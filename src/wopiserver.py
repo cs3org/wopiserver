@@ -6,7 +6,7 @@
 #
 # Giuseppe.LoPresti@cern.ch
 
-import sys, os, json
+import sys, os, time, json
 import logging.handlers
 import logging
 try:
@@ -29,27 +29,38 @@ storageserver = 'root://castorpps'                 # XXX todo read from config f
 homedir = '/castor/cern.ch/user/i/itglp/'
 xrdfs = XrdClient.FileSystem(storageserver)  
 chunksize = 1048576                                # XXX todo read from config file
+tokenvalidity = 86400                              # XXX todo read from config file
 
 # some xrootd useful wrappers
-
+# XXX make a class/module out of this
 def statXRootFile(filename):
   rc, statInfo = xrdfs.stat(homedir + filename)
   if statInfo is None:
     raise IOError(rc.message)
   return statInfo
 
-
 def readXRootFile(filename):
   with XrdClient.File() as f:
     rc, _statInfo_unused = f.open(storageserver + '/' + homedir + filename, OpenFlags.READ)
     if rc.ok == False:
       # the file could not be opened: as this is a generator, we yield the error string instead of the file's contents
-      log.info('msg="Requested file %s not found" error="%s"' % (filename, rc.message))
+      log.info('msg="Error opening the file for read" filename="%s" error="%s"' % (filename, rc.message))
       yield rc.message
     else:
       # the actual read is buffered and managed by the Flask server
       for chunk in f.readchunks(offset=0, chunksize=chunksize):
         yield chunk
+
+def writeXRootFile(filename, content):
+  with XrdClient.File() as f:
+    rc, _statInfo_unused = f.open(storageserver + '/' + homedir + filename, OpenFlags.DELETE)
+    if rc.ok == False:
+      # the file could not be opened, raise error
+      log.info('msg="Error opening the file for write" filename="%s" error="%s"' % (filename, rc.message))
+      raise IOError(rc.message)
+    else:
+      # XXX write the entire file - we should find a way to only update the required chunks...
+      f.write(content, offset=0)
 
 
 # The Web Application starts here
@@ -63,7 +74,7 @@ def index():
 def wopiopen():
   username = flask.request.args['username']
   filename = flask.request.args['filename']
-  acctok = jwt.encode({'username': username, 'filename': filename}, wopisecret, algorithm='HS256')
+  acctok = jwt.encode({'username': username, 'filename': filename, 'exp': (int(time.time())+tokenvalidity)}, wopisecret, algorithm='HS256')
   log.info('msg="Access token set" client="%s" user="%s" filename="%s" token="%s"' % (flask.request.remote_addr, username, filename, acctok))
   return acctok
 
@@ -72,6 +83,8 @@ def wopiopen():
 def wopiCheckFileInfo(fileid):
   try:
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
+    if acctok['exp'] < time.time():
+      raise jwt.exceptions.DecodeError
     log.info('msg="GET metadata" username="%s" filename"%s"' % (acctok['username'], acctok['filename']))
     md = {}
     statInfo = statXRootFile(acctok['filename'])
@@ -87,7 +100,7 @@ def wopiCheckFileInfo(fileid):
     log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
     return 'Invalid access token', 401
   except IOError, e:
-    log.info('msg="Requested file %s not found" error="%s"' % (acctok['filename'], e))
+    log.info('msg="Requested file not found" filename="%s" error="%s"' % (acctok['filename'], e))
     return 'File not found', 404
   except Exception, e:
     log.error('msg="Unexpected exception caught" exception="%s"' % e)
@@ -99,6 +112,8 @@ def wopiCheckFileInfo(fileid):
 def wopiGetFile(fileid):
   try:
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
+    if acctok['exp'] < time.time():
+      raise jwt.exceptions.DecodeError
     log.info('msg="GET content" username="%s" filename="%s"' % (acctok['username'], acctok['filename']))
     # stream file from storage to client
     resp = flask.Response(readXRootFile(acctok['filename']), mimetype='application/octet-stream')
@@ -117,14 +132,21 @@ def wopiGetFile(fileid):
 def wopiPostContent(fileid):
   try:
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
-    log.info("NOOP - POST content for file %s" % fileid)
+    if acctok['exp'] < time.time():
+      raise jwt.exceptions.DecodeError
+    log.info('msg="POST content" username="%s" filename="%s"' % (acctok['username'], acctok['filename']))
+    writeXRootFile(acctok['filename'], flask.request.get_data())
+    return 'OK', 200
   except jwt.exceptions.DecodeError:
     log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
     return 'Invalid access token', 401
+  except IOError, e:
+    log.info('msg="Error writing file" filename="%s" error="%s"' % (acctok['filename'], e))
+    return 'I/O Error', 500
   except Exception, e:
     log.error('msg="Unexpected exception caught" exception="%s"' % e)
     log.debug(sys.exc_info())
     return 'Internal error', 500
 
 
-app.run(host='0.0.0.0', port=443, threaded=True, debug=True, ssl_context=('wopicert.crt', 'wopikey.key'))
+app.run(host='0.0.0.0', port=8080, threaded=True, debug=True) #, ssl_context=('wopicert.crt', 'wopikey.key'))
