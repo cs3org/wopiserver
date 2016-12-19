@@ -12,7 +12,7 @@ import logging
 try:
   from XRootD import client as XrdClient   # the xroot bindings for python, xrootd-python-4.4.1-1.el7.x86_64.rpm
   from XRootD.client.flags import OpenFlags
-  import flask                             # Flask app server, python-flask-0.10.1-4.el7.noarch.rpm
+  import flask                             # Flask app server, python-flask-0.10.1-4.el7.noarch.rpm + pyOpenSSL-0.13.1-3.el7.x86_64.rpm
   import jwt                               # PyJWT Jason Web Token, python-jwt-1.4.0-2.el7.noarch.rpm
 except:
   print "Missing modules, please install xrootd-python, python-flask, python-jwt"
@@ -64,7 +64,7 @@ def wopiopen():
   username = flask.request.args['username']
   filename = flask.request.args['filename']
   acctok = jwt.encode({'username': username, 'filename': filename}, wopisecret, algorithm='HS256')
-  log.info('msg="Access token set" user="%s" filename="%s" token="%s"' % (username, filename, acctok))
+  log.info('msg="Access token set" client="%s" user="%s" filename="%s" token="%s"' % (flask.request.remote_addr, username, filename, acctok))
   return acctok
 
 
@@ -127,4 +127,4 @@ def wopiPostContent(fileid):
     return 'Internal error', 500
 
 
-app.run(host='0.0.0.0', port=8080)
+app.run(host='0.0.0.0', port=443, threaded=True, debug=True, ssl_context=('wopicert.crt', 'wopikey.key'))
