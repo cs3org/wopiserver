@@ -6,7 +6,7 @@
 #
 # Giuseppe.LoPresti@cern.ch
 
-import sys, os, time, json
+import sys, os, time, json, httplib
 import logging.handlers
 import logging
 try:
@@ -109,14 +109,14 @@ def wopiCheckFileInfo(fileid):
     return resp
   except jwt.exceptions.DecodeError:
     log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
-    return 'Invalid access token', 401
+    return 'Invalid access token', httplib.UNAUTHORIZED
   except IOError, e:
     log.info('msg="Requested file not found" filename="%s" error="%s"' % (acctok['filename'], e))
-    return 'File not found', 404
+    return 'File not found', httplib.NOT_FOUND
   except Exception, e:
     log.error('msg="Unexpected exception caught" exception="%s"' % e)
     log.debug(sys.exc_info())
-    return 'Internal error', 500
+    return 'Internal error', httplib.INTERNAL_SERVER_ERROR
 
 
 @app.route("/api/wopi/files/<fileid>/contents", methods=['GET'])
@@ -132,11 +132,11 @@ def wopiGetFile(fileid):
     return resp
   except jwt.exceptions.DecodeError:
     log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
-    return 'Invalid access token', 401
+    return 'Invalid access token', httplib.UNAUTHORIZED
   except Exception, e:
     log.error('msg="Unexpected exception caught" exception="%s"' % e)
     log.debug(sys.exc_info())
-    return 'Internal error', 500
+    return 'Internal error', httplib.INTERNAL_SERVER_ERROR
 
 
 @app.route("/api/wopi/files/<fileid>/contents", methods=['POST'])
@@ -147,17 +147,17 @@ def wopiPostContent(fileid):
       raise jwt.exceptions.DecodeError
     log.info('msg="POST content" username="%s" filename="%s"' % (acctok['username'], acctok['filename']))
     writeXRootFile(acctok['filename'], flask.request.get_data())
-    return 'OK', 200
+    return 'OK', httplib.OK
   except jwt.exceptions.DecodeError:
     log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
-    return 'Invalid access token', 401
+    return 'Invalid access token', httplib.UNAUTHORIZED
   except IOError, e:
     log.info('msg="Error writing file" filename="%s" error="%s"' % (acctok['filename'], e))
-    return 'I/O Error', 500
+    return 'I/O Error', httplib.INTERNAL_SERVER_ERROR
   except Exception, e:
     log.error('msg="Unexpected exception caught" exception="%s"' % e)
     log.debug(sys.exc_info())
-    return 'Internal error', 500
+    return 'Internal error', httplib.INTERNAL_SERVER_ERROR
 
 
 app.run(host='0.0.0.0', port=8080, threaded=True, debug=True) #, ssl_context=('wopicert.crt', 'wopikey.key'))
