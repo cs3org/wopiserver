@@ -52,8 +52,8 @@ def readXRootFile(filename):
         yield chunk
 
 def writeXRootFile(filename, content):
-  #now = time.time()
   f = XrdClient.File()
+  # pass in the URL a special flag to enable the EOS atomic overwrite like the OwnCloud server
   rc, _statInfo_unused = f.open(storageserver + '/' + homedir + filename, OpenFlags.DELETE)   # overwrite previous version
   if rc.ok == False:
     log.info('msg="Error opening the file for write" filename="%s" error="%s"' % (filename, rc.message))
@@ -67,9 +67,6 @@ def writeXRootFile(filename, content):
   if rc.ok == False:
     log.info('msg="Error closing the file" filename="%s" error="%s"' % (filename, rc.message))
     raise IOError(rc.message)
-  # if we got here, the write was successful, so rename to original name and drop old version
-  #xrdfs.rm(storageserver + '/' + homedir + filename)
-  #xrdfs.mv(storageserver + '/' + homedir + filename + '_' + now, storageserver + '/' + homedir + filename)
 
 
 # The Web Application starts here
