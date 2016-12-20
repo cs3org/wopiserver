@@ -94,7 +94,7 @@ def wopiCheckFileInfo(fileid):
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
     if acctok['exp'] < time.time():
       raise jwt.exceptions.DecodeError
-    log.info('msg="GET metadata" username="%s" filename"%s" fileid="%s"' % (acctok['username'], acctok['filename'], fileid))
+    log.info('msg="CheckFileInfo" username="%s" filename"%s" fileid="%s"' % (acctok['username'], acctok['filename'], fileid))
     statInfo = statXRootFile(acctok['filename'])
     # populate metadata for this file
     md = {}
@@ -125,7 +125,7 @@ def wopiGetFile(fileid):
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
     if acctok['exp'] < time.time():
       raise jwt.exceptions.DecodeError
-    log.info('msg="GET content" username="%s" filename="%s" fileid="%s"' % (acctok['username'], acctok['filename'], fileid))
+    log.info('msg="GetFile" username="%s" filename="%s" fileid="%s"' % (acctok['username'], acctok['filename'], fileid))
     # stream file from storage to client
     resp = flask.Response(readXRootFile(acctok['filename']), mimetype='application/octet-stream')
     resp.headers['X-WOPI-ItemVersion'] = '1.0'   # XXX todo get version from server
@@ -139,13 +139,64 @@ def wopiGetFile(fileid):
     return 'Internal error', httplib.INTERNAL_SERVER_ERROR
 
 
+@app.route("/api/wopi/files/<fileid>", methods=['POST'])
+def wopiLockUnlock(fileid):
+  try:
+    acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
+    if acctok['exp'] < time.time():
+      raise jwt.exceptions.DecodeError
+    headers = flask.request.headers
+    if('X-WOPI-Override' not in headers or 'X-WOPI-Lock' not in headers):
+      return 'X-WOPI-Override or X-WOPI-Lock missing from the headers', httplib.BAD_REQUEST
+    op = headers['X-WOPI-Override']   # must be one of LOCK, UNLOCK, REFRESH_LOCK
+    if op not in ('LOCK', 'UNLOCK', 'REFRESH_LOCK'):
+      return 'Lock operation %s not supported' % op, httplib.BAD_REQUEST
+    lock = headers['X-WOPI-Lock']
+    oldLock = headers['X-WOPI-OldLock'] if 'X-WOPI-OldLock' in headers else ''
+    log.info('msg="%s" username="%s" filename="%s" lock="%s"' % (op.title(), acctok['username'], acctok['filename'], lock))
+    # XXX todo check for existing locks and lock the file on the backend by setting an external attribute
+    # if file not found or any other remote access error raise IOError
+    # NOTE XXX ext attr API missing from xroot python bindings?
+    #retrievedLock = getXRootXAttr(acctok['filename'], 'wopi.lock.name')
+    #retrievedValidity = getXRootXAttr(acctok['filename'], 'wopi.lock.exp', int)
+    #if (oldLock == '' and retrievedLock != '' and retrievedLock != lock) or (oldLock != '' and retrievedLock != oldLock):
+      #resp = flask.Response()
+      #resp.headers['X-WOPI-Lock'] = retrievedLock
+      #log.info('msg="%s" filename="%s" lock="%s" retrievedLock="%s" result="conflict"' % (op.title(), acctok['filename'], lock, retrievedLock))
+      #resp.status_code = httplib.CONFLICT
+    #if op == 'REFRESH_LOCK' and retrievedValidity < time.time():
+      #log.info('msg="%s" filename="%s" lock="%s" result="expired"' % (op.title(), acctok['filename'], lock))
+      #return 'Lock %s has expired' % lock, httplib.BAD_REQUEST
+    #if op == 'UNLOCK':
+      #setXRootXAttr(acctok['filename'], 'wopi.lock.name', '')
+      #setXRootXAttr(acctok['filename'], 'wopi.lock.exp', '')
+      #log.info('msg="%s" filename="%s" lock="%s" result="success"' % (op.title(), acctok['filename'], lock))
+      #return 'OK', httplib.OK
+    #else:  # LOCK or REFRESH_LOCK
+      #setXRootXAttr(acctok['filename'], 'wopi.lock.name', lock)
+      #setXRootXAttr(acctok['filename'], 'wopi.lock.exp', (time.time() + 30*60))
+      #log.info('msg="%s" filename="%s" lock="%s" result="success"' % (op.title(), acctok['filename'], lock))
+      #return 'OK', httplib.OK
+    # for now:
+    return 'Not yet supported', httpd.NOT_IMPLEMENTED
+  except jwt.exceptions.DecodeError:
+    log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
+    return 'Invalid access token', httplib.UNAUTHORIZED
+  except IOError, e:
+    log.info('msg="Requested file not found" filename="%s" error="%s"' % (acctok['filename'], e))
+    return 'File not found', httplib.NOT_FOUND
+  except Exception, e:
+    log.error('msg="Unexpected exception caught" exception="%s"' % e)
+    log.debug(sys.exc_info())
+    return 'Internal error', httplib.INTERNAL_SERVER_ERROR
+
 @app.route("/api/wopi/files/<fileid>/contents", methods=['POST'])
 def wopiPostContent(fileid):
   try:
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
     if acctok['exp'] < time.time():
       raise jwt.exceptions.DecodeError
-    log.info('msg="POST content" username="%s" filename="%s"' % (acctok['username'], acctok['filename']))
+    log.info('msg="PostContent" username="%s" filename="%s"' % (acctok['username'], acctok['filename']))
     writeXRootFile(acctok['filename'], flask.request.get_data())
     return 'OK', httplib.OK
   except jwt.exceptions.DecodeError:
