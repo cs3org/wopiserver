@@ -52,15 +52,24 @@ def readXRootFile(filename):
         yield chunk
 
 def writeXRootFile(filename, content):
-  with XrdClient.File() as f:
-    rc, _statInfo_unused = f.open(storageserver + '/' + homedir + filename, OpenFlags.DELETE)
-    if rc.ok == False:
-      # the file could not be opened, raise error
-      log.info('msg="Error opening the file for write" filename="%s" error="%s"' % (filename, rc.message))
-      raise IOError(rc.message)
-    else:
-      # XXX write the entire file - we should find a way to only update the required chunks...
-      f.write(content, offset=0)
+  #now = time.time()
+  f = XrdClient.File()
+  rc, _statInfo_unused = f.open(storageserver + '/' + homedir + filename, OpenFlags.DELETE)   # overwrite previous version
+  if rc.ok == False:
+    log.info('msg="Error opening the file for write" filename="%s" error="%s"' % (filename, rc.message))
+    raise IOError(rc.message)
+  # XXX write the entire file - we should find a way to only update the required chunks...
+  rc, _statInfo_unused = f.write(content, offset=0)
+  if rc.ok == False:
+    log.info('msg="Error writing the file" filename="%s" error="%s"' % (filename, rc.message))
+    raise IOError(rc.message)
+  rc, _statInfo_unused = f.close()
+  if rc.ok == False:
+    log.info('msg="Error closing the file" filename="%s" error="%s"' % (filename, rc.message))
+    raise IOError(rc.message)
+  # if we got here, the write was successful, so rename to original name and drop old version
+  #xrdfs.rm(storageserver + '/' + homedir + filename)
+  #xrdfs.mv(storageserver + '/' + homedir + filename + '_' + now, storageserver + '/' + homedir + filename)
 
 
 # The Web Application starts here
@@ -72,9 +81,12 @@ def index():
 
 @app.route("/wopiopen", methods=['GET'])
 def wopiopen():
-  username = flask.request.args['username']
-  filename = flask.request.args['filename']
-  acctok = jwt.encode({'username': username, 'filename': filename, 'exp': (int(time.time())+tokenvalidity)}, wopisecret, algorithm='HS256')
+  req = flask.request
+  username = req.args['username']
+  filename = req.args['filename']
+  canedit = ('canedit' in req.args and req.args['canedit'] == 'yes')
+  acctok = jwt.encode({'username': username, 'filename': filename, 'canedit': canedit, 'exp': (int(time.time())+tokenvalidity)},
+                      wopisecret, algorithm='HS256')
   log.info('msg="Access token set" client="%s" user="%s" filename="%s" token="%s"' % (flask.request.remote_addr, username, filename, acctok))
   return acctok
 
@@ -85,15 +97,17 @@ def wopiCheckFileInfo(fileid):
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
     if acctok['exp'] < time.time():
       raise jwt.exceptions.DecodeError
-    log.info('msg="GET metadata" username="%s" filename"%s"' % (acctok['username'], acctok['filename']))
-    md = {}
+    log.info('msg="GET metadata" username="%s" filename"%s" fileid="%s"' % (acctok['username'], acctok['filename'], fileid))
     statInfo = statXRootFile(acctok['filename'])
+    # populate metadata for this file
+    md = {}
     md['BaseFileName'] = os.path.basename(acctok['filename'])
     md['OwnerId'] = acctok['username']                      # XXX todo get owner uid
     md['UserId'] = acctok['username']
     md['Size'] = statInfo.size                              # XXX todo check this is < request.headers['X-WOPI-MaxExpectedSize']
     md['Version'] = statInfo.modtimestr
-    md['SupportsUpdate'] = md['UserCanWrite'] = md['SupportsLocks'] = True
+    md['SupportsUpdate'] = md['UserCanWrite'] = md['SupportsLocks'] = acctok['canedit']
+    # send it in JSON format
     resp = flask.Response(json.dumps(md), mimetype='application/json')
     return resp
   except jwt.exceptions.DecodeError:
@@ -114,7 +128,7 @@ def wopiGetFile(fileid):
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
     if acctok['exp'] < time.time():
       raise jwt.exceptions.DecodeError
-    log.info('msg="GET content" username="%s" filename="%s"' % (acctok['username'], acctok['filename']))
+    log.info('msg="GET content" username="%s" filename="%s" fileid="%s"' % (acctok['username'], acctok['filename'], fileid))
     # stream file from storage to client
     resp = flask.Response(readXRootFile(acctok['filename']), mimetype='application/octet-stream')
     resp.headers['X-WOPI-ItemVersion'] = '1.0'   # XXX todo get version from server
