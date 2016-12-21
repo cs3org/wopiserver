@@ -73,7 +73,7 @@ def writeXRootFile(filename, content):
 @app.route("/")
 def index():
   log.info('msg="Accessed root page" client="%s"' % flask.request.remote_addr)
-  return "This is the CERNBox WOPI server: access is performed via REST API, e.g. GET /api/wopi/files/fileid\n"
+  return "This is the CERNBox WOPI server. Access is performed via REST API, see <a href=http://wopi.readthedocs.io>http://wopi.readthedocs.io</a>."
 
 
 @app.route("/wopiopen", methods=['GET'])
