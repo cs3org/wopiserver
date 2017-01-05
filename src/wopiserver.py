@@ -34,7 +34,9 @@ try:
   app = flask.Flask("WOPIServer")
   log = app.logger
   log.setLevel(_loglevels[config.get('general', 'loglevel')])
-  log.addHandler(logging.FileHandler(config.get('general', 'logfile')))
+  loghandler = logging.FileHandler(config.get('general', 'logfile'))
+  loghandler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)s %(levelname)-8s %(message)s', datefmt='%Y-%m-%dT%H:%M:%S'))
+  log.addHandler(loghandler)
   wopisecret = open(config.get('general', 'secretfile')).read()
   tokenvalidity = config.getint('general', 'tokenvalidity')
 except Exception, e:
@@ -57,7 +59,7 @@ def wopiopen():
   canedit = ('canedit' in req.args and req.args['canedit'] == 'yes')
   acctok = jwt.encode({'username': username, 'filename': filename, 'canedit': canedit, 'exp': (int(time.time())+tokenvalidity)},
                       wopisecret, algorithm='HS256')
-  log.info('msg="Access token set" client="%s" user="%s" filename="%s" token="%s"' % (flask.request.remote_addr, username, filename, acctok))
+  log.info('msg="Access token set" client="%s" user="%s" filename="%s" canedit="%r" token="%s"' % (flask.request.remote_addr, username, filename, canedit, acctok))
   return acctok
 
 
@@ -160,4 +162,4 @@ def wopiPostContent(fileid):
     return 'Internal error', httplib.INTERNAL_SERVER_ERROR
 
 
-app.run(host='0.0.0.0', port=8080, threaded=True, debug=True) #, ssl_context=('wopicert.crt', 'wopikey.key'))
+app.run(host='0.0.0.0', port=8080, threaded=True, debug=(config.get('general', 'loglevel') == 'Debug')) #, ssl_context=('wopicert.crt', 'wopikey.key'))
