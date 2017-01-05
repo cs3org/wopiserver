@@ -6,7 +6,7 @@
 #
 # Giuseppe.LoPresti@cern.ch
 
-import sys, os, time, json, httplib
+import sys, os, time, ConfigParser, json, httplib
 import logging.handlers
 import logging
 try:
@@ -17,14 +17,30 @@ except:
   print "Missing modules, please install xrootd-python, python-flask, python-jwt"
   sys.exit(-1)
 
-# prepare the Flask web app
-app = flask.Flask("WOPIServer")
-log = app.logger
-log.setLevel(logging.DEBUG)
-log.addHandler(logging.FileHandler('/var/tmp/wopiserver.log'))    # XXX todo put in a proper place
-wopisecret = 'wopisecret'                          # XXX todo read secret from config file
-tokenvalidity = 86400                              # XXX todo read from config file
+# read the configuration
+_loglevels = { "Critical": logging.CRITICAL,  # 50
+               "Error":    logging.ERROR,     # 40
+               "Warning":  logging.WARNING,   # 30
+               "Info":     logging.INFO,      # 20
+               "Debug":    logging.DEBUG      # 10
+             }
+global config
+config = ConfigParser.SafeConfigParser()
+config.read('/etc/wopi/wopiserver.defaults.conf')
+config.read('/etc/wopi/wopiserver.conf')
 
+# prepare the Flask web app
+try:
+  app = flask.Flask("WOPIServer")
+  log = app.logger
+  log.setLevel(_loglevels[config.get('general', 'loglevel')])
+  log.addHandler(logging.FileHandler(config.get('general', 'logfile')))
+  wopisecret = open(config.get('general', 'secretfile')).read()
+  tokenvalidity = config.getint('general', 'tokenvalidity')
+except Exception, e:
+  # any error we got here with the configuration is fatal
+  log.critical('msg="Failed to read config, bailing out" error=%s' % e)
+  sys.exit(-1)
 
 # The Web Application starts here
 @app.route("/")

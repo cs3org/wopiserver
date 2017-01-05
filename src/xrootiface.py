@@ -12,15 +12,16 @@ from XRootD import client as XrdClient   # the xroot bindings for python, xrootd
 from XRootD.client.flags import OpenFlags
 
 class XrdCl:
+  global config
 
   def __init__(self, log, filename):
     self.log = log
     self.filename = filename
     # prepare the xroot client
-    self.storageserver = 'root://castorpps'                 # XXX todo read from config file
-    self.homedir = '/castor/cern.ch/user/i/itglp/'
+    self.storageserver = config.get('general', 'storageserver')
+    self.homedir = '/castor/cern.ch/user/i/itglp/'    # XXX temporary - to be discussed
     self.xrdfs = XrdClient.FileSystem(self.storageserver)  
-    self.chunksize = 1048576                                # XXX todo read from config file
+    self.chunksize = config.getint('io', 'chunksize')
 
   def stat(self):
     rc, statInfo = self.xrdfs.stat(self.homedir + self.filename)
