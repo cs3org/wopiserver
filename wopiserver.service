@@ -1,0 +1,15 @@
+[Unit]
+Description=WOPI Server for CERNBox
+After=syslog.target
+
+[Service]
+Type=simple
+User=wopi
+Group=wopi
+WorkingDirectory=/tmp
+ExecStart=/usr/bin/wopiserver.py
+StandardOutput=null
+StandardError=syslog
+
+[Install]
+WantedBy=multi-user.target
