@@ -35,7 +35,7 @@ try:
   loghandler = logging.FileHandler(config.get('general', 'logfile'))
   loghandler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)s %(levelname)-8s %(message)s', datefmt='%Y-%m-%dT%H:%M:%S'))
   log.addHandler(loghandler)
-  wopisecret = open(config.get('general', 'secretfile')).read()
+  wopisecret = open(config.get('security', 'secretfile')).read()
   tokenvalidity = config.getint('general', 'tokenvalidity')
   xrdcl.init(config, log)    # initialize the xroot client module
 except Exception, e:
@@ -194,4 +194,5 @@ def wopiPostContent(fileid):
     return 'Internal error', httplib.INTERNAL_SERVER_ERROR
 
 
-app.run(host='0.0.0.0', port=8080, threaded=True, debug=(config.get('general', 'loglevel') == 'Debug')) #, ssl_context=('wopicert.crt', 'wopikey.key'))
+app.run(host='0.0.0.0', port=8080, threaded=True, debug=(config.get('general', 'loglevel') == 'Debug'))
+#       ssl_context=(config.get('security', 'wopicert'), config.get('security', 'wopikey')))
