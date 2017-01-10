@@ -43,6 +43,29 @@ except Exception, e:
   log.critical('msg="Failed to read config, bailing out" error=%s' % e)
   sys.exit(-1)
 
+
+# generate an access token for a given file of a given user. Warning: access to this function must be protected
+def doWopiOpen(req):
+  ruid = req.args['ruid']
+  rgid = req.args['rgid']
+  filename = req.args['filename']
+  canedit = ('canedit' in req.args and req.args['canedit'].lower() == 'yes')
+  try:
+    if canedit:
+      # stat now the file to handle sync conflicts afterwards
+      mtime = xrdcl.stat(filename, ruid, rgid).modtime
+    else:
+      mtime = 0
+  except IOError, e:
+    log.info('msg="Requested file not found" filename="%s" error="%s"' % (filename, e))
+    return 'File not found', httplib.NOT_FOUND
+  acctok = jwt.encode({'ruid': ruid, 'rgid': rgid, 'filename': filename, 'canedit': canedit, 'mtime': mtime,
+                      'exp': (int(time.time())+tokenvalidity)}, wopisecret, algorithm='HS256')
+  log.info('msg="Access token set" host="%s" user="%s:%s" filename="%s" canedit="%r" token="%s"' % \
+           (req.remote_addr, ruid, rgid, filename, canedit, acctok))
+  return acctok
+
+
 # The Web Application starts here
 @app.route("/")
 def index():
@@ -51,16 +74,20 @@ def index():
 
 
 @app.route("/wopiopen", methods=['GET'])
-def wopiopen():
-  req = flask.request
-  username = req.args['username']
-  filename = req.args['filename']
-  canedit = ('canedit' in req.args and req.args['canedit'].lower() == 'yes')
-  acctok = jwt.encode({'username': username, 'filename': filename, 'canedit': canedit,
-                      'exp': (int(time.time())+tokenvalidity)}, wopisecret, algorithm='HS256')
-  log.info('msg="Access token set" client="%s" user="%s" filename="%s" canedit="%r" token="%s"' % \
-           (flask.request.remote_addr, username, filename, canedit, acctok))
-  return acctok
+def wopiOpen():
+  # first resolve the client: only our OwnCloud servers shall use this API
+  try:
+    allowedclients = config.get('general', 'allowedclients').split()
+    for c in allowedclients:
+      for ip in socket.getaddrinfo(c, None):
+        if ip[4][0] == flask.request.remote_addr:
+          # we got a match, go for the open
+          return doWopiOpen(flask.request)
+  except ConfigParser.NoOptionError:
+    pass   # and fail
+  # no match found, fail
+  log.info('msg="Unauthorized access attempt" client="%s"' % flask.request.remote_addr)
+  return 'Client IP not authorized', httplib.UNAUTHORIZED
 
 
 @app.route("/api/wopi/files/<fileid>", methods=['GET'])
