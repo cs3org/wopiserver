@@ -6,29 +6,27 @@
 #
 # Giuseppe.LoPresti@cern.ch
 
-import sys, os, time, ConfigParser, json, httplib
+import sys, os, time, socket, ConfigParser, json, httplib
 import logging.handlers
 import logging
 try:
-  import flask                  # Flask app server, python-flask-0.10.1-4.el7.noarch.rpm + pyOpenSSL-0.13.1-3.el7.x86_64.rpm
-  import jwt                    # PyJWT Jason Web Token, python-jwt-1.4.0-2.el7.noarch.rpm
-  from xrootiface import XrdCl  # a wrapper for the xrootd python bindings, xrootd-python-4.4.x.el7.x86_64.rpm
+  import flask                 # Flask app server, python-flask-0.10.1-4.el7.noarch.rpm + pyOpenSSL-0.13.1-3.el7.x86_64.rpm
+  import jwt                   # PyJWT Jason Web Token, python-jwt-1.4.0-2.el7.noarch.rpm
+  import xrootiface as xrdcl   # a wrapper around the xrootd python bindings, xrootd-python-4.4.x.el7.x86_64.rpm
 except:
   print "Missing modules, please install xrootd-python, python-flask, python-jwt"
   sys.exit(-1)
 
 # read the configuration
-_loglevels = { "Critical": logging.CRITICAL,  # 50
-               "Error":    logging.ERROR,     # 40
-               "Warning":  logging.WARNING,   # 30
-               "Info":     logging.INFO,      # 20
-               "Debug":    logging.DEBUG      # 10
+_loglevels = {"Critical": logging.CRITICAL,  # 50
+              "Error":    logging.ERROR,     # 40
+              "Warning":  logging.WARNING,   # 30
+              "Info":     logging.INFO,      # 20
+              "Debug":    logging.DEBUG      # 10
              }
-global config
 config = ConfigParser.SafeConfigParser()
 config.read('/etc/wopi/wopiserver.defaults.conf')
 config.read('/etc/wopi/wopiserver.conf')
-
 # prepare the Flask web app
 try:
   app = flask.Flask("WOPIServer")
@@ -39,6 +37,7 @@ try:
   log.addHandler(loghandler)
   wopisecret = open(config.get('general', 'secretfile')).read()
   tokenvalidity = config.getint('general', 'tokenvalidity')
+  xrdcl.init(config, log)    # initialize the xroot client module
 except Exception, e:
   # any error we got here with the configuration is fatal
   log.critical('msg="Failed to read config, bailing out" error=%s' % e)
@@ -70,15 +69,15 @@ def wopiCheckFileInfo(fileid):
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
     if acctok['exp'] < time.time():
       raise jwt.exceptions.DecodeError
-    log.info('msg="CheckFileInfo" username="%s" filename"%s" fileid="%s"' % (acctok['username'], acctok['filename'], fileid))
-    statInfo = XrdCl(log, acctok['filename']).stat()
-    if statInfo.size > int(request.headers['X-WOPI-MaxExpectedSize']):
+    log.info('msg="CheckFileInfo" user="%s:%s" filename"%s" fileid="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid))
+    statInfo = xrdcl.stat(acctok['filename'], acctok['ruid'], acctok['rgid'])
+    if statInfo.size > int(flask.request.headers['X-WOPI-MaxExpectedSize']):
       raise ValueError
     # populate metadata for this file
     md = {}
     md['BaseFileName'] = os.path.basename(acctok['filename'])
-    md['OwnerId'] = acctok['username']                      # XXX do we need the owner uid?
-    md['UserId'] = acctok['username']
+    md['OwnerId'] = acctok['ruid']                      # XXX do we need the owner uid?
+    md['UserId'] = acctok['ruid'] + ':' + acctok['rgid']
     md['Size'] = statInfo.size
     md['Version'] = statInfo.modtimestr
     md['SupportsUpdate'] = md['UserCanWrite'] = md['SupportsLocks'] = acctok['canedit']
@@ -93,7 +92,7 @@ def wopiCheckFileInfo(fileid):
     return 'File not found', httplib.NOT_FOUND
   except ValueError, e:
     log.warning('msg="The requested file is too large" filename="%s" actualSize="%ld" maxExpectedSize="%s" exception="%s"' % \
-                (acctok['filename'], statInfo.size, request.headers['X-WOPI-MaxExpectedSize'], e))
+                (acctok['filename'], statInfo.size, flask.request.headers['X-WOPI-MaxExpectedSize'], e))
   except KeyError, e:
     log.error('msg="Invalid access token, missing %s field"' % e)
     return 'Invalid access token', httplib.UNAUTHORIZED
@@ -109,9 +108,9 @@ def wopiGetFile(fileid):
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
     if acctok['exp'] < time.time():
       raise jwt.exceptions.DecodeError
-    log.info('msg="GetFile" username="%s" filename="%s" fileid="%s"' % (acctok['username'], acctok['filename'], fileid))
+    log.info('msg="GetFile" user="%s:%s" filename="%s" fileid="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid))
     # stream file from storage to client
-    resp = flask.Response(XrdCl(log, acctok['filename']).readFile(), mimetype='application/octet-stream')
+    resp = flask.Response(xrdcl.readFile(acctok['filename'], acctok['ruid'], acctok['rgid']), mimetype='application/octet-stream')
     resp.headers['X-WOPI-ItemVersion'] = '1.0'   # XXX todo get version from server
     return resp
   except jwt.exceptions.DecodeError:
@@ -130,13 +129,13 @@ def wopiLockUnlock(fileid):
     if acctok['exp'] < time.time():
       raise jwt.exceptions.DecodeError
     headers = flask.request.headers
-    if('X-WOPI-Override' not in headers or 'X-WOPI-Lock' not in headers):
+    if 'X-WOPI-Override' not in headers or 'X-WOPI-Lock' not in headers:
       return 'X-WOPI-Override or X-WOPI-Lock missing from the headers', httplib.BAD_REQUEST
     op = headers['X-WOPI-Override']   # must be one of LOCK, UNLOCK, REFRESH_LOCK
     if op not in ('LOCK', 'UNLOCK', 'REFRESH_LOCK'):
-      return 'Lock operation %s not supported' % op, httplib.BAD_REQUEST
+      return 'Unknown locking operation %s in header' % op, httplib.BAD_REQUEST
     lock = headers['X-WOPI-Lock']
-    log.info('msg="%s" username="%s" filename="%s" lock="%s"' % (op.title(), acctok['username'], acctok['filename'], lock))
+    log.info('msg="%s" user="%s:%s" filename="%s" lock="%s"' % (op.title(), acctok['ruid'], acctok['rgid'], acctok['filename'], lock))
     return 'OK', httplib.OK
   except jwt.exceptions.DecodeError:
     log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
