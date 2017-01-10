@@ -109,7 +109,8 @@ def wopiCheckFileInfo(fileid):
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
     if acctok['exp'] < time.time():
       raise jwt.exceptions.DecodeError
-    log.info('msg="CheckFileInfo" user="%s:%s" filename"%s" fileid="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid))
+    log.info('msg="CheckFileInfo" user="%s:%s" filename"%s" fileid="%s" WopiSession="%s"' % \
+             (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, flask.request.headers['X-WOPI-Session']))
     statInfo = xrdcl.stat(acctok['filename'], acctok['ruid'], acctok['rgid'])
     if statInfo.size > int(flask.request.headers['X-WOPI-MaxExpectedSize']):
       raise ValueError
@@ -119,7 +120,7 @@ def wopiCheckFileInfo(fileid):
     md['OwnerId'] = acctok['ruid']                      # XXX do we need the owner uid?
     md['UserId'] = acctok['ruid'] + ':' + acctok['rgid']
     md['Size'] = statInfo.size
-    md['Version'] = statInfo.modtimestr
+    md['Version'] = statInfo.modtimestr     # todo get ETAG from server
     md['SupportsUpdate'] = md['UserCanWrite'] = md['SupportsLocks'] = acctok['canedit']
     # send it in JSON format
     resp = flask.Response(json.dumps(md), mimetype='application/json')
@@ -152,7 +153,7 @@ def wopiGetFile(fileid):
     log.info('msg="GetFile" user="%s:%s" filename="%s" fileid="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid))
     # stream file from storage to client
     resp = flask.Response(xrdcl.readFile(acctok['filename'], acctok['ruid'], acctok['rgid']), mimetype='application/octet-stream')
-    resp.headers['X-WOPI-ItemVersion'] = '1.0'   # XXX todo get version from server
+    resp.headers['X-WOPI-ItemVersion'] = '1.0'   # XXX todo get ETAG from server
     return resp
   except jwt.exceptions.DecodeError:
     log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
@@ -195,9 +196,27 @@ def wopiPostContent(fileid):
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
     if acctok['exp'] < time.time():
       raise jwt.exceptions.DecodeError
-    log.info('msg="PostContent" username="%s" filename="%s"' % (acctok['username'], acctok['filename']))
-    XrdCl(log, acctok['filename']).writeFile(flask.request.get_data())
-    return 'OK', httplib.OK
+    log.info('msg="PostContent" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename']))
+    # check the destination file now against conflicts
+    try:
+      mtime = xrdcl.stat(acctok['filename'], acctok['ruid'], acctok['rgid']).modtime   # XXX todo get ETAG - how to get the ETAG at the first open time?
+    except IOError:
+      # the file got deleted meanwhile: force a conflict
+      mtime = time.time()
+    if mtime > int(acctok['mtime']):
+      # someone else overwrote the file before us: we must therefore create a new conflict file
+      newname, ext = os.path.splitext(acctok['filename'])
+      newname = '%s_conflict-%s.%s' % (newname, time.strftime('%Y%m%d-%H%M%S'), ext.strip())   # this is the OwnCloud format
+      xrdcl.writeFile(newname, acctok['ruid'], acctok['rgid'], flask.request.get_data())
+      log.info('msg="Conflicting copy found" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], newname))
+      return 'Conflicting copy found, mtime = %d' % mtime, httplib.PRECONDITION_FAILED    # return a failure so that the user can check
+    else:
+      # OK, nobody overwrote the file: attempt to overwrite it.
+      # XXX Note that the entire check+write operation should be atomic, but the previous check
+      # XXX still gives the opportunity of a race condition. For the time being we just live with it...
+      xrdcl.writeFile(acctok['filename'], acctok['ruid'], acctok['rgid'], flask.request.get_data())
+      log.info('msg="File successfully written" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename']))
+      return 'OK', httplib.OK
   except jwt.exceptions.DecodeError:
     log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
     return 'Invalid access token', httplib.UNAUTHORIZED

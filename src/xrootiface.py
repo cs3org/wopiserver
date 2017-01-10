@@ -19,7 +19,7 @@ xrdfs = None
 
 def _eosargs(ruid, rgid, atomicwrite=0):
   '''One-liner to generate extra EOS-specific arguments for the xroot URL'''
-  return '?eos.ruid=' + ruid + '&eos.rgid=' + rgid + ('&eos.atomicwrite=1' if atomicwrite else '')
+  return '?eos.ruid=' + ruid + '&eos.rgid=' + rgid + ('&eos.atomic=1' if atomicwrite else '')
 
 def init(inConfig, inLog):
   '''Init module-level variables'''
