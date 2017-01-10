@@ -56,10 +56,11 @@ def wopiopen():
   req = flask.request
   username = req.args['username']
   filename = req.args['filename']
-  canedit = ('canedit' in req.args and req.args['canedit'] == 'yes')
-  acctok = jwt.encode({'username': username, 'filename': filename, 'canedit': canedit, 'exp': (int(time.time())+tokenvalidity)},
-                      wopisecret, algorithm='HS256')
-  log.info('msg="Access token set" client="%s" user="%s" filename="%s" canedit="%r" token="%s"' % (flask.request.remote_addr, username, filename, canedit, acctok))
+  canedit = ('canedit' in req.args and req.args['canedit'].lower() == 'yes')
+  acctok = jwt.encode({'username': username, 'filename': filename, 'canedit': canedit,
+                      'exp': (int(time.time())+tokenvalidity)}, wopisecret, algorithm='HS256')
+  log.info('msg="Access token set" client="%s" user="%s" filename="%s" canedit="%r" token="%s"' % \
+           (flask.request.remote_addr, username, filename, canedit, acctok))
   return acctok
 
 
@@ -71,12 +72,14 @@ def wopiCheckFileInfo(fileid):
       raise jwt.exceptions.DecodeError
     log.info('msg="CheckFileInfo" username="%s" filename"%s" fileid="%s"' % (acctok['username'], acctok['filename'], fileid))
     statInfo = XrdCl(log, acctok['filename']).stat()
+    if statInfo.size > int(request.headers['X-WOPI-MaxExpectedSize']):
+      raise ValueError
     # populate metadata for this file
     md = {}
     md['BaseFileName'] = os.path.basename(acctok['filename'])
-    md['OwnerId'] = acctok['username']                      # XXX todo get owner uid
+    md['OwnerId'] = acctok['username']                      # XXX do we need the owner uid?
     md['UserId'] = acctok['username']
-    md['Size'] = statInfo.size                              # XXX todo check this is < request.headers['X-WOPI-MaxExpectedSize']
+    md['Size'] = statInfo.size
     md['Version'] = statInfo.modtimestr
     md['SupportsUpdate'] = md['UserCanWrite'] = md['SupportsLocks'] = acctok['canedit']
     # send it in JSON format
@@ -88,6 +91,9 @@ def wopiCheckFileInfo(fileid):
   except IOError, e:
     log.info('msg="Requested file not found" filename="%s" error="%s"' % (acctok['filename'], e))
     return 'File not found', httplib.NOT_FOUND
+  except ValueError, e:
+    log.warning('msg="The requested file is too large" filename="%s" actualSize="%ld" maxExpectedSize="%s" exception="%s"' % \
+                (acctok['filename'], statInfo.size, request.headers['X-WOPI-MaxExpectedSize'], e))
   except KeyError, e:
     log.error('msg="Invalid access token, missing %s field"' % e)
     return 'Invalid access token', httplib.UNAUTHORIZED
