@@ -11,13 +11,13 @@ import logging
 from XRootD import client as XrdClient      # the xroot bindings for python, xrootd-python-4.4.x.el7.x86_64.rpm
 from XRootD.client.flags import OpenFlags
 
+# module-wide state
 config = None
 log = None
 storageserver = None
 xrdfs = None
-homedir = '/castor/cern.ch/user/i/itglp/'    # XXX temporary - to be discussed
 
-def eosargs(ruid, rgid, atomicwrite=0):
+def _eosargs(ruid, rgid, atomicwrite=0):
   '''One-liner to generate extra EOS-specific arguments for the xroot URL'''
   return '?eos.ruid=' + ruid + '&eos.rgid=' + rgid + ('&eos.atomicwrite=1' if atomicwrite else '')
 
@@ -37,7 +37,7 @@ def stat(filename, ruid, rgid):
   '''Stat a file via xroot on behalf of the given uid,gid'''
   if not xrdfs:
     raise ValueError
-  rc, statInfo = xrdfs.stat(homedir + filename + eosargs(ruid, rgid))
+  rc, statInfo = xrdfs.stat(filename + _eosargs(ruid, rgid))
   # XXX todo get the etag for later
   if statInfo is None:
     raise IOError(rc.message.strip('\n'))
@@ -48,7 +48,7 @@ def readFile(filename, ruid, rgid):
   if not xrdfs:
     raise ValueError
   with XrdClient.File() as f:
-    rc, _statInfo_unused = f.open(storageserver + '/' + homedir + filename + eosargs(ruid, rgid), OpenFlags.READ)
+    rc, _statInfo_unused = f.open(storageserver + '/' + filename + _eosargs(ruid, rgid), OpenFlags.READ)
     if not rc.ok:
       # the file could not be opened: as this is a generator, we yield the error string instead of the file's contents
       log.info('msg="Error opening the file for read" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
@@ -63,7 +63,7 @@ def writeFile(filename, ruid, rgid, content):
   if not xrdfs:
     raise ValueError
   f = XrdClient.File()
-  rc, _statInfo_unused = f.open(storageserver + '/' + homedir + filename + eosargs(ruid, rgid, 1), OpenFlags.DELETE)
+  rc, _statInfo_unused = f.open(storageserver + '/' + filename + _eosargs(ruid, rgid, 1), OpenFlags.DELETE)
   if not rc.ok:
     log.info('msg="Error opening the file for write" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
     raise IOError(rc.message.strip('\n'))
