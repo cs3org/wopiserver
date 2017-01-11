@@ -17,18 +17,19 @@ except:
   print "Missing modules, please install xrootd-python, python-flask, python-jwt"
   sys.exit(-1)
 
-# read the configuration
-_loglevels = {"Critical": logging.CRITICAL,  # 50
-              "Error":    logging.ERROR,     # 40
-              "Warning":  logging.WARNING,   # 30
-              "Info":     logging.INFO,      # 20
-              "Debug":    logging.DEBUG      # 10
-             }
-config = ConfigParser.SafeConfigParser()
-config.read('/etc/wopi/wopiserver.defaults.conf')
-config.read('/etc/wopi/wopiserver.conf')
-# prepare the Flask web app
 try:
+  _loglevels = {"Critical": logging.CRITICAL,  # 50
+                "Error":    logging.ERROR,     # 40
+                "Warning":  logging.WARNING,   # 30
+                "Info":     logging.INFO,      # 20
+                "Debug":    logging.DEBUG      # 10
+               }
+  lastConfigReadTime = time.time()
+  # read the configuration
+  config = ConfigParser.SafeConfigParser()
+  config.readfp(open('/etc/wopi/wopiserver.defaults.conf'))    # fails if the file does not exist
+  config.read('/etc/wopi/wopiserver.conf')
+  # prepare the Flask web app
   app = flask.Flask("WOPIServer")
   log = app.logger
   log.setLevel(_loglevels[config.get('general', 'loglevel')])
@@ -44,8 +45,8 @@ except Exception, e:
   sys.exit(-1)
 
 
-# generate an access token for a given file of a given user. Warning: access to this function must be protected
 def doWopiOpen(req):
+  '''Generate an access token for a given file of a given user. Warning: access to this function must be protected'''
   ruid = req.args['ruid']
   rgid = req.args['rgid']
   filename = req.args['filename']
@@ -66,22 +67,33 @@ def doWopiOpen(req):
   return acctok
 
 
+def refreshConfig():
+  '''re-read the configuration file every 300 secs to catch any runtime parameter change'''
+  if time.time() > lastConfigReadTime + 300:
+    lastConfigReadTime = time.time()
+    config.read('/etc/wopi/wopiserver.conf')
+
+
 # The Web Application starts here
 @app.route("/")
 def index():
   log.info('msg="Accessed root page" client="%s"' % flask.request.remote_addr)
-  return "This is the CERNBox WOPI server. Access is performed via REST API, see <a href=http://wopi.readthedocs.io>http://wopi.readthedocs.io</a>."
+  return """
+    <div align="center" style="color:#000080; padding-top:100px; font-family:Verdana; size:11">This is the CERNBox <a href=http://wopi.readthedocs.io>WOPI</a> server for Microsoft Office Online.
+    To use this service, please log in to your <a href=https://cernbox.cern.ch>CERNBox</a> account and open any Microsoft Office document.</div>
+    """
 
 
 @app.route("/wopiopen", methods=['GET'])
 def wopiOpen():
+  refreshConfig()
   # first resolve the client: only our OwnCloud servers shall use this API
   try:
     allowedclients = config.get('general', 'allowedclients').split()
     for c in allowedclients:
       for ip in socket.getaddrinfo(c, None):
         if ip[4][0] == flask.request.remote_addr:
-          # we got a match, go for the open
+          # we got a match, go for the open and generate the access token
           return doWopiOpen(flask.request)
   except ConfigParser.NoOptionError:
     pass   # and fail
@@ -92,6 +104,7 @@ def wopiOpen():
 
 @app.route("/api/wopi/files/<fileid>", methods=['GET'])
 def wopiCheckFileInfo(fileid):
+  refreshConfig()
   try:
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
     if acctok['exp'] < time.time():
@@ -131,6 +144,7 @@ def wopiCheckFileInfo(fileid):
 
 @app.route("/api/wopi/files/<fileid>/contents", methods=['GET'])
 def wopiGetFile(fileid):
+  refreshConfig()
   try:
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
     if acctok['exp'] < time.time():
@@ -151,6 +165,7 @@ def wopiGetFile(fileid):
 
 @app.route("/api/wopi/files/<fileid>", methods=['POST'])
 def wopiLockUnlock(fileid):
+  refreshConfig()
   try:
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
     if acctok['exp'] < time.time():
@@ -175,6 +190,7 @@ def wopiLockUnlock(fileid):
 
 @app.route("/api/wopi/files/<fileid>/contents", methods=['POST'])
 def wopiPostContent(fileid):
+  refreshConfig()
   try:
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
     if acctok['exp'] < time.time():
