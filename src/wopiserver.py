@@ -70,6 +70,7 @@ def doWopiOpen(req):
 
 def refreshConfig():
   '''re-read the configuration file every 300 secs to catch any runtime parameter change'''
+  global lastConfigReadTime
   if time.time() > lastConfigReadTime + 300:
     lastConfigReadTime = time.time()
     config.read('/etc/wopi/wopiserver.conf')
@@ -111,10 +112,8 @@ def wopiCheckFileInfo(fileid):
     if acctok['exp'] < time.time():
       raise jwt.exceptions.DecodeError
     log.info('msg="CheckFileInfo" user="%s:%s" filename"%s" fileid="%s" WopiSession="%s"' % \
-             (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, flask.request.headers['X-WOPI-Session']))
+             (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, flask.request.headers['X-WOPI-Session'] if 'X-WOPI-Session' in flask.request.headers else 'N/A'))
     statInfo = xrdcl.stat(acctok['filename'], acctok['ruid'], acctok['rgid'])
-    if statInfo.size > int(flask.request.headers['X-WOPI-MaxExpectedSize']):
-      raise ValueError
     # populate metadata for this file
     md = {}
     md['BaseFileName'] = os.path.basename(acctok['filename'])
