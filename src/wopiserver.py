@@ -38,7 +38,8 @@ try:
   log.addHandler(loghandler)
   wopisecret = open(config.get('security', 'secretfile')).read()
   tokenvalidity = config.getint('general', 'tokenvalidity')
-  xrdcl.init(config, log)    # initialize the xroot client module
+  xrdcl.init(config, log)                          # initialize the xroot client module
+  config.get('general', 'allowedclients')          # read this to make sure it is configured
 except Exception, e:
   # any error we got here with the configuration is fatal
   log.critical('msg="Failed to read config, bailing out" error=%s' % e)
@@ -72,6 +73,9 @@ def refreshConfig():
   if time.time() > lastConfigReadTime + 300:
     lastConfigReadTime = time.time()
     config.read('/etc/wopi/wopiserver.conf')
+    # refresh some general parameters
+    tokenvalidity = config.getint('general', 'tokenvalidity')
+    log.setLevel(_loglevels[config.get('general', 'loglevel')])
 
 
 # The Web Application starts here
@@ -88,15 +92,12 @@ def index():
 def wopiOpen():
   refreshConfig()
   # first resolve the client: only our OwnCloud servers shall use this API
-  try:
-    allowedclients = config.get('general', 'allowedclients').split()
-    for c in allowedclients:
-      for ip in socket.getaddrinfo(c, None):
-        if ip[4][0] == flask.request.remote_addr:
-          # we got a match, go for the open and generate the access token
-          return doWopiOpen(flask.request)
-  except ConfigParser.NoOptionError:
-    pass   # and fail
+  allowedclients = config.get('general', 'allowedclients').split()
+  for c in allowedclients:
+    for ip in socket.getaddrinfo(c, None):
+      if ip[4][0] == flask.request.remote_addr:
+        # we got a match, go for the open and generate the access token
+        return doWopiOpen(flask.request)
   # no match found, fail
   log.info('msg="Unauthorized access attempt" client="%s"' % flask.request.remote_addr)
   return 'Client IP not authorized', httplib.UNAUTHORIZED
