@@ -89,7 +89,7 @@ def index():
     """
 
 
-@app.route("/wopiopen", methods=['GET'])
+@app.route("/wopi/cboxopen", methods=['GET'])
 def wopiOpen():
   refreshConfig()
   # first resolve the client: only our OwnCloud servers shall use this API
@@ -104,7 +104,7 @@ def wopiOpen():
   return 'Client IP not authorized', httplib.UNAUTHORIZED
 
 
-@app.route("/api/wopi/files/<fileid>", methods=['GET'])
+@app.route("/wopi/files/<fileid>", methods=['GET'])
 def wopiCheckFileInfo(fileid):
   refreshConfig()
   try:
@@ -143,7 +143,7 @@ def wopiCheckFileInfo(fileid):
     return 'Internal error', httplib.INTERNAL_SERVER_ERROR
 
 
-@app.route("/api/wopi/files/<fileid>/contents", methods=['GET'])
+@app.route("/wopi/files/<fileid>/contents", methods=['GET'])
 def wopiGetFile(fileid):
   refreshConfig()
   try:
@@ -164,33 +164,64 @@ def wopiGetFile(fileid):
     return 'Internal error', httplib.INTERNAL_SERVER_ERROR
 
 
-@app.route("/api/wopi/files/<fileid>", methods=['POST'])
-def wopiLockUnlock(fileid):
+# the following operations are all called on POST /wopi/files/<fileid>
+
+def wopiLockUnlock(fileid, reqheaders, acctok):
+  lock = reqheaders['X-WOPI-Lock']
+  log.info('msg="%s" user="%s:%s" filename="%s" lock="%s"' % \
+           (reqheaders['X-WOPI-Override'].title(), acctok['ruid'], acctok['rgid'], acctok['filename'], lock))
+  return 'OK', httplib.OK
+
+def wopiGetLock(fileid, reqheaders, acctok):
+  log.info('msg="GetLock" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename']))
+  return 'Not supported', httplib.NOT_IMPLEMENTED
+
+def wopiPutRelative(fileid, reqheaders, acctok):
+  log.info('msg="PutRelative" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename']))
+  return 'Not supported', httplib.NOT_IMPLEMENTED
+
+def deleteFile(fileid, reqheaders, acctok):
+  log.info('msg="DeleteFile" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename']))
+  return 'Not supported', httplib.NOT_IMPLEMENTED
+
+def renameFile(fileid, reqheaders, acctok):
+  log.info('msg="RenameFile" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename']))
+  return 'Not supported', httplib.NOT_IMPLEMENTED
+
+@app.route("/wopi/files/<fileid>", methods=['POST'])
+def wopiPost(fileid):
   refreshConfig()
   try:
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
     if acctok['exp'] < time.time():
       raise jwt.exceptions.DecodeError
     headers = flask.request.headers
-    if 'X-WOPI-Override' not in headers or 'X-WOPI-Lock' not in headers:
-      return 'X-WOPI-Override or X-WOPI-Lock missing from the headers', httplib.BAD_REQUEST
-    op = headers['X-WOPI-Override']   # must be one of LOCK, UNLOCK, REFRESH_LOCK
-    if op not in ('LOCK', 'UNLOCK', 'REFRESH_LOCK'):
-      return 'Unknown locking operation %s in header' % op, httplib.BAD_REQUEST
-    lock = headers['X-WOPI-Lock']
-    log.info('msg="%s" user="%s:%s" filename="%s" lock="%s"' % (op.title(), acctok['ruid'], acctok['rgid'], acctok['filename'], lock))
-    return 'OK', httplib.OK
+    op = headers['X-WOPI-Override']       # must be one of the following strings, throws KeyError if missing
+    if op in ('LOCK', 'UNLOCK', 'REFRESH_LOCK'):
+      return wopiLockUnlock(fileid, headers, acctok)
+    elif op == 'GET_LOCK':
+      return wopiGetLock(fileid, headers, acctok)
+    elif op == 'PUT_RELATIVE':
+      return wopiPutRelative(fileid, headers, acctok)
+    elif op == 'DELETE_FILE':
+      return wopiDeleteFile(fileid, headers, acctok)
+    elif op == 'RENAME_FILE':
+      return wopiRenameFile(fileid, headers, acctok)
+    else:
+      return 'Unknown operation %s found in header' % op, httplib.BAD_REQUEST
   except jwt.exceptions.DecodeError:
     log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
     return 'Invalid access token', httplib.UNAUTHORIZED
+  except KeyError, e:
+    return 'Missing header %s in POST request' % e, httplib.BAD_REQUEST
   except Exception, e:
     log.error('msg="Unexpected exception caught" exception="%s"' % e)
     log.debug(sys.exc_info())
     return 'Internal error', httplib.INTERNAL_SERVER_ERROR
 
 
-@app.route("/api/wopi/files/<fileid>/contents", methods=['POST'])
-def wopiPostContent(fileid):
+@app.route("/wopi/files/<fileid>/contents", methods=['POST'])
+def wopiPutFile(fileid):
   refreshConfig()
   try:
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
