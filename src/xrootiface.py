@@ -9,7 +9,7 @@
 import sys, os, time
 import logging
 from XRootD import client as XrdClient      # the xroot bindings for python, xrootd-python-4.4.x.el7.x86_64.rpm
-from XRootD.client.flags import OpenFlags
+from XRootD.client.flags import OpenFlags, QueryCode
 
 # module-wide state
 config = None
@@ -38,10 +38,18 @@ def stat(filename, ruid, rgid):
   if not xrdfs:
     raise ValueError
   rc, statInfo = xrdfs.stat(filename + _eosargs(ruid, rgid))
-  # XXX todo get the etag for later
   if statInfo is None:
     raise IOError(rc.message.strip('\n'))
   return statInfo
+
+def statx(filename, ruid, rgid):
+  '''Get extended stat info via an xroot opaque query on behalf of the given uid,gid'''
+  if not xrdfs:
+    raise ValueError
+  rc, statInfo = xrdfs.query(QueryCode.OPAQUEFILE, filename + _eosargs(ruid, rgid) + '&mgm.pcmd=stat')
+  if statInfo is None:
+    raise IOError(rc.message.strip('\n'))
+  return statInfo.split()
 
 def readFile(filename, ruid, rgid):
   '''Read a file via xroot on behalf of the given uid,gid. Note that the function is a generator, managed by Flask.'''

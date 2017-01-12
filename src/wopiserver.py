@@ -6,7 +6,8 @@
 #
 # Giuseppe.LoPresti@cern.ch
 
-import sys, os, time, socket, ConfigParser, json, httplib
+import sys, os, time, socket, ConfigParser, platform
+import urllib, httplib, json
 import logging.handlers
 import logging
 try:
@@ -16,6 +17,9 @@ try:
 except:
   print "Missing modules, please install xrootd-python, python-flask, python-jwt"
   sys.exit(-1)
+
+# XXX todo replace this string on the fly on packaging
+WOPISERVVERSION = '0.2git'
 
 try:
   _loglevels = {"Critical": logging.CRITICAL,  # 50
@@ -47,25 +51,27 @@ except Exception, e:
 
 
 def doWopiOpen(req):
-  '''Generate an access token for a given file of a given user. Warning: access to this function must be protected'''
+  '''Generate an access token for a given file of a given user, and returns a URL-encoded string
+  suitable to be passed as a WOPISrc value to a Microsoft Office Online server.
+  Access to this function is protected by source IP address.'''
   ruid = req.args['ruid']
   rgid = req.args['rgid']
   filename = req.args['filename']
   canedit = ('canedit' in req.args and req.args['canedit'].lower() == 'yes')
   try:
-    if canedit:
-      # stat now the file to handle sync conflicts afterwards
-      mtime = xrdcl.stat(filename, ruid, rgid).modtime
-    else:
-      mtime = 0
+    # stat now the file to check for existence and handle sync conflicts afterwards
+    statx = xrdcl.statx(filename, ruid, rgid)
+    inode = statx[2]
+    mtime = statx[12]
   except IOError, e:
     log.info('msg="Requested file not found" filename="%s" error="%s"' % (filename, e))
     return 'File not found', httplib.NOT_FOUND
   acctok = jwt.encode({'ruid': ruid, 'rgid': rgid, 'filename': filename, 'canedit': canedit, 'mtime': mtime,
                       'exp': (int(time.time())+tokenvalidity)}, wopisecret, algorithm='HS256')
-  log.info('msg="Access token set" host="%s" user="%s:%s" filename="%s" canedit="%r" token="%s"' % \
-           (req.remote_addr, ruid, rgid, filename, canedit, acctok))
-  return acctok
+  log.info('msg="Access token set" host="%s" user="%s:%s" filename="%s" canedit="%r" inode="%s" token="%s"' % \
+           (req.remote_addr, ruid, rgid, filename, canedit, inode, acctok))
+  # generate and return an URL-encoded URL for the Office Online server
+  return urllib.quote_plus('http://%s:8080/wopi/files/%s' % (socket.gethostname(), inode)) + '&access_token=%s' %  urllib.quote_plus(acctok)
 
 
 def refreshConfig():
@@ -84,9 +90,11 @@ def refreshConfig():
 def index():
   log.info('msg="Accessed root page" client="%s"' % flask.request.remote_addr)
   return """
-    <div align="center" style="color:#000080; padding-top:100px; font-family:Verdana; size:11">This is the CERNBox <a href=http://wopi.readthedocs.io>WOPI</a> server for Microsoft Office Online.
-    To use this service, please log in to your <a href=https://cernbox.cern.ch>CERNBox</a> account and open any Microsoft Office document.</div>
-    """
+    <div align="center" style="color:#000080; padding-top:50px; font-family:Verdana; size:11">This is the CERNBox <a href=http://wopi.readthedocs.io>WOPI</a> server for Microsoft Office Online.
+    To use this service, please log in to your <a href=https://cernbox.cern.ch>CERNBox</a> account and click on the Open button next to your Microsoft Office documents.</div>
+    <br><br><br><br><br><br><br><br><br><br><hr>
+    <i>CERNBox WOPI Server %s. Powered by Flask %s for Python %s</i>.
+    """ % (WOPISERVVERSION, flask.__version__, platform.python_version())
 
 
 @app.route("/wopi/cboxopen", methods=['GET'])
@@ -113,14 +121,14 @@ def wopiCheckFileInfo(fileid):
       raise jwt.exceptions.DecodeError
     log.info('msg="CheckFileInfo" user="%s:%s" filename"%s" fileid="%s" WopiSession="%s"' % \
              (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, flask.request.headers['X-WOPI-Session'] if 'X-WOPI-Session' in flask.request.headers else 'N/A'))
-    statInfo = xrdcl.stat(acctok['filename'], acctok['ruid'], acctok['rgid'])
+    statInfo = xrdcl.statx(acctok['filename'], acctok['ruid'], acctok['rgid'])
     # populate metadata for this file
     md = {}
     md['BaseFileName'] = os.path.basename(acctok['filename'])
-    md['OwnerId'] = acctok['ruid']                      # XXX do we need the owner uid?
+    md['OwnerId'] = statInfo[5] + ':' + statInfo[6]
     md['UserId'] = acctok['ruid'] + ':' + acctok['rgid']
-    md['Size'] = statInfo.size
-    md['Version'] = statInfo.modtimestr     # todo get ETAG from server
+    md['Size'] = statInfo[8]
+    md['Version'] = statInfo[12]
     md['SupportsUpdate'] = md['UserCanWrite'] = md['SupportsLocks'] = acctok['canedit']
     # send it in JSON format
     resp = flask.Response(json.dumps(md), mimetype='application/json')
@@ -131,9 +139,6 @@ def wopiCheckFileInfo(fileid):
   except IOError, e:
     log.info('msg="Requested file not found" filename="%s" error="%s"' % (acctok['filename'], e))
     return 'File not found', httplib.NOT_FOUND
-  except ValueError, e:
-    log.warning('msg="The requested file is too large" filename="%s" actualSize="%ld" maxExpectedSize="%s" exception="%s"' % \
-                (acctok['filename'], statInfo.size, flask.request.headers['X-WOPI-MaxExpectedSize'], e))
   except KeyError, e:
     log.error('msg="Invalid access token, missing %s field"' % e)
     return 'Invalid access token', httplib.UNAUTHORIZED
@@ -153,7 +158,7 @@ def wopiGetFile(fileid):
     log.info('msg="GetFile" user="%s:%s" filename="%s" fileid="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid))
     # stream file from storage to client
     resp = flask.Response(xrdcl.readFile(acctok['filename'], acctok['ruid'], acctok['rgid']), mimetype='application/octet-stream')
-    resp.headers['X-WOPI-ItemVersion'] = '1.0'   # XXX todo get ETAG from server
+    resp.headers['X-WOPI-ItemVersion'] = acctok['mtime']
     return resp
   except jwt.exceptions.DecodeError:
     log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
@@ -230,14 +235,14 @@ def wopiPutFile(fileid):
     log.info('msg="PostContent" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename']))
     # check the destination file now against conflicts
     try:
-      mtime = xrdcl.stat(acctok['filename'], acctok['ruid'], acctok['rgid']).modtime   # XXX todo get ETAG - how to get the ETAG at the first open time?
+      mtime = xrdcl.stat(acctok['filename'], acctok['ruid'], acctok['rgid']).modtime
     except IOError:
       # the file got deleted meanwhile: force a conflict
       mtime = time.time()
     if mtime > int(acctok['mtime']):
       # someone else overwrote the file before us: we must therefore create a new conflict file
       newname, ext = os.path.splitext(acctok['filename'])
-      newname = '%s_conflict-%s.%s' % (newname, time.strftime('%Y%m%d-%H%M%S'), ext.strip())   # this is the OwnCloud format
+      newname = '%s_conflict-%s%s' % (newname, time.strftime('%Y%m%d-%H%M%S'), ext.strip())   # this is the OwnCloud format
       xrdcl.writeFile(newname, acctok['ruid'], acctok['rgid'], flask.request.get_data())
       log.info('msg="Conflicting copy found" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], newname))
       return 'Conflicting copy found, mtime = %d' % mtime, httplib.PRECONDITION_FAILED    # return a failure so that the user can check
