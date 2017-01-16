@@ -37,7 +37,7 @@ try:
   app = flask.Flask("WOPIServer")
   log = app.logger
   log.setLevel(_loglevels[config.get('general', 'loglevel')])
-  loghandler = logging.FileHandler(config.get('general', 'logfile'))
+  loghandler = logging.FileHandler('/var/log/cernbox/wopiserver.log')
   loghandler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)s %(levelname)-8s %(message)s', datefmt='%Y-%m-%dT%H:%M:%S'))
   log.addHandler(loghandler)
   wopisecret = open(config.get('security', 'secretfile')).read()
@@ -50,28 +50,23 @@ except Exception, e:
   sys.exit(-1)
 
 
-def doWopiOpen(req):
+def generateAccessToken(ruid, rgid, filename, canedit):
   '''Generate an access token for a given file of a given user, and returns a URL-encoded string
   suitable to be passed as a WOPISrc value to a Microsoft Office Online server.
   Access to this function is protected by source IP address.'''
-  ruid = req.args['ruid']
-  rgid = req.args['rgid']
-  filename = req.args['filename']
-  canedit = ('canedit' in req.args and req.args['canedit'].lower() == 'yes')
   try:
-    # stat now the file to check for existence and handle sync conflicts afterwards
+    # stat now the file to check for existence and get inode and modification time
+    # the inode serves as fileid, the mtime is later used for conflicts resolution
     statx = xrdcl.statx(filename, ruid, rgid)
     inode = statx[2]
     mtime = statx[12]
   except IOError, e:
     log.info('msg="Requested file not found" filename="%s" error="%s"' % (filename, e))
-    return 'File not found', httplib.NOT_FOUND
+    raise
   acctok = jwt.encode({'ruid': ruid, 'rgid': rgid, 'filename': filename, 'canedit': canedit, 'mtime': mtime,
                       'exp': (int(time.time())+tokenvalidity)}, wopisecret, algorithm='HS256')
-  log.info('msg="Access token set" host="%s" user="%s:%s" filename="%s" canedit="%r" inode="%s" token="%s"' % \
-           (req.remote_addr, ruid, rgid, filename, canedit, inode, acctok))
-  # generate and return an URL-encoded URL for the Office Online server
-  return urllib.quote_plus('http://%s:8080/wopi/files/%s' % (socket.gethostname(), inode)) + '&access_token=%s' %  urllib.quote_plus(acctok)
+  # return the inode == fileid and the access token
+  return inode, acctok
 
 
 def refreshConfig():
@@ -99,14 +94,28 @@ def index():
 
 @app.route("/wopi/cboxopen", methods=['GET'])
 def wopiOpen():
+  '''Get a WOPISrc target and an access token to be passed to Microsoft Office online for accessing a given file for a given user'''
   refreshConfig()
+  req = flask.request
   # first resolve the client: only our OwnCloud servers shall use this API
   allowedclients = config.get('general', 'allowedclients').split()
   for c in allowedclients:
     for ip in socket.getaddrinfo(c, None):
-      if ip[4][0] == flask.request.remote_addr:
-        # we got a match, go for the open and generate the access token
-        return doWopiOpen(flask.request)
+      if ip[4][0] == req.remote_addr:
+        # we got a match, generate the access token
+        ruid = req.args['ruid']
+        rgid = req.args['rgid']
+        filename = req.args['filename']
+        canedit = ('canedit' in req.args and req.args['canedit'].lower() == 'yes')
+        try:
+          inode, acctok = generateAccessToken(ruid, rgid, filename, canedit)
+          log.info('msg="wopiOpen: access token set" host="%s" user="%s:%s" filename="%s" canedit="%r" inode="%s" token="%s"' % \
+                   (req.remote_addr, ruid, rgid, filename, canedit, inode, acctok))
+          # return an URL-encoded URL for the Office Online server
+          return urllib.quote_plus('http://%s:8080/wopi/files/%s' % (socket.gethostname(), inode)) + \
+                 '&access_token=%s' % acctok      # no need to URL-encode the JWT token
+        except IOError, e:
+          return 'File not found', httplib.NOT_FOUND
   # no match found, fail
   log.info('msg="Unauthorized access attempt" client="%s"' % flask.request.remote_addr)
   return 'Client IP not authorized', httplib.UNAUTHORIZED
@@ -130,6 +139,9 @@ def wopiCheckFileInfo(fileid):
     md['Size'] = statInfo[8]
     md['Version'] = statInfo[12]
     md['SupportsUpdate'] = md['UserCanWrite'] = md['SupportsLocks'] = acctok['canedit']
+    md['UserCanNotWriteRelative'] = True     # XXX for the time being, until the PutRelative function is implemented
+    md['DownloadUrl'] = config.get('general', 'downloadurl') + \
+                        '?dir=' + urllib.quote_plus(os.path.dirname(acctok['filename'])) + '&files=' + urllib.quote_plus(md['BaseFileName'])
     # send it in JSON format
     resp = flask.Response(json.dumps(md), mimetype='application/json')
     return resp
