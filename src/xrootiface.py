@@ -34,7 +34,7 @@ def init(inConfig, inLog):
   xrdfs = XrdClient.FileSystem(storageserver)
 
 def stat(filename, ruid, rgid):
-  '''Stat a file via xroot on behalf of the given uid,gid'''
+  '''Stat a file via xroot on behalf of the given uid,gid. Not actually used but included for completeness.'''
   if not xrdfs:
     raise ValueError
   rc, statInfo = xrdfs.stat(filename + _eosargs(ruid, rgid))
@@ -46,10 +46,32 @@ def statx(filename, ruid, rgid):
   '''Get extended stat info via an xroot opaque query on behalf of the given uid,gid'''
   if not xrdfs:
     raise ValueError
-  rc, statInfo = xrdfs.query(QueryCode.OPAQUEFILE, filename + _eosargs(ruid, rgid) + '&mgm.pcmd=stat')
-  if statInfo is None:
+  rc, rawinfo = xrdfs.query(QueryCode.OPAQUEFILE, filename + _eosargs(ruid, rgid) + '&mgm.pcmd=stat')
+  if not rc.ok:
     raise IOError(rc.message.strip('\n'))
-  return statInfo.split()
+  return rawinfo.split()
+
+def getXAttr(filename, ruid, rgid, key):
+  '''Get extended attributes via an xroot opaque query on behalf of the given uid,gid'''
+  if not xrdfs:
+    raise ValueError
+  rc, rawinfo = xrdfs.query(QueryCode.OPAQUEFILE, filename + _eosargs(ruid, rgid) + \
+                            '&mgm.cmd=attr&mgm.subcmd=get&mgm.attr.key=' + key)
+  if rawinfo is None:
+    #log.warning('msg="Error getting xattr" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
+    raise IOError(rc.message.strip('\n'))
+  return rawinfo.split()
+
+def setXAttr(filename, ruid, rgid, key, value):
+  '''Set the extended attribute <key> to <value> via an xroot opaque query on behalf of the given uid,gid'''
+  if not xrdfs:
+    raise ValueError
+  rc, rawinfo = xrdfs.query(QueryCode.OPAQUEFILE, filename + _eosargs(ruid, rgid) + \
+                            '&mgm.cmd=attr&mgm.subcmd=set&mgm.attr.key=' + key + '&mgm.attr.value=' + value)
+  if rawinfo is None:
+    #log.warning('msg="Error setting xattr" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
+    raise IOError(rc.message.strip('\n'))
+  return rawinfo.split()
 
 def readFile(filename, ruid, rgid):
   '''Read a file via xroot on behalf of the given uid,gid. Note that the function is a generator, managed by Flask.'''
@@ -59,7 +81,7 @@ def readFile(filename, ruid, rgid):
     rc, _statInfo_unused = f.open(storageserver + '/' + filename + _eosargs(ruid, rgid), OpenFlags.READ)
     if not rc.ok:
       # the file could not be opened: as this is a generator, we yield the error string instead of the file's contents
-      log.info('msg="Error opening the file for read" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
+      log.warning('msg="Error opening the file for read" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
       yield rc.message
     else:
       # the actual read is buffered and managed by the Flask server
@@ -78,9 +100,9 @@ def writeFile(filename, ruid, rgid, content):
   # write the file. In a future implementation, we should find a way to only update the required chunks...
   rc, _statInfo_unused = f.write(content, offset=0)
   if not rc.ok:
-    log.info('msg="Error writing the file" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
+    log.warning('msg="Error writing the file" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
     raise IOError(rc.message.strip('\n'))
   rc, _statInfo_unused = f.close()
   if not rc.ok:
-    log.info('msg="Error closing the file" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
+    log.warning('msg="Error closing the file" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
     raise IOError(rc.message.strip('\n'))
