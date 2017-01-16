@@ -1,0 +1,11 @@
+/var/log/cernbox/wopiserver.log
+{
+  compress
+  daily
+  missingok
+  rotate 500
+  postrotate
+    /bin/kill -^CP `cat /var/run/syslogd.pid 2> /dev/null` 2> /dev/null || true
+    /bin/kill -^CP `cat /var/run/rsyslogd.pid 2> /dev/null` 2> /dev/null || true
+  endscript
+}

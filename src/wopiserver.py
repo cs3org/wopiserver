@@ -18,8 +18,8 @@ except:
   print "Missing modules, please install xrootd-python, python-flask, python-jwt"
   sys.exit(-1)
 
-# XXX todo replace this string on the fly on packaging
-WOPISERVVERSION = '0.2git'
+# the following constant is replaced on the fly when generating the RPM (cf. spec file)
+WOPISERVERVERSION = 'git'
 
 try:
   _loglevels = {"Critical": logging.CRITICAL,  # 50
@@ -94,7 +94,7 @@ def index():
     To use this service, please log in to your <a href=https://cernbox.cern.ch>CERNBox</a> account and click on the Open button next to your Microsoft Office documents.</div>
     <br><br><br><br><br><br><br><br><br><br><hr>
     <i>CERNBox WOPI Server %s. Powered by Flask %s for Python %s</i>.
-    """ % (WOPISERVVERSION, flask.__version__, platform.python_version())
+    """ % (WOPISERVERVERSION, flask.__version__, platform.python_version())
 
 
 @app.route("/wopi/cboxopen", methods=['GET'])
@@ -266,4 +266,4 @@ def wopiPutFile(fileid):
 
 
 app.run(host='0.0.0.0', port=8080, threaded=True, debug=(config.get('general', 'loglevel') == 'Debug'))
-#       ssl_context=(config.get('security', 'wopicert'), config.get('security', 'wopikey')))
+# XXX todo: enable https and then add:    ssl_context=(config.get('security', 'wopicert'), config.get('security', 'wopikey')))

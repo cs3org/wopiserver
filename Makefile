@@ -1,4 +1,4 @@
-FILES_TO_RPM = src wopisecret wopiserver.conf wopiserver.service
+FILES_TO_RPM = src wopisecret wopiserver.conf wopiserver.service wopiserver.logrotate
 SPECFILE = $(shell find . -type f -name *.spec)
 PACKAGE  = $(shell awk '$$1 == "Name:"     { print $$2 }' $(SPECFILE) )
 VERSION  = $(shell awk '$$1 == "Version:"  { print $$2 }' $(SPECFILE) )

@@ -4,9 +4,9 @@ After=syslog.target
 
 [Service]
 Type=simple
-User=wopi
-Group=wopi
-WorkingDirectory=/tmp
+User=cboxwopi
+Group=def-cg
+WorkingDirectory=/var/log/wopiserver
 ExecStart=/usr/bin/wopiserver.py
 StandardOutput=null
 StandardError=syslog
