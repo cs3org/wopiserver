@@ -143,12 +143,13 @@ def wopiCheckFileInfo(fileid):
     filemd['Size'] = statInfo[8]
     filemd['Version'] = statInfo[12]
     filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = acctok['canedit']
+    filemd['SupportsRename'] = filemd['UserCanRename'] = True
     filemd['UserCanNotWriteRelative'] = True     # XXX for the time being, until the PutRelative function is implemented
     filemd['DownloadUrl'] = config.get('general', 'downloadurl') + '?dir=' + urllib.quote_plus(os.path.dirname(acctok['filename'])) + \
-                                   '&files=' + urllib.quote_plus(md['BaseFileName'])
+                                   '&files=' + urllib.quote_plus(filemd['BaseFileName'])
     if acctok['canedit']:
       # the file is going to be edited: keep its current mtime as our last modification time for later conflict checking
-      xrdcl.setXAttr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime, statInfo[8])
+      xrdcl.setXAttr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime, statInfo[12])
     # send it in JSON format
     resp = flask.Response(json.dumps(filemd), mimetype='application/json')
     return resp
@@ -194,7 +195,7 @@ def wopiLockUnlock(fileid, reqheaders, acctok):
   lock = reqheaders['X-WOPI-Lock']
   log.info('msg="%s" user="%s:%s" filename="%s" lock="%s"' % \
            (reqheaders['X-WOPI-Override'].title(), acctok['ruid'], acctok['rgid'], acctok['filename'], lock))
-  if lock = 'UNLOCK':
+  if lock == 'UNLOCK':
     # remove any extended attribute related to conflicts handling
     try:
       xrdcl.rmXAttr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime)
@@ -220,7 +221,7 @@ def wopiDeleteFile(fileid, reqheaders, acctok):
   except Exception:
     return 'Internal error', httplib.INTERNAL_SERVER_ERROR
 
-def renameFile(fileid, reqheaders, acctok):
+def wopiRenameFile(fileid, reqheaders, acctok):
   log.info('msg="RenameFile" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename']))
   return 'Not supported', httplib.NOT_IMPLEMENTED
 
@@ -266,19 +267,20 @@ def wopiPutFile(fileid):
     log.info('msg="PostContent" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename']))
     # check the destination file now against conflicts
     try:
-      currMtime = xrdcl.stat(acctok['filename'], acctok['ruid'], acctok['rgid']).modtime
-      ourMtime = int(xrdcl.getXAttr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime))
+      currmtime = xrdcl.stat(acctok['filename'], acctok['ruid'], acctok['rgid']).modtime
+      ourmtime = int(xrdcl.getXAttr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime))
     except (IOError, ValueError) as e:
       # either the file or our xattr got deleted meanwhile: force a conflict
-      currMtime = time.time()
-      ourMtime = 0
-    if currMtime > ourMtime:
+      currmtime = time.time()
+      ourmtime = 0
+    if currmtime > ourmtime:
       # someone else overwrote the file before us: we must therefore create a new conflict file
       newname, ext = os.path.splitext(acctok['filename'])
       newname = '%s_conflict-%s%s' % (newname, time.strftime('%Y%m%d-%H%M%S'), ext.strip())   # this is the OwnCloud format
       xrdcl.writeFile(newname, acctok['ruid'], acctok['rgid'], flask.request.get_data())
-      log.info('msg="Conflicting copy found" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], newname))
-      return 'Conflicting copy found, mtime = %d' % mtime, httplib.PRECONDITION_FAILED    # return a failure so that the user can check
+      log.info('msg="Conflicting copy found" user="%s:%s" filename="%s" currmtime="%ld" ourmtime="%ld"' % \
+               (acctok['ruid'], acctok['rgid'], newname, currmtime, ourmtime))
+      return 'Conflicting copy found', httplib.INTERNAL_SERVER_ERROR   # return a failure so that the user can check
     else:
       # OK, nobody overwrote the file: go ahead and overwrite it.
       # Note that the entire check+write operation should be atomic, but the previous check still gives
@@ -287,8 +289,8 @@ def wopiPutFile(fileid):
       xrdcl.writeFile(acctok['filename'], acctok['ruid'], acctok['rgid'], flask.request.get_data())
       log.info('msg="File successfully written" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename']))
       # and retrieve again the modification time to update our xattr
-      newMtime = xrdcl.stat(acctok['filename'], acctok['ruid'], acctok['rgid']).modtime
-      xrdcl.setXAttr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime, newMtime)
+      newmtime = xrdcl.stat(acctok['filename'], acctok['ruid'], acctok['rgid']).modtime
+      xrdcl.setXAttr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime, newmtime)
       return 'OK', httplib.OK
   except jwt.exceptions.DecodeError:
     log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])

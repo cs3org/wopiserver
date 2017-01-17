@@ -21,6 +21,27 @@ def _eosargs(ruid, rgid, atomicwrite=0):
   '''One-liner to generate extra EOS-specific arguments for the xroot URL'''
   return '?eos.ruid=' + ruid + '&eos.rgid=' + rgid + ('&eos.atomic=1' if atomicwrite else '')
 
+def _xrootcmd(cmd, subcmd, ruid, rgid, args):
+  '''Perform the <cmd>/<subcmd> action on the special /proc/user path on behalf of the given uid,gid'''
+  log.debug('msg="Invoking _xrootcmd" cmd="%s" subcmd="%s" args="%s"' % (cmd, subcmd, args))
+  if not xrdfs:
+    raise ValueError
+  with XrdClient.File() as f:
+    rc, _statInfo_unused = f.open(storageserver + '//proc/user/' + _eosargs(ruid, rgid) + '&mgm.cmd=' + cmd + \
+                                  ('&mgm.subcmd=' + subcmd if subcmd else '') + '&' + args, OpenFlags.READ)
+    res = f.readline().strip('\n').split('&')
+    if len(res) == 3:    # we may only just get stdout: in that case, assume it's all OK
+      rc = res[2]
+      rc = rc[rc.find('=')+1:]
+      if rc != '0':
+        # failure: get info from stderr, log and raise
+        msg = res[1][res[1].find('=')+1:]
+        log.warning('msg="Error with xroot command" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' % (cmd, subcmd, args, msg, rc))
+        raise IOError(msg)
+  # all right, return everything that came in stdout
+  return res[0][res[0].find('stdout=')+7:]
+
+
 def init(inConfig, inLog):
   '''Init module-level variables'''
   global config
@@ -35,6 +56,7 @@ def init(inConfig, inLog):
 
 def stat(filename, ruid, rgid):
   '''Stat a file via xroot on behalf of the given uid,gid. Not actually used but included for completeness.'''
+  log.debug('msg="Invoking stat" filename="%s"' % filename)
   if not xrdfs:
     raise ValueError
   rc, statInfo = xrdfs.stat(filename + _eosargs(ruid, rgid))
@@ -44,50 +66,31 @@ def stat(filename, ruid, rgid):
 
 def statx(filename, ruid, rgid):
   '''Get extended stat info via an xroot opaque query on behalf of the given uid,gid'''
+  log.debug('msg="Invoking statx" filename="%s"' % filename)
   if not xrdfs:
     raise ValueError
   rc, rawinfo = xrdfs.query(QueryCode.OPAQUEFILE, filename + _eosargs(ruid, rgid) + '&mgm.pcmd=stat')
-  if statInfo is None:
+  if rawinfo is None:
     raise IOError(rc.message.strip('\n'))
   return rawinfo.split()
 
 def setXAttr(filename, ruid, rgid, key, value):
-  '''Set the extended attribute <key> to <value> via an xroot special open on behalf of the given uid,gid'''
-  if not xrdfs:
-    raise ValueError
-  with XrdClient.File() as f:
-    rc, _statInfo_unused = f.open(storageserver + '//proc/user/' + _eosargs(ruid, rgid) + '&mgm.cmd=attr&mgm.subcmd=set' + \
-                                  '&mgm.attr.key=' + key + '&mgm.attr.value=' + value + '&mgm.path=' + filename, OpenFlags.READ)
-    if not rc.ok:
-      log.warning('msg="Error setting xattr" filename="%s" attr="%s" error="%s"' % (filename, key+'='+value, rc.message.strip('\n')))
-      raise IOError(rc.message.strip('\n'))
+  '''Set the extended attribute <key> to <value> via a special open on behalf of the given uid,gid'''
+  _xrootcmd('attr', 'set', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.attr.value=' + value + '&mgm.path=' + filename)
 
 def getXAttr(filename, ruid, rgid, key):
-  '''Get the extended attribute <key> via an xroot special open on behalf of the given uid,gid'''
-  if not xrdfs:
-    raise ValueError
-  with XrdClient.File() as f:
-    rc, _statInfo_unused = f.open(storageserver + '//proc/user/' + _eosargs(ruid, rgid) + '&mgm.cmd=attr&mgm.subcmd=get' + \
-                                  '&mgm.attr.key=' + key + '&mgm.path=' + filename, OpenFlags.READ)
-    if not rc.ok:
-      #log.warning('msg="Error getting xattr" filename="%s" attr="%s" error="%s"' % (filename, key, rc.message.strip('\n')))
-      raise IOError(rc.message.strip('\n'))
-    data = f.readline()    # get the info, in the format mgm.proc.stdout=<key>="<value>"
-  return data.split('"')[1]
+  '''Get the extended attribute <key> via a special open on behalf of the given uid,gid'''
+  res = _xrootcmd('attr', 'get', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.path=' + filename)
+  # if no error, the response comes in the format <key>="<value>"
+  return res.split('"')[1]
 
 def rmXAttr(filename, ruid, rgid, key):
-  '''Remove the extended attribute <key> via an xroot special open on behalf of the given uid,gid'''
-  if not xrdfs:
-    raise ValueError
-  with XrdClient.File() as f:
-    rc, _statInfo_unused = f.open(storageserver + '//proc/user/' + _eosargs(ruid, rgid) + '&mgm.cmd=attr&mgm.subcmd=rm' + \
-                                  '&mgm.attr.key=' + key + '&mgm.path=' + filename, OpenFlags.READ)
-    if not rc.ok:
-      log.warning('msg="Error removing xattr" filename="%s" attr="%s" error="%s"' % (filename, key+'='+value, rc.message.strip('\n')))
-      raise IOError(rc.message.strip('\n'))
+  '''Remove the extended attribute <key> via a special open on behalf of the given uid,gid'''
+  _xrootcmd('attr', 'rm', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.path=' + filename)
 
 def readFile(filename, ruid, rgid):
   '''Read a file via xroot on behalf of the given uid,gid. Note that the function is a generator, managed by Flask.'''
+  log.debug('msg="Invoking readFile" filename="%s"' % filename)
   if not xrdfs:
     raise ValueError
   with XrdClient.File() as f:
@@ -103,6 +106,7 @@ def readFile(filename, ruid, rgid):
 
 def writeFile(filename, ruid, rgid, content):
   '''Write a file via xroot on behalf of the given uid,gid. The entire content is written and any pre-existing file is deleted.'''
+  log.debug('msg="Invoking writeFile filename="%s"' % filename)
   if not xrdfs:
     raise ValueError
   f = XrdClient.File()
@@ -120,13 +124,10 @@ def writeFile(filename, ruid, rgid, content):
     log.warning('msg="Error closing the file" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
     raise IOError(rc.message.strip('\n'))
 
+def renameFile(origFilename, newFilename, ruid, rgid):
+  '''Rename a file via a special open from origFilename to newFilename on behalf of the given uid,gid.'''
+  _xrootcmd('file', 'rename', ruid, rgid, '&mgm.path=' + origFilename + '&mgm.file.target=' + newFilename)
+
 def removeFile(filename, ruid, rgid):
-  '''Remove a file via xroot on behalf of the given uid,gid.'''
-  if not xrdfs:
-    raise ValueError
-  with XrdClient.File() as f:
-    rc, _statInfo_unused = f.open(storageserver + '//proc/user/' + _eosargs(ruid, rgid) + '&mgm.cmd=rm' + \
-                                  '&mgm.path=' + filename, OpenFlags.READ)
-    if not rc.ok:
-      log.warning('msg="Error removing file" filename="%s" attr="%s" error="%s"' % (filename, key+'='+value, rc.message.strip('\n')))
-      raise IOError(rc.message.strip('\n'))
+  '''Remove a file via a special open on behalf of the given uid,gid.'''
+  _xrootcmd('rm', None, ruid, rgid, '&mgm.path=' + filename)
