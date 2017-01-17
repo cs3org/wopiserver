@@ -47,31 +47,44 @@ def statx(filename, ruid, rgid):
   if not xrdfs:
     raise ValueError
   rc, rawinfo = xrdfs.query(QueryCode.OPAQUEFILE, filename + _eosargs(ruid, rgid) + '&mgm.pcmd=stat')
-  if not rc.ok:
-    raise IOError(rc.message.strip('\n'))
-  return rawinfo.split()
-
-def getXAttr(filename, ruid, rgid, key):
-  '''Get extended attributes via an xroot opaque query on behalf of the given uid,gid'''
-  if not xrdfs:
-    raise ValueError
-  rc, rawinfo = xrdfs.query(QueryCode.OPAQUEFILE, filename + _eosargs(ruid, rgid) + \
-                            '&mgm.cmd=attr&mgm.subcmd=get&mgm.attr.key=' + key)
-  if rawinfo is None:
-    #log.warning('msg="Error getting xattr" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
+  if statInfo is None:
     raise IOError(rc.message.strip('\n'))
   return rawinfo.split()
 
 def setXAttr(filename, ruid, rgid, key, value):
-  '''Set the extended attribute <key> to <value> via an xroot opaque query on behalf of the given uid,gid'''
+  '''Set the extended attribute <key> to <value> via an xroot special open on behalf of the given uid,gid'''
   if not xrdfs:
     raise ValueError
-  rc, rawinfo = xrdfs.query(QueryCode.OPAQUEFILE, filename + _eosargs(ruid, rgid) + \
-                            '&mgm.cmd=attr&mgm.subcmd=set&mgm.attr.key=' + key + '&mgm.attr.value=' + value)
-  if rawinfo is None:
-    #log.warning('msg="Error setting xattr" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
-    raise IOError(rc.message.strip('\n'))
-  return rawinfo.split()
+  with XrdClient.File() as f:
+    rc, _statInfo_unused = f.open(storageserver + '//proc/user/' + _eosargs(ruid, rgid) + '&mgm.cmd=attr&mgm.subcmd=set' + \
+                                  '&mgm.attr.key=' + key + '&mgm.attr.value=' + value + '&mgm.path=' + filename, OpenFlags.READ)
+    if not rc.ok:
+      log.warning('msg="Error setting xattr" filename="%s" attr="%s" error="%s"' % (filename, key+'='+value, rc.message.strip('\n')))
+      raise IOError(rc.message.strip('\n'))
+
+def getXAttr(filename, ruid, rgid, key):
+  '''Get the extended attribute <key> via an xroot special open on behalf of the given uid,gid'''
+  if not xrdfs:
+    raise ValueError
+  with XrdClient.File() as f:
+    rc, _statInfo_unused = f.open(storageserver + '//proc/user/' + _eosargs(ruid, rgid) + '&mgm.cmd=attr&mgm.subcmd=get' + \
+                                  '&mgm.attr.key=' + key + '&mgm.path=' + filename, OpenFlags.READ)
+    if not rc.ok:
+      #log.warning('msg="Error getting xattr" filename="%s" attr="%s" error="%s"' % (filename, key, rc.message.strip('\n')))
+      raise IOError(rc.message.strip('\n'))
+    data = f.readline()    # get the info, in the format mgm.proc.stdout=<key>="<value>"
+  return data.split('"')[1]
+
+def rmXAttr(filename, ruid, rgid, key):
+  '''Remove the extended attribute <key> via an xroot special open on behalf of the given uid,gid'''
+  if not xrdfs:
+    raise ValueError
+  with XrdClient.File() as f:
+    rc, _statInfo_unused = f.open(storageserver + '//proc/user/' + _eosargs(ruid, rgid) + '&mgm.cmd=attr&mgm.subcmd=rm' + \
+                                  '&mgm.attr.key=' + key + '&mgm.path=' + filename, OpenFlags.READ)
+    if not rc.ok:
+      log.warning('msg="Error removing xattr" filename="%s" attr="%s" error="%s"' % (filename, key+'='+value, rc.message.strip('\n')))
+      raise IOError(rc.message.strip('\n'))
 
 def readFile(filename, ruid, rgid):
   '''Read a file via xroot on behalf of the given uid,gid. Note that the function is a generator, managed by Flask.'''
