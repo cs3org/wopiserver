@@ -147,9 +147,6 @@ def wopiCheckFileInfo(fileid):
     filemd['UserCanNotWriteRelative'] = True     # XXX for the time being, until the PutRelative function is implemented
     filemd['DownloadUrl'] = config.get('general', 'downloadurl') + '?dir=' + urllib.quote_plus(os.path.dirname(acctok['filename'])) + \
                                    '&files=' + urllib.quote_plus(filemd['BaseFileName'])
-    if acctok['canedit']:
-      # the file is going to be edited: keep its current mtime as our last modification time for later conflict checking
-      xrdcl.setXAttr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime, statInfo[12])
     # send it in JSON format
     resp = flask.Response(json.dumps(filemd), mimetype='application/json')
     return resp
@@ -176,6 +173,9 @@ def wopiGetFile(fileid):
     if acctok['exp'] < time.time():
       raise jwt.exceptions.DecodeError
     log.info('msg="GetFile" user="%s:%s" filename="%s" fileid="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid))
+    # set an xattr with the current mtime for later conflicts checking
+    currmtime = xrdcl.stat(acctok['filename'], acctok['ruid'], acctok['rgid']).modtime
+    xrdcl.setXAttr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime, currmtime)
     # stream file from storage to client
     resp = flask.Response(xrdcl.readFile(acctok['filename'], acctok['ruid'], acctok['rgid']), mimetype='application/octet-stream')
     resp.headers['X-WOPI-ItemVersion'] = acctok['mtime']
@@ -195,7 +195,7 @@ def wopiLockUnlock(fileid, reqheaders, acctok):
   lock = reqheaders['X-WOPI-Lock']
   log.info('msg="%s" user="%s:%s" filename="%s" lock="%s"' % \
            (reqheaders['X-WOPI-Override'].title(), acctok['ruid'], acctok['rgid'], acctok['filename'], lock))
-  if lock == 'UNLOCK':
+  if reqheaders['X-WOPI-Override'] == 'UNLOCK':
     # remove any extended attribute related to conflicts handling
     try:
       xrdcl.rmXAttr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime)
@@ -265,12 +265,16 @@ def wopiPutFile(fileid):
     if acctok['exp'] < time.time():
       raise jwt.exceptions.DecodeError
     log.info('msg="PostContent" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename']))
-    # check the destination file now against conflicts
+    # check now the destination file against conflicts
     try:
       currmtime = xrdcl.stat(acctok['filename'], acctok['ruid'], acctok['rgid']).modtime
-      ourmtime = int(xrdcl.getXAttr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime))
-    except (IOError, ValueError) as e:
-      # either the file or our xattr got deleted meanwhile: force a conflict
+      try:
+        ourmtime = int(xrdcl.getXAttr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime))
+      except IOError:
+        # file exists but no xattr present: it was overwritten, force conflict
+        ourmtime = 0
+    except IOError:
+      # the file got deleted meanwhile: force a conflict
       currmtime = time.time()
       ourmtime = 0
     if currmtime > ourmtime:

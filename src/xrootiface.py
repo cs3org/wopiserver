@@ -76,7 +76,7 @@ def statx(filename, ruid, rgid):
 
 def setXAttr(filename, ruid, rgid, key, value):
   '''Set the extended attribute <key> to <value> via a special open on behalf of the given uid,gid'''
-  _xrootcmd('attr', 'set', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.attr.value=' + value + '&mgm.path=' + filename)
+  _xrootcmd('attr', 'set', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.attr.value=' + str(value) + '&mgm.path=' + filename)
 
 def getXAttr(filename, ruid, rgid, key):
   '''Get the extended attribute <key> via a special open on behalf of the given uid,gid'''
