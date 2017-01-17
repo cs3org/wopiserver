@@ -119,3 +119,14 @@ def writeFile(filename, ruid, rgid, content):
   if not rc.ok:
     log.warning('msg="Error closing the file" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
     raise IOError(rc.message.strip('\n'))
+
+def removeFile(filename, ruid, rgid):
+  '''Remove a file via xroot on behalf of the given uid,gid.'''
+  if not xrdfs:
+    raise ValueError
+  with XrdClient.File() as f:
+    rc, _statInfo_unused = f.open(storageserver + '//proc/user/' + _eosargs(ruid, rgid) + '&mgm.cmd=rm' + \
+                                  '&mgm.path=' + filename, OpenFlags.READ)
+    if not rc.ok:
+      log.warning('msg="Error removing file" filename="%s" attr="%s" error="%s"' % (filename, key+'='+value, rc.message.strip('\n')))
+      raise IOError(rc.message.strip('\n'))

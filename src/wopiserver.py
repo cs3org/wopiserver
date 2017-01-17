@@ -212,9 +212,13 @@ def wopiPutRelative(fileid, reqheaders, acctok):
   log.info('msg="PutRelative" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename']))
   return 'Not supported', httplib.NOT_IMPLEMENTED
 
-def deleteFile(fileid, reqheaders, acctok):
+def wopiDeleteFile(fileid, reqheaders, acctok):
   log.info('msg="DeleteFile" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename']))
-  return 'Not supported', httplib.NOT_IMPLEMENTED
+  try:
+    xrdcl.removeFile(acctok['filename'], acctok['ruid'], acctok['rgid'])
+    return 'OK', httplib.OK
+  except Exception:
+    return 'Internal error', httplib.INTERNAL_SERVER_ERROR
 
 def renameFile(fileid, reqheaders, acctok):
   log.info('msg="RenameFile" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename']))
@@ -279,6 +283,7 @@ def wopiPutFile(fileid):
       # OK, nobody overwrote the file: go ahead and overwrite it.
       # Note that the entire check+write operation should be atomic, but the previous check still gives
       # the opportunity of a race condition. We just live with it as OwnCloud does not seem to provide anything better...
+      # Anyhow, previous versions are all stored and recoverable by the user.
       xrdcl.writeFile(acctok['filename'], acctok['ruid'], acctok['rgid'], flask.request.get_data())
       log.info('msg="File successfully written" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename']))
       # and retrieve again the modification time to update our xattr
