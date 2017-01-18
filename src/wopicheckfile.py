@@ -1,15 +1,15 @@
 #!/usr/bin/python
 #
-# Check the given file for WOPI extended attributes
+'''Check the given file for WOPI extended attributes'''
 
 import sys, getopt, ConfigParser, logging
 import xrootiface
 
 # usage function
-def usage(exitCode):
+def usage(exitcode):
   '''prints usage'''
   print 'Usage : ' + sys.argv[0] + ' [-h|--help] <filename>'
-  sys.exit(exitCode)
+  sys.exit(exitcode)
 
 # first parse the options
 try:

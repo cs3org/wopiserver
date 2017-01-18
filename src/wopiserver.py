@@ -51,7 +51,7 @@ try:
   config.get('general', 'allowedclients')          # read this to make sure it is configured
 except Exception, e:
   # any error we got here with the configuration is fatal
-  log.critical('msg="Failed to read config, bailing out" error=%s' % e)
+  print "Failed to initialize the service, bailing out:", e
   sys.exit(-1)
 
 
@@ -150,7 +150,7 @@ def wopiCheckFileInfo(fileid):
     filemd['OwnerId'] = statInfo[5] + ':' + statInfo[6]
     filemd['UserId'] = acctok['ruid'] + ':' + acctok['rgid']
     filemd['Size'] = statInfo[8]
-    filemd['Version'] = statInfo[12]
+    filemd['Version'] = acctok['mtime']
     filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = acctok['canedit']
     filemd['SupportsRename'] = filemd['UserCanRename'] = False
     filemd['UserCanNotWriteRelative'] = True     # XXX for the time being, until the PutRelative function is implemented
@@ -187,6 +187,7 @@ def wopiGetFile(fileid):
     # stream file from storage to client
     resp = flask.Response(xrdcl.readfile(acctok['filename'], acctok['ruid'], acctok['rgid']), mimetype='application/octet-stream')
     resp.headers['X-WOPI-ItemVersion'] = acctok['mtime']
+    resp.status_code = httplib.OK
     return resp
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
     log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
@@ -306,13 +307,21 @@ def wopiPutFile(fileid):
     except IOError:
       # either the file was deleted or it was overwritten by others: force conflict
       newname, ext = os.path.splitext(acctok['filename'])
-      newname = '%s_conflict-%s%s' % (newname, time.strftime('%Y%m%d-%H%M%S'), ext.strip())   # this is the OwnCloud format
+      # !! note the OwnCloud format is '<filename>_conflict-<date>-<time>', but it is not synchronized back !!
+      newname = '%s-conflict-%s%s' % (newname, time.strftime('%Y%m%d-%H%M%S'), ext.strip())
       xrdcl.writefile(newname, acctok['ruid'], acctok['rgid'], flask.request.get_data())
-      log.info('msg="Conflicting copy created" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], newname))
-      resp = flask.Response()
-      resp.headers['X-WOPI-ServerError'] = 'Conflicting copy created'
-      resp.status_code = httplib.INTERNAL_SERVER_ERROR      # return a failure so that the user can check
-      return resp
+      log.info('msg="Conflicting copy created" user="%s:%s" newfilename="%s"' % (acctok['ruid'], acctok['rgid'], newname))
+      # keep track of this action in the xattr, to avoid looping (see below)
+      xrdcl.setxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime, 'conflict')
+      # and report failure to Office Online: it will retry a couple of times and eventually it will notify the user
+      return 'Conflicting copy created', httplib.INTERNAL_SERVER_ERROR
+    except ValueError:
+      # the xattr was not an integer: assume Office Online is looping on an already conflicting file,
+      # therefore do nothing and keep reporting internal error. Of course if the attribute was modified by hand,
+      # this mechanism fails.
+      log.info('msg="Conflicting copy already created" user="%s:%s" filename="%s"' % \
+               (acctok['ruid'], acctok['rgid'], acctok['filename']))
+      return 'Conflicting copy already created', httplib.INTERNAL_SERVER_ERROR
     # Go for overwriting the file. Note that the entire check+write operation should be atomic,
     # but the previous check still gives the opportunity of a race condition. We just live with it
     # as OwnCloud does not seem to provide anything better...
@@ -334,5 +343,6 @@ def wopiPutFile(fileid):
     return 'Internal error', httplib.INTERNAL_SERVER_ERROR
 
 
+# start the Flask endless listening loop
 app.run(host='0.0.0.0', port=8080, threaded=True, debug=(config.get('general', 'loglevel') == 'Debug'))
 # XXX todo: enable https and then add:    ssl_context=(config.get('security', 'wopicert'), config.get('security', 'wopikey')))
