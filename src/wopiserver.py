@@ -71,7 +71,7 @@ def generateAccessToken(ruid, rgid, filename, canedit):
   exptime = int(time.time()) + tokenvalidity
   acctok = jwt.encode({'ruid': ruid, 'rgid': rgid, 'filename': filename, 'canedit': canedit, 'mtime': mtime,
                        'exp': exptime}, wopisecret, algorithm='HS256')
-  log.debug('msg="Invoking generateAccessToken" ruid="%s" rgid="%s" filename="%s" canedit="%s" mtime="%s" expiration="%d"' % \
+  log.debug('msg="access_token generated" ruid="%s" rgid="%s" filename="%s" canedit="%s" mtime="%s" expiration="%d"' % \
             (ruid, rgid, filename, canedit, mtime, exptime))
   # return the inode == fileid and the access token
   return inode, acctok
@@ -93,7 +93,7 @@ def refreshConfig():
 @app.route("/")
 def index():
   '''Return a default index page with some user-friendly information about this service'''
-  log.info('msg="Accessed root page" client="%s"' % flask.request.remote_addr)
+  log.info('msg="Accessed index page" client="%s"' % flask.request.remote_addr)
   return """
     <div align="center" style="color:#000080; padding-top:50px; font-family:Verdana; size:11">
     This is the CERNBox <a href=http://wopi.readthedocs.io>WOPI</a> server for Microsoft Office Online.
@@ -184,8 +184,6 @@ def wopiGetFile(fileid):
     if acctok['exp'] < time.time():
       raise jwt.exceptions.DecodeError
     log.info('msg="GetFile" user="%s:%s" filename="%s" fileid="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid))
-    # set an xattr with the current time for later conflicts checking
-    xrdcl.setxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime, int(time.time()))
     # stream file from storage to client
     resp = flask.Response(xrdcl.readfile(acctok['filename'], acctok['ruid'], acctok['rgid']), mimetype='application/octet-stream')
     resp.headers['X-WOPI-ItemVersion'] = acctok['mtime']
@@ -201,18 +199,32 @@ def wopiGetFile(fileid):
 
 # the following operations are all called on POST /wopi/files/<fileid>
 
-def wopiLockUnlock(fileid, reqheaders, acctok):
-  '''Implements the Lock, Unlock, and RefreshLock WOPI calls'''
+def wopiLock(fileid, reqheaders, acctok):
+  '''Implements the Lock and RefreshLock WOPI calls'''
   lock = reqheaders['X-WOPI-Lock']
   log.info('msg="%s" user="%s:%s" filename="%s" fileid="%s" lock="%s"' % \
            (reqheaders['X-WOPI-Override'].title(), acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, lock))
-  if reqheaders['X-WOPI-Override'] == 'UNLOCK':
-    # remove any extended attribute related to conflicts handling
+  if reqheaders['X-WOPI-Override'] == 'LOCK':
+    # on first lock, set an xattr with the current time for later conflicts checking
     try:
-      xrdcl.rmxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime)
+      xrdcl.setxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime, int(time.time()))
     except IOError:
-      # ignore, it's not worth to report an error here
-      pass
+      # not fatal, but will generate a conflict file later on, so log a warning
+      log.warning('msg="Unable to set xattr" user="%s:%s" filename="%s" fileid="%s"' % \
+                  (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid))
+  return 'OK', httplib.OK
+
+def wopiUnlock(fileid, reqheaders, acctok):
+  '''Implements the Unlock WOPI call'''
+  lock = reqheaders['X-WOPI-Lock']
+  log.info('msg="Unlock" user="%s:%s" filename="%s" fileid="%s" lock="%s"' % \
+           (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, lock))
+  # remove any extended attribute related to conflicts handling
+  try:
+    xrdcl.rmxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime)
+  except IOError:
+    # ignore, it's not worth to report anything here
+    pass
   return 'OK', httplib.OK
 
 def wopiGetLock(fileid, reqheaders_unused, acctok):
@@ -232,7 +244,7 @@ def wopiDeleteFile(fileid, reqheaders_unused, acctok):
   try:
     xrdcl.removefile(acctok['filename'], acctok['ruid'], acctok['rgid'])
     return 'OK', httplib.OK
-  except Exception:
+  except IOError:
     return 'Internal error', httplib.INTERNAL_SERVER_ERROR
 
 def wopiRenameFile(fileid, reqheaders_unused, acctok):
@@ -251,8 +263,10 @@ def wopiPost(fileid):
       raise jwt.exceptions.DecodeError
     headers = flask.request.headers
     op = headers['X-WOPI-Override']       # must be one of the following strings, throws KeyError if missing
-    if op in ('LOCK', 'UNLOCK', 'REFRESH_LOCK'):
-      return wopiLockUnlock(fileid, headers, acctok)
+    if op in ('LOCK', 'REFRESH_LOCK'):
+      return wopiLock(fileid, headers, acctok)
+    elif op == 'UNLOCK':
+      return wopiUnlock(fileid, headers, acctok)
     elif op == 'GET_LOCK':
       return wopiGetLock(fileid, headers, acctok)
     elif op == 'PUT_RELATIVE':
@@ -295,7 +309,10 @@ def wopiPutFile(fileid):
       newname = '%s_conflict-%s%s' % (newname, time.strftime('%Y%m%d-%H%M%S'), ext.strip())   # this is the OwnCloud format
       xrdcl.writefile(newname, acctok['ruid'], acctok['rgid'], flask.request.get_data())
       log.info('msg="Conflicting copy created" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], newname))
-      return 'Conflicting copy found', httplib.INTERNAL_SERVER_ERROR   # return a failure so that the user can check
+      resp = flask.Response()
+      resp.headers['X-WOPI-ServerError'] = 'Conflicting copy created'
+      resp.status_code = httplib.INTERNAL_SERVER_ERROR      # return a failure so that the user can check
+      return resp
     # Go for overwriting the file. Note that the entire check+write operation should be atomic,
     # but the previous check still gives the opportunity of a race condition. We just live with it
     # as OwnCloud does not seem to provide anything better...
