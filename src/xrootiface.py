@@ -1,10 +1,10 @@
-#!/bin/python
-#
 # xrootiface.py
-#
-# XRootD interface for the WOPI server for CERNBox
-#
-# Giuseppe.LoPresti@cern.ch
+'''
+XRootD interface for the WOPI server for CERNBox
+
+Author: Giuseppe.LoPresti@cern.ch
+CERN/IT-ST
+'''
 
 from XRootD import client as XrdClient      # the xroot bindings for python, xrootd-python-4.4.x.el7.x86_64.rpm
 from XRootD.client.flags import OpenFlags, QueryCode
@@ -25,7 +25,7 @@ def _xrootcmd(cmd, subcmd, ruid, rgid, args):
   if not xrdfs:
     raise ValueError
   with XrdClient.File() as f:
-    rc, _statInfo_unused = f.open(storageserver + '//proc/user/' + _eosargs(ruid, rgid) + '&mgm.cmd=' + cmd + \
+    rc, statInfo_unused = f.open(storageserver + '//proc/user/' + _eosargs(ruid, rgid) + '&mgm.cmd=' + cmd + \
                                   ('&mgm.subcmd=' + subcmd if subcmd else '') + '&' + args, OpenFlags.READ)
     res = f.readline().strip('\n').split('&')
     if len(res) == 3:    # we may only just get stdout: in that case, assume it's all OK
@@ -40,14 +40,14 @@ def _xrootcmd(cmd, subcmd, ruid, rgid, args):
   return res[0][res[0].find('stdout=')+7:]
 
 
-def init(inConfig, inLog):
+def init(inconfig, inlog):
   '''Init module-level variables'''
   global config
   global log
   global storageserver
   global xrdfs
-  config = inConfig
-  log = inLog
+  config = inconfig
+  log = inlog
   storageserver = config.get('general', 'storageserver')
   # prepare the xroot client
   xrdfs = XrdClient.FileSystem(storageserver)
@@ -72,27 +72,27 @@ def statx(filename, ruid, rgid):
     raise IOError(rc.message.strip('\n'))
   return rawinfo.split()
 
-def setXAttr(filename, ruid, rgid, key, value):
+def setxattr(filename, ruid, rgid, key, value):
   '''Set the extended attribute <key> to <value> via a special open on behalf of the given uid,gid'''
   _xrootcmd('attr', 'set', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.attr.value=' + str(value) + '&mgm.path=' + filename)
 
-def getXAttr(filename, ruid, rgid, key):
+def getxattr(filename, ruid, rgid, key):
   '''Get the extended attribute <key> via a special open on behalf of the given uid,gid'''
   res = _xrootcmd('attr', 'get', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.path=' + filename)
   # if no error, the response comes in the format <key>="<value>"
   return res.split('"')[1]
 
-def rmXAttr(filename, ruid, rgid, key):
+def rmxattr(filename, ruid, rgid, key):
   '''Remove the extended attribute <key> via a special open on behalf of the given uid,gid'''
   _xrootcmd('attr', 'rm', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.path=' + filename)
 
-def readFile(filename, ruid, rgid):
+def readfile(filename, ruid, rgid):
   '''Read a file via xroot on behalf of the given uid,gid. Note that the function is a generator, managed by Flask.'''
   log.debug('msg="Invoking readFile" filename="%s"' % filename)
   if not xrdfs:
     raise ValueError
   with XrdClient.File() as f:
-    rc, _statInfo_unused = f.open(storageserver + '/' + filename + _eosargs(ruid, rgid), OpenFlags.READ)
+    rc, statInfo_unused = f.open(storageserver + '/' + filename + _eosargs(ruid, rgid), OpenFlags.READ)
     if not rc.ok:
       # the file could not be opened: as this is a generator, we yield the error string instead of the file's contents
       log.warning('msg="Error opening the file for read" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
@@ -102,30 +102,30 @@ def readFile(filename, ruid, rgid):
       for chunk in f.readchunks(offset=0, chunksize=config.getint('io', 'chunksize')):
         yield chunk
 
-def writeFile(filename, ruid, rgid, content):
+def writefile(filename, ruid, rgid, content):
   '''Write a file via xroot on behalf of the given uid,gid. The entire content is written and any pre-existing file is deleted.'''
   log.debug('msg="Invoking writeFile filename="%s"' % filename)
   if not xrdfs:
     raise ValueError
   f = XrdClient.File()
-  rc, _statInfo_unused = f.open(storageserver + '/' + filename + _eosargs(ruid, rgid, 1), OpenFlags.DELETE)
+  rc, statInfo_unused = f.open(storageserver + '/' + filename + _eosargs(ruid, rgid, 1), OpenFlags.DELETE)
   if not rc.ok:
     log.info('msg="Error opening the file for write" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
     raise IOError(rc.message.strip('\n'))
   # write the file. In a future implementation, we should find a way to only update the required chunks...
-  rc, _statInfo_unused = f.write(content, offset=0)
+  rc, statInfo_unused = f.write(content, offset=0)
   if not rc.ok:
     log.warning('msg="Error writing the file" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
     raise IOError(rc.message.strip('\n'))
-  rc, _statInfo_unused = f.close()
+  rc, statInfo_unused = f.close()
   if not rc.ok:
     log.warning('msg="Error closing the file" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
     raise IOError(rc.message.strip('\n'))
 
-def renameFile(origFilename, newFilename, ruid, rgid):
-  '''Rename a file via a special open from origFilename to newFilename on behalf of the given uid,gid.'''
-  _xrootcmd('file', 'rename', ruid, rgid, '&mgm.path=' + origFilename + '&mgm.file.target=' + newFilename)
+def renamefile(origfilename, newfilename, ruid, rgid):
+  '''Rename a file via a special open from origfilename to newfilename on behalf of the given uid,gid.'''
+  _xrootcmd('file', 'rename', ruid, rgid, '&mgm.path=' + origfilename + '&mgm.file.target=' + newfilename)
 
-def removeFile(filename, ruid, rgid):
+def removefile(filename, ruid, rgid):
   '''Remove a file via a special open on behalf of the given uid,gid.'''
   _xrootcmd('rm', None, ruid, rgid, '&mgm.path=' + filename)
