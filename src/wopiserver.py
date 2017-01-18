@@ -69,6 +69,8 @@ def generateAccessToken(ruid, rgid, filename, canedit):
     raise
   acctok = jwt.encode({'ruid': ruid, 'rgid': rgid, 'filename': filename, 'canedit': canedit, 'mtime': mtime,
                       'exp': (int(time.time())+tokenvalidity)}, wopisecret, algorithm='HS256')
+  log.debug('msg="Invoking generateAccessToken" ruid="%s" rgid="%s" filename="%s" canedit="%s" mtime="%s" exp="%d"' % \
+            (ruid, rgid, filename, canedit, mtime))
   # return the inode == fileid and the access token
   return inode, acctok
 
@@ -173,9 +175,8 @@ def wopiGetFile(fileid):
     if acctok['exp'] < time.time():
       raise jwt.exceptions.DecodeError
     log.info('msg="GetFile" user="%s:%s" filename="%s" fileid="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid))
-    # set an xattr with the current mtime for later conflicts checking
-    currmtime = xrdcl.stat(acctok['filename'], acctok['ruid'], acctok['rgid']).modtime
-    xrdcl.setXAttr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime, currmtime)
+    # set an xattr with the current time for later conflicts checking
+    xrdcl.setXAttr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime, int(time.time()))
     # stream file from storage to client
     resp = flask.Response(xrdcl.readFile(acctok['filename'], acctok['ruid'], acctok['rgid']), mimetype='application/octet-stream')
     resp.headers['X-WOPI-ItemVersion'] = acctok['mtime']
@@ -267,23 +268,16 @@ def wopiPutFile(fileid):
     log.info('msg="PostContent" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename']))
     # check now the destination file against conflicts
     try:
-      currmtime = xrdcl.stat(acctok['filename'], acctok['ruid'], acctok['rgid']).modtime
-      try:
-        ourmtime = int(xrdcl.getXAttr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime))
-      except IOError:
-        # file exists but no xattr present: it was overwritten, force conflict
-        ourmtime = 0
+      ourmtime = int(xrdcl.getXAttr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime))
     except IOError:
-      # the file got deleted meanwhile: force a conflict
-      currmtime = time.time()
+      # either the file was deleted or it was overwritten by others, force conflict
       ourmtime = 0
-    if currmtime > ourmtime:
+    if not ourmtime:
       # someone else overwrote the file before us: we must therefore create a new conflict file
       newname, ext = os.path.splitext(acctok['filename'])
       newname = '%s_conflict-%s%s' % (newname, time.strftime('%Y%m%d-%H%M%S'), ext.strip())   # this is the OwnCloud format
       xrdcl.writeFile(newname, acctok['ruid'], acctok['rgid'], flask.request.get_data())
-      log.info('msg="Conflicting copy found" user="%s:%s" filename="%s" currmtime="%ld" ourmtime="%ld"' % \
-               (acctok['ruid'], acctok['rgid'], newname, currmtime, ourmtime))
+      log.info('msg="Conflicting copy created" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], newname))
       return 'Conflicting copy found', httplib.INTERNAL_SERVER_ERROR   # return a failure so that the user can check
     else:
       # OK, nobody overwrote the file: go ahead and overwrite it.
@@ -293,8 +287,7 @@ def wopiPutFile(fileid):
       xrdcl.writeFile(acctok['filename'], acctok['ruid'], acctok['rgid'], flask.request.get_data())
       log.info('msg="File successfully written" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename']))
       # and retrieve again the modification time to update our xattr
-      newmtime = xrdcl.stat(acctok['filename'], acctok['ruid'], acctok['rgid']).modtime
-      xrdcl.setXAttr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime, newmtime)
+      xrdcl.setXAttr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime, int(time.time()))
       return 'OK', httplib.OK
   except jwt.exceptions.DecodeError:
     log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])

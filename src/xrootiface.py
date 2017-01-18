@@ -6,8 +6,6 @@
 #
 # Giuseppe.LoPresti@cern.ch
 
-import sys, os, time
-import logging
 from XRootD import client as XrdClient      # the xroot bindings for python, xrootd-python-4.4.x.el7.x86_64.rpm
 from XRootD.client.flags import OpenFlags, QueryCode
 
