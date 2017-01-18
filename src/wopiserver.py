@@ -160,7 +160,7 @@ def wopiCheckFileInfo(fileid):
     # send it in JSON format
     resp = flask.Response(json.dumps(filemd), mimetype='application/json')
     return resp
-  except jwt.exceptions.DecodeError:
+  except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
     log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
     return 'Invalid access token', httplib.UNAUTHORIZED
   except IOError, e:
@@ -190,7 +190,7 @@ def wopiGetFile(fileid):
     resp = flask.Response(xrdcl.readfile(acctok['filename'], acctok['ruid'], acctok['rgid']), mimetype='application/octet-stream')
     resp.headers['X-WOPI-ItemVersion'] = acctok['mtime']
     return resp
-  except jwt.exceptions.DecodeError:
+  except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
     log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
     return 'Invalid access token', httplib.UNAUTHORIZED
   except Exception, e:
@@ -263,7 +263,7 @@ def wopiPost(fileid):
       return wopiRenameFile(fileid, headers, acctok)
     else:
       return 'Unknown operation %s found in header' % op, httplib.BAD_REQUEST
-  except jwt.exceptions.DecodeError:
+  except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
     log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
     return 'Invalid access token', httplib.UNAUTHORIZED
   except KeyError, e:
@@ -285,28 +285,27 @@ def wopiPutFile(fileid):
     log.info('msg="PostContent" user="%s:%s" filename="%s" fileid="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid))
     # check now the destination file against conflicts
     try:
-      ourmtime = int(xrdcl.getxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime))
+      savetime = int(xrdcl.getxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime))
+      # OK, we got our xattr, therefore assume nobody overwrote the file
+      log.debug('msg="Got lastWopiSaveTime" user="%s:%s" filename="%s" savetime="%ld"' % \
+                (acctok['ruid'], acctok['rgid'], acctok['filename'], savetime))
     except IOError:
-      # either the file was deleted or it was overwritten by others, force conflict
-      ourmtime = 0
-    if not ourmtime:
-      # someone else overwrote the file before us: we must therefore create a new conflict file
+      # either the file was deleted or it was overwritten by others: force conflict
       newname, ext = os.path.splitext(acctok['filename'])
       newname = '%s_conflict-%s%s' % (newname, time.strftime('%Y%m%d-%H%M%S'), ext.strip())   # this is the OwnCloud format
       xrdcl.writefile(newname, acctok['ruid'], acctok['rgid'], flask.request.get_data())
       log.info('msg="Conflicting copy created" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], newname))
       return 'Conflicting copy found', httplib.INTERNAL_SERVER_ERROR   # return a failure so that the user can check
-    else:
-      # OK, nobody overwrote the file: go ahead and overwrite it.
-      # Note that the entire check+write operation should be atomic, but the previous check still gives
-      # the opportunity of a race condition. We just live with it as OwnCloud does not seem to provide anything better...
-      # Anyhow, previous versions are all stored and recoverable by the user.
-      xrdcl.writefile(acctok['filename'], acctok['ruid'], acctok['rgid'], flask.request.get_data())
-      log.info('msg="File successfully written" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename']))
-      # and retrieve again the modification time to update our xattr
-      xrdcl.setxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime, int(time.time()))
-      return 'OK', httplib.OK
-  except jwt.exceptions.DecodeError:
+    # Go for overwriting the file. Note that the entire check+write operation should be atomic,
+    # but the previous check still gives the opportunity of a race condition. We just live with it
+    # as OwnCloud does not seem to provide anything better...
+    # Anyhow, previous versions are all stored and recoverable by the user.
+    xrdcl.writefile(acctok['filename'], acctok['ruid'], acctok['rgid'], flask.request.get_data())
+    log.info('msg="File successfully written" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename']))
+    # and retrieve again the modification time to update our xattr
+    xrdcl.setxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime, int(time.time()))
+    return 'OK', httplib.OK
+  except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
     log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
     return 'Invalid access token', httplib.UNAUTHORIZED
   except IOError, e:
