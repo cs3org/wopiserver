@@ -26,7 +26,7 @@ def _xrootcmd(cmd, subcmd, ruid, rgid, args):
     raise ValueError
   with XrdClient.File() as f:
     rc, statInfo_unused = f.open(storageserver + '//proc/user/' + _eosargs(ruid, rgid) + '&mgm.cmd=' + cmd + \
-                                  ('&mgm.subcmd=' + subcmd if subcmd else '') + '&' + args, OpenFlags.READ)
+                                 ('&mgm.subcmd=' + subcmd if subcmd else '') + '&' + args, OpenFlags.READ)
     res = f.readline().strip('\n').split('&')
     if len(res) == 3:    # we may only just get stdout: in that case, assume it's all OK
       rc = res[2]
@@ -68,9 +68,10 @@ def statx(filename, ruid, rgid):
   if not xrdfs:
     raise ValueError
   rc, rawinfo = xrdfs.query(QueryCode.OPAQUEFILE, filename + _eosargs(ruid, rgid) + '&mgm.pcmd=stat')
-  if rawinfo is None:
-    raise IOError(rc.message.strip('\n'))
-  return rawinfo.split()
+  rawinfo = rawinfo.split()
+  if rawinfo[-1].find('retc') == 0:
+    raise IOError(rawinfo[-1])
+  return rawinfo
 
 def setxattr(filename, ruid, rgid, key, value):
   '''Set the extended attribute <key> to <value> via a special open on behalf of the given uid,gid'''
