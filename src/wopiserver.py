@@ -112,22 +112,26 @@ def wopiOpen():
   # first resolve the client: only our OwnCloud servers shall use this API
   allowedclients = config.get('general', 'allowedclients').split()
   for c in allowedclients:
-    for ip in socket.getaddrinfo(c, None):
-      if ip[4][0] == req.remote_addr:
-        # we got a match, generate the access token
-        ruid = req.args['ruid']
-        rgid = req.args['rgid']
-        filename = req.args['filename']
-        canedit = ('canedit' in req.args and req.args['canedit'].lower() == 'yes')
-        try:
-          inode, acctok = generateAccessToken(ruid, rgid, filename, canedit)
-          log.info('msg="wopiOpen: access token set" host="%s" user="%s:%s" filename="%s" canedit="%r" inode="%s" token="%s"' % \
-                   (req.remote_addr, ruid, rgid, filename, canedit, inode, acctok))
-          # return an URL-encoded URL for the Office Online server
-          return urllib.quote_plus('http://%s:8080/wopi/files/%s' % (socket.gethostname(), inode)) + \
-                 '&access_token=%s' % acctok      # no need to URL-encode the JWT token
-        except IOError:
-          return 'File not found', httplib.NOT_FOUND
+    try:
+      for ip in socket.getaddrinfo(c, None):
+        if ip[4][0] == req.remote_addr:
+          # we got a match, generate the access token
+          ruid = req.args['ruid']
+          rgid = req.args['rgid']
+          filename = req.args['filename']
+          canedit = ('canedit' in req.args and req.args['canedit'].lower() == 'yes')
+          try:
+            inode, acctok = generateAccessToken(ruid, rgid, filename, canedit)
+            log.info('msg="wopiOpen: access token set" host="%s" user="%s:%s" filename="%s" canedit="%r" inode="%s" token="%s"' % \
+                     (req.remote_addr, ruid, rgid, filename, canedit, inode, acctok))
+            # return an URL-encoded URL for the Office Online server
+            return urllib.quote_plus('http://%s:8080/wopi/files/%s' % (socket.gethostname(), inode)) + \
+                   '&access_token=%s' % acctok      # no need to URL-encode the JWT token
+          except IOError:
+            return 'File not found', httplib.NOT_FOUND
+    except socket.gaierror:
+      log.warning('msg="wopiOpen: %s found in configured allowed clients but unknown by DNS resolution"' % c)
+      pass
   # no match found, fail
   log.info('msg="wopiOpen: unauthorized access attempt" client="%s"' % flask.request.remote_addr)
   return 'Client IP not authorized', httplib.UNAUTHORIZED
