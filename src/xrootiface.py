@@ -8,6 +8,7 @@ CERN/IT-ST
 
 from XRootD import client as XrdClient      # the xroot bindings for python, xrootd-python-4.4.x.el7.x86_64.rpm
 from XRootD.client.flags import OpenFlags, QueryCode
+import urllib
 
 # module-wide state
 config = None
@@ -67,7 +68,7 @@ def statx(filename, ruid, rgid):
   log.debug('msg="Invoking statx" filename="%s"' % filename)
   if not xrdfs:
     raise ValueError
-  rc, rawinfo = xrdfs.query(QueryCode.OPAQUEFILE, filename + _eosargs(ruid, rgid) + '&mgm.pcmd=stat')
+  rc_unused, rawinfo = xrdfs.query(QueryCode.OPAQUEFILE, filename + _eosargs(ruid, rgid) + '&mgm.pcmd=stat')
   rawinfo = rawinfo.split()
   if rawinfo[-1].find('retc') == 0:
     raise IOError(rawinfo[-1])
@@ -75,17 +76,17 @@ def statx(filename, ruid, rgid):
 
 def setxattr(filename, ruid, rgid, key, value):
   '''Set the extended attribute <key> to <value> via a special open on behalf of the given uid,gid'''
-  _xrootcmd('attr', 'set', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.attr.value=' + str(value) + '&mgm.path=' + filename)
+  _xrootcmd('attr', 'set', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.attr.value=' + str(value) + '&mgm.path=' + urllib.quote_plus(filename))
 
 def getxattr(filename, ruid, rgid, key):
   '''Get the extended attribute <key> via a special open on behalf of the given uid,gid'''
-  res = _xrootcmd('attr', 'get', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.path=' + filename)
+  res = _xrootcmd('attr', 'get', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.path=' + urllib.quote_plus(filename))
   # if no error, the response comes in the format <key>="<value>"
   return res.split('"')[1]
 
 def rmxattr(filename, ruid, rgid, key):
   '''Remove the extended attribute <key> via a special open on behalf of the given uid,gid'''
-  _xrootcmd('attr', 'rm', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.path=' + filename)
+  _xrootcmd('attr', 'rm', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.path=' + urllib.quote_plus(filename))
 
 def readfile(filename, ruid, rgid):
   '''Read a file via xroot on behalf of the given uid,gid. Note that the function is a generator, managed by Flask.'''
@@ -125,8 +126,9 @@ def writefile(filename, ruid, rgid, content):
 
 def renamefile(origfilename, newfilename, ruid, rgid):
   '''Rename a file via a special open from origfilename to newfilename on behalf of the given uid,gid.'''
-  _xrootcmd('file', 'rename', ruid, rgid, '&mgm.path=' + origfilename + '&mgm.file.target=' + newfilename)
+  _xrootcmd('file', 'rename', ruid, rgid, '&mgm.path=' + urllib.quote_plus(origfilename) + \
+            '&mgm.file.target=' + urllib.quote_plus(newfilename))
 
 def removefile(filename, ruid, rgid):
   '''Remove a file via a special open on behalf of the given uid,gid.'''
-  _xrootcmd('rm', None, ruid, rgid, '&mgm.path=' + filename)
+  _xrootcmd('rm', None, ruid, rgid, '&mgm.path=' + urllib.quote_plus(filename))
