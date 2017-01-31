@@ -68,11 +68,10 @@ def statx(filename, ruid, rgid):
   log.debug('msg="Invoking statx" filename="%s"' % filename)
   if not xrdfs:
     raise ValueError
-  rc_unused, rawinfo = xrdfs.query(QueryCode.OPAQUEFILE, filename + _eosargs(ruid, rgid) + '&mgm.pcmd=stat')
-  rawinfo = rawinfo.split()
-  if rawinfo[-1].find('retc') == 0:
-    raise IOError(rawinfo[-1])
-  return rawinfo
+  rc, rawinfo = xrdfs.query(QueryCode.OPAQUEFILE, filename + _eosargs(ruid, rgid) + '&mgm.pcmd=stat')
+  if rc != '[SUCCESS]':
+    raise IOError(rc)
+  return rawinfo.split()
 
 def setxattr(filename, ruid, rgid, key, value):
   '''Set the extended attribute <key> to <value> via a special open on behalf of the given uid,gid'''
