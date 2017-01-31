@@ -140,6 +140,7 @@ def wopiOpen():
 @app.route("/wopi/files/<fileid>", methods=['GET'])
 def wopiCheckFileInfo(fileid):
   '''Implements the CheckFileInfo WOPI call'''
+  # cf. http://wopi.readthedocs.io/projects/wopirest/en/latest/files/CheckFileInfo.html
   refreshConfig()
   try:
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
@@ -157,7 +158,6 @@ def wopiCheckFileInfo(fileid):
     filemd['Version'] = acctok['mtime']
     filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = acctok['canedit']
     filemd['SupportsRename'] = filemd['UserCanRename'] = False
-    filemd['UserCanNotWriteRelative'] = True     # XXX for the time being, until the PutRelative function is implemented
     filemd['DownloadUrl'] = config.get('general', 'downloadurl') + \
                             '?dir=' + urllib.quote_plus(os.path.dirname(acctok['filename'])) + \
                             '&files=' + urllib.quote_plus(filemd['BaseFileName'])
@@ -201,58 +201,67 @@ def wopiGetFile(fileid):
     log.debug(sys.exc_info())
     return 'Internal error', httplib.INTERNAL_SERVER_ERROR
 
-#
-# the following operations are all called on POST /wopi/files/<fileid>
-#
-def wopiLock(fileid, reqheaders, acctok):
-  '''Implements the Lock and RefreshLock WOPI calls'''
-  lock = reqheaders['X-WOPI-Lock']
-  oldLock = reqheaders['X-WOPI-OldLock'] if 'X-WOPI-OldLock' in reqheaders else ''
-  op = reqheaders['X-WOPI-Override']
+
+def _retrieveWopiLock(fileid, operation, lock, acctok):
+  '''Retrieves an existing lock for a given file'''
   try:
     retrievedLock = xrdcl.getxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kWopiLockValue)
     lockExpiration = int(xrdcl.getxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kWopiLockExp))
   except IOError:
     retrievedLock = ''     # no pre-existing lock found
     lockExpiration = 0
-  log.info('msg="%s" user="%s:%s" filename="%s" fileid="%s" lock="%s" oldLock="%s" retrievedLock="%s" expTime="%s"' % \
-           (op.title(), acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, lock, oldLock, retrievedLock, \
+  log.info('msg="%s" user="%s:%s" filename="%s" fileid="%s" lock="%s" retrievedLock="%s" expTime="%s"' % \
+           (operation.title(), acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, lock, retrievedLock, \
             time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(lockExpiration))))
   if lockExpiration < time.time():
-    # the retrieved lock is not valid any longer
+    # the retrieved lock is not valid any longer, discard
     retrievedLock = ''
+  return retrievedLock
+
+def _makeConflictResponse(operation, retrievedlock, lock, oldlock, filename):
+  resp = flask.Response()
+  resp.headers['X-WOPI-Lock'] = retrievedlock
+  log.info('msg="%s" filename="%s" lock="%s" oldLock="%s" retrievedLock="%s" result="conflict"' % \
+           (operation.title(), filename, lock, oldlock, retrievedlock))
+  resp.status_code = httplib.CONFLICT
+  return resp
+
+#
+# the following operations are all called on POST /wopi/files/<fileid>
+#
+def wopiLock(fileid, reqheaders, acctok):
+  '''Implements the Lock and RefreshLock WOPI calls'''
+  # cf. http://wopi.readthedocs.io/projects/wopirest/en/latest/files/Lock.html
+  op = reqheaders['X-WOPI-Override']
+  lock = reqheaders['X-WOPI-Lock']
+  oldLock = reqheaders['X-WOPI-OldLock'] if 'X-WOPI-OldLock' in reqheaders else ''
+  retrievedLock = _retrieveWopiLock(fileid, op, lock, acctok)
   # perform the required checks for the validity of the new lock
   if (oldLock == '' and retrievedLock != '' and retrievedLock != lock) or (oldLock != '' and retrievedLock != oldLock):
-    resp = flask.Response()
-    resp.headers['X-WOPI-Lock'] = retrievedLock
-    log.info('msg="%s" filename="%s" lock="%s" retrievedLock="%s" result="conflict"' % \
-             (op.title(), acctok['filename'], lock, retrievedLock))
-    resp.status_code = httplib.CONFLICT
-    return resp
-  if op == 'REFRESH_LOCK' and lockExpiration < time.time():
-    log.info('msg="%s" filename="%s" lock="%s" result="expired"' % (op.title(), acctok['filename'], lock))
-    return 'Lock %s has expired' % lock, httplib.BAD_REQUEST
-  else:  # LOCK or REFRESH_LOCK: set the lock to the given one, and record its expiration time
-    xrdcl.setxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kWopiLockValue, lock)
-    xrdcl.setxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kWopiLockExp, \
-                   time.time() + config.getint('general', 'wopilockexpiration'))
-    log.info('msg="%s" filename="%s" lock="%s" result="success"' % (op.title(), acctok['filename'], lock))
-    if retrievedLock == '':
-      # on first lock, set an xattr with the current time for later conflicts checking
-      try:
-        xrdcl.setxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime, int(time.time()))
-      except IOError:
-        # not fatal, but will generate a conflict file later on, so log a warning
-        log.warning('msg="Unable to set xattr" user="%s:%s" filename="%s" fileid="%s"' % \
-                    (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid))
-    return 'OK', httplib.OK
+    return _makeConflictResponse(op, retrievedLock, lock, oldLock, acctok['filename'])
+  # LOCK or REFRESH_LOCK: set the lock to the given one, and record its expiration time
+  xrdcl.setxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kWopiLockValue, lock)
+  xrdcl.setxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kWopiLockExp, \
+                 time.time() + config.getint('general', 'wopilockexpiration'))
+  log.info('msg="%s" filename="%s" lock="%s" result="success"' % (op.title(), acctok['filename'], lock))
+  if retrievedLock == '':
+    # on first lock, set an xattr with the current time for later conflicts checking
+    try:
+      xrdcl.setxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime, int(time.time()))
+    except IOError:
+      # not fatal, but will generate a conflict file later on, so log a warning
+      log.warning('msg="Unable to set xattr" user="%s:%s" filename="%s" fileid="%s"' % \
+                  (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid))
+  return 'OK', httplib.OK
+
 
 def wopiUnlock(fileid, reqheaders, acctok):
   '''Implements the Unlock WOPI call'''
   lock = reqheaders['X-WOPI-Lock']
-  log.info('msg="Unlock" user="%s:%s" filename="%s" fileid="%s" lock="%s"' % \
-           (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, lock))
-  # remove any extended attribute related to locks and conflicts handling
+  retrievedLock = _retrieveWopiLock(fileid, 'UNLOCK', lock, acctok)
+  if retrievedLock != '' and retrievedLock != lock:
+    return _makeConflictResponse('UNLOCK', retrievedLock, lock, '', acctok['filename'])
+  # OK, the lock matches. Remove any extended attribute related to locks and conflicts handling
   try:
     xrdcl.rmxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime)
     xrdcl.rmxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kWopiLockValue)
@@ -262,41 +271,69 @@ def wopiUnlock(fileid, reqheaders, acctok):
     pass
   return 'OK', httplib.OK
 
+
 def wopiGetLock(fileid, reqheaders_unused, acctok):
   '''Implements the GetLock WOPI call'''
-  log.info('msg="GetLock" user="%s:%s" filename="%s" fileid="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid))
   resp = flask.Response()
-  try:
-    resp.headers['X-WOPI-Lock'] = xrdcl.getxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kWopiLockValue)
-    lockExpiration = int(xrdcl.getxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kWopiLockExp))
-    if lockExpiration < time.time():
-      resp.headers['X-WOPI-Lock'] = ''    # the lock is not valid any longer, discard
-  except (IOError, ValueError) as e_unused:
-    # nothing to return
-    resp.headers['X-WOPI-Lock'] = ''
+  resp.headers['X-WOPI-Lock'] = _retrieveWopiLock(fileid, 'GETLOCK', '', acctok)
   resp.status_code = httplib.OK
   return resp
 
-def wopiPutRelative(fileid, reqheaders_unused, acctok):
-  '''Implements the PutRelative WOPI call'''
-  # http://wopi.readthedocs.io/projects/wopirest/en/latest/files/PutRelativeFile.html
-  log.info('msg="PutRelative" user="%s:%s" filename="%s" fileid="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid))
+
+def wopiPutRelative(fileid, reqheaders, acctok):
+  '''Implements the PutRelative WOPI call. Corresponds to the 'Save as...' menu entry.'''
+  # cf. http://wopi.readthedocs.io/projects/wopirest/en/latest/files/PutRelativeFile.html
+  suggTarget = reqheaders['X-WOPI-SuggestedTarget'] if 'X-WOPI-SuggestedTarget' in reqheaders else ''
+  relTarget = reqheaders['X-WOPI-RelativeTarget'] if 'X-WOPI-RelativeTarget' in reqheaders else ''
+  overwriteTarget = 'X-WOPI-OverwriteRelativeTarget' in reqheaders and reqheaders['X-WOPI-OverwriteRelativeTarget'] == 'true'
+  targetName = reqheaders['X-WOPI-RequestedName']
+  lock = reqheaders['X-WOPI-Lock']
+  retrievedLock = _retrieveWopiLock(fileid, 'PUTRELATIVE', lock, acctok)
+  if retrievedLock != '' and retrievedLock != lock:
+    return _makeConflictResponse('PUTRELATIVE', retrievedLock, lock, '', acctok['filename'])
+  if suggTarget != '' and relTarget != '':
+    return 'Not supported', httplib.NOT_IMPLEMENTED
+  # XXX TODO
   return 'Not supported', httplib.NOT_IMPLEMENTED
+
 
 def wopiDeleteFile(fileid, reqheaders_unused, acctok):
   '''Implements the DeleteFile WOPI call'''
-  log.info('msg="DeleteFile" user="%s:%s" filename="%s" fileid="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid))
+  retrievedLock = _retrieveWopiLock(fileid, 'DELETEFILE', '', acctok)
+  if retrievedLock != '':
+    # file is locked and cannot be deleted
+    return _makeConflictResponse('RENAMEFILE', retrievedLock, '', '', acctok['filename'])
   try:
     xrdcl.removefile(acctok['filename'], acctok['ruid'], acctok['rgid'])
     return 'OK', httplib.OK
   except IOError:
     return 'Internal error', httplib.INTERNAL_SERVER_ERROR
 
-def wopiRenameFile(fileid, reqheaders_unused, acctok):
+
+def wopiRenameFile(fileid, reqheaders, acctok):
   '''Implements the RenameFile WOPI call'''
-  log.info('msg="RenameFile" user="%s:%s" filename="%s" fileid="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid))
-  #targetname = reqheaders['X-WOPI-RequestedName']
-  return 'Not supported', httplib.NOT_IMPLEMENTED
+  targetName = reqheaders['X-WOPI-RequestedName']
+  lock = reqheaders['X-WOPI-Lock']
+  retrievedLock = _retrieveWopiLock(fileid, 'RENAMEFILE', lock, acctok)
+  if retrievedLock != '' and retrievedLock != lock:
+    return _makeConflictResponse('RENAMEFILE', retrievedLock, lock, '', acctok['filename'])
+  try:
+    targetName += os.path.splitext(acctok['filename'])[1]    # the destination name comes without extension
+    log.info('msg="RenameFile" user="%s:%s" filename="%s" fileid="%s" targetname="%s"' % \
+             (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, targetName))
+    xrdcl.renamefile(acctok['filename'], targetName, acctok['ruid'], acctok['rgid'])
+    renamemd = {}
+    renamemd['Name'] = os.path.basename(targetName)
+    # send it in JSON format
+    resp = flask.Response(json.dumps(renamemd), mimetype='application/json')
+    return resp
+  except IOError, e:
+    # assume the rename failed because of the destination filename and report the error
+    resp = flask.Response()
+    resp.headers['X-WOPI-InvalidFileNameError'] = 'Failed to rename: %s' % e
+    resp.status_code = httplib.BAD_REQUEST
+    return resp
+
 
 @app.route("/wopi/files/<fileid>", methods=['POST'])
 def wopiFilesPost(fileid):
