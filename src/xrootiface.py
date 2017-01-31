@@ -68,8 +68,8 @@ def statx(filename, ruid, rgid):
   if not xrdfs:
     raise ValueError
   rc, rawinfo = xrdfs.query(QueryCode.OPAQUEFILE, filename + _eosargs(ruid, rgid) + '&mgm.pcmd=stat')
-  if rc != '[SUCCESS]':
-    raise IOError(rc)
+  if str(rc).find('[SUCCESS]') == -1:
+    raise IOError(str(rc).strip('\n'))
   return rawinfo.split()
 
 def setxattr(filename, ruid, rgid, key, value):

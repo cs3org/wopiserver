@@ -129,7 +129,7 @@ def wopiOpen():
             return urllib.quote_plus('http://%s:8080/wopi/files/%s' % (socket.gethostname(), inode)) + \
                    '&access_token=%s' % acctok      # no need to URL-encode the JWT token
           except IOError:
-            return 'File not found', httplib.NOT_FOUND
+            return 'Remote error or file not found', httplib.NOT_FOUND
     except socket.gaierror:
       log.warning('msg="wopiOpen: %s found in configured allowed clients but unknown by DNS resolution"' % c)
   # no match found, fail
@@ -175,7 +175,7 @@ def wopiCheckFileInfo(fileid):
     return 'Invalid access token', httplib.UNAUTHORIZED
   except Exception, e:
     log.error('msg="Unexpected exception caught" exception="%s"' % e)
-    log.debug(sys.exc_info())
+    log.error(str(sys.exc_info()))
     return 'Internal error', httplib.INTERNAL_SERVER_ERROR
 
 
@@ -198,7 +198,7 @@ def wopiGetFile(fileid):
     return 'Invalid access token', httplib.UNAUTHORIZED
   except Exception, e:
     log.error('msg="Unexpected exception caught" exception="%s"' % e)
-    log.debug(sys.exc_info())
+    log.error(str(sys.exc_info()))
     return 'Internal error', httplib.INTERNAL_SERVER_ERROR
 
 
@@ -216,11 +216,11 @@ def _retrieveWopiLock(fileid, operation, lock, acctok):
   if lockExpiration < time.time():
     # the retrieved lock is not valid any longer, discard
     retrievedLock = ''
-  return retrievedLock
+  return json.loads(retrievedLock) if retrievedLock != '' else None
 
 def _makeConflictResponse(operation, retrievedlock, lock, oldlock, filename):
   resp = flask.Response()
-  resp.headers['X-WOPI-Lock'] = retrievedlock
+  resp.headers['X-WOPI-Lock'] = json.dumps(retrievedlock)
   log.info('msg="%s" filename="%s" lock="%s" oldLock="%s" retrievedLock="%s" result="conflict"' % \
            (operation.title(), filename, lock, oldlock, retrievedlock))
   resp.status_code = httplib.CONFLICT
@@ -233,16 +233,17 @@ def wopiLock(fileid, reqheaders, acctok):
   '''Implements the Lock and RefreshLock WOPI calls'''
   # cf. http://wopi.readthedocs.io/projects/wopirest/en/latest/files/Lock.html
   op = reqheaders['X-WOPI-Override']
-  lock = reqheaders['X-WOPI-Lock']
-  oldLock = reqheaders['X-WOPI-OldLock'] if 'X-WOPI-OldLock' in reqheaders else ''
+  lock = json.loads(reqheaders['X-WOPI-Lock'])
+  oldLock = json.loads(reqheaders['X-WOPI-OldLock']) if 'X-WOPI-OldLock' in reqheaders else None
   retrievedLock = _retrieveWopiLock(fileid, op, lock, acctok)
   # perform the required checks for the validity of the new lock
-  if (oldLock == '' and retrievedLock != '' and retrievedLock != lock) or (oldLock != '' and retrievedLock != oldLock):
+  if (oldLock is None and retrievedLock != None and retrievedLock['L'] != lock['L']) or \
+     (oldLock != None and retrievedLock['L'] != oldLock['L']):
     return _makeConflictResponse(op, retrievedLock, lock, oldLock, acctok['filename'])
   # LOCK or REFRESH_LOCK: set the lock to the given one, and record its expiration time
-  xrdcl.setxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kWopiLockValue, lock)
+  xrdcl.setxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kWopiLockValue, str(lock))
   xrdcl.setxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kWopiLockExp, \
-                 time.time() + config.getint('general', 'wopilockexpiration'))
+                 int(time.time()) + config.getint('general', 'wopilockexpiration'))
   log.info('msg="%s" filename="%s" lock="%s" result="success"' % (op.title(), acctok['filename'], lock))
   if retrievedLock == '':
     # on first lock, set an xattr with the current time for later conflicts checking
@@ -257,9 +258,9 @@ def wopiLock(fileid, reqheaders, acctok):
 
 def wopiUnlock(fileid, reqheaders, acctok):
   '''Implements the Unlock WOPI call'''
-  lock = reqheaders['X-WOPI-Lock']
+  lock = json.loads(reqheaders['X-WOPI-Lock'])
   retrievedLock = _retrieveWopiLock(fileid, 'UNLOCK', lock, acctok)
-  if retrievedLock != '' and retrievedLock != lock:
+  if retrievedLock != None and json.loads(retrievedLock)['L'] != lock['L']:
     return _makeConflictResponse('UNLOCK', retrievedLock, lock, '', acctok['filename'])
   # OK, the lock matches. Remove any extended attribute related to locks and conflicts handling
   try:
@@ -275,7 +276,7 @@ def wopiUnlock(fileid, reqheaders, acctok):
 def wopiGetLock(fileid, reqheaders_unused, acctok):
   '''Implements the GetLock WOPI call'''
   resp = flask.Response()
-  resp.headers['X-WOPI-Lock'] = _retrieveWopiLock(fileid, 'GETLOCK', '', acctok)
+  resp.headers['X-WOPI-Lock'] = json.dumps(_retrieveWopiLock(fileid, 'GETLOCK', '', acctok))
   resp.status_code = httplib.OK
   return resp
 
@@ -287,9 +288,9 @@ def wopiPutRelative(fileid, reqheaders, acctok):
   relTarget = reqheaders['X-WOPI-RelativeTarget'] if 'X-WOPI-RelativeTarget' in reqheaders else ''
   overwriteTarget = 'X-WOPI-OverwriteRelativeTarget' in reqheaders and reqheaders['X-WOPI-OverwriteRelativeTarget'] == 'true'
   targetName = reqheaders['X-WOPI-RequestedName']
-  lock = reqheaders['X-WOPI-Lock']
+  lock = json.loads(reqheaders['X-WOPI-Lock'])
   retrievedLock = _retrieveWopiLock(fileid, 'PUTRELATIVE', lock, acctok)
-  if retrievedLock != '' and retrievedLock != lock:
+  if retrievedLock != None and json.loads(retrievedLock)['L'] != lock['L']:
     return _makeConflictResponse('PUTRELATIVE', retrievedLock, lock, '', acctok['filename'])
   if suggTarget != '' and relTarget != '':
     return 'Not supported', httplib.NOT_IMPLEMENTED
@@ -300,9 +301,9 @@ def wopiPutRelative(fileid, reqheaders, acctok):
 def wopiDeleteFile(fileid, reqheaders_unused, acctok):
   '''Implements the DeleteFile WOPI call'''
   retrievedLock = _retrieveWopiLock(fileid, 'DELETEFILE', '', acctok)
-  if retrievedLock != '':
+  if retrievedLock != None:
     # file is locked and cannot be deleted
-    return _makeConflictResponse('RENAMEFILE', retrievedLock, '', '', acctok['filename'])
+    return _makeConflictResponse('DELETEFILE', retrievedLock, '', '', acctok['filename'])
   try:
     xrdcl.removefile(acctok['filename'], acctok['ruid'], acctok['rgid'])
     return 'OK', httplib.OK
@@ -313,9 +314,9 @@ def wopiDeleteFile(fileid, reqheaders_unused, acctok):
 def wopiRenameFile(fileid, reqheaders, acctok):
   '''Implements the RenameFile WOPI call'''
   targetName = reqheaders['X-WOPI-RequestedName']
-  lock = reqheaders['X-WOPI-Lock']
+  lock = json.loads(reqheaders['X-WOPI-Lock'])
   retrievedLock = _retrieveWopiLock(fileid, 'RENAMEFILE', lock, acctok)
-  if retrievedLock != '' and retrievedLock != lock:
+  if retrievedLock != None and json.loads(retrievedLock)['L'] != lock['L']:
     return _makeConflictResponse('RENAMEFILE', retrievedLock, lock, '', acctok['filename'])
   try:
     targetName += os.path.splitext(acctok['filename'])[1]    # the destination name comes without extension
@@ -366,7 +367,7 @@ def wopiFilesPost(fileid):
     return 'Missing header %s in POST request' % e, httplib.BAD_REQUEST
   except Exception, e:
     log.error('msg="Unexpected exception caught" exception="%s"' % e)
-    log.debug(sys.exc_info())
+    log.error(str(sys.exc_info()))
     return 'Internal error', httplib.INTERNAL_SERVER_ERROR
 
 
@@ -378,6 +379,11 @@ def wopiPutFile(fileid):
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
     if acctok['exp'] < time.time():
       raise jwt.exceptions.DecodeError
+    # check that the caller holds the current lock on the file
+    lock = json.loads(flask.request.headers['X-WOPI-Lock'])
+    retrievedLock = _retrieveWopiLock(fileid, 'PUTFILE', lock, acctok)
+    if retrievedLock != None and json.loads(retrievedLock)['L'] != lock['L']:
+      return _makeConflictResponse('PUTFILE', retrievedLock, lock, '', acctok['filename'])
     log.info('msg="PostContent" user="%s:%s" filename="%s" fileid="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid))
     # check now the destination file against conflicts
     try:
@@ -420,7 +426,7 @@ def wopiPutFile(fileid):
     return 'I/O Error', httplib.INTERNAL_SERVER_ERROR
   except Exception, e:
     log.error('msg="Unexpected exception caught" exception="%s"' % e)
-    log.debug(sys.exc_info())
+    log.error(str(sys.exc_info()))
     return 'Internal error', httplib.INTERNAL_SERVER_ERROR
 
 
