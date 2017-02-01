@@ -34,7 +34,7 @@ def _xrootcmd(cmd, subcmd, ruid, rgid, args):
       if rc != '0':
         # failure: get info from stderr, log and raise
         msg = res[1][res[1].find('=')+1:]
-        log.warning('msg="Error with xroot command" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' % (cmd, subcmd, args, msg, rc))
+        log.info('msg="Error with xroot command" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' % (cmd, subcmd, args, msg, rc))
         raise IOError(msg)
   # all right, return everything that came in stdout
   return res[0][res[0].find('stdout=')+7:]
@@ -70,6 +70,8 @@ def statx(filename, ruid, rgid):
   rc, rawinfo = xrdfs.query(QueryCode.OPAQUEFILE, filename + _eosargs(ruid, rgid) + '&mgm.pcmd=stat')
   if str(rc).find('[SUCCESS]') == -1:
     raise IOError(str(rc).strip('\n'))
+  if rawinfo.find('retc=') > 0:
+    raise IOError(rawinfo.strip('\n'))
   return rawinfo.split()
 
 def setxattr(filename, ruid, rgid, key, value):
