@@ -1,6 +1,10 @@
 #!/usr/bin/python
-#
-'''Check the given file for WOPI extended attributes'''
+'''
+Check the given file for WOPI extended attributes
+
+Author: Giuseppe.LoPresti@cern.ch
+CERN IT/ST
+'''
 
 import sys, getopt, ConfigParser, logging
 import xrootiface

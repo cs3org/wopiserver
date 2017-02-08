@@ -1,7 +1,7 @@
 #!/bin/python
-#
-# wopiserver.py
 '''
+wopiserver.py
+
 The Web-application Open Platform Interface (WOPI) gateway for CERNBox
 
 Author: Giuseppe.LoPresti@cern.ch

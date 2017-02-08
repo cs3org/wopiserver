@@ -1,5 +1,6 @@
-# xrootiface.py
 '''
+xrootiface.py
+
 XRootD interface for the WOPI server for CERNBox
 
 Author: Giuseppe.LoPresti@cern.ch
