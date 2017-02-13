@@ -124,7 +124,7 @@ def wopiOpen():
           # we got a match, generate the access token
           ruid = int(req.args['ruid'])
           rgid = int(req.args['rgid'])
-          filename = req.args['filename']
+          filename = urllib.unquote(req.args['filename'])
           canedit = ('canedit' in req.args and req.args['canedit'].lower() == 'yes')
           try:
             inode, acctok = _generateAccessToken(str(ruid), str(rgid), filename, canedit)
