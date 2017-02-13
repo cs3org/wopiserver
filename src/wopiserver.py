@@ -163,9 +163,7 @@ def wopiCheckFileInfo(fileid):
     filemd['Version'] = acctok['mtime']
     filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = acctok['canedit']
     filemd['SupportsRename'] = filemd['UserCanRename'] = True
-    filemd['DownloadUrl'] = config.get('general', 'downloadurl') + \
-                            '?dir=' + urllib.quote_plus(os.path.dirname(acctok['filename'])) + \
-                            '&files=' + urllib.quote_plus(filemd['BaseFileName'])
+    filemd['DownloadUrl'] = config.get('general', 'downloadurl') + '?path=' + urllib.quote_plus(acctok['filename'])
     # send it in JSON format
     return flask.Response(json.dumps(filemd), mimetype='application/json')
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
