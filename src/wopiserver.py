@@ -95,7 +95,10 @@ def _logGeneralExceptionAndReturn(ex):
             (ex, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback)))
   return 'Internal error', httplib.INTERNAL_SERVER_ERROR
 
+
+#
 # The Web Application starts here
+#
 @app.route("/")
 def index():
   '''Return a default index page with some user-friendly information about this service'''
@@ -110,8 +113,8 @@ def index():
     """ % (WOPISERVERVERSION, flask.__version__, platform.python_version())
 
 
-@app.route("/wopi/cboxopen", methods=['GET'])
-def wopiOpen():
+@app.route("/cbox/open", methods=['GET'])
+def cboxOpen():
   '''Return a WOPISrc target and an access token to be passed to Microsoft Office online for accessing a given file for a given user'''
   _refreshConfig()
   req = flask.request
@@ -142,6 +145,31 @@ def wopiOpen():
   return 'Client IP not authorized', httplib.UNAUTHORIZED
 
 
+@app.route("/cbox/download", methods=['GET'])
+def cboxDownload():
+  '''Return the file's content for a given and valid access token. Used as a download URL,
+     so that the file's path is kept safe.'''
+  try:
+    acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
+    resp = flask.Response(xrdcl.readfile(acctok['filename'], acctok['ruid'], acctok['rgid']), mimetype='application/octet-stream')
+    resp.status_code = httplib.OK
+    return resp
+  except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
+    log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
+    return 'Invalid access token', httplib.UNAUTHORIZED
+  except IOError, e:
+    log.info('msg="Requested file not found" filename="%s" error="%s"' % (acctok['filename'], e))
+    return 'File not found', httplib.NOT_FOUND
+  except KeyError, e:
+    log.error('msg="Invalid access token, missing %s field"' % e)
+    return 'Invalid access token', httplib.UNAUTHORIZED
+  except Exception, e:
+    return _logGeneralExceptionAndReturn(e)
+
+
+#
+# The WOPI protocol implementation starts here
+#
 @app.route("/wopi/files/<fileid>", methods=['GET'])
 def wopiCheckFileInfo(fileid):
   '''Implements the CheckFileInfo WOPI call'''
@@ -163,7 +191,7 @@ def wopiCheckFileInfo(fileid):
     filemd['Version'] = acctok['mtime']
     filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = acctok['canedit']
     filemd['SupportsRename'] = filemd['UserCanRename'] = True
-    filemd['DownloadUrl'] = config.get('general', 'downloadurl') + '?path=' + urllib.quote_plus(acctok['filename'])
+    filemd['DownloadUrl'] = 'http://%s:8080/cbox/download?access_token=%s' % (socket.gethostname(), flask.request.args['access_token'])
     # send it in JSON format
     return flask.Response(json.dumps(filemd), mimetype='application/json')
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
@@ -519,5 +547,5 @@ def wopiPutFile(fileid):
 
 # start the Flask endless listening loop
 app.run(host='0.0.0.0', port=8080, threaded=True, debug=(config.get('general', 'loglevel') == 'Debug'))
-# XXX todo: enable https on port 443 and then add:
+# XXX todo: enable https on port 443, replace 8080 with 443 everywhere and then add:
 #       ssl_context=(config.get('security', 'wopicert'), config.get('security', 'wopikey')))
