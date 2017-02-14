@@ -18,7 +18,10 @@ xrdfs = None
 
 def _eosargs(ruid, rgid, atomicwrite=0):
   '''One-liner to generate extra EOS-specific arguments for the xroot URL'''
-  return '?eos.ruid=' + ruid + '&eos.rgid=' + rgid + ('&eos.atomic=1' if atomicwrite else '')
+  if int(ruid) == 0 or int(rgid) == 0:
+    # this is an assert: user must not be root
+    raise ValueError
+  return '?eos.ruid=' + ruid + '&eos.rgid=' + rgid + ('&eos.atomic=1' if atomicwrite else '') + '&eos.app=wopi'
 
 def _xrootcmd(cmd, subcmd, ruid, rgid, args):
   '''Perform the <cmd>/<subcmd> action on the special /proc/user path on behalf of the given uid,gid'''
