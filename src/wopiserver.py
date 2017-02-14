@@ -45,12 +45,13 @@ try:
   loghandler = logging.FileHandler('/var/log/cernbox/wopiserver.log')
   loghandler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)s %(levelname)-8s %(message)s', datefmt='%Y-%m-%dT%H:%M:%S'))
   log.addHandler(loghandler)
-  wopisecret = open(config.get('security', 'secretfile')).read()
+  wopisecret = open(config.get('security', 'wopisecretfile')).read()
+  cerboxsecret = open(config.get('security', 'cernboxsecretfile')).read()
   tokenvalidity = config.getint('general', 'tokenvalidity')
   xrdcl.init(config, log)                          # initialize the xroot client module
   config.get('general', 'allowedclients')          # read this to make sure it is configured
 except Exception, e:
-  # any error we got here with the configuration is fatal
+  # any error we get here with the configuration is fatal
   print "Failed to initialize the service, bailing out:", e
   sys.exit(-1)
 
@@ -78,7 +79,7 @@ def _generateAccessToken(ruid, rgid, filename, canedit):
 
 
 def _refreshConfig():
-  '''re-read the configuration file every 300 secs to catch any runtime parameter change'''
+  '''Re-read the configuration file every 300 secs to catch any runtime parameter change'''
   global lastConfigReadTime
   global tokenvalidity
   if time.time() > lastConfigReadTime + 300:
@@ -90,6 +91,7 @@ def _refreshConfig():
 
 
 def _logGeneralExceptionAndReturn(ex):
+  '''Convenience function to log a stack trace and return HTTP 500'''
   ex_type, ex_value, ex_traceback = sys.exc_info()
   log.error('msg="Unexpected exception caught" exception="%s" type="%s" traceback="%s"' % \
             (ex, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback)))
@@ -115,10 +117,17 @@ def index():
 
 @app.route("/cbox/open", methods=['GET'])
 def cboxOpen():
-  '''Return a WOPISrc target and an access token to be passed to Microsoft Office online for accessing a given file for a given user'''
+  '''Return a WOPISrc target and an access token to be passed to Microsoft Office online for
+  accessing a given file for a given user. This is the most sensitive call as it provides direct
+  access to any user's data, therefore it is protected both by IP and by a shared secret.'''
   _refreshConfig()
   req = flask.request
-  # first resolve the client: only our OwnCloud servers shall use this API
+  # first check if the shared secret matches ours
+  if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + cernboxsecret:
+    log.info('msg="cboxOpen: unauthorized access attempt, missing authorization token" client="%s"' % \
+             flask.request.remote_addr)
+    return 'Client IP not authorized', httplib.UNAUTHORIZED
+  # then resolve the client: only our OwnCloud servers shall use this API
   allowedclients = config.get('general', 'allowedclients').split()
   for c in allowedclients:
     try:
@@ -131,28 +140,31 @@ def cboxOpen():
           canedit = ('canedit' in req.args and req.args['canedit'].lower() == 'yes')
           try:
             inode, acctok = _generateAccessToken(str(ruid), str(rgid), filename, canedit)
-            log.info('msg="wopiOpen: access token set" host="%s" user="%d:%d" filename="%s" canedit="%r" inode="%s" token="%s"' % \
+            log.info('msg="cboxOpen: access token set" host="%s" user="%d:%d" filename="%s" canedit="%r" inode="%s" token="%s"' % \
                      (req.remote_addr, ruid, rgid, filename, canedit, inode, acctok))
-            # return an URL-encoded URL for the Office Online server
+            # return an URL-encoded WOPISrc URL for the Office Online server
             return urllib.quote_plus('http://%s:8080/wopi/files/%s' % (socket.gethostname(), inode)) + \
                    '&access_token=%s' % acctok      # no need to URL-encode the JWT token
           except IOError:
             return 'Remote error or file not found', httplib.NOT_FOUND
     except socket.gaierror:
-      log.warning('msg="wopiOpen: %s found in configured allowed clients but unknown by DNS resolution"' % c)
+      log.warning('msg="cboxOpen: %s found in configured allowed clients but unknown by DNS resolution"' % c)
   # no match found, fail
-  log.info('msg="wopiOpen: unauthorized access attempt" client="%s"' % flask.request.remote_addr)
+  log.info('msg="cboxOpen: unauthorized access attempt, client IP not whitelisted" client="%s"' % \
+           flask.request.remote_addr)
   return 'Client IP not authorized', httplib.UNAUTHORIZED
 
 
 @app.route("/cbox/download", methods=['GET'])
 def cboxDownload():
-  '''Return the file's content for a given and valid access token. Used as a download URL,
+  '''Return the file's content for a given valid access token. Used as a download URL,
      so that the file's path is kept safe.'''
   try:
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
     resp = flask.Response(xrdcl.readfile(acctok['filename'], acctok['ruid'], acctok['rgid']), mimetype='application/octet-stream')
     resp.status_code = httplib.OK
+    log.info('msg="cboxDownload: direct download succeeded" filename="%s" user="%s:%s"' % \
+             (acctok['filename'], acctok['ruid'], acctok['rgid']))
     return resp
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
     log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
@@ -161,7 +173,7 @@ def cboxDownload():
     log.info('msg="Requested file not found" filename="%s" error="%s"' % (acctok['filename'], e))
     return 'File not found', httplib.NOT_FOUND
   except KeyError, e:
-    log.error('msg="Invalid access token, missing %s field"' % e)
+    log.error('msg="Invalid access token or request argument" error="%s"' % e)
     return 'Invalid access token', httplib.UNAUTHORIZED
   except Exception, e:
     return _logGeneralExceptionAndReturn(e)
@@ -201,7 +213,7 @@ def wopiCheckFileInfo(fileid):
     log.info('msg="Requested file not found" filename="%s" error="%s"' % (acctok['filename'], e))
     return 'File not found', httplib.NOT_FOUND
   except KeyError, e:
-    log.error('msg="Invalid access token, missing %s field"' % e)
+    log.error('msg="Invalid access token or request argument" error="%s"' % e)
     return 'Invalid access token', httplib.UNAUTHORIZED
   except Exception, e:
     return _logGeneralExceptionAndReturn(e)
@@ -485,6 +497,7 @@ def wopiFilesPost(fileid):
     log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
     return 'Invalid access token', httplib.UNAUTHORIZED
   except KeyError, e:
+    log.error('msg="Invalid access token or request argument" error="%s"' % e)
     return 'Missing header %s in POST request' % e, httplib.BAD_REQUEST
   except Exception, e:
     return _logGeneralExceptionAndReturn(e)
