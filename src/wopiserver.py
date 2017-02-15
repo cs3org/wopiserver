@@ -382,7 +382,7 @@ def wopiPutRelative(fileid, reqheaders, acctok):
     if suggTarget[0] == '.':    # we just have the extension here
       targetname = os.path.splitext(acctok['filename'])[0] + suggTarget
     else:
-      targetname = suggTarget
+      targetname = os.path.dirname(acctok['filename']) + os.path.sep + suggTarget
     # check for existence of the target file and adjust until a non-existing one is obtained
     while True:
       try:
@@ -399,7 +399,8 @@ def wopiPutRelative(fileid, reqheaders, acctok):
                    (acctok['ruid'], acctok['rgid'], targetname, suggTarget, str(e)))
           return 'Illegal filename %s: %s' % (targetname, e), httplib.BAD_REQUEST
   else:
-    # the relative target is a full filename to be respected, and that may overwrite an existing file
+    # the relative target is a filename to be respected, and that may overwrite an existing file
+    relTarget = os.path.dirname(acctok['filename']) + os.path.sep + relTarget    # make full path
     overwriteTarget = 'X-WOPI-OverwriteRelativeTarget' in reqheaders and bool(reqheaders['X-WOPI-OverwriteRelativeTarget'])
     try:
       # check for file existence + lock
@@ -424,7 +425,7 @@ def wopiPutRelative(fileid, reqheaders, acctok):
   log.info('msg="PutRelative: generating new access token" user="%s:%s" filename="%s" canedit="True"' % \
            (acctok['ruid'], acctok['rgid'], targetname))
   inode, newacctok = _generateAccessToken(acctok['ruid'], acctok['rgid'], targetname, True)
-  putrelmd['URL'] = urllib.quote_plus('http://%s:8080/wopi/files/%s' % (socket.gethostname(), inode)) + \
+  putrelmd['Url'] = urllib.quote_plus('http://%s:8080/wopi/files/%s' % (socket.gethostname(), inode)) + \
                     '&access_token=%s' % newacctok      # no need to URL-encode the JWT token
   return flask.Response(json.dumps(putrelmd), mimetype='application/json')
 
