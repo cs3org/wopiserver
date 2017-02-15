@@ -46,7 +46,7 @@ try:
   loghandler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)s %(levelname)-8s %(message)s', datefmt='%Y-%m-%dT%H:%M:%S'))
   log.addHandler(loghandler)
   wopisecret = open(config.get('security', 'wopisecretfile')).read()
-  cerboxsecret = open(config.get('security', 'cernboxsecretfile')).read()
+  cernboxsecret = open(config.get('security', 'cernboxsecretfile')).read()
   tokenvalidity = config.getint('general', 'tokenvalidity')
   xrdcl.init(config, log)                          # initialize the xroot client module
   config.get('general', 'allowedclients')          # read this to make sure it is configured
@@ -126,7 +126,7 @@ def cboxOpen():
   if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + cernboxsecret:
     log.info('msg="cboxOpen: unauthorized access attempt, missing authorization token" client="%s"' % \
              flask.request.remote_addr)
-    return 'Client IP not authorized', httplib.UNAUTHORIZED
+    return 'Client not authorized', httplib.UNAUTHORIZED
   # then resolve the client: only our OwnCloud servers shall use this API
   allowedclients = config.get('general', 'allowedclients').split()
   for c in allowedclients:
@@ -152,7 +152,7 @@ def cboxOpen():
   # no match found, fail
   log.info('msg="cboxOpen: unauthorized access attempt, client IP not whitelisted" client="%s"' % \
            flask.request.remote_addr)
-  return 'Client IP not authorized', httplib.UNAUTHORIZED
+  return 'Client not authorized', httplib.UNAUTHORIZED
 
 
 @app.route("/cbox/download", methods=['GET'])
