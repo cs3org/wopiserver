@@ -45,8 +45,8 @@ try:
   loghandler = logging.FileHandler('/var/log/cernbox/wopiserver.log')
   loghandler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)s %(levelname)-8s %(message)s', datefmt='%Y-%m-%dT%H:%M:%S'))
   log.addHandler(loghandler)
-  wopisecret = open(config.get('security', 'wopisecretfile')).read()
-  cernboxsecret = open(config.get('security', 'cernboxsecretfile')).read()
+  wopisecret = open(config.get('security', 'wopisecretfile')).read().strip('\n')
+  cernboxsecret = open(config.get('security', 'cernboxsecretfile')).read().strip('\n')
   tokenvalidity = config.getint('general', 'tokenvalidity')
   xrdcl.init(config, log)                          # initialize the xroot client module
   config.get('general', 'allowedclients')          # read this to make sure it is configured
@@ -162,6 +162,7 @@ def cboxDownload():
   try:
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
     resp = flask.Response(xrdcl.readfile(acctok['filename'], acctok['ruid'], acctok['rgid']), mimetype='application/octet-stream')
+    resp.headers['Content-Disposition'] = 'attachment; filename="%s"' % os.path.basename(acctok['filename'])
     resp.status_code = httplib.OK
     log.info('msg="cboxDownload: direct download succeeded" filename="%s" user="%s:%s"' % \
              (acctok['filename'], acctok['ruid'], acctok['rgid']))
