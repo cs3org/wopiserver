@@ -14,6 +14,8 @@ Source: %{name}-%{version}.tar.gz
 # The required Python version makes this package depend on at least CentOS 7 to compile and run.
 BuildRequires: python >= 2.7
 Requires: python >= 2.7, python-flask, python-jwt, xrootd-python
+# The following to avoid to pick up /bin/python as an automatic dependency
+AutoReq: no
 
 %description
 This RPM provides a Flask-based web server to implement the Microsoft WOPI protocol for CERNBox
