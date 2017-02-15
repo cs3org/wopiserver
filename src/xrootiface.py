@@ -24,7 +24,8 @@ def _eosargs(ruid, rgid, atomicwrite=0):
   return '?eos.ruid=' + ruid + '&eos.rgid=' + rgid + ('&eos.atomic=1' if atomicwrite else '') + '&eos.app=wopi'
 
 def _xrootcmd(cmd, subcmd, ruid, rgid, args):
-  '''Perform the <cmd>/<subcmd> action on the special /proc/user path on behalf of the given uid,gid'''
+  '''Perform the <cmd>/<subcmd> action on the special /proc/user path on behalf of the given uid,gid.
+     Note that this is entirely EOS-specific.'''
   log.debug('msg="Invoking _xrootcmd" cmd="%s" subcmd="%s" args="%s"' % (cmd, subcmd, args))
   if not xrdfs:
     raise ValueError
@@ -57,7 +58,7 @@ def init(inconfig, inlog):
   xrdfs = XrdClient.FileSystem(storageserver)
 
 def stat(filename, ruid, rgid):
-  '''Stat a file via xroot on behalf of the given uid,gid. Not actually used but included for completeness.'''
+  '''Stat a file via xroot on behalf of the given uid,gid. Uses the default xroot API.'''
   log.debug('msg="Invoking stat" filename="%s"' % filename)
   if not xrdfs:
     raise ValueError
@@ -109,7 +110,8 @@ def readfile(filename, ruid, rgid):
         yield chunk
 
 def writefile(filename, ruid, rgid, content):
-  '''Write a file via xroot on behalf of the given uid,gid. The entire content is written and any pre-existing file is deleted.'''
+  '''Write a file via xroot on behalf of the given uid,gid. The entire content is written
+     and any pre-existing file is deleted.'''
   log.debug('msg="Invoking writeFile filename="%s"' % filename)
   if not xrdfs:
     raise ValueError
@@ -135,3 +137,4 @@ def renamefile(origfilename, newfilename, ruid, rgid):
 def removefile(filename, ruid, rgid):
   '''Remove a file via a special open on behalf of the given uid,gid.'''
   _xrootcmd('rm', None, ruid, rgid, '&mgm.path=' + filename)
+

@@ -72,8 +72,8 @@ def _generateAccessToken(ruid, rgid, filename, canedit):
   exptime = int(time.time()) + tokenvalidity
   acctok = jwt.encode({'ruid': ruid, 'rgid': rgid, 'filename': filename, 'canedit': canedit, 'mtime': mtime,
                        'exp': exptime}, wopisecret, algorithm='HS256')
-  log.debug('msg="Access token generated" ruid="%s" rgid="%s" filename="%s" canedit="%s" mtime="%s" expiration="%d"' % \
-            (ruid, rgid, filename, canedit, mtime, exptime))
+  log.info('msg="Access token generated" ruid="%s" rgid="%s" canedit="%r" filename="%s" inode="%s" mtime="%s" expiration="%d"' % \
+           (ruid, rgid, canedit, filename, inode, mtime, exptime))
   # return the inode == fileid and the access token
   return inode, acctok
 
@@ -107,7 +107,7 @@ def index():
   log.info('msg="Accessed index page" client="%s"' % flask.request.remote_addr)
   return """
     <div align="center" style="color:#000080; padding-top:50px; font-family:Verdana; size:11">
-    This is the CERNBox <a href=http://wopi.readthedocs.io>WOPI</a> server for Microsoft Office Online.
+    This is the CERNBox <a href=http://wopi.readthedocs.io>WOPI</a> server for Microsoft Office Online.<br>
     To use this service, please log in to your <a href=https://cernbox.cern.ch>CERNBox</a> account
     and click on the View/Edit buttons next to your Microsoft Office documents.</div>
     <br><br><br><br><br><br><br><br><br><br><hr>
@@ -139,16 +139,16 @@ def cboxOpen():
           filename = urllib.unquote(req.args['filename'])
           canedit = ('canedit' in req.args and req.args['canedit'].lower() == 'yes')
           try:
+            log.info('msg="cboxOpen: access granted, generating token" client="%s" user="%d:%d"' % \
+                     (req.remote_addr, ruid, rgid))
             inode, acctok = _generateAccessToken(str(ruid), str(rgid), filename, canedit)
-            log.info('msg="cboxOpen: access token set" host="%s" user="%d:%d" filename="%s" canedit="%r" inode="%s" token="%s"' % \
-                     (req.remote_addr, ruid, rgid, filename, canedit, inode, acctok))
             # return an URL-encoded WOPISrc URL for the Office Online server
             return urllib.quote_plus('http://%s:8080/wopi/files/%s' % (socket.gethostname(), inode)) + \
                    '&access_token=%s' % acctok      # no need to URL-encode the JWT token
           except IOError:
             return 'Remote error or file not found', httplib.NOT_FOUND
     except socket.gaierror:
-      log.warning('msg="cboxOpen: %s found in configured allowed clients but unknown by DNS resolution"' % c)
+      log.warning('msg="cboxOpen: %s found in configured allowed clients but unknown by DNS resolution, ignoring"' % c)
   # no match found, fail
   log.info('msg="cboxOpen: unauthorized access attempt, client IP not whitelisted" client="%s"' % \
            flask.request.remote_addr)
@@ -260,7 +260,7 @@ def _retrieveWopiLock(fileid, operation, lock, acctok):
 
 
 def _storeWopiLock(operation, lock, acctok):
-  '''Store the lock for a given file in the form of an encoded JSON string (cf. the access token)'''
+  '''Stores the lock for a given file in the form of an encoded JSON string (cf. the access token)'''
   # append the expiration time
   lock['exp'] = int(time.time()) + config.getint('general', 'wopilockexpiration')
   try:
@@ -273,6 +273,7 @@ def _storeWopiLock(operation, lock, acctok):
 
 def _compareWopiLocks(lock1, lock2):
   '''Compares two dictionaries to decide if they represent the same WOPI lock'''
+  log.debug('msg="compareLocks" lock1="%s" lock2="%s"' % (lock1, lock2))
   if 'L' in lock1 and 'L' in lock2:
     return lock1['L'] == lock2['L']     # typically used by MS Excel
   elif 'S' in lock1 and 'S' in lock2:
@@ -292,7 +293,8 @@ def _makeConflictResponse(operation, retrievedlock, lock, oldlock, filename):
 
 
 def _storeWopiFile(request, acctok, targetname='', savetime=0):
-  '''Saves a file from an HTTP request to the given target filename (defaulting to the access token's one)'''
+  '''Saves a file from an HTTP request to the given target filename (defaulting to the access token's one),
+     and stores the save time as an xattr. Throws IOError in case of any failure'''
   if not targetname:
     targetname = acctok['filename']
   xrdcl.writefile(targetname, acctok['ruid'], acctok['rgid'], request.get_data())
@@ -376,8 +378,8 @@ def wopiPutRelative(fileid, reqheaders, acctok):
   if (suggTarget and relTarget) or (not suggTarget and not relTarget):
     return 'Not supported', httplib.NOT_IMPLEMENTED
   if suggTarget:
-    # the suggested target is filename that can be changed to avoid collisions
-    if suggTarget[0] == '.':
+    # the suggested target is a filename that can be changed to avoid collisions
+    if suggTarget[0] == '.':    # we just have the extension here
       targetname = os.path.splitext(acctok['filename'])[0] + suggTarget
     else:
       targetname = suggTarget
@@ -419,9 +421,9 @@ def wopiPutRelative(fileid, reqheaders, acctok):
   # prepare and send the JSON response
   putrelmd = {}
   putrelmd['Name'] = os.path.basename(targetname)
+  log.info('msg="PutRelative: generating new access token" user="%s:%s" filename="%s" canedit="True"' % \
+           (acctok['ruid'], acctok['rgid'], targetname))
   inode, newacctok = _generateAccessToken(acctok['ruid'], acctok['rgid'], targetname, True)
-  log.info('msg="PutRelative: new access token set" user="%s:%s" filename="%s" canedit="True" inode="%s" token="%s"' % \
-           (acctok['ruid'], acctok['rgid'], targetname, inode, newacctok))
   putrelmd['URL'] = urllib.quote_plus('http://%s:8080/wopi/files/%s' % (socket.gethostname(), inode)) + \
                     '&access_token=%s' % newacctok      # no need to URL-encode the JWT token
   return flask.Response(json.dumps(putrelmd), mimetype='application/json')
@@ -559,7 +561,9 @@ def wopiPutFile(fileid):
     return _logGeneralExceptionAndReturn(e)
 
 
-# start the Flask endless listening loop
+#
+# Start the Flask endless listening loop
+#
 app.run(host='0.0.0.0', port=8080, threaded=True, debug=(config.get('general', 'loglevel') == 'Debug'))
 # XXX todo: enable https on port 443, replace 8080 with 443 everywhere and then add:
 #       ssl_context=(config.get('security', 'wopicert'), config.get('security', 'wopikey')))
