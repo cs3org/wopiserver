@@ -137,7 +137,7 @@ def cboxOpen():
           ruid = int(req.args['ruid'])
           rgid = int(req.args['rgid'])
           filename = urllib.unquote(req.args['filename'])
-          canedit = ('canedit' in req.args and req.args['canedit'].lower() == 'yes')
+          canedit = ('canedit' in req.args and req.args['canedit'].lower() == 'true')
           try:
             log.info('msg="cboxOpen: access granted, generating token" client="%s" user="%d:%d"' % \
                      (req.remote_addr, ruid, rgid))
