@@ -46,7 +46,7 @@ try:
   loghandler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)s %(levelname)-8s %(message)s', datefmt='%Y-%m-%dT%H:%M:%S'))
   log.addHandler(loghandler)
   wopisecret = open(config.get('security', 'wopisecretfile')).read().strip('\n')
-  cernboxsecret = open(config.get('security', 'cernboxsecretfile')).read().strip('\n')
+  ocsecret = open(config.get('security', 'ocsecretfile')).read().strip('\n')
   tokenvalidity = config.getint('general', 'tokenvalidity')
   xrdcl.init(config, log)                          # initialize the xroot client module
   config.get('general', 'allowedclients')          # read this to make sure it is configured
@@ -132,7 +132,7 @@ def cboxOpen():
   _refreshConfig()
   req = flask.request
   # first check if the shared secret matches ours
-  if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + cernboxsecret:
+  if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + ocsecret:
     log.info('msg="cboxOpen: unauthorized access attempt, missing authorization token" client="%s"' % \
              flask.request.remote_addr)
     return 'Client not authorized', httplib.UNAUTHORIZED

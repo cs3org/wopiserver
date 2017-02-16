@@ -47,7 +47,7 @@ install -m 644 wopiserver.service    %buildroot/usr/lib/systemd/system/wopiserve
 install -m 644 wopiserver.conf       %buildroot/etc/wopi/wopiserver.defaults.conf
 install -m 644 wopiserver.logrotate  %buildroot/etc/logrotate.d/cernbox-wopi-server
 install -m 600 wopisecret            %buildroot/etc/wopi/wopisecret
-install -m 600 cernboxsecret         %buildroot/etc/wopi/cernboxsecret
+install -m 600 ocsecret              %buildroot/etc/wopi/ocsecret
 
 %clean
 rm -rf %buildroot/
@@ -64,7 +64,7 @@ setcap 'cap_net_bind_service=+ep' %buildroot/usr/bin/wopiserver.py
 /etc/logrotate.d/cernbox-wopi-server
 %attr(-,cboxwopi,def-cg) /var/log/cernbox
 %attr(-,cboxwopi,def-cg) %config(noreplace) /etc/wopi/wopisecret
-%attr(-,cboxwopi,def-cg) %config(noreplace) /etc/wopi/cernboxsecret
+%attr(-,cboxwopi,def-cg) %config(noreplace) /etc/wopi/ocsecret
 /usr/lib/systemd/system/wopiserver.service
 /usr/bin/*
 %_python_lib/*
