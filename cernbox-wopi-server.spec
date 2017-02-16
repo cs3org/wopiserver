@@ -55,8 +55,8 @@ rm -rf %buildroot/
 %preun
 
 %post
-# enable listening on port < 1024
-setcap 'cap_net_bind_service=+ep' %buildroot/usr/bin/wopiserver.py
+# enable listening on port < 1024: unfortunately we have to do it on the python binary...
+setcap 'cap_net_bind_service=+ep' /usr/bin/python2.7
 
 %files
 %defattr(-,root,root,-)
@@ -70,9 +70,9 @@ setcap 'cap_net_bind_service=+ep' %buildroot/usr/bin/wopiserver.py
 %_python_lib/*
 
 %changelog
-*     Feb    2017 Giuseppe Lo Presti <lopresti@cern.ch> 0.4
-- First release for pre-production deployment
-* Thu Feb 14 2017 Giuseppe Lo Presti <lopresti@cern.ch> 0.3
+* Thu Feb 16 2017 Giuseppe Lo Presti <lopresti@cern.ch> 0.4
+- First release for pre-production deployment: https, download URL and minor fixes
+* Tue Feb 14 2017 Giuseppe Lo Presti <lopresti@cern.ch> 0.3
 - Added the Locking interface and PutRelative, RenameFile, DeleteFile
 - Refined the /cbox API to interact with OwnCloud
 * Wed Jan 18 2017 Giuseppe Lo Presti <lopresti@cern.ch> 0.2
