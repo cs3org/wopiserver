@@ -50,10 +50,19 @@ try:
   tokenvalidity = config.getint('general', 'tokenvalidity')
   xrdcl.init(config, log)                          # initialize the xroot client module
   config.get('general', 'allowedclients')          # read this to make sure it is configured
+  useHttps = config.get('security', 'useHttps').lower() == 'yes'
 except Exception, e:
   # any error we get here with the configuration is fatal
   print "Failed to initialize the service, bailing out:", e
   sys.exit(-1)
+
+
+def _ourHostName():
+  '''Returns the WOPI web address taking into account whether it's http or https'''
+  if useHttps:
+    return 'https://%s' % socket.gethostname()
+  else:
+    return 'http://%s:8080' % socket.gethostname()
 
 
 def _generateAccessToken(ruid, rgid, filename, canedit):
@@ -143,7 +152,7 @@ def cboxOpen():
                      (req.remote_addr, ruid, rgid))
             inode, acctok = _generateAccessToken(str(ruid), str(rgid), filename, canedit)
             # return an URL-encoded WOPISrc URL for the Office Online server
-            return urllib.quote_plus('http://%s:8080/wopi/files/%s' % (socket.gethostname(), inode)) + \
+            return urllib.quote_plus('%s/wopi/files/%s' % (_ourHostName(), inode)) + \
                    '&access_token=%s' % acctok      # no need to URL-encode the JWT token
           except IOError:
             return 'Remote error or file not found', httplib.NOT_FOUND
@@ -428,7 +437,7 @@ def wopiPutRelative(fileid, reqheaders, acctok):
   log.info('msg="PutRelative: generating new access token" user="%s:%s" filename="%s" canedit="True"' % \
            (acctok['ruid'], acctok['rgid'], targetname))
   inode, newacctok = _generateAccessToken(acctok['ruid'], acctok['rgid'], targetname, True)
-  putrelmd['Url'] = urllib.quote_plus('http://%s:8080/wopi/files/%s' % (socket.gethostname(), inode)) + \
+  putrelmd['Url'] = urllib.quote_plus('%s/wopi/files/%s' % (_ourHostName(), inode)) + \
                     '&access_token=%s' % newacctok      # no need to URL-encode the JWT token
   return flask.Response(json.dumps(putrelmd), mimetype='application/json')
 
@@ -568,6 +577,8 @@ def wopiPutFile(fileid):
 #
 # Start the Flask endless listening loop
 #
-app.run(host='0.0.0.0', port=8080, threaded=True, debug=(config.get('general', 'loglevel') == 'Debug'))
-# XXX todo: enable https on port 443, replace 8080 with 443 everywhere and then add:
-#       ssl_context=(config.get('security', 'wopicert'), config.get('security', 'wopikey')))
+if useHttps:
+  app.run(host='0.0.0.0', port=443, threaded=True, debug=(config.get('general', 'loglevel') == 'Debug'),
+          ssl_context=(config.get('security', 'wopicert'), config.get('security', 'wopikey')))
+else:
+  app.run(host='0.0.0.0', port=8080, threaded=True, debug=(config.get('general', 'loglevel') == 'Debug'))
