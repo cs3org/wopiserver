@@ -161,6 +161,8 @@ def cboxDownload():
      so that the file's path is kept safe.'''
   try:
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
+    if acctok['exp'] < time.time():
+      raise jwt.exceptions.ExpiredSignatureError
     resp = flask.Response(xrdcl.readfile(acctok['filename'], acctok['ruid'], acctok['rgid']), mimetype='application/octet-stream')
     resp.headers['Content-Disposition'] = 'attachment; filename="%s"' % os.path.basename(acctok['filename'])
     resp.status_code = httplib.OK
@@ -191,7 +193,7 @@ def wopiCheckFileInfo(fileid):
   try:
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
     if acctok['exp'] < time.time():
-      raise jwt.exceptions.DecodeError
+      raise jwt.exceptions.ExpiredSignatureError
     log.info('msg="CheckFileInfo" user="%s:%s" filename"%s" fileid="%s"' % \
              (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid))
     statInfo = xrdcl.statx(acctok['filename'], acctok['ruid'], acctok['rgid'])
@@ -204,7 +206,8 @@ def wopiCheckFileInfo(fileid):
     filemd['Version'] = acctok['mtime']
     filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = acctok['canedit']
     filemd['SupportsRename'] = filemd['UserCanRename'] = True
-    filemd['DownloadUrl'] = 'http://%s:8080/cbox/download?access_token=%s' % (socket.gethostname(), flask.request.args['access_token'])
+    filemd['DownloadUrl'] = '%s?access_token=%s' % \
+                            (config.get('general', 'downloadurl'), flask.request.args['access_token'])
     # send it in JSON format
     return flask.Response(json.dumps(filemd), mimetype='application/json')
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
@@ -227,7 +230,7 @@ def wopiGetFile(fileid):
   try:
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
     if acctok['exp'] < time.time():
-      raise jwt.exceptions.DecodeError
+      raise jwt.exceptions.ExpiredSignatureError
     log.info('msg="GetFile" user="%s:%s" filename="%s" fileid="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid))
     # stream file from storage to client
     resp = flask.Response(xrdcl.readfile(acctok['filename'], acctok['ruid'], acctok['rgid']), mimetype='application/octet-stream')
@@ -480,7 +483,7 @@ def wopiFilesPost(fileid):
   try:
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
     if acctok['exp'] < time.time():
-      raise jwt.exceptions.DecodeError
+      raise jwt.exceptions.ExpiredSignatureError
     headers = flask.request.headers
     op = headers['X-WOPI-Override']       # must be one of the following strings, throws KeyError if missing
     if op in ('LOCK', 'REFRESH_LOCK'):
@@ -514,7 +517,7 @@ def wopiPutFile(fileid):
   try:
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
     if acctok['exp'] < time.time():
-      raise jwt.exceptions.DecodeError
+      raise jwt.exceptions.ExpiredSignatureError
     # check that the caller holds the current lock on the file
     lock = json.loads(flask.request.headers['X-WOPI-Lock'])
     retrievedLock = _retrieveWopiLock(fileid, 'PUTFILE', lock, acctok)
