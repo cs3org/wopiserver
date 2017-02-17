@@ -141,6 +141,15 @@ def cboxOpen():
     log.info('msg="cboxOpen: unauthorized access attempt, missing authorization token" client="%s"' % \
              flask.request.remote_addr)
     return 'Client not authorized', httplib.UNAUTHORIZED
+  # now validate the user identity and deny root access
+  try:
+    ruid = int(req.args['ruid'])
+    rgid = int(req.args['rgid'])
+    if ruid == 0 or rgid == 0:
+      raise ValueError
+  except ValueError:
+    log.info('msg="cboxOpen: invalid user/group in request" client="%s"' % flask.request.remote_addr)
+    return 'Client not authorized', httplib.UNAUTHORIZED
   # then resolve the client: only our OwnCloud servers shall use this API
   allowedclients = config.get('general', 'allowedclients').split()
   for c in allowedclients:
@@ -148,8 +157,6 @@ def cboxOpen():
       for ip in socket.getaddrinfo(c, None):
         if ip[4][0] == req.remote_addr:
           # we got a match, generate the access token
-          ruid = int(req.args['ruid'])
-          rgid = int(req.args['rgid'])
           filename = urllib.unquote(req.args['filename'])
           canedit = ('canedit' in req.args and req.args['canedit'].lower() == 'true')
           try:

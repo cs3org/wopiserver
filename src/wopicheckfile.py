@@ -52,9 +52,9 @@ xrootiface.init(config, logging.getLogger(''))
 
 # stat + getxattr the given file
 try:
-  statInfo = xrootiface.stat(filename, '1', '1')
+  statInfo = xrootiface.stat(filename, '0', '0')
   try:
-    wopiTime = xrootiface.getxattr(filename, '1', '1', 'oc.wopi.lastwritetime')
+    wopiTime = xrootiface.getxattr(filename, '0', '0', 'oc.wopi.lastwritetime')
     print '%s: mtime = %d, last WOPI write time = %s' % (filename, statInfo.modtime, wopiTime)
   except IOError:
     print '%s: mtime = %d, not being written by the WOPI server' % (filename, statInfo.modtime)
