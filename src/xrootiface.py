@@ -36,7 +36,8 @@ def _xrootcmd(cmd, subcmd, ruid, rgid, args):
       if rc != '0':
         # failure: get info from stderr, log and raise
         msg = res[1][res[1].find('=')+1:]
-        log.info('msg="Error with xroot command" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' % (cmd, subcmd, args, msg, rc))
+        log.info('msg="Error with xroot command" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' % \
+                 (cmd, subcmd, args, msg, rc.strip('\00')))
         raise IOError(msg)
   # all right, return everything that came in stdout
   return res[0][res[0].find('stdout=')+7:]
