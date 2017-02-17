@@ -319,16 +319,14 @@ def _makeConflictResponse(operation, retrievedlock, lock, oldlock, filename):
   return resp
 
 
-def _storeWopiFile(request, acctok, targetname='', savetime=0):
+def _storeWopiFile(request, acctok, targetname=''):
   '''Saves a file from an HTTP request to the given target filename (defaulting to the access token's one),
      and stores the save time as an xattr. Throws IOError in case of any failure'''
   if not targetname:
     targetname = acctok['filename']
   xrdcl.writefile(targetname, acctok['ruid'], acctok['rgid'], request.get_data())
   # save the current time for later conflict checking
-  if not savetime:
-    savetime = int(time.time())
-  xrdcl.setxattr(targetname, acctok['ruid'], acctok['rgid'], kLastWopiSaveTime, savetime)
+  xrdcl.setxattr(targetname, acctok['ruid'], acctok['rgid'], kLastWopiSaveTime, int(time.time()))
 
 
 #
@@ -561,10 +559,11 @@ def wopiPutFile(fileid):
     except IOError:
       # either the file was deleted or it was overwritten by others: force conflict
       newname, ext = os.path.splitext(acctok['filename'])
-      # !! note the OwnCloud format is '<filename>_conflict-<date>-<time>', but it is not synchronized back !!
+      # XXX note the OwnCloud format is '<filename>_conflict-<date>-<time>', but it is not synchronized back !!
       newname = '%s-conflict-%s%s' % (newname, time.strftime('%Y%m%d-%H%M%S'), ext.strip())
-      # save and keep track of this action in the xattr, to avoid looping (see below)
-      _storeWopiFile(flask.request, acctok, newname, 'conflict')
+      _storeWopiFile(flask.request, acctok, newname)
+      # keep track of this action in the original file's xattr, to avoid looping (see below)
+      xrdcl.setxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime, 'conflict')
       log.info('msg="Conflicting copy created" user="%s:%s" newFilename="%s"' % (acctok['ruid'], acctok['rgid'], newname))
       # and report failure to Office Online: it will retry a couple of times and eventually it will notify the user
       return 'Conflicting copy created', httplib.INTERNAL_SERVER_ERROR
