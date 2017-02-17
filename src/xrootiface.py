@@ -112,7 +112,7 @@ def readfile(filename, ruid, rgid):
 def writefile(filename, ruid, rgid, content):
   '''Write a file via xroot on behalf of the given uid,gid. The entire content is written
      and any pre-existing file is deleted.'''
-  log.debug('msg="Invoking writeFile filename="%s"' % filename)
+  log.debug('msg="Invoking writeFile" filename="%s"' % filename)
   if not xrdfs:
     raise ValueError
   f = XrdClient.File()

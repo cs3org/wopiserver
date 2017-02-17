@@ -51,6 +51,10 @@ try:
   xrdcl.init(config, log)                          # initialize the xroot client module
   config.get('general', 'allowedclients')          # read this to make sure it is configured
   useHttps = config.get('security', 'usehttps').lower() == 'yes'
+  if useHttps:
+    log.info('msg="WOPI Server starting in secure mode"')
+  else:
+    log.warning('msg="WOPI Server starting in plain http, use for testing purposes only"')
 except Exception, e:
   # any error we get here with the configuration is fatal
   print "Failed to initialize the service, bailing out:", e
@@ -81,8 +85,8 @@ def _generateAccessToken(ruid, rgid, filename, canedit):
   exptime = int(time.time()) + tokenvalidity
   acctok = jwt.encode({'ruid': ruid, 'rgid': rgid, 'filename': filename, 'canedit': canedit, 'mtime': mtime,
                        'exp': exptime}, wopisecret, algorithm='HS256')
-  log.info('msg="Access token generated" ruid="%s" rgid="%s" canedit="%r" filename="%s" inode="%s" mtime="%s" expiration="%d"' % \
-           (ruid, rgid, canedit, filename, inode, mtime, exptime))
+  log.info('msg="Access token generated" ruid="%s" rgid="%s" canedit="%r" filename="%s" inode="%s" mtime="%s" expiration="%d" acctok="%s"' % \
+           (ruid, rgid, canedit, filename, inode, mtime, exptime, acctok[-10:]))
   # return the inode == fileid and the access token
   return inode, acctok
 
@@ -176,8 +180,8 @@ def cboxDownload():
     resp = flask.Response(xrdcl.readfile(acctok['filename'], acctok['ruid'], acctok['rgid']), mimetype='application/octet-stream')
     resp.headers['Content-Disposition'] = 'attachment; filename="%s"' % os.path.basename(acctok['filename'])
     resp.status_code = httplib.OK
-    log.info('msg="cboxDownload: direct download succeeded" filename="%s" user="%s:%s"' % \
-             (acctok['filename'], acctok['ruid'], acctok['rgid']))
+    log.info('msg="cboxDownload: direct download succeeded" filename="%s" user="%s:%s" acctok="%s"' % \
+             (acctok['filename'], acctok['ruid'], acctok['rgid'], flask.request.args['access_token'][-10:]))
     return resp
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
     log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
@@ -204,8 +208,8 @@ def wopiCheckFileInfo(fileid):
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
     if acctok['exp'] < time.time():
       raise jwt.exceptions.ExpiredSignatureError
-    log.info('msg="CheckFileInfo" user="%s:%s" filename"%s" fileid="%s"' % \
-             (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid))
+    log.info('msg="CheckFileInfo" user="%s:%s" filename"%s" fileid="%s" acctok="%s"' % \
+             (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, flask.request.args['access_token'][-10:]))
     statInfo = xrdcl.statx(acctok['filename'], acctok['ruid'], acctok['rgid'])
     # populate metadata for this file
     filemd = {}
@@ -241,7 +245,8 @@ def wopiGetFile(fileid):
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
     if acctok['exp'] < time.time():
       raise jwt.exceptions.ExpiredSignatureError
-    log.info('msg="GetFile" user="%s:%s" filename="%s" fileid="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid))
+    log.info('msg="GetFile" user="%s:%s" filename="%s" fileid="%s" acctok="%s"' % \
+             (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, flask.request.args['access_token'][-10:]))
     # stream file from storage to client
     resp = flask.Response(xrdcl.readfile(acctok['filename'], acctok['ruid'], acctok['rgid']), mimetype='application/octet-stream')
     resp.headers['X-WOPI-ItemVersion'] = acctok['mtime']
@@ -286,12 +291,14 @@ def _storeWopiLock(operation, lock, acctok):
 
 def _compareWopiLocks(lock1, lock2):
   '''Compares two dictionaries to decide if they represent the same WOPI lock'''
-  log.debug('msg="compareLocks" lock1="%s" lock2="%s"' % (lock1, lock2))
   if 'L' in lock1 and 'L' in lock2:
-    return lock1['L'] == lock2['L']     # typically used by MS Excel
+    log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="%r"' % (lock1, lock2, lock1['L'] == lock2['L']))
+    return lock1['L'] == lock2['L']     # used by Excel and PowerPoint
   elif 'S' in lock1 and 'S' in lock2:
-    return lock1['S'] == lock2['S']     # typically used by MS Word
+    log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="%r"' % (lock1, lock2, lock1['S'] == lock2['S']))
+    return lock1['S'] == lock2['S']     # used by Word
   else:
+    log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="False"' % (lock1, lock2))
     return False
 
 
@@ -361,6 +368,7 @@ def wopiUnlock(fileid, reqheaders, acctok):
   if retrievedLock and not _compareWopiLocks(retrievedLock, lock):
     return _makeConflictResponse('UNLOCK', retrievedLock, lock, '', acctok['filename'])
   if not retrievedLock:
+    # there was no lock, do nothing and return success
     return 'OK', httplib.OK
   # OK, the lock matches. Remove any extended attribute related to locks and conflicts handling
   try:
@@ -385,8 +393,10 @@ def wopiPutRelative(fileid, reqheaders, acctok):
   # cf. http://wopi.readthedocs.io/projects/wopirest/en/latest/files/PutRelativeFile.html
   suggTarget = reqheaders['X-WOPI-SuggestedTarget'] if 'X-WOPI-SuggestedTarget' in reqheaders else ''
   relTarget = reqheaders['X-WOPI-RelativeTarget'] if 'X-WOPI-RelativeTarget' in reqheaders else ''
-  log.info('msg="PutRelative" user="%s:%s" filename="%s" fileid="%s" suggTarget="%s" relTarget="%s"' % \
-           (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, suggTarget, relTarget))
+  overwriteTarget = 'X-WOPI-OverwriteRelativeTarget' in reqheaders and bool(reqheaders['X-WOPI-OverwriteRelativeTarget'])
+  log.info('msg="PutRelative" user="%s:%s" filename="%s" fileid="%s" suggTarget="%s" relTarget="%s" overwrite="%r" acctok="%s"' % \
+           (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, \
+            suggTarget, relTarget, overwriteTarget, flask.request.args['access_token'][-10:]))
   # either one xor the other must be present
   if (suggTarget and relTarget) or (not suggTarget and not relTarget):
     return 'Not supported', httplib.NOT_IMPLEMENTED
@@ -414,7 +424,6 @@ def wopiPutRelative(fileid, reqheaders, acctok):
   else:
     # the relative target is a filename to be respected, and that may overwrite an existing file
     relTarget = os.path.dirname(acctok['filename']) + os.path.sep + relTarget    # make full path
-    overwriteTarget = 'X-WOPI-OverwriteRelativeTarget' in reqheaders and bool(reqheaders['X-WOPI-OverwriteRelativeTarget'])
     try:
       # check for file existence + lock
       fileExists = retrievedLock = ''
@@ -534,7 +543,8 @@ def wopiPutFile(fileid):
     if retrievedLock != None and not _compareWopiLocks(retrievedLock, lock):
       return _makeConflictResponse('PUTFILE', retrievedLock, lock, '', acctok['filename'])
     # OK, we can save the file now
-    log.info('msg="PutFile" user="%s:%s" filename="%s" fileid="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid))
+    log.info('msg="PutFile" user="%s:%s" filename="%s" fileid="%s" acctok="%s"' % \
+             (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, flask.request.args['access_token'][-10:]))
     try:
       # check now the destination file against conflicts
       savetime = int(xrdcl.getxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime))
