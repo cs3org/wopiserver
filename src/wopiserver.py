@@ -159,7 +159,7 @@ def cboxOpen():
         if ip[4][0] == req.remote_addr:
           # we got a match, generate the access token
           filename = urllib.unquote(req.args['filename'])
-          canedit = ('canedit' in req.args and req.args['canedit'].lower() == 'true')
+          canedit = 'canedit' in req.args and bool(req.args['canedit'].lower())
           try:
             log.info('msg="cboxOpen: access granted, generating token" client="%s" user="%d:%d"' % \
                      (req.remote_addr, ruid, rgid))
@@ -193,7 +193,7 @@ def cboxDownload():
     return resp
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
     log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
-    return 'Invalid access token', httplib.UNAUTHORIZED
+    return 'Invalid access token', httplib.NOT_FOUND
   except IOError, e:
     log.info('msg="Requested file not found" filename="%s" error="%s"' % (acctok['filename'], e))
     return 'File not found', httplib.NOT_FOUND
@@ -224,17 +224,20 @@ def wopiCheckFileInfo(fileid):
     filemd['BaseFileName'] = os.path.basename(acctok['filename'])
     filemd['OwnerId'] = statInfo[5] + ':' + statInfo[6]
     filemd['UserId'] = acctok['ruid'] + ':' + acctok['rgid']
-    filemd['Size'] = statInfo[8]
+    filemd['Size'] = long(statInfo[8])
     filemd['Version'] = acctok['mtime']
-    filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = acctok['canedit']
-    filemd['SupportsRename'] = filemd['UserCanRename'] = True
+    filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = \
+        filemd['SupportsRename'] = filemd['UserCanRename'] = acctok['canedit']
+    #filemd['UserCanPresent'] = True   # what about the broadcasting feature in Office Online?
+    filemd['CloseButtonClosesWindow'] = True
     filemd['DownloadUrl'] = '%s?access_token=%s' % \
                             (config.get('general', 'downloadurl'), flask.request.args['access_token'])
+    log.debug('msg="File metadata response" metadata="%s"' % filemd)
     # send it in JSON format
     return flask.Response(json.dumps(filemd), mimetype='application/json')
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
     log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
-    return 'Invalid access token', httplib.UNAUTHORIZED
+    return 'Invalid access token', httplib.NOT_FOUND
   except IOError, e:
     log.info('msg="Requested file not found" filename="%s" error="%s"' % (acctok['filename'], e))
     return 'File not found', httplib.NOT_FOUND
@@ -527,7 +530,7 @@ def wopiFilesPost(fileid):
       return 'Unknown operation %s found in header' % op, httplib.BAD_REQUEST
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
     log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
-    return 'Invalid access token', httplib.UNAUTHORIZED
+    return 'Invalid access token', httplib.NOT_FOUND
   except KeyError, e:
     log.error('msg="Invalid access token or request argument" error="%s"' % e)
     return 'Missing header %s in POST request' % e, httplib.BAD_REQUEST
@@ -584,7 +587,7 @@ def wopiPutFile(fileid):
     return 'OK', httplib.OK
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
     log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
-    return 'Invalid access token', httplib.UNAUTHORIZED
+    return 'Invalid access token', httplib.NOT_FOUND
   except IOError, e:
     log.info('msg="Error writing file" filename="%s" error="%s"' % (acctok['filename'], e))
     return 'I/O Error', httplib.INTERNAL_SERVER_ERROR
