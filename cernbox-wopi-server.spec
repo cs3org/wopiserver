@@ -4,7 +4,7 @@
 Name:      cernbox-wopi-server
 Summary:   A WOPI server to support Microsoft Office online on CERNBox
 Version:   0.4
-Release:   0%{?dist}
+Release:   1%{?dist}
 License:   GPLv3
 Buildroot: %{_tmppath}/%{name}-buildroot
 Group:     CERN-IT/ST
@@ -46,8 +46,6 @@ install -m 644 src/xrootiface.py     %buildroot/%_python_lib/xrootiface.py
 install -m 644 wopiserver.service    %buildroot/usr/lib/systemd/system/wopiserver.service
 install -m 644 wopiserver.conf       %buildroot/etc/wopi/wopiserver.defaults.conf
 install -m 644 wopiserver.logrotate  %buildroot/etc/logrotate.d/cernbox-wopi-server
-install -m 600 wopisecret            %buildroot/etc/wopi/wopisecret
-install -m 600 ocsecret              %buildroot/etc/wopi/ocsecret
 
 %clean
 rm -rf %buildroot/
@@ -57,14 +55,14 @@ rm -rf %buildroot/
 %post
 # enable listening on port < 1024: unfortunately we have to do it on the python binary...
 setcap 'cap_net_bind_service=+ep' /usr/bin/python2.7
+touch /etc/wopi/wopisecret
+touch /etc/wopi/ocsecret
 
 %files
 %defattr(-,root,root,-)
 /etc/wopi
 /etc/logrotate.d/cernbox-wopi-server
 %attr(-,cboxwopi,def-cg) /var/log/cernbox
-%attr(-,cboxwopi,def-cg) %config(noreplace) /etc/wopi/wopisecret
-%attr(-,cboxwopi,def-cg) %config(noreplace) /etc/wopi/ocsecret
 /usr/lib/systemd/system/wopiserver.service
 /usr/bin/*
 %_python_lib/*
