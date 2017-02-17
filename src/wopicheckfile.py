@@ -48,6 +48,7 @@ logging.getLogger('').addHandler(console)
 config = ConfigParser.SafeConfigParser()
 config.readfp(open('/etc/wopi/wopiserver.defaults.conf'))    # fails if the file does not exist
 config.read('/etc/wopi/wopiserver.conf')
+wopisecret = open(config.get('security', 'wopisecretfile')).read().strip('\n')
 xrootiface.init(config, logging.getLogger(''))
 
 # stat + getxattr the given file
@@ -55,7 +56,12 @@ try:
   statInfo = xrootiface.stat(filename, '0', '0')
   try:
     wopiTime = xrootiface.getxattr(filename, '0', '0', 'oc.wopi.lastwritetime')
-    print '%s: mtime = %d, last WOPI write time = %s' % (filename, statInfo.modtime, wopiTime)
+    try:
+      wopiLock = xrootiface.getxattr(filename, '0', '0', 'oc.wopi.lock')
+      wopiLock = jwt.decode(wopiLock, wopisecret, algorithms=['HS256'])
+      print '%s: mtime = %d, last WOPI write time = %s, locked: %s' % (filename, statInfo.modtime, wopiTime, wopiLock)
+    except IOError:
+      print '%s: mtime = %d, last WOPI write time = %s, not locked' % (filename, statInfo.modtime, wopiTime)
   except IOError:
     print '%s: mtime = %d, not being written by the WOPI server' % (filename, statInfo.modtime)
 except IOError, e:
