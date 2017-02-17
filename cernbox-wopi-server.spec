@@ -70,7 +70,7 @@ setcap 'cap_net_bind_service=+ep' /usr/bin/python2.7
 %_python_lib/*
 
 %changelog
-* Thu Feb 16 2017 Giuseppe Lo Presti <lopresti@cern.ch> 0.4
+* Fri Feb 17 2017 Giuseppe Lo Presti <lopresti@cern.ch> 0.4
 - First release for pre-production deployment: https, download URL and minor fixes
 * Tue Feb 14 2017 Giuseppe Lo Presti <lopresti@cern.ch> 0.3
 - Added the Locking interface and PutRelative, RenameFile, DeleteFile

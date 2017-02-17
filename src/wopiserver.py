@@ -50,7 +50,7 @@ try:
   tokenvalidity = config.getint('general', 'tokenvalidity')
   xrdcl.init(config, log)                          # initialize the xroot client module
   config.get('general', 'allowedclients')          # read this to make sure it is configured
-  useHttps = config.get('security', 'useHttps').lower() == 'yes'
+  useHttps = config.get('security', 'usehttps').lower() == 'yes'
 except Exception, e:
   # any error we get here with the configuration is fatal
   print "Failed to initialize the service, bailing out:", e
@@ -128,11 +128,12 @@ def index():
 def cboxOpen():
   '''Return a WOPISrc target and an access token to be passed to Microsoft Office online for
   accessing a given file for a given user. This is the most sensitive call as it provides direct
-  access to any user's data, therefore it is protected both by IP and by a shared secret.'''
+  access to any user's data, therefore it is protected both by IP and a shared secret. The shared
+  secret protection is disabled when running in plain http mode for testing purposes.'''
   _refreshConfig()
   req = flask.request
-  # first check if the shared secret matches ours
-  if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + ocsecret:
+  # if running in https mode, first check if the shared secret matches ours
+  if useHttps and ('Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + ocsecret):
     log.info('msg="cboxOpen: unauthorized access attempt, missing authorization token" client="%s"' % \
              flask.request.remote_addr)
     return 'Client not authorized', httplib.UNAUTHORIZED
