@@ -83,9 +83,10 @@ def _generateAccessToken(ruid, rgid, filename, canedit):
     log.info('msg="Requested file not found" filename="%s" error="%s"' % (filename, e))
     raise
   exptime = int(time.time()) + tokenvalidity
-  acctok = jwt.encode({'ruid': ruid, 'rgid': rgid, 'filename': filename, 'canedit': canedit, 'mtime': mtime,
-                       'exp': exptime}, wopisecret, algorithm='HS256')
-  log.info('msg="Access token generated" ruid="%s" rgid="%s" canedit="%r" filename="%s" inode="%s" mtime="%s" expiration="%d" acctok="%s"' % \
+  acctok = jwt.encode({'ruid': ruid, 'rgid': rgid, 'filename': filename, 'canedit': canedit,
+                       'mtime': mtime, 'exp': exptime}, wopisecret, algorithm='HS256')
+  log.info('msg="Access token generated" ruid="%s" rgid="%s" canedit="%r" filename="%s" inode="%s" ' \
+           'mtime="%s" expiration="%d" acctok="%s"' % \
            (ruid, rgid, canedit, filename, inode, mtime, exptime, acctok[-10:]))
   # return the inode == fileid and the access token
   return inode, acctok
