@@ -69,7 +69,7 @@ def _ourHostName():
     return 'http://%s:8080' % socket.gethostname()
 
 
-def _generateAccessToken(ruid, rgid, filename, canedit):
+def _generateAccessToken(ruid, rgid, filename, canedit, username):
   '''Generate an access token for a given file of a given user, and returns a URL-encoded string
   suitable to be passed as a WOPISrc value to a Microsoft Office Online server.
   Access to this function is protected by source IP address.'''
@@ -83,7 +83,7 @@ def _generateAccessToken(ruid, rgid, filename, canedit):
     log.info('msg="Requested file not found" filename="%s" error="%s"' % (filename, e))
     raise
   exptime = int(time.time()) + tokenvalidity
-  acctok = jwt.encode({'ruid': ruid, 'rgid': rgid, 'filename': filename, 'canedit': canedit,
+  acctok = jwt.encode({'ruid': ruid, 'rgid': rgid, 'filename': filename, 'canedit': canedit, 'username': username,
                        'mtime': mtime, 'exp': exptime}, wopisecret, algorithm='HS256')
   log.info('msg="Access token generated" ruid="%s" rgid="%s" canedit="%r" filename="%s" inode="%s" ' \
            'mtime="%s" expiration="%d" acctok="%s"' % \
@@ -139,8 +139,7 @@ def cboxOpen():
   req = flask.request
   # if running in https mode, first check if the shared secret matches ours
   if useHttps and ('Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + ocsecret):
-    log.info('msg="cboxOpen: unauthorized access attempt, missing authorization token" client="%s"' % \
-             flask.request.remote_addr)
+    log.info('msg="cboxOpen: unauthorized access attempt, missing authorization token" client="%s"' % req.remote_addr)
     return 'Client not authorized', httplib.UNAUTHORIZED
   # now validate the user identity and deny root access
   try:
@@ -149,7 +148,8 @@ def cboxOpen():
     if ruid == 0 or rgid == 0:
       raise ValueError
   except ValueError:
-    log.info('msg="cboxOpen: invalid user/group in request" client="%s"' % flask.request.remote_addr)
+    log.info('msg="cboxOpen: invalid user/group in request" client="%s" user="%s:%s"' % \
+             req.remote_addr, req.args['ruid'], req.args['rgid'])
     return 'Client not authorized', httplib.UNAUTHORIZED
   # then resolve the client: only our OwnCloud servers shall use this API
   allowedclients = config.get('general', 'allowedclients').split()
@@ -160,10 +160,11 @@ def cboxOpen():
           # we got a match, generate the access token
           filename = urllib.unquote(req.args['filename'])
           canedit = 'canedit' in req.args and bool(req.args['canedit'].lower())
+          username = req.args['username'] if 'username' in req.args else 'Anonymous'
           try:
-            log.info('msg="cboxOpen: access granted, generating token" client="%s" user="%d:%d"' % \
-                     (req.remote_addr, ruid, rgid))
-            inode, acctok = _generateAccessToken(str(ruid), str(rgid), filename, canedit)
+            log.info('msg="cboxOpen: access granted, generating token" client="%s" user="%d:%d" friendlyname="%s"' % \
+                     (req.remote_addr, ruid, rgid, username))
+            inode, acctok = _generateAccessToken(str(ruid), str(rgid), filename, canedit, username)
             # return an URL-encoded WOPISrc URL for the Office Online server
             return urllib.quote_plus('%s/wopi/files/%s' % (_ourHostName(), inode)) + \
                    '&access_token=%s' % acctok      # no need to URL-encode the JWT token
@@ -172,8 +173,7 @@ def cboxOpen():
     except socket.gaierror:
       log.warning('msg="cboxOpen: %s found in configured allowed clients but unknown by DNS resolution, ignoring"' % c)
   # no match found, fail
-  log.info('msg="cboxOpen: unauthorized access attempt, client IP not whitelisted" client="%s"' % \
-           flask.request.remote_addr)
+  log.info('msg="cboxOpen: unauthorized access attempt, client IP not whitelisted" client="%s"' % req.remote_addr)
   return 'Client not authorized', httplib.UNAUTHORIZED
 
 
@@ -223,7 +223,8 @@ def wopiCheckFileInfo(fileid):
     filemd = {}
     filemd['BaseFileName'] = os.path.basename(acctok['filename'])
     filemd['OwnerId'] = statInfo[5] + ':' + statInfo[6]
-    filemd['UserId'] = acctok['ruid'] + ':' + acctok['rgid']
+    filemd['UserId'] = acctok['ruid'] + ':' + acctok['rgid']    # typically same as OwnerId
+    filemd['UserFriendlyName'] = acctok['username']
     filemd['Size'] = long(statInfo[8])
     filemd['Version'] = acctok['mtime']
     filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = \
@@ -455,7 +456,7 @@ def wopiPutRelative(fileid, reqheaders, acctok):
   putrelmd['Name'] = os.path.basename(targetname)
   log.info('msg="PutRelative: generating new access token" user="%s:%s" filename="%s" canedit="True"' % \
            (acctok['ruid'], acctok['rgid'], targetname))
-  inode, newacctok = _generateAccessToken(acctok['ruid'], acctok['rgid'], targetname, True)
+  inode, newacctok = _generateAccessToken(acctok['ruid'], acctok['rgid'], targetname, True, acctok['username'])
   putrelmd['Url'] = urllib.quote_plus('%s/wopi/files/%s' % (_ourHostName(), inode)) + \
                     '&access_token=%s' % newacctok      # no need to URL-encode the JWT token
   return flask.Response(json.dumps(putrelmd), mimetype='application/json')
@@ -527,7 +528,8 @@ def wopiFilesPost(fileid):
     elif op == 'RENAME_FILE':
       return wopiRenameFile(fileid, headers, acctok)
     else:
-      return 'Unknown operation %s found in header' % op, httplib.BAD_REQUEST
+      log.warning('msg="Unknown/unsupported operation" operation="%s"' % op)
+      return 'Not supported operation found in header', httplib.NOT_IMPLEMENTED
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
     log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
     return 'Invalid access token', httplib.NOT_FOUND
