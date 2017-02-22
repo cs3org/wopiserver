@@ -159,7 +159,7 @@ def cboxOpen():
         if ip[4][0] == req.remote_addr:
           # we got a match, generate the access token
           filename = urllib.unquote(req.args['filename'])
-          canedit = 'canedit' in req.args and bool(req.args['canedit'].lower())
+          canedit = 'canedit' in req.args and req.args['canedit'].lower() == 'true'
           username = req.args['username'] if 'username' in req.args else 'Anonymous'
           try:
             log.info('msg="cboxOpen: access granted, generating token" client="%s" user="%d:%d" friendlyname="%s"' % \
