@@ -527,6 +527,7 @@ def wopiFilesPost(fileid):
       return wopiDeleteFile(fileid, headers, acctok)
     elif op == 'RENAME_FILE':
       return wopiRenameFile(fileid, headers, acctok)
+    #elif op == 'PUT_USER_INFO':   https://wopirest.readthedocs.io/en/latest/files/PutUserInfo.html
     else:
       log.warning('msg="Unknown/unsupported operation" operation="%s"' % op)
       return 'Not supported operation found in header', httplib.NOT_IMPLEMENTED
@@ -559,9 +560,12 @@ def wopiPutFile(fileid):
     try:
       # check now the destination file against conflicts
       savetime = int(xrdcl.getxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime))
-      # we got our xattr, therefore assume nobody overwrote the file
-      log.debug('msg="Got lastWopiSaveTime" user="%s:%s" filename="%s" savetime="%ld"' % \
-                (acctok['ruid'], acctok['rgid'], acctok['filename'], savetime))
+      # we got our xattr: if mtime is greater, someone may have updated the file from a FUSE or SMB mount
+      mtime = xrdcl.stat(acctok['filename'], acctok['ruid'], acctok['rgid']).modtime
+      log.debug('msg="Got lastWopiSaveTime" user="%s:%s" filename="%s" savetime="%ld" lastmtime="%ld"' % \
+                (acctok['ruid'], acctok['rgid'], acctok['filename'], savetime, mtime))
+      if mtime > savetime:
+        raise IOError
     except IOError:
       # either the file was deleted or it was overwritten by others: force conflict
       newname, ext = os.path.splitext(acctok['filename'])
