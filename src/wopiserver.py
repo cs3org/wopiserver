@@ -22,9 +22,8 @@ except ImportError:
 # the following constant is replaced on the fly when generating the RPM (cf. spec file)
 WOPISERVERVERSION = 'git'
 
-# these are the xattr keys used for conflicts resolution and locking on the remote storage
-kLastWopiSaveTime = 'oc.wopi.lastwritetime'
-kWopiLock = 'oc.wopi.lock'
+# this is the xattr key used for conflicts resolution on the remote storage
+LASTSAVETIMEKEY = 'oc.wopi.lastwritetime'
 
 try:
   _loglevels = {"Critical": logging.CRITICAL,  # 50
@@ -273,13 +272,23 @@ def wopiGetFile(fileid):
 #
 # Some internal utilities for the POST-related file actions
 #
+def _getLockName(filename):
+  '''Generates a hidden filename used to store the WOPI locks'''
+  return os.path.dirname(filename) + os.path.sep + '.sys.wopi.' + os.path.basename(filename)
+
+
 def _retrieveWopiLock(fileid, operation, lock, acctok):
   '''Retrieves and logs an existing lock for a given file'''
   try:
-    retrievedLock = xrdcl.getxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kWopiLock)
+    for l in xrdcl.readfile(_getLockName(acctok['filename']), '0', '0'):
+      retrievedLock = l         # one iteration is largely sufficient to hit EOF
+    retrievedLock = jwt.decode(retrievedLock, wopisecret, algorithms=['HS256'])
   except IOError:
     return None     # no pre-existing lock found
-  retrievedLock = jwt.decode(retrievedLock, wopisecret, algorithms=['HS256'])
+  except jwt.exceptions.DecodeError:
+    log.warning('msg="%s" user="%s:%s" filename="%s" error="WOPI lock corrupted, ignoring"' % \
+                (operation.title(), acctok['ruid'], acctok['rgid'], acctok['filename']))
+    return None
   log.info('msg="%s" user="%s:%s" filename="%s" fileid="%s" lock="%s" retrievedLock="%s" expTime="%s"' % \
            (operation.title(), acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, lock, retrievedLock, \
             time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(retrievedLock['exp']))))
@@ -294,7 +303,7 @@ def _storeWopiLock(operation, lock, acctok):
   # append the expiration time
   lock['exp'] = int(time.time()) + config.getint('general', 'wopilockexpiration')
   try:
-    xrdcl.setxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kWopiLock, jwt.encode(lock, wopisecret, algorithm='HS256'))
+    xrdcl.writefile(_getLockName(acctok['filename']), '0', '0', jwt.encode(lock, wopisecret, algorithm='HS256'))
     log.info('msg="%s" filename="%s" lock="%s" result="success"' % (operation.title(), acctok['filename'], lock))
   except IOError, e:
     log.warning('msg="%s" filename="%s" lock="%s" result="unable to store lock" reason="%s"' % \
@@ -331,7 +340,7 @@ def _storeWopiFile(request, acctok, targetname=''):
     targetname = acctok['filename']
   xrdcl.writefile(targetname, acctok['ruid'], acctok['rgid'], request.get_data())
   # save the current time for later conflict checking
-  xrdcl.setxattr(targetname, acctok['ruid'], acctok['rgid'], kLastWopiSaveTime, int(time.time()))
+  xrdcl.setxattr(targetname, acctok['ruid'], acctok['rgid'], LASTSAVETIMEKEY, int(time.time()))
 
 
 #
@@ -358,7 +367,7 @@ def wopiLock(fileid, reqheaders, acctok):
   if not retrievedLock:
     # on first lock, set an xattr with the current time for later conflicts checking
     try:
-      xrdcl.setxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime, int(time.time()))
+      xrdcl.setxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], LASTSAVETIMEKEY, int(time.time()))
     except IOError, e:
       # not fatal, but will generate a conflict file later on, so log a warning
       log.warning('msg="Unable to set lastwritetime xattr" user="%s:%s" filename="%s" reason="%s"' % \
@@ -382,10 +391,14 @@ def wopiUnlock(fileid, reqheaders, acctok):
     return 'OK', httplib.OK
   # OK, the lock matches. Remove any extended attribute related to locks and conflicts handling
   try:
-    xrdcl.rmxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kWopiLock)
-    xrdcl.rmxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime)
+    xrdcl.removefile(_getLockName(acctok['filename']), '0', '0')
   except IOError:
     # ignore, it's not worth to report anything here
+    pass
+  try:
+    xrdcl.rmxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], LASTSAVETIMEKEY)
+  except IOError:
+    # same as above
     pass
   return 'OK', httplib.OK
 
@@ -436,9 +449,9 @@ def wopiPutRelative(fileid, reqheaders, acctok):
     relTarget = os.path.dirname(acctok['filename']) + os.path.sep + relTarget    # make full path
     try:
       # check for file existence + lock
-      fileExists = retrievedLock = ''
+      fileExists = retrievedLock = False
       fileExists = xrdcl.stat(relTarget, acctok['ruid'], acctok['rgid'])
-      retrievedLock = xrdcl.getxattr(relTarget, acctok['ruid'], acctok['rgid'], kWopiLock)
+      retrievedLock = xrdcl.stat(_getLockName(relTarget), '0', '0')
     except IOError:
       pass
     if fileExists and (not overwriteTarget or retrievedLock):
@@ -559,12 +572,13 @@ def wopiPutFile(fileid):
              (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, flask.request.args['access_token'][-10:]))
     try:
       # check now the destination file against conflicts
-      savetime = int(xrdcl.getxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime))
+      savetime = int(xrdcl.getxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], LASTSAVETIMEKEY))
       # we got our xattr: if mtime is greater, someone may have updated the file from a FUSE or SMB mount
       mtime = xrdcl.stat(acctok['filename'], acctok['ruid'], acctok['rgid']).modtime
       log.debug('msg="Got lastWopiSaveTime" user="%s:%s" filename="%s" savetime="%ld" lastmtime="%ld"' % \
                 (acctok['ruid'], acctok['rgid'], acctok['filename'], savetime, mtime))
       if mtime > savetime:
+        # this is the case, force conflict
         raise IOError
     except IOError:
       # either the file was deleted or it was overwritten by others: force conflict
@@ -573,7 +587,7 @@ def wopiPutFile(fileid):
       newname = '%s-conflict-%s%s' % (newname, time.strftime('%Y%m%d-%H%M%S'), ext.strip())
       _storeWopiFile(flask.request, acctok, newname)
       # keep track of this action in the original file's xattr, to avoid looping (see below)
-      xrdcl.setxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], kLastWopiSaveTime, 'conflict')
+      xrdcl.setxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], LASTSAVETIMEKEY, 'conflict')
       log.info('msg="Conflicting copy created" user="%s:%s" newFilename="%s"' % (acctok['ruid'], acctok['rgid'], newname))
       # and report failure to Office Online: it will retry a couple of times and eventually it will notify the user
       return 'Conflicting copy created', httplib.INTERNAL_SERVER_ERROR
