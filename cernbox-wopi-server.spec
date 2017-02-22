@@ -3,8 +3,8 @@
 #
 Name:      cernbox-wopi-server
 Summary:   A WOPI server to support Microsoft Office online on CERNBox
-Version:   0.4
-Release:   1%{?dist}
+Version:   1.0
+Release:   0%{?dist}
 License:   GPLv3
 Buildroot: %{_tmppath}/%{name}-buildroot
 Group:     CERN-IT/ST
@@ -68,8 +68,10 @@ touch /etc/wopi/ocsecret
 %_python_lib/*
 
 %changelog
+* Wed Feb 22 2017 Giuseppe Lo Presti <lopresti@cern.ch> 1.0
+- First official release for internal deployment after first round of tests
 * Fri Feb 17 2017 Giuseppe Lo Presti <lopresti@cern.ch> 0.4
-- First release for pre-production deployment: https, download URL and minor fixes
+- Release for pre-production tests including https, download URL and minor fixes
 * Tue Feb 14 2017 Giuseppe Lo Presti <lopresti@cern.ch> 0.3
 - Added the Locking interface and PutRelative, RenameFile, DeleteFile
 - Refined the /cbox API to interact with OwnCloud
