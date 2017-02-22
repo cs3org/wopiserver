@@ -6,14 +6,18 @@ Author: Giuseppe.LoPresti@cern.ch
 CERN IT/ST
 '''
 
-import sys, getopt, ConfigParser, logging
+import sys, os, getopt, ConfigParser, logging, jwt
 import xrootiface
 
 # usage function
 def usage(exitcode):
-  '''prints usage'''
+  '''Prints usage'''
   print 'Usage : ' + sys.argv[0] + ' [-h|--help] <filename>'
   sys.exit(exitcode)
+
+def _getLockName(fname):
+  '''Generates a hidden filename used to store the WOPI locks. Copy from wopiserver.py.'''
+  return os.path.dirname(fname) + os.path.sep + '.sys.wopi.' + os.path.basename(fname)
 
 # first parse the options
 try:
@@ -57,7 +61,8 @@ try:
   try:
     wopiTime = xrootiface.getxattr(filename, '0', '0', 'oc.wopi.lastwritetime')
     try:
-      wopiLock = xrootiface.getxattr(filename, '0', '0', 'oc.wopi.lock')
+      for l in xrootiface.readfile(_getLockName(filename), '0', '0'):
+        wopiLock = l
       wopiLock = jwt.decode(wopiLock, wopisecret, algorithms=['HS256'])
       print '%s: mtime = %d, last WOPI write time = %s, locked: %s' % (filename, statInfo.modtime, wopiTime, wopiLock)
     except IOError:

@@ -341,7 +341,7 @@ def _storeWopiFile(request, acctok, targetname=''):
   if not targetname:
     targetname = acctok['filename']
   xrdcl.writefile(targetname, acctok['ruid'], acctok['rgid'], request.get_data())
-  # save the current time for later conflict checking
+  # save the current time for later conflict checking: this is never lesser than the mtime of the file
   xrdcl.setxattr(targetname, acctok['ruid'], acctok['rgid'], LASTSAVETIMEKEY, int(time.time()))
 
 
