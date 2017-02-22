@@ -8,8 +8,10 @@ Author: Giuseppe.LoPresti@cern.ch
 CERN/IT-ST
 '''
 
-import sys, os, time, socket, traceback, ConfigParser, platform
-import logging.handlers, logging
+import sys, os, time, socket, traceback, ConfigParser
+from platform import python_version
+import logging
+import logging.handlers
 import urllib, httplib, json
 try:
   import flask                 # Flask app server, python-flask-0.10.1-4.el7.noarch.rpm + pyOpenSSL-0.13.1-3.el7.x86_64.rpm
@@ -86,7 +88,7 @@ def _generateAccessToken(ruid, rgid, filename, canedit, username):
                        'mtime': mtime, 'exp': exptime}, wopisecret, algorithm='HS256')
   log.info('msg="Access token generated" ruid="%s" rgid="%s" canedit="%r" filename="%s" inode="%s" ' \
            'mtime="%s" expiration="%d" acctok="%s"' % \
-           (ruid, rgid, canedit, filename, inode, mtime, exptime, acctok[-10:]))
+           (ruid, rgid, canedit, filename, inode, mtime, exptime, acctok[-20:]))
   # return the inode == fileid and the access token
   return inode, acctok
 
@@ -125,7 +127,7 @@ def index():
     and click on the View/Edit buttons next to your Microsoft Office documents.</div>
     <br><br><br><br><br><br><br><br><br><br><hr>
     <i>CERNBox WOPI Server %s. Powered by Flask %s for Python %s</i>.
-    """ % (WOPISERVERVERSION, flask.__version__, platform.python_version())
+    """ % (WOPISERVERVERSION, flask.__version__, python_version())
 
 
 @app.route("/cbox/open", methods=['GET'])
@@ -188,7 +190,7 @@ def cboxDownload():
     resp.headers['Content-Disposition'] = 'attachment; filename="%s"' % os.path.basename(acctok['filename'])
     resp.status_code = httplib.OK
     log.info('msg="cboxDownload: direct download succeeded" filename="%s" user="%s:%s" acctok="%s"' % \
-             (acctok['filename'], acctok['ruid'], acctok['rgid'], flask.request.args['access_token'][-10:]))
+             (acctok['filename'], acctok['ruid'], acctok['rgid'], flask.request.args['access_token'][-20:]))
     return resp
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
     log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
@@ -216,7 +218,7 @@ def wopiCheckFileInfo(fileid):
     if acctok['exp'] < time.time():
       raise jwt.exceptions.ExpiredSignatureError
     log.info('msg="CheckFileInfo" user="%s:%s" filename"%s" fileid="%s" acctok="%s"' % \
-             (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, flask.request.args['access_token'][-10:]))
+             (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
     statInfo = xrdcl.statx(acctok['filename'], acctok['ruid'], acctok['rgid'])
     # populate metadata for this file
     filemd = {}
@@ -257,7 +259,7 @@ def wopiGetFile(fileid):
     if acctok['exp'] < time.time():
       raise jwt.exceptions.ExpiredSignatureError
     log.info('msg="GetFile" user="%s:%s" filename="%s" fileid="%s" acctok="%s"' % \
-             (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, flask.request.args['access_token'][-10:]))
+             (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
     # stream file from storage to client
     resp = flask.Response(xrdcl.readfile(acctok['filename'], acctok['ruid'], acctok['rgid']), mimetype='application/octet-stream')
     resp.headers['X-WOPI-ItemVersion'] = acctok['mtime']
@@ -419,7 +421,7 @@ def wopiPutRelative(fileid, reqheaders, acctok):
   overwriteTarget = 'X-WOPI-OverwriteRelativeTarget' in reqheaders and bool(reqheaders['X-WOPI-OverwriteRelativeTarget'])
   log.info('msg="PutRelative" user="%s:%s" filename="%s" fileid="%s" suggTarget="%s" relTarget="%s" overwrite="%r" acctok="%s"' % \
            (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, \
-            suggTarget, relTarget, overwriteTarget, flask.request.args['access_token'][-10:]))
+            suggTarget, relTarget, overwriteTarget, flask.request.args['access_token'][-20:]))
   # either one xor the other must be present
   if (suggTarget and relTarget) or (not suggTarget and not relTarget):
     return 'Not supported', httplib.NOT_IMPLEMENTED
@@ -569,7 +571,7 @@ def wopiPutFile(fileid):
       return _makeConflictResponse('PUTFILE', retrievedLock, lock, '', acctok['filename'])
     # OK, we can save the file now
     log.info('msg="PutFile" user="%s:%s" filename="%s" fileid="%s" acctok="%s"' % \
-             (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, flask.request.args['access_token'][-10:]))
+             (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
     try:
       # check now the destination file against conflicts
       savetime = int(xrdcl.getxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], LASTSAVETIMEKEY))
