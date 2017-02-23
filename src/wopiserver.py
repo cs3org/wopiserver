@@ -313,7 +313,9 @@ def _storeWopiLock(operation, lock, acctok):
 
 
 def _compareWopiLocks(lock1, lock2):
-  '''Compares two dictionaries to decide if they represent the same WOPI lock'''
+  '''Compares two dictionaries and returns True if they represent the same WOPI lock.
+     Note that there's no documentation about the internal format of the WOPI locks and
+     the comparison is purely based on heuristics!'''
   if 'L' in lock1 and 'L' in lock2:
     log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="%r"' % (lock1, lock2, lock1['L'] == lock2['L']))
     return lock1['L'] == lock2['L']     # used by Excel and PowerPoint
@@ -321,8 +323,9 @@ def _compareWopiLocks(lock1, lock2):
     log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="%r"' % (lock1, lock2, lock1['S'] == lock2['S']))
     return lock1['S'] == lock2['S']     # used by Word
   else:
-    log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="False"' % (lock1, lock2))
-    return False
+    # not sure this makes sense
+    log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="%r"' % (lock1, lock2, lock1 == lock2))
+    return lock1 == lock2
 
 
 def _makeConflictResponse(operation, retrievedlock, lock, oldlock, filename):
