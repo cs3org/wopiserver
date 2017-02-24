@@ -431,24 +431,24 @@ def wopiPutRelative(fileid, reqheaders, acctok):
   if suggTarget:
     # the suggested target is a filename that can be changed to avoid collisions
     if suggTarget[0] == '.':    # we just have the extension here
-      targetname = os.path.splitext(acctok['filename'])[0] + suggTarget
+      targetName = os.path.splitext(acctok['filename'])[0] + suggTarget
     else:
-      targetname = os.path.dirname(acctok['filename']) + os.path.sep + suggTarget
+      targetName = os.path.dirname(acctok['filename']) + os.path.sep + suggTarget
     # check for existence of the target file and adjust until a non-existing one is obtained
     while True:
       try:
-        xrdcl.stat(targetname, acctok['ruid'], acctok['rgid'])
+        xrdcl.stat(targetName, acctok['ruid'], acctok['rgid'])
         # the file exists: try a different name
-        name, ext = os.path.splitext(targetname)
-        targetname = name + '_copy' + ext
+        name, ext = os.path.splitext(targetName)
+        targetName = name + '_copy' + ext
       except IOError, e:
         if 'No such file or directory' in str(e):
-          # OK, the targetname is good to go
+          # OK, the targetName is good to go
           break
         else:
           log.info('msg="PutRelative" user="%s:%s" filename="%s" suggTarget="%s" error="%s"' % \
-                   (acctok['ruid'], acctok['rgid'], targetname, suggTarget, str(e)))
-          return 'Illegal filename %s: %s' % (targetname, e), httplib.BAD_REQUEST
+                   (acctok['ruid'], acctok['rgid'], targetName, suggTarget, str(e)))
+          return 'Illegal filename %s: %s' % (targetName, e), httplib.BAD_REQUEST
   else:
     # the relative target is a filename to be respected, and that may overwrite an existing file
     relTarget = os.path.dirname(acctok['filename']) + os.path.sep + relTarget    # make full path
@@ -462,21 +462,21 @@ def wopiPutRelative(fileid, reqheaders, acctok):
     if fileExists and (not overwriteTarget or retrievedLock):
       return _makeConflictResponse('PUTRELATIVE', retrievedLock, '', '', relTarget)
     # else we can use the relative target
-    targetname = relTarget
-  # either way, we now have a targetname to save the file: attempt to do so
+    targetName = relTarget
+  # either way, we now have a targetName to save the file: attempt to do so
   try:
-    _storeWopiFile(flask.request, acctok, targetname)
+    _storeWopiFile(flask.request, acctok, targetName)
   except IOError, e:
-    log.info('msg="Error writing file" filename="%s" error="%s"' % (targetname, e))
+    log.info('msg="Error writing file" filename="%s" error="%s"' % (targetName, e))
     return 'I/O Error', httplib.INTERNAL_SERVER_ERROR
+  # generate an access token for the new file
+  log.info('msg="PutRelative: generating new access token" user="%s:%s" filename="%s" canedit="True" friendlyname="%s"' % \
+           (acctok['ruid'], acctok['rgid'], targetName, acctok['username']))
+  inode, newacctok = _generateAccessToken(acctok['ruid'], acctok['rgid'], targetName, True, acctok['username'])
   # prepare and send the JSON response
   putrelmd = {}
-  putrelmd['Name'] = os.path.basename(targetname)
-  log.info('msg="PutRelative: generating new access token" user="%s:%s" filename="%s" canedit="True"' % \
-           (acctok['ruid'], acctok['rgid'], targetname))
-  inode, newacctok = _generateAccessToken(acctok['ruid'], acctok['rgid'], targetname, True, acctok['username'])
-  putrelmd['Url'] = urllib.quote_plus('%s/wopi/files/%s' % (_ourHostName(), inode)) + \
-                    '&access_token=%s' % newacctok      # no need to URL-encode the JWT token
+  putrelmd['Name'] = os.path.basename(targetName)
+  putrelmd['Url'] = urllib.quote_plus('%s/wopi/files/%s' % (_ourHostName(), inode)) + '&access_token=' + newacctok
   return flask.Response(json.dumps(putrelmd), mimetype='application/json')
 
 
