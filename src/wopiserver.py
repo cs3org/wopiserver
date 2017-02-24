@@ -276,7 +276,7 @@ def wopiGetFile(fileid):
 #
 def _getLockName(filename):
   '''Generates a hidden filename used to store the WOPI locks'''
-  return os.path.dirname(filename) + os.path.sep + '.sys.wopi.' + os.path.basename(filename)
+  return os.path.dirname(filename) + os.path.sep + '.sys.wopilock.' + os.path.basename(filename) + '.'
 
 
 def _retrieveWopiLock(fileid, operation, lock, acctok):

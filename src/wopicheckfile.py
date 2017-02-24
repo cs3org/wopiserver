@@ -16,8 +16,8 @@ def usage(exitcode):
   sys.exit(exitcode)
 
 def _getLockName(fname):
-  '''Generates a hidden filename used to store the WOPI locks. Copy from wopiserver.py.'''
-  return os.path.dirname(fname) + os.path.sep + '.sys.wopi.' + os.path.basename(fname)
+  '''Generates a hidden filename used to store the WOPI locks. Copied from wopiserver.py.'''
+  return os.path.dirname(fname) + os.path.sep + '.sys.wopilock.' + os.path.basename(fname) + '.'
 
 # first parse the options
 try:
