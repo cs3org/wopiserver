@@ -315,7 +315,6 @@ def wopiCheckFileInfo(fileid):
     filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = \
         filemd['SupportsRename'] = filemd['UserCanRename'] = acctok['canedit']
     #filemd['UserCanPresent'] = True   # what about the broadcasting feature in Office Online?
-    filemd['CloseButtonClosesWindow'] = True
     filemd['DownloadUrl'] = '%s?access_token=%s' % \
                             (config.get('general', 'downloadurl'), flask.request.args['access_token'])
     log.debug('msg="File metadata response" metadata="%s"' % filemd)
