@@ -45,7 +45,7 @@ try:
   log = app.logger
   log.setLevel(_loglevels[config.get('general', 'loglevel')])
   loghandler = logging.FileHandler('/var/log/cernbox/wopiserver.log')
-  loghandler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)s %(levelname)-8s %(message)s', datefmt='%Y-%m-%dT%H:%M:%S'))
+  loghandler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)s[%(process)d] %(levelname)-8s %(message)s', datefmt='%Y-%m-%dT%H:%M:%S'))
   log.addHandler(loghandler)
   wopisecret = open(config.get('security', 'wopisecretfile')).read().strip('\n')
   ocsecret = open(config.get('security', 'ocsecretfile')).read().strip('\n')
