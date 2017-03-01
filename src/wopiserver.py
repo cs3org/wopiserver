@@ -212,7 +212,7 @@ def index():
     <div align="center" style="color:#000080; padding-top:50px; font-family:Verdana; size:11">
     This is the CERNBox <a href=http://wopi.readthedocs.io>WOPI</a> server for Microsoft Office Online.<br>
     To use this service, please log in to your <a href=https://cernbox.cern.ch>CERNBox</a> account
-    and click on the View/Edit buttons next to your Microsoft Office documents.</div>
+    and click on your Microsoft Office documents.</div>
     <br><br><br><br><br><br><br><br><br><br><hr>
     <i>CERNBox WOPI Server %s. Powered by Flask %s for Python %s</i>.
     """ % (WOPISERVERVERSION, flask.__version__, python_version())
