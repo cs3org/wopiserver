@@ -177,7 +177,7 @@ def _compareWopiLocks(lock1, lock2):
 def _makeConflictResponse(operation, retrievedlock, lock, oldlock, filename):
   '''Generates and logs an HTTP 401 response in case of locks conflict'''
   resp = flask.Response()
-  resp.headers['X-WOPI-Lock'] = json.dumps(retrievedlock)
+  resp.headers['X-WOPI-Lock'] = json.dumps(retrievedlock) if retrievedlock else ''
   resp.status_code = httplib.CONFLICT
   log.info('msg="%s" filename="%s" lock="%s" oldLock="%s" retrievedLock="%s" result="conflict"' % \
            (operation.title(), filename, lock, oldlock, retrievedlock))
@@ -396,11 +396,8 @@ def wopiUnlock(fileid, reqheaders, acctok):
     log.warning('msg="Unlock" filename="%s" lock="%s" result="invalid format"' % (acctok['filename'], lock))
     return 'Invalid JSON-formatted lock', httplib.BAD_REQUEST
   retrievedLock = _retrieveWopiLock(fileid, 'UNLOCK', lock, acctok)
-  if retrievedLock and not _compareWopiLocks(retrievedLock, lock):
+  if not _compareWopiLocks(retrievedLock, lock):
     return _makeConflictResponse('UNLOCK', retrievedLock, lock, '', acctok['filename'])
-  if not retrievedLock:
-    # there was no lock, do nothing and return success
-    return 'OK', httplib.OK
   # OK, the lock matches. Remove any extended attribute related to locks and conflicts handling
   try:
     xrdcl.removefile(_getLockName(acctok['filename']), '0', '0')
