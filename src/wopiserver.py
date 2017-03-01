@@ -13,6 +13,7 @@ from platform import python_version
 import logging
 import logging.handlers
 import urllib, httplib, json
+from uuid import UUID
 try:
   import flask                 # Flask app server, python-flask-0.10.1-4.el7.noarch.rpm + pyOpenSSL-0.13.1-3.el7.x86_64.rpm
   import jwt                   # PyJWT JSON Web Token, python-jwt-1.4.0-2.el7.noarch.rpm
@@ -88,8 +89,8 @@ def _generateAccessToken(ruid, rgid, filename, canedit, username):
     log.info('msg="Requested file not found" filename="%s" error="%s"' % (filename, e))
     raise
   exptime = int(time.time()) + tokenvalidity
-  acctok = jwt.encode({'ruid': ruid, 'rgid': rgid, 'filename': filename, 'canedit': canedit, 'username': username,
-                       'mtime': mtime, 'exp': exptime}, wopisecret, algorithm='HS256')
+  acctok = jwt.encode({'ruid': ruid, 'rgid': rgid, 'filename': filename, 'username': username,
+                       'canedit': canedit, 'exp': exptime}, wopisecret, algorithm='HS256')
   log.info('msg="Access token generated" ruid="%s" rgid="%s" canedit="%r" filename="%s" inode="%s" ' \
            'mtime="%s" expiration="%d" acctok="%s"' % \
            (ruid, rgid, canedit, filename, inode, mtime, exptime, acctok[-20:]))
@@ -168,6 +169,9 @@ def _compareWopiLocks(lock1, lock2):
   elif 'S' in lock1 and 'S' in lock2:
     log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="%r"' % (lock1, lock2, lock1['S'] == lock2['S']))
     return lock1['S'] == lock2['S']     # used by Word
+  elif 'S' in lock1:
+    log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="%r"' % (lock1, lock2, lock1['S'] == lock2))
+    return lock1['S'] == lock2          # also used by Word
   else:
     # not sure this makes sense
     log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="%r"' % (lock1, lock2, lock1 == lock2))
@@ -311,7 +315,7 @@ def wopiCheckFileInfo(fileid):
     filemd['UserId'] = acctok['ruid'] + ':' + acctok['rgid']    # typically same as OwnerId
     filemd['UserFriendlyName'] = acctok['username']
     filemd['Size'] = long(statInfo[8])
-    filemd['Version'] = acctok['mtime']
+    filemd['Version'] = statInfo[12]
     filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = \
         filemd['SupportsRename'] = filemd['UserCanRename'] = acctok['canedit']
     #filemd['UserCanPresent'] = True   # what about the broadcasting feature in Office Online?
@@ -345,7 +349,6 @@ def wopiGetFile(fileid):
              (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
     # stream file from storage to client
     resp = flask.Response(xrdcl.readfile(acctok['filename'], acctok['ruid'], acctok['rgid']), mimetype='application/octet-stream')
-    resp.headers['X-WOPI-ItemVersion'] = acctok['mtime']
     resp.status_code = httplib.OK
     return resp
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
@@ -576,8 +579,14 @@ def wopiPutFile(fileid):
     try:
       lock = json.loads(lock)
     except ValueError:
-      log.warning('msg="PutFile" filename="%s" lock="%s" result="invalid format"' % (acctok['filename'], lock))
-      return 'Invalid JSON-formatted lock', httplib.BAD_REQUEST
+      # it happens with MS Word that the given lock is only the UUID!
+      try:
+        UUID(lock)
+        # it worked, accept it
+      except ValueError:
+        # nope, refuse it
+        log.warning('msg="PutFile" filename="%s" lock="%s" result="invalid format"' % (acctok['filename'], lock))
+        return 'Invalid lock', httplib.BAD_REQUEST
     retrievedLock = _retrieveWopiLock(fileid, 'PUTFILE', lock, acctok)
     if retrievedLock != None and not _compareWopiLocks(retrievedLock, lock):
       return _makeConflictResponse('PUTFILE', retrievedLock, lock, '', acctok['filename'])
