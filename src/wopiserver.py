@@ -127,12 +127,12 @@ def _getLockName(filename):
 
 def _retrieveWopiLock(fileid, operation, lock, acctok):
   '''Retrieves and logs an existing lock for a given file'''
+  for l in xrdcl.readfile(_getLockName(acctok['filename']), '0', '0'):
+    if 'No such file or directory' in l:
+      return None     # no pre-existing lock found
+    retrievedLock = l         # one iteration is largely sufficient to hit EOF
   try:
-    for l in xrdcl.readfile(_getLockName(acctok['filename']), '0', '0'):
-      retrievedLock = l         # one iteration is largely sufficient to hit EOF
     retrievedLock = jwt.decode(retrievedLock, wopisecret, algorithms=['HS256'])
-  except IOError:
-    return None     # no pre-existing lock found
   except jwt.exceptions.DecodeError:
     log.warning('msg="%s" user="%s:%s" filename="%s" error="WOPI lock corrupted, ignoring"' % \
                 (operation.title(), acctok['ruid'], acctok['rgid'], acctok['filename']))
