@@ -575,7 +575,12 @@ def wopiPutFile(fileid):
     if acctok['exp'] < time.time():
       raise jwt.exceptions.ExpiredSignatureError
     # check that the caller holds the current lock on the file
-    lock = json.loads(flask.request.headers['X-WOPI-Lock'])
+    lock = flask.request.headers['X-WOPI-Lock']
+    try:
+      lock = json.loads(lock)
+    except ValueError:
+      log.warning('msg="PutFile" filename="%s" lock="%s" result="invalid format"' % (acctok['filename'], lock))
+      return 'Invalid JSON-formatted lock', httplib.BAD_REQUEST
     retrievedLock = _retrieveWopiLock(fileid, 'PUTFILE', lock, acctok)
     if retrievedLock != None and not _compareWopiLocks(retrievedLock, lock):
       return _makeConflictResponse('PUTFILE', retrievedLock, lock, '', acctok['filename'])
