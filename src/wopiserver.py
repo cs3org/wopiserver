@@ -46,7 +46,8 @@ try:
   log = app.logger
   log.setLevel(_loglevels[config.get('general', 'loglevel')])
   loghandler = logging.FileHandler('/var/log/cernbox/wopiserver.log')
-  loghandler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)s[%(process)d] %(levelname)-8s %(message)s', datefmt='%Y-%m-%dT%H:%M:%S'))
+  loghandler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)s[%(process)d] %(levelname)-8s %(message)s',
+                                            datefmt='%Y-%m-%dT%H:%M:%S'))
   log.addHandler(loghandler)
   wopisecret = open(config.get('security', 'wopisecretfile')).read().strip('\n')
   ocsecret = open(config.get('security', 'ocsecretfile')).read().strip('\n')
@@ -204,17 +205,21 @@ def _storeWopiFile(request, acctok, targetname=''):
 #
 #############################################################################################################
 
-@app.route("/")
+@app.route("/", methods=['GET'])
 def index():
   '''Return a default index page with some user-friendly information about this service'''
   log.info('msg="Accessed index page" client="%s"' % flask.request.remote_addr)
   return """
+    <html><head><title>CERNBox WOPI</title></head>
+    <body>
     <div align="center" style="color:#000080; padding-top:50px; font-family:Verdana; size:11">
     This is the CERNBox <a href=http://wopi.readthedocs.io>WOPI</a> server for Microsoft Office Online.<br>
     To use this service, please log in to your <a href=https://cernbox.cern.ch>CERNBox</a> account
     and click on your Microsoft Office documents.</div>
     <br><br><br><br><br><br><br><br><br><br><hr>
     <i>CERNBox WOPI Server %s. Powered by Flask %s for Python %s</i>.
+    </body>
+    </html>
     """ % (WOPISERVERVERSION, flask.__version__, python_version())
 
 
@@ -639,7 +644,8 @@ def wopiPutFile(fileid):
 
 
 #
-# Start the Flask endless listening loop
+# Start the Flask endless listening loop.
+# To scale up with multiple processes, processes=N can be added to the keys.
 #
 if useHttps:
   app.run(host='0.0.0.0', port=443, threaded=True, debug=(config.get('general', 'loglevel') == 'Debug'),
