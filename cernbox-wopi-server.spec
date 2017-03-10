@@ -3,7 +3,7 @@
 #
 Name:      cernbox-wopi-server
 Summary:   A WOPI server to support Microsoft Office online on CERNBox
-Version:   1.1
+Version:   1.2
 Release:   1%{?dist}
 License:   GPLv3
 Buildroot: %{_tmppath}/%{name}-buildroot
@@ -13,7 +13,7 @@ Source: %{name}-%{version}.tar.gz
 
 # The required Python version makes this package depend on at least CentOS 7 to compile and run.
 BuildRequires: python >= 2.7
-Requires: python >= 2.7, python-flask, python-jwt, xrootd-python, pyOpenSSL
+Requires: python >= 2.7, python-flask, python-jwt, xrootd-python, pyOpenSSL, nginx
 # The following to avoid to pick up /bin/python as an automatic dependency
 AutoReq: no
 
@@ -53,8 +53,6 @@ rm -rf %buildroot/
 %preun
 
 %post
-# enable listening on port < 1024: unfortunately we have to do it on the python binary...
-setcap 'cap_net_bind_service=+ep' /usr/bin/python2.7
 touch /etc/wopi/wopisecret
 touch /etc/wopi/ocsecret
 
@@ -68,17 +66,22 @@ touch /etc/wopi/ocsecret
 %_python_lib/*
 
 %changelog
+* Fri Mar 22 2017 Giuseppe Lo Presti <lopresti@cern.ch> 1.2
+- Support deployment with nginx as opposed to standalone Flask
+- Support creation of new documents
 * Wed Mar  1 2017 Giuseppe Lo Presti <lopresti@cern.ch> 1.1
 - Improved lock handling to fully support concurrent editing
 * Fri Feb 24 2017 Giuseppe Lo Presti <lopresti@cern.ch> 1.0
 - First official release for internal deployment after first round of tests
 * Fri Feb 17 2017 Giuseppe Lo Presti <lopresti@cern.ch> 0.4
-- Release for pre-production tests including https, download URL and minor fixes
+- Support for https, download URL and minor fixes
+- Release for pre-production tests
 * Tue Feb 14 2017 Giuseppe Lo Presti <lopresti@cern.ch> 0.3
-- Added the Locking interface and PutRelative, RenameFile, DeleteFile
+- Implemented the locking interface
+- Support the PutRelativeFile, RenameFile, DeleteFile operations
 - Refined the /cbox API to interact with OwnCloud
 * Wed Jan 18 2017 Giuseppe Lo Presti <lopresti@cern.ch> 0.2
-- First complete version for test deployment with eosbackup
+- First nearly complete version for test deployment with eosbackup
 * Thu Jan  5 2017 Giuseppe Lo Presti <lopresti@cern.ch> 0.1
 - First packaging for the WOPI server prototype
 

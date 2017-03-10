@@ -217,7 +217,7 @@ def index():
     To use this service, please log in to your <a href=https://cernbox.cern.ch>CERNBox</a> account
     and click on your Microsoft Office documents.</div>
     <br><br><br><br><br><br><br><br><br><br><hr>
-    <i>CERNBox WOPI Server %s. Powered by Flask %s for Python %s on nginx</i>.
+    <i>CERNBox WOPI Server %s. Powered by Flask %s for Python %s on Nginx</i>.
     </body>
     </html>
     """ % (WOPISERVERVERSION, flask.__version__, python_version())
@@ -621,7 +621,7 @@ def wopiPutFile(fileid):
     except IOError:
       # either the file was deleted or it was updated/overwritten by others: force conflict
       newname, ext = os.path.splitext(acctok['filename'])
-      # XXX note the OwnCloud format is '<filename>_conflict-<date>-<time>', but it is not synchronized back !!
+      # !!! note the OwnCloud format is '<filename>_conflict-<date>-<time>', but it is not synchronized back !!!
       newname = '%s-conflict-%s%s' % (newname, time.strftime('%Y%m%d-%H%M%S'), ext.strip())
       _storeWopiFile(flask.request, acctok, newname)
       # keep track of this action in the original file's xattr, to avoid looping (see below)
@@ -654,11 +654,13 @@ def wopiPutFile(fileid):
 
 
 #
-# Start the Flask endless listening loop.
-# To scale up with multiple processes, processes=N can be added to the keys.
+# If started in standalone mode, start the Flask endless listening loop.
+# The solution chosen for production is to start the server inside Nginx. See:
+# https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-uwsgi-and-nginx-on-centos-7
 #
-if useHttps:
-  app.run(host='0.0.0.0', port=443, threaded=True, debug=(config.get('general', 'loglevel') == 'Debug'),
-          ssl_context=(config.get('security', 'wopicert'), config.get('security', 'wopikey')))
-else:
-  app.run(host='0.0.0.0', port=8080, threaded=True, debug=(config.get('general', 'loglevel') == 'Debug'))
+if __name__ == '__main__':
+  if useHttps:
+    app.run(host='0.0.0.0', port=443, threaded=True, debug=(config.get('general', 'loglevel') == 'Debug'),
+            ssl_context=(config.get('security', 'wopicert'), config.get('security', 'wopikey')))
+  else:
+    app.run(host='0.0.0.0', port=8080, threaded=True, debug=(config.get('general', 'loglevel') == 'Debug'))
