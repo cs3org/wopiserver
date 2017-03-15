@@ -579,7 +579,14 @@ def wopiPutFile(fileid):
     acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
     if acctok['exp'] < time.time():
       raise jwt.exceptions.ExpiredSignatureError
-    # check that the caller holds the current lock on the file
+    if 'X-WOPI-Lock' not in flask.request.headers:
+      # no lock given, assume we are in creation mode (cf. editnew WOPI action)
+      log.info('msg="PutFile" user="%s:%s" filename="%s" fileid="%s" action="editnew" acctok="%s"' % \
+               (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
+      _storeWopiFile(flask.request, acctok)
+      log.info('msg="File successfully written" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename']))
+      return 'OK', httplib.OK
+    # otherwise, check that the caller holds the current lock on the file
     lock = flask.request.headers['X-WOPI-Lock']
     try:
       lock = json.loads(lock)
@@ -596,7 +603,7 @@ def wopiPutFile(fileid):
     if retrievedLock != None and not _compareWopiLocks(retrievedLock, lock):
       return _makeConflictResponse('PUTFILE', retrievedLock, lock, '', acctok['filename'])
     # OK, we can save the file now
-    log.info('msg="PutFile" user="%s:%s" filename="%s" fileid="%s" acctok="%s"' % \
+    log.info('msg="PutFile" user="%s:%s" filename="%s" fileid="%s" action="edit" acctok="%s"' % \
              (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
     try:
       # check now the destination file against conflicts
