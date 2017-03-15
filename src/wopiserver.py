@@ -150,7 +150,7 @@ def _retrieveWopiLock(fileid, operation, lock, acctok):
 
 def _storeWopiLock(operation, lock, acctok):
   '''Stores the lock for a given file in the form of an encoded JSON string (cf. the access token)'''
-  # append the expiration time
+  # append or overwrite the expiration time
   lock['exp'] = int(time.time()) + config.getint('general', 'wopilockexpiration')
   try:
     xrdcl.writefile(_getLockName(acctok['filename']), '0', '0', jwt.encode(lock, wopisecret, algorithm='HS256'))
@@ -217,7 +217,7 @@ def index():
     To use this service, please log in to your <a href=https://cernbox.cern.ch>CERNBox</a> account
     and click on your Microsoft Office documents.</div>
     <br><br><br><br><br><br><br><br><br><br><hr>
-    <i>CERNBox WOPI Server %s. Powered by Flask %s for Python %s</i>.
+    <i>CERNBox WOPI Server %s. Powered by Flask %s for Python %s on nginx</i>.
     </body>
     </html>
     """ % (WOPISERVERVERSION, flask.__version__, python_version())
@@ -320,9 +320,10 @@ def wopiCheckFileInfo(fileid):
     filemd['UserId'] = acctok['ruid'] + ':' + acctok['rgid']    # typically same as OwnerId
     filemd['UserFriendlyName'] = acctok['username']
     filemd['Size'] = long(statInfo[8])
-    filemd['Version'] = statInfo[12]
-    filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = \
-        filemd['SupportsRename'] = filemd['UserCanRename'] = acctok['canedit']
+    filemd['Version'] = statInfo[12]   # mtime is used as version here
+    filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = filemd['SupportsGetLock'] = \
+        filemd['SupportsRename'] = filemd['UserCanRename'] = filemd['SupportsDeleteFile'] = acctok['canedit']
+    filemd['SupportsExtendedLockLength'] = True
     #filemd['UserCanPresent'] = True   # what about the broadcasting feature in Office Online?
     filemd['DownloadUrl'] = '%s?access_token=%s' % \
                             (config.get('general', 'downloadurl'), flask.request.args['access_token'])
@@ -361,6 +362,8 @@ def wopiGetFile(fileid):
     return 'Invalid access token', httplib.UNAUTHORIZED
   except Exception, e:
     return _logGeneralExceptionAndReturn(e)
+
+
 
 
 #
@@ -494,10 +497,10 @@ def wopiPutRelative(fileid, reqheaders, acctok):
 
 def wopiDeleteFile(fileid, reqheaders_unused, acctok):
   '''Implements the DeleteFile WOPI call'''
-  retrievedLock = _retrieveWopiLock(fileid, 'DELETEFILE', '', acctok)
+  retrievedLock = _retrieveWopiLock(fileid, 'DELETE', '', acctok)
   if retrievedLock != None:
     # file is locked and cannot be deleted
-    return _makeConflictResponse('DELETEFILE', retrievedLock, '', '', acctok['filename'])
+    return _makeConflictResponse('DELETE', retrievedLock, '', '', acctok['filename'])
   try:
     xrdcl.removefile(acctok['filename'], acctok['ruid'], acctok['rgid'])
     return 'OK', httplib.OK
@@ -553,7 +556,7 @@ def wopiFilesPost(fileid):
       return wopiGetLock(fileid, headers, acctok)
     elif op == 'PUT_RELATIVE':
       return wopiPutRelative(fileid, headers, acctok)
-    elif op == 'DELETE_FILE':
+    elif op == 'DELETE':
       return wopiDeleteFile(fileid, headers, acctok)
     elif op == 'RENAME_FILE':
       return wopiRenameFile(fileid, headers, acctok)
