@@ -491,7 +491,7 @@ def wopiPutRelative(fileid, reqheaders, acctok):
   # prepare and send the response as JSON
   putrelmd = {}
   putrelmd['Name'] = os.path.basename(targetName)
-  putrelmd['Url'] = urllib.quote_plus('%s/wopi/files/%s' % (_ourHostName(), inode)) + '&access_token=' + newacctok
+  putrelmd['Url'] = '%s/wopi/files/%s?access_token=%s' % (_ourHostName(), inode, newacctok)
   return flask.Response(json.dumps(putrelmd), mimetype='application/json')
 
 
