@@ -364,25 +364,6 @@ def wopiGetFile(fileid):
     return _logGeneralExceptionAndReturn(e)
 
 
-@app.route("/wopi/files/<fileid>/ancestry", methods=['GET'])
-def wopiEnumerateAncestors(fileid):
-  '''Implements the EnumerateAncestors WOPI call'''
-  _refreshConfig()
-  try:
-    acctok = jwt.decode(flask.request.args['access_token'], wopisecret, algorithms=['HS256'])
-    if acctok['exp'] < time.time():
-      raise jwt.exceptions.ExpiredSignatureError
-    log.warning('msg="EnumerateAncestors" user="%s:%s" filename"%s" fileid="%s" acctok="%s"' % \
-             (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
-    return 'Not supported', httplib.NOT_IMPLEMENTED
-  except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
-    log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
-    return 'Invalid access token', httplib.NOT_FOUND
-  except KeyError, e:
-    log.error('msg="Invalid access token or request argument" error="%s"' % e)
-    return 'Invalid access token', httplib.UNAUTHORIZED
-  except Exception, e:
-    return _logGeneralExceptionAndReturn(e)
 
 
 #
