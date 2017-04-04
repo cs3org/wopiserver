@@ -57,18 +57,18 @@ xrootiface.init(config, logging.getLogger(''))
 
 # stat + getxattr the given file
 try:
-  statInfo = xrootiface.stat(filename, '0', '0')
+  statInfo = xrootiface.statx(filename, '0', '0')
   try:
     wopiTime = xrootiface.getxattr(filename, '0', '0', 'oc.wopi.lastwritetime')
     try:
       for l in xrootiface.readfile(_getLockName(filename), '0', '0'):
         wopiLock = l
       wopiLock = jwt.decode(wopiLock, wopisecret, algorithms=['HS256'])
-      print '%s: mtime = %d, last WOPI write time = %s, locked: %s' % (filename, statInfo.modtime, wopiTime, wopiLock)
-    except IOError:
-      print '%s: mtime = %d, last WOPI write time = %s, not locked' % (filename, statInfo.modtime, wopiTime)
+      print '%s: inode = %s, mtime = %s, last WOPI write time = %s, locked: %s' % (filename, statInfo[2], statInfo[12], wopiTime, wopiLock)
+    except jwt.exceptions.DecodeError:
+      print '%s: inode = %s, mtime = %s, last WOPI write time = %s, not locked' % (filename, statInfo[2], statInfo[12], wopiTime)
   except IOError:
-    print '%s: mtime = %d, not being written by the WOPI server' % (filename, statInfo.modtime)
+    print '%s: inode = %s, mtime = %s, not being written by the WOPI server' % (filename, statInfo[2], statInfo[12])
 except IOError, e:
   print '%s: %s' % (filename, e)
 
