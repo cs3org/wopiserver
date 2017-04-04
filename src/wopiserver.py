@@ -243,7 +243,7 @@ def cboxOpen():
       raise ValueError
   except ValueError:
     log.info('msg="cboxOpen: invalid user/group in request" client="%s" user="%s:%s"' % \
-             req.remote_addr, req.args['ruid'], req.args['rgid'])
+             (req.remote_addr, req.args['ruid'], req.args['rgid']))
     return 'Client not authorized', httplib.UNAUTHORIZED
   # then resolve the client: only our OwnCloud servers shall use this API
   allowedclients = config.get('general', 'allowedclients').split()
