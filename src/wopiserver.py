@@ -28,6 +28,17 @@ WOPISERVERVERSION = 'git'
 # this is the xattr key used for conflicts resolution on the remote storage
 LASTSAVETIMEKEY = 'oc.wopi.lastwritetime'
 
+# The supported Office Online end-points
+ENDPOINTS = {}
+ENDPOINTS[('.docx', 'view')] = 'https://oos.cern.ch/wv/wordviewerframe.aspx'
+ENDPOINTS[('.docx', 'edit')] = 'https://oos.cern.ch/we/wordeditorframe.aspx?edit=1'
+ENDPOINTS[('.xlsx', 'view')] = 'https://oos.cern.ch/x/_layouts/xlviewerinternal.aspx'
+ENDPOINTS[('.xlsx', 'edit')] = 'https://oos.cern.ch/x/_layouts/xlviewerinternal.aspx?edit=1'
+ENDPOINTS[('.pptx', 'view')] = 'https://oos.cern.ch/p/PowerPointFrame.aspx'
+ENDPOINTS[('.pptx', 'edit')] = 'https://oos.cern.ch/p/PowerPointFrame.aspx?PowerPointView=EditView'
+ENDPOINTS[('.one', 'view')] = ''
+ENDPOINTS[('.one', 'edit')] = ''
+
 # Initialization
 try:
   _loglevels = {"Critical": logging.CRITICAL,  # 50
@@ -298,6 +309,13 @@ def cboxDownload():
     return _logGeneralExceptionAndReturn(e)
 
 
+@app.route("/cbox/endpoints", methods=['GET'])
+def cboxEndPoints():
+  '''Returns the supported end-points for Office Online at CERN'''
+  ep = [{str(k): ENDPOINTS[k]} for k in ENDPOINTS.keys()]
+  return flask.Response(json.dumps(ep), mimetype='application/json')
+
+
 #
 # The WOPI protocol implementation starts here
 #
@@ -315,7 +333,8 @@ def wopiCheckFileInfo(fileid):
     statInfo = xrdcl.statx(acctok['filename'], acctok['ruid'], acctok['rgid'])
     # populate metadata for this file
     filemd = {}
-    filemd['BaseFileName'] = os.path.basename(acctok['filename'])
+    filemd['BaseFileName'] = filemd['BreadcrumbDocName'] = os.path.basename(acctok['filename'])
+    filemd['BreadcrumbFolderName'] = os.path.dirname(acctok['filename'])
     filemd['OwnerId'] = statInfo[5] + ':' + statInfo[6]
     filemd['UserId'] = acctok['ruid'] + ':' + acctok['rgid']    # typically same as OwnerId
     filemd['UserFriendlyName'] = acctok['username']
@@ -327,6 +346,15 @@ def wopiCheckFileInfo(fileid):
     #filemd['UserCanPresent'] = True   # what about the broadcasting feature in Office Online?
     filemd['DownloadUrl'] = '%s?access_token=%s' % \
                             (config.get('general', 'downloadurl'), flask.request.args['access_token'])
+    filemd['BreadcrumbFolderUrl'] = '%s/?dir=%s' % \
+                            ('https://testbox.cern.ch/index.php/apps/files', urllib.quote_plus(filemd['BreadcrumbFolderName']))    # config.get('general', 'folderurl')
+    fext = os.path.splitext(filemd['BaseFileName'])[1]
+    if fext[-1] != 'x':    # new extensions scheme
+      fext += 'x'
+    wopiSrc = 'WOPISrc=%s&access_token=%s' % \
+              (urllib.quote_plus('%s/wopi/files/%s' % (_ourHostName(), fileid)), flask.request.args['access_token'])
+    filemd['HostViewUrl'] = '%s&%s' % (ENDPOINTS[(fext, 'view')], wopiSrc)
+    filemd['HostEditUrl'] = '%s&%s' % (ENDPOINTS[(fext, 'edit')], wopiSrc)
     log.debug('msg="File metadata response" metadata="%s"' % filemd)
     # send in JSON format
     return flask.Response(json.dumps(filemd), mimetype='application/json')
@@ -492,6 +520,8 @@ def wopiPutRelative(fileid, reqheaders, acctok):
   putrelmd = {}
   putrelmd['Name'] = os.path.basename(targetName)
   putrelmd['Url'] = '%s/wopi/files/%s?access_token=%s' % (_ourHostName(), inode, newacctok)
+  putrelmd['HostEditUrl'] = '%s&WOPISrc=%s' % (ENDPOINTS[(os.path.splitext(targetName)[1], 'edit')], putrelmd['Url'])
+  log.debug('msg="PutRelative response" metadata="%s"' % putrelmd)
   return flask.Response(json.dumps(putrelmd), mimetype='application/json')
 
 
