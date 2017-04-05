@@ -143,28 +143,30 @@ def _retrieveWopiLock(fileid, operation, lock, acctok):
   for l in xrdcl.readfile(_getLockName(acctok['filename']), '0', '0'):
     if 'No such file or directory' in l:
       return None     # no pre-existing lock found
-    retrievedLock = l         # one iteration is largely sufficient to hit EOF
+    # otherwise one iteration is largely sufficient to hit EOF
   try:
-    retrievedLock = jwt.decode(retrievedLock, wopisecret, algorithms=['HS256'])
+    retrievedLock = jwt.decode(l, wopisecret, algorithms=['HS256'])
   except jwt.exceptions.DecodeError:
     log.warning('msg="%s" user="%s:%s" filename="%s" error="WOPI lock corrupted, ignoring"' % \
                 (operation.title(), acctok['ruid'], acctok['rgid'], acctok['filename']))
     return None
   log.info('msg="%s" user="%s:%s" filename="%s" fileid="%s" lock="%s" retrievedLock="%s" expTime="%s"' % \
-           (operation.title(), acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, lock, retrievedLock, \
+           (operation.title(), acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, lock, retrievedLock['wopilock'], \
             time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(retrievedLock['exp']))))
   if retrievedLock['exp'] < time.time():
     # the retrieved lock is not valid any longer, discard
     return None
-  return retrievedLock
+  return retrievedLock['wopilock']
 
 
 def _storeWopiLock(operation, lock, acctok):
   '''Stores the lock for a given file in the form of an encoded JSON string (cf. the access token)'''
   # append or overwrite the expiration time
-  lock['exp'] = int(time.time()) + config.getint('general', 'wopilockexpiration')
+  l = {}
+  l['wopilock'] = lock
+  l['exp'] = int(time.time()) + config.getint('general', 'wopilockexpiration')
   try:
-    xrdcl.writefile(_getLockName(acctok['filename']), '0', '0', jwt.encode(lock, wopisecret, algorithm='HS256'))
+    xrdcl.writefile(_getLockName(acctok['filename']), '0', '0', jwt.encode(l, wopisecret, algorithm='HS256'))
     log.info('msg="%s" filename="%s" lock="%s" result="success"' % (operation.title(), acctok['filename'], lock))
   except IOError, e:
     log.warning('msg="%s" filename="%s" lock="%s" result="unable to store lock" reason="%s"' % \
@@ -172,28 +174,17 @@ def _storeWopiLock(operation, lock, acctok):
 
 
 def _compareWopiLocks(lock1, lock2):
-  '''Compares two dictionaries and returns True if they represent the same WOPI lock.
-     Note that there's no documentation about the internal format of the WOPI locks and
-     the comparison is purely based on heuristics!'''
-  if 'L' in lock1 and 'L' in lock2:
-    log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="%r"' % (lock1, lock2, lock1['L'] == lock2['L']))
-    return lock1['L'] == lock2['L']     # used by Excel and PowerPoint
-  elif 'S' in lock1 and 'S' in lock2:
-    log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="%r"' % (lock1, lock2, lock1['S'] == lock2['S']))
-    return lock1['S'] == lock2['S']     # used by Word
-  elif 'S' in lock1:
-    log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="%r"' % (lock1, lock2, lock1['S'] == lock2))
-    return lock1['S'] == lock2          # also used by Word
-  else:
-    # not sure this makes sense
-    log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="%r"' % (lock1, lock2, lock1 == lock2))
-    return lock1 == lock2
+  '''Compares two locks and returns True if they represent the same WOPI lock.
+     Officially, the comparison must be based on their string representation, but it has happened
+     that the internal format of the WOPI locks had to be looked at, by pure heuristics!'''
+  log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="%r"' % (lock1, lock2, lock1 == lock2))
+  return lock1 == lock2
 
 
 def _makeConflictResponse(operation, retrievedlock, lock, oldlock, filename):
   '''Generates and logs an HTTP 401 response in case of locks conflict'''
   resp = flask.Response()
-  resp.headers['X-WOPI-Lock'] = json.dumps(retrievedlock) if retrievedlock else ''
+  resp.headers['X-WOPI-Lock'] = retrievedlock if retrievedlock else ''
   resp.status_code = httplib.CONFLICT
   log.info('msg="%s" filename="%s" lock="%s" oldLock="%s" retrievedLock="%s" result="conflict"' % \
            (operation.title(), filename, lock, oldlock, retrievedlock))
@@ -404,12 +395,7 @@ def wopiLock(fileid, reqheaders, acctok):
   # cf. http://wopi.readthedocs.io/projects/wopirest/en/latest/files/Lock.html
   op = reqheaders['X-WOPI-Override']
   lock = reqheaders['X-WOPI-Lock']
-  try:
-    lock = json.loads(lock)
-  except ValueError:
-    log.warning('msg="%s" filename="%s" lock="%s" result="invalid format"' % (op.title(), acctok['filename'], lock))
-    return 'Invalid JSON-formatted lock', httplib.BAD_REQUEST
-  oldLock = json.loads(reqheaders['X-WOPI-OldLock']) if 'X-WOPI-OldLock' in reqheaders else None
+  oldLock = reqheaders['X-WOPI-OldLock'] if 'X-WOPI-OldLock' in reqheaders else None
   retrievedLock = _retrieveWopiLock(fileid, op, lock, acctok)
   # perform the required checks for the validity of the new lock
   if (oldLock is None and retrievedLock != None and not _compareWopiLocks(retrievedLock, lock)) or \
@@ -431,11 +417,6 @@ def wopiLock(fileid, reqheaders, acctok):
 def wopiUnlock(fileid, reqheaders, acctok):
   '''Implements the Unlock WOPI call'''
   lock = reqheaders['X-WOPI-Lock']
-  try:
-    lock = json.loads(lock)
-  except ValueError:
-    log.warning('msg="Unlock" filename="%s" lock="%s" result="invalid format"' % (acctok['filename'], lock))
-    return 'Invalid JSON-formatted lock', httplib.BAD_REQUEST
   retrievedLock = _retrieveWopiLock(fileid, 'UNLOCK', lock, acctok)
   if not _compareWopiLocks(retrievedLock, lock):
     return _makeConflictResponse('UNLOCK', retrievedLock, lock, '', acctok['filename'])
@@ -456,7 +437,7 @@ def wopiUnlock(fileid, reqheaders, acctok):
 def wopiGetLock(fileid, reqheaders_unused, acctok):
   '''Implements the GetLock WOPI call'''
   resp = flask.Response()
-  resp.headers['X-WOPI-Lock'] = json.dumps(_retrieveWopiLock(fileid, 'GETLOCK', '', acctok))
+  resp.headers['X-WOPI-Lock'] = _retrieveWopiLock(fileid, 'GETLOCK', '', acctok)
   resp.status_code = httplib.OK
   return resp
 
@@ -545,11 +526,6 @@ def wopiRenameFile(fileid, reqheaders, acctok):
   '''Implements the RenameFile WOPI call'''
   targetName = reqheaders['X-WOPI-RequestedName']
   lock = reqheaders['X-WOPI-Lock']
-  try:
-    lock = json.loads(lock)
-  except ValueError:
-    log.warning('msg="RenameFile" filename="%s" lock="%s" result="invalid format"' % (acctok['filename'], lock))
-    return 'Invalid JSON-formatted lock', httplib.BAD_REQUEST
   retrievedLock = _retrieveWopiLock(fileid, 'RENAMEFILE', lock, acctok)
   if retrievedLock != None and not _compareWopiLocks(retrievedLock, lock):
     return _makeConflictResponse('RENAMEFILE', retrievedLock, lock, '', acctok['filename'])
@@ -599,9 +575,6 @@ def wopiFilesPost(fileid):
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
     log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
     return 'Invalid access token', httplib.NOT_FOUND
-  except KeyError, e:
-    log.error('msg="Invalid access token or request argument" error="%s"' % e)
-    return 'Missing header %s in POST request' % e, httplib.BAD_REQUEST
   except Exception, e:
     return _logGeneralExceptionAndReturn(e)
 
@@ -623,17 +596,6 @@ def wopiPutFile(fileid):
       return 'OK', httplib.OK
     # otherwise, check that the caller holds the current lock on the file
     lock = flask.request.headers['X-WOPI-Lock']
-    try:
-      lock = json.loads(lock)
-    except ValueError:
-      # it happens with MS Word that the given lock is only the UUID!
-      try:
-        UUID(lock)
-        # it worked, accept it
-      except ValueError:
-        # nope, refuse it
-        log.warning('msg="PutFile" filename="%s" lock="%s" result="invalid format"' % (acctok['filename'], lock))
-        return 'Invalid lock', httplib.BAD_REQUEST
     retrievedLock = _retrieveWopiLock(fileid, 'PUTFILE', lock, acctok)
     if retrievedLock != None and not _compareWopiLocks(retrievedLock, lock):
       return _makeConflictResponse('PUTFILE', retrievedLock, lock, '', acctok['filename'])
