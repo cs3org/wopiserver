@@ -588,12 +588,18 @@ def wopiPutFile(fileid):
     if acctok['exp'] < time.time():
       raise jwt.exceptions.ExpiredSignatureError
     if 'X-WOPI-Lock' not in flask.request.headers:
-      # no lock given, assume we are in creation mode (cf. editnew WOPI action)
+      # no lock given: check if the file exists, if not assume we are in creation mode (cf. editnew WOPI action)
       log.info('msg="PutFile" user="%s:%s" filename="%s" fileid="%s" action="editnew" acctok="%s"' % \
                (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
-      _storeWopiFile(flask.request, acctok)
-      log.info('msg="File successfully written" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename']))
-      return 'OK', httplib.OK
+      try:
+        if xrdcl.stat(acctok['filename'], '0', '0').size == 0:   # a 0-size file is equivalent to not existing
+          raise IOError
+        log.warning('msg="PutFile" error="File exists and no WOPI lock provided" filename="%s"' % acctok['filename'])
+        return 'File exists', httplib.CONFLICT
+      except IOError:
+        _storeWopiFile(flask.request, acctok)
+        log.info('msg="File successfully written" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename']))
+        return 'OK', httplib.OK
     # otherwise, check that the caller holds the current lock on the file
     lock = flask.request.headers['X-WOPI-Lock']
     retrievedLock = _retrieveWopiLock(fileid, 'PUTFILE', lock, acctok)
