@@ -13,7 +13,6 @@ from platform import python_version
 import logging
 import logging.handlers
 import urllib, httplib, json
-from uuid import UUID
 try:
   import flask                 # Flask app server, python-flask-0.10.1-4.el7.noarch.rpm + pyOpenSSL-0.13.1-3.el7.x86_64.rpm
   import jwt                   # PyJWT JSON Web Token, python-jwt-1.4.0-2.el7.noarch.rpm
@@ -36,8 +35,8 @@ ENDPOINTS[('.xlsx', 'view')] = 'https://oos.cern.ch/x/_layouts/xlviewerinternal.
 ENDPOINTS[('.xlsx', 'edit')] = 'https://oos.cern.ch/x/_layouts/xlviewerinternal.aspx?edit=1'
 ENDPOINTS[('.pptx', 'view')] = 'https://oos.cern.ch/p/PowerPointFrame.aspx?PowerPointView=ReadingView'
 ENDPOINTS[('.pptx', 'edit')] = 'https://oos.cern.ch/p/PowerPointFrame.aspx?PowerPointView=EditView'
-ENDPOINTS[('.one', 'view')]  = 'https://oos.cern.ch/o/onenoteframe.aspx?edit=0'
-ENDPOINTS[('.one', 'edit')]  = 'https://oos.cern.ch/o/onenoteframe.aspx?edit=1'
+ENDPOINTS[('.one', 'view')] = 'https://oos.cern.ch/o/onenoteframe.aspx?edit=0'
+ENDPOINTS[('.one', 'edit')] = 'https://oos.cern.ch/o/onenoteframe.aspx?edit=1'
 
 # Initialization
 try:
@@ -70,6 +69,7 @@ try:
     log.info('msg="WOPI Server starting in secure mode"')
   else:
     log.warning('msg="WOPI Server starting in plain http, use for testing purposes only"')
+  useNginx = True
 except Exception, e:
   # any error we get here with the configuration is fatal
   print "Failed to initialize the service, bailing out:", e
@@ -140,6 +140,7 @@ def _getLockName(filename):
 
 def _retrieveWopiLock(fileid, operation, lock, acctok):
   '''Retrieves and logs an existing lock for a given file'''
+  l = ''
   for l in xrdcl.readfile(_getLockName(acctok['filename']), '0', '0'):
     if 'No such file or directory' in l:
       return None     # no pre-existing lock found
@@ -219,10 +220,10 @@ def index():
     To use this service, please log in to your <a href=https://cernbox.cern.ch>CERNBox</a> account
     and click on your Microsoft Office documents.</div>
     <br><br><br><br><br><br><br><br><br><br><hr>
-    <i>CERNBox WOPI Server %s. Powered by Flask %s for Python %s on Nginx</i>.
+    <i>CERNBox WOPI Server %s. Powered by Flask %s for Python %s%s</i>.
     </body>
     </html>
-    """ % (WOPISERVERVERSION, flask.__version__, python_version())
+    """ % (WOPISERVERVERSION, flask.__version__, python_version(), (' on Nginx' if useNginx else ''))
 
 
 @app.route("/cbox/open", methods=['GET'])
@@ -666,6 +667,7 @@ def wopiPutFile(fileid):
 # https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-uwsgi-and-nginx-on-centos-7
 #
 if __name__ == '__main__':
+  useNginx = False
   if useHttps:
     app.run(host='0.0.0.0', port=443, threaded=True, debug=(config.get('general', 'loglevel') == 'Debug'),
             ssl_context=(config.get('security', 'wopicert'), config.get('security', 'wopikey')))
