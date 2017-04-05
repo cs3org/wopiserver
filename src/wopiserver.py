@@ -30,14 +30,14 @@ LASTSAVETIMEKEY = 'oc.wopi.lastwritetime'
 
 # The supported Office Online end-points
 ENDPOINTS = {}
-ENDPOINTS[('.docx', 'view')] = 'https://oos.cern.ch/wv/wordviewerframe.aspx'
+ENDPOINTS[('.docx', 'view')] = 'https://oos.cern.ch/wv/wordviewerframe.aspx?edit=0'
 ENDPOINTS[('.docx', 'edit')] = 'https://oos.cern.ch/we/wordeditorframe.aspx?edit=1'
-ENDPOINTS[('.xlsx', 'view')] = 'https://oos.cern.ch/x/_layouts/xlviewerinternal.aspx'
+ENDPOINTS[('.xlsx', 'view')] = 'https://oos.cern.ch/x/_layouts/xlviewerinternal.aspx?edit=0'
 ENDPOINTS[('.xlsx', 'edit')] = 'https://oos.cern.ch/x/_layouts/xlviewerinternal.aspx?edit=1'
-ENDPOINTS[('.pptx', 'view')] = 'https://oos.cern.ch/p/PowerPointFrame.aspx'
+ENDPOINTS[('.pptx', 'view')] = 'https://oos.cern.ch/p/PowerPointFrame.aspx?PowerPointView=ReadingView'
 ENDPOINTS[('.pptx', 'edit')] = 'https://oos.cern.ch/p/PowerPointFrame.aspx?PowerPointView=EditView'
-ENDPOINTS[('.one', 'view')] = ''
-ENDPOINTS[('.one', 'edit')] = ''
+ENDPOINTS[('.one', 'view')]  = 'https://oos.cern.ch/o/onenoteframe.aspx?edit=0'
+ENDPOINTS[('.one', 'edit')]  = 'https://oos.cern.ch/o/onenoteframe.aspx?edit=1'
 
 # Initialization
 try:
