@@ -334,7 +334,7 @@ def wopiCheckFileInfo(fileid):
     # populate metadata for this file
     filemd = {}
     filemd['BaseFileName'] = filemd['BreadcrumbDocName'] = os.path.basename(acctok['filename'])
-    filemd['BreadcrumbFolderName'] = os.path.dirname(acctok['filename'])
+    filemd['BreadcrumbFolderName'] = 'Back to ' + os.path.dirname(acctok['filename']).split('/')[-1]
     filemd['OwnerId'] = statInfo[5] + ':' + statInfo[6]
     filemd['UserId'] = acctok['ruid'] + ':' + acctok['rgid']    # typically same as OwnerId
     filemd['UserFriendlyName'] = acctok['username']
@@ -346,13 +346,15 @@ def wopiCheckFileInfo(fileid):
     #filemd['UserCanPresent'] = True   # what about the broadcasting feature in Office Online?
     filemd['DownloadUrl'] = '%s?access_token=%s' % \
                             (config.get('general', 'downloadurl'), flask.request.args['access_token'])
-    filemd['BreadcrumbFolderUrl'] = '%s/?dir=%s' % \
-                            ('https://testbox.cern.ch/index.php/apps/files', urllib.quote_plus(filemd['BreadcrumbFolderName']))    # config.get('general', 'folderurl')
+    folderPath = os.path.dirname(acctok['filename'])
+    if '/user/' in folderPath:   # home paths in the form /eos/user/l/letter need to be stripped...
+      folderPath = '/' + '/'.join(folderPath.split('/')[6:])
     fext = os.path.splitext(filemd['BaseFileName'])[1]
-    if fext[-1] != 'x':    # new extensions scheme
+    if fext[-1] != 'x':    # new Office extensions scheme
       fext += 'x'
     wopiSrc = 'WOPISrc=%s&access_token=%s' % \
               (urllib.quote_plus('%s/wopi/files/%s' % (_ourHostName(), fileid)), flask.request.args['access_token'])
+    filemd['BreadcrumbFolderUrl'] = '%s/?dir=%s' % (config.get('general', 'folderurl'), urllib.quote_plus(folderPath))
     filemd['HostViewUrl'] = '%s&%s' % (ENDPOINTS[(fext, 'view')], wopiSrc)
     filemd['HostEditUrl'] = '%s&%s' % (ENDPOINTS[(fext, 'edit')], wopiSrc)
     log.debug('msg="File metadata response" metadata="%s"' % filemd)
