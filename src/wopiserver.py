@@ -55,7 +55,7 @@ try:
   app = flask.Flask("WOPIServer")
   log = app.logger
   log.setLevel(_loglevels[config.get('general', 'loglevel')])
-  loghandler = logging.FileHandler('/var/log/cernbox/wopiserver.log')
+  loghandler = logging.FileHandler('/var/log/wopi/wopiserver.log')
   loghandler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)s[%(process)d] %(levelname)-8s %(message)s',
                                             datefmt='%Y-%m-%dT%H:%M:%S'))
   log.addHandler(loghandler)

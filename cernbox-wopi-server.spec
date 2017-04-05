@@ -39,7 +39,7 @@ mkdir -p %buildroot/%_python_lib
 mkdir -p %buildroot/etc/wopi
 mkdir -p %buildroot/etc/logrotate.d
 mkdir -p %buildroot/usr/lib/systemd/system
-mkdir -p %buildroot/var/log/cernbox
+mkdir -p %buildroot/var/log/wopi
 install -m 755 src/wopiserver.py     %buildroot/usr/bin/wopiserver.py
 install -m 755 src/wopicheckfile.py  %buildroot/usr/bin/wopicheckfile.py
 install -m 644 src/xrootiface.py     %buildroot/%_python_lib/xrootiface.py
@@ -60,7 +60,7 @@ touch /etc/wopi/ocsecret
 %defattr(-,root,root,-)
 /etc/wopi
 /etc/logrotate.d/cernbox-wopi-server
-%attr(-,cboxwopi,def-cg) /var/log/cernbox
+%attr(-,cboxwopi,def-cg) /var/log/wopi
 /usr/lib/systemd/system/wopiserver.service
 /usr/bin/*
 %_python_lib/*

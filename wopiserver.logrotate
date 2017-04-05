@@ -1,4 +1,4 @@
-/var/log/cernbox/wopiserver.log
+/var/log/wopi/wopiserver.log
 {
   compress
   daily
