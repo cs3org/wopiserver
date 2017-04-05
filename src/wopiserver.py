@@ -533,13 +533,19 @@ def wopiRenameFile(fileid, reqheaders, acctok):
   if retrievedLock != None and not _compareWopiLocks(retrievedLock, lock):
     return _makeConflictResponse('RENAMEFILE', retrievedLock, lock, '', acctok['filename'])
   try:
-    targetName += os.path.splitext(acctok['filename'])[1]    # the destination name comes without extension
+    # the destination name comes without base path and without extension
+    targetName = os.path.dirname(acctok['filename']) + '/' + targetName + os.path.splitext(acctok['filename'])[1]
     log.info('msg="RenameFile" user="%s:%s" filename="%s" fileid="%s" targetname="%s"' % \
              (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, targetName))
     xrdcl.renamefile(acctok['filename'], targetName, acctok['ruid'], acctok['rgid'])
+    xrdcl.renamefile(_getLockName(acctok['filename']), _getLockName(targetName), '0', '0')
     # prepare and send the response as JSON
     renamemd = {}
-    renamemd['Name'] = os.path.basename(targetName)
+    renamemd['Name'] = reqheaders['X-WOPI-RequestedName']
+    renamemd['HostEditUrl'] = '%s&WOPISrc=%s&access_token=%s' % \
+                              (ENDPOINTS[(os.path.splitext(targetName)[1], 'edit')], \
+                               urllib.quote_plus('%s/wopi/files/%s' % (_ourHostName(), fileid)), \
+                               flask.request.args['access_token'])
     return flask.Response(json.dumps(renamemd), mimetype='application/json')
   except IOError, e:
     # assume the rename failed because of the destination filename and report the error
@@ -595,7 +601,7 @@ def wopiPutFile(fileid):
       log.info('msg="PutFile" user="%s:%s" filename="%s" fileid="%s" action="editnew" acctok="%s"' % \
                (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
       try:
-        if xrdcl.stat(acctok['filename'], '0', '0').size == 0:   # a 0-size file is equivalent to not existing
+        if xrdcl.stat(acctok['filename'], acctok['ruid'], acctok['rgid']).size == 0:   # a 0-size file is equivalent to not existing
           raise IOError
         log.warning('msg="PutFile" error="File exists and no WOPI lock provided" filename="%s"' % acctok['filename'])
         return 'File exists', httplib.CONFLICT
