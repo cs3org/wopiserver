@@ -542,10 +542,6 @@ def wopiRenameFile(fileid, reqheaders, acctok):
     # prepare and send the response as JSON
     renamemd = {}
     renamemd['Name'] = reqheaders['X-WOPI-RequestedName']
-    renamemd['HostEditUrl'] = '%s&WOPISrc=%s&access_token=%s' % \
-                              (ENDPOINTS[(os.path.splitext(targetName)[1], 'edit')], \
-                               urllib.quote_plus('%s/wopi/files/%s' % (_ourHostName(), fileid)), \
-                               flask.request.args['access_token'])
     return flask.Response(json.dumps(renamemd), mimetype='application/json')
   except IOError, e:
     # assume the rename failed because of the destination filename and report the error
