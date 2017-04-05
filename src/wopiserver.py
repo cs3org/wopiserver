@@ -503,7 +503,10 @@ def wopiPutRelative(fileid, reqheaders, acctok):
   putrelmd = {}
   putrelmd['Name'] = os.path.basename(targetName)
   putrelmd['Url'] = '%s/wopi/files/%s?access_token=%s' % (_ourHostName(), inode, newacctok)
-  putrelmd['HostEditUrl'] = '%s&WOPISrc=%s' % (ENDPOINTS[(os.path.splitext(targetName)[1], 'edit')], putrelmd['Url'])
+  putrelmd['HostEditUrl'] = '%s&WOPISrc=%s&access_token=%s' % \
+                            (ENDPOINTS[(os.path.splitext(targetName)[1], 'edit')], \
+                             urllib.quote_plus('%s/wopi/files/%s' % (_ourHostName(), inode)), \
+                             newacctok)
   log.debug('msg="PutRelative response" metadata="%s"' % putrelmd)
   return flask.Response(json.dumps(putrelmd), mimetype='application/json')
 
