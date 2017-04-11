@@ -324,6 +324,7 @@ def cboxDownload():
 @wopi.app.route("/cbox/endpoints", methods=['GET'])
 def cboxEndPoints():
   '''Returns the supported end-points for Office Online at CERN'''
+  wopi.log.info('msg="cboxEndPoints: returning list of valid Office Online end-points" client="%s"' % flask.request.remote_addr)
   ep = [{str(k): ENDPOINTS[k]} for k in ENDPOINTS.keys()]   # flatten the tuples used as keys
   return flask.Response(json.dumps(ep), mimetype='application/json')
 
@@ -339,6 +340,7 @@ def cboxGetOpenFiles():
     wopi.log.info('msg="cboxGetOpenFiles: unauthorized access attempt, missing authorization token" client="%s"' % req.remote_addr)
     return 'Client not authorized', httplib.UNAUTHORIZED
   # dump the current list of opened files in JSON format
+  wopi.log.info('msg="cboxGetOpenFiles: returning list of open files" client="%s"' % req.remote_addr)
   return flask.Response(json.dumps(wopi.openfiles), mimetype='application/json')
 
 
