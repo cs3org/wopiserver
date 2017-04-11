@@ -49,6 +49,7 @@ class wopi(object):
                "Debug":    logging.DEBUG      # 10
               }
   log = app.logger
+  openfiles = []
 
   @classmethod
   def init(cls):
@@ -327,6 +328,20 @@ def cboxEndPoints():
   return flask.Response(json.dumps(ep), mimetype='application/json')
 
 
+@wopi.app.route("/cbox/open/list", methods=['GET'])
+def cboxGetOpenFiles():
+  '''Returns a list of all currently opened files, for operations purposes only.
+  This call is protected by the same shared secret as the /cbox/open call.'''
+  wopi.refreshconfig()
+  req = flask.request
+  # if running in https mode, first check if the shared secret matches ours
+  if wopi.useHttps and ('Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + wopi.ocsecret):
+    wopi.log.info('msg="cboxGetOpenFiles: unauthorized access attempt, missing authorization token" client="%s"' % req.remote_addr)
+    return 'Client not authorized', httplib.UNAUTHORIZED
+  # dump the current list of opened files in JSON format
+  return flask.Response(json.dumps(wopi.openfiles), mimetype='application/json')
+
+
 #
 # The WOPI protocol implementation starts here
 #
@@ -427,6 +442,8 @@ def wopiLock(fileid, reqheaders, acctok):
       # not fatal, but will generate a conflict file later on, so log a warning
       wopi.log.warning('msg="Unable to set lastwritetime xattr" user="%s:%s" filename="%s" reason="%s"' % \
                        (acctok['ruid'], acctok['rgid'], acctok['filename'], e))
+    # and keep track of the fact that this file has been opened for write
+    wopi.openfiles.append(acctok['filename'])
   return 'OK', httplib.OK
 
 
@@ -446,6 +463,12 @@ def wopiUnlock(fileid, reqheaders, acctok):
     xrdcl.rmxattr(acctok['filename'], acctok['ruid'], acctok['rgid'], LASTSAVETIMEKEY)
   except IOError:
     # same as above
+    pass
+  # and remove the file from our internal list of opened files
+  try:
+    wopi.openfiles.remove(acctok['filename'])
+  except ValueError:
+    # already removed?
     pass
   return 'OK', httplib.OK
 
