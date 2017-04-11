@@ -351,7 +351,7 @@ def wopiCheckFileInfo(fileid):
     # populate metadata for this file
     filemd = {}
     filemd['BaseFileName'] = filemd['BreadcrumbDocName'] = os.path.basename(acctok['filename'])
-    filemd['BreadcrumbFolderName'] = 'Back to ' + acctok['filename'].split('/')[-1]
+    filemd['BreadcrumbFolderName'] = 'Back to ' + acctok['filename'].split('/')[-2]
     filemd['OwnerId'] = statInfo[5] + ':' + statInfo[6]
     filemd['UserId'] = acctok['ruid'] + ':' + acctok['rgid']    # typically same as OwnerId
     filemd['UserFriendlyName'] = acctok['username']
