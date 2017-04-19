@@ -793,8 +793,7 @@ def wopiPutFile(fileid):
 
 #
 # If started in standalone mode, start the Flask endless listening loop.
-# The solution chosen for production is to start the server inside Nginx. See:
-# https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-uwsgi-and-nginx-on-centos-7
+# The solution chosen for production is to start the server inside Nginx (cf. wsgi.py)
 #
 if __name__ == '__main__':
   Wopi.init()
