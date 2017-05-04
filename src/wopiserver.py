@@ -375,8 +375,9 @@ def wopiCheckFileInfo(fileid):
     filemd['UserFriendlyName'] = acctok['username']
     filemd['Size'] = long(statInfo[8])
     filemd['Version'] = statInfo[12]   # mtime is used as version here
-    filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = filemd['SupportsGetLock'] = \
-        filemd['SupportsRename'] = filemd['UserCanRename'] = filemd['SupportsDeleteFile'] = acctok['canedit']
+    filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = \
+        filemd['SupportsGetLock'] = filemd['SupportsDeleteFile'] = acctok['canedit']
+    filemd['SupportsRename'] = filemd['UserCanRename'] = False   # XXX renaming is currently broken in all Office Online apps
     filemd['SupportsExtendedLockLength'] = True
     #filemd['UserCanPresent'] = True   # what about the broadcasting feature in Office Online?
     filemd['DownloadUrl'] = '%s?access_token=%s' % \
@@ -579,7 +580,7 @@ def wopiDeleteFile(fileid, reqheaders_unused, acctok):
 
 
 def wopiRenameFile(fileid, reqheaders, acctok):
-  '''Implements the RenameFile WOPI call'''
+  '''Implements the RenameFile WOPI call. This seems to be broken in Office Online, thus it is disabled for the time being.'''
   targetName = reqheaders['X-WOPI-RequestedName']
   lock = reqheaders['X-WOPI-Lock']
   retrievedLock = _retrieveWopiLock(fileid, 'RENAMEFILE', lock, acctok)
