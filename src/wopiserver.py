@@ -71,6 +71,7 @@ class wopi(object):
       xrdcl.init(cls.config, cls.log)                          # initialize the xroot client module
       cls.config.get('general', 'allowedclients')          # read this to make sure it is configured
       cls.useHttps = cls.config.get('security', 'usehttps').lower() == 'yes'
+      cls.repeatedLockRequests = {}               # cf. the wopiLock() function below
     except Exception, e:
       # any error we get here with the configuration is fatal
       print "Failed to initialize the service, bailing out:", e
@@ -433,6 +434,17 @@ def wopiLock(fileid, reqheaders, acctok):
   # perform the required checks for the validity of the new lock
   if (oldLock is None and retrievedLock != None and not _compareWopiLocks(retrievedLock, lock)) or \
      (oldLock != None and not _compareWopiLocks(retrievedLock, oldLock)):
+    # we got a locking conflict: as we've seen cases of looping clients attempting to restate the same
+    # lock over and over again, we keep track of this request and we forcefully clean up the lock
+    # once 'too many' requests come for the same lock
+    if retrievedLock not in wopi.repeatedLockRequests:
+      wopi.repeatedLockRequests[retrievedLock] = 1
+    else:
+      wopi.repeatedLockRequests[retrievedLock] += 1
+      if wopi.repeatedLockRequests[retrievedLock] == 5:
+        xrdcl.removefile(_getLockName(acctok['filename']), '0', '0')
+        wopi.log.warning('msg="Lock: blindly removing the existing lock to unblock client" user="%s:%s" filename="%s"' % \
+                         (acctok['ruid'], acctok['rgid'], acctok['filename']))
     return _makeConflictResponse(op, retrievedLock, lock, oldLock, acctok['filename'])
   # LOCK or REFRESH_LOCK: set the lock to the given one, including the expiration time
   _storeWopiLock(op, lock, acctok)
