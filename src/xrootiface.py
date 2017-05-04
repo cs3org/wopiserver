@@ -23,12 +23,13 @@ def _eosargs(ruid, rgid, atomicwrite=0):
 def _xrootcmd(cmd, subcmd, ruid, rgid, args):
   '''Perform the <cmd>/<subcmd> action on the special /proc/user path on behalf of the given uid,gid.
      Note that this is entirely EOS-specific.'''
-  log.debug('msg="Invoking _xrootcmd" cmd="%s" subcmd="%s" args="%s"' % (cmd, subcmd, args))
   if not xrdfs:
     raise ValueError
   with XrdClient.File() as f:
-    rc, statInfo_unused = f.open(storageserver + '//proc/user/' + _eosargs(ruid, rgid) + '&mgm.cmd=' + cmd + \
-                                 ('&mgm.subcmd=' + subcmd if subcmd else '') + '&' + args, OpenFlags.READ)
+    url = storageserver + '//proc/user/' + _eosargs(ruid, rgid) + '&mgm.cmd=' + cmd + \
+          ('&mgm.subcmd=' + subcmd if subcmd else '') + '&' + args
+    log.debug('msg="Invoking _xrootcmd" cmd="%s%s" url="%s"' % (cmd, ('/' + subcmd if subcmd else ''), url))
+    rc, statInfo_unused = f.open(url, OpenFlags.READ)
     res = f.readline().strip('\n').split('&')
     if len(res) == 3:    # we may only just get stdout: in that case, assume it's all OK
       rc = res[2]
@@ -130,9 +131,9 @@ def writefile(filename, ruid, rgid, content):
 
 def renamefile(origfilename, newfilename, ruid, rgid):
   '''Rename a file via a special open from origfilename to newfilename on behalf of the given uid,gid.'''
-  _xrootcmd('file', 'rename', ruid, rgid, '&mgm.path=' + origfilename + '&mgm.file.target=' + newfilename)
+  _xrootcmd('file', 'rename', ruid, rgid, 'mgm.path=' + origfilename + '&mgm.file.source=' + origfilename + '&mgm.file.target=' + newfilename)
 
 def removefile(filename, ruid, rgid):
   '''Remove a file via a special open on behalf of the given uid,gid.'''
-  _xrootcmd('rm', None, ruid, rgid, '&mgm.path=' + filename)
+  _xrootcmd('rm', None, ruid, rgid, 'mgm.path=' + filename)
 
