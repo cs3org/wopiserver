@@ -3,8 +3,8 @@
 #
 Name:      cernbox-wopi-server
 Summary:   A WOPI server to support Microsoft Office online on CERNBox
-Version:   1.3
-Release:   1%{?dist}
+Version:   1.4
+Release:   0%{?dist}
 License:   GPLv3
 Buildroot: %{_tmppath}/%{name}-buildroot
 Group:     CERN-IT/ST
@@ -66,8 +66,10 @@ touch /etc/wopi/ocsecret
 %_python_lib/*
 
 %changelog
+* Fri May  5 2017 Giuseppe Lo Presti <lopresti@cern.ch> 1.4
+- Disabled renaming and added work-around for looping locking requests
+- Get list of currently opened files for operations purposes
 * Fri Apr  7 2017 Giuseppe Lo Presti <lopresti@cern.ch> 1.3
-- Support deployment with nginx as opposed to standalone Flask
 - Improved navigation and properties in Office Online
 - Fixed lock handling to adhere to specifications (this is known
   to break renaming in Word and PowerPoint)
