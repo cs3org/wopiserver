@@ -181,9 +181,9 @@ def _retrieveWopiLock(fileid, operation, lock, acctok):
 
 def _storeWopiLock(operation, lock, acctok):
   '''Stores the lock for a given file in the form of an encoded JSON string (cf. the access token)'''
-  # append or overwrite the expiration time
   l = {}
   l['wopilock'] = lock
+  # append or overwrite the expiration time
   l['exp'] = int(time.time()) + wopi.config.getint('general', 'wopilockexpiration')
   try:
     xrdcl.writefile(_getLockName(acctok['filename']), '0', '0', jwt.encode(l, wopi.wopisecret, algorithm='HS256'))
@@ -195,10 +195,33 @@ def _storeWopiLock(operation, lock, acctok):
 
 def _compareWopiLocks(lock1, lock2):
   '''Compares two locks and returns True if they represent the same WOPI lock.
-     Officially, the comparison must be based on their string representation, but it has happened
-     that the internal format of the WOPI locks had to be looked at, by pure heuristics!'''
-  wopi.log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="%r"' % (lock1, lock2, lock1 == lock2))
-  return lock1 == lock2
+     Officially, the comparison must be based on the locks' string representations, but because of
+     a bug in Word Online, currently the internal format of the WOPI locks is looked at, based
+     on heuristics. Note that this format is subject to change and is not documented!'''
+  if lock1 == lock2:
+    wopi.log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="True"' % (lock1, lock2))
+    return True
+  else:
+    # before giving up, attempt to parse the lock as a JSON dictionary
+    try:
+      l1 = json.loads(lock1)
+      try:
+        l2 = json.loads(lock2)
+        if 'S' in l1 and 'S' in l2:
+          wopi.log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="%r"' % (lock1, lock2, l1['S'] == l2['S']))
+          return l1['S'] == l2['S']     # used by Word
+        #elif 'L' in lock1 and 'L' in lock2:
+        #  wopi.log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="%r"' % (lock1, lock2, lock1['L'] == lock2['L']))
+        #  return lock1['L'] == lock2['L']     # used by Excel and PowerPoint
+      except ValueError:
+        # lock2 is not a JSON dictionary
+        if 'S' in l1:
+          wopi.log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="%r"' % (lock1, lock2, l1['S'] == lock2))
+          return l1['S'] == lock2          # also used by Word (BUG!)
+    except ValueError:
+      # lock1 is not a JSON dictionary: log the lock values and fail the comparison
+      wopi.log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="False"' % (lock1, lock2))
+      return False
 
 
 def _makeConflictResponse(operation, retrievedlock, lock, oldlock, filename):
