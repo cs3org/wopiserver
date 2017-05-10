@@ -481,7 +481,7 @@ def wopiLock(fileid, reqheaders, acctok):
       wopi.log.warning('msg="Unable to set lastwritetime xattr" user="%s:%s" filename="%s" reason="%s"' % \
                        (acctok['ruid'], acctok['rgid'], acctok['filename'], e))
     # and keep track of the fact that this file has been opened for write
-    wopi.openfiles.append(acctok['filename'])
+    wopi.openfiles.append((acctok['filename'], acctok['ruid'], acctok['rgid']))
   return 'OK', httplib.OK
 
 
@@ -504,7 +504,7 @@ def wopiUnlock(fileid, reqheaders, acctok):
     pass
   # and remove the file from our internal list of opened files
   try:
-    wopi.openfiles.remove(acctok['filename'])
+    wopi.openfiles.remove((acctok['filename'], acctok['ruid'], acctok['rgid']))
   except ValueError:
     # already removed?
     pass
