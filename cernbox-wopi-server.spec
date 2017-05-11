@@ -42,6 +42,7 @@ mkdir -p %buildroot/usr/lib/systemd/system
 mkdir -p %buildroot/var/log/wopi
 install -m 755 src/wopiserver.py     %buildroot/usr/bin/wopiserver.py
 install -m 755 src/wopicheckfile.py  %buildroot/usr/bin/wopicheckfile.py
+install -m 755 src/wopilistopenfiles.sh %buildroot/usr/bin/wopilistopenfiles.sh
 install -m 644 src/xrootiface.py     %buildroot/%_python_lib/xrootiface.py
 install -m 644 wopiserver.service    %buildroot/usr/lib/systemd/system/wopiserver.service
 install -m 644 wopiserver.conf       %buildroot/etc/wopi/wopiserver.defaults.conf
