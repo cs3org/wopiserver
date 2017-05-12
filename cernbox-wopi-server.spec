@@ -31,7 +31,7 @@ This RPM provides a Flask-based web server to implement the Microsoft WOPI proto
 
 %install
 # server versioning
-sed -i "s/WOPISERVERVERSION = 'git'/WOPISERVERVERSION = '%{version}'/" src/wopiserver.py
+sed -i "s/WOPISERVERVERSION = 'git'/WOPISERVERVERSION = '%{version}-%{release}'/" src/wopiserver.py
 # installation
 rm -rf %buildroot/
 mkdir -p %buildroot/usr/bin
