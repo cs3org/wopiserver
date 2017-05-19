@@ -126,9 +126,9 @@ def _logGeneralExceptionAndReturn(ex):
   return 'Internal error', httplib.INTERNAL_SERVER_ERROR
 
 
-def _generateAccessToken(ruid, rgid, filename, canedit, username, foldername):
-  '''Generate an access token for a given file of a given user, and returns a URL-encoded string
-  suitable to be passed as a WOPISrc value to a Microsoft Office Online server.
+def _generateAccessToken(ruid, rgid, filename, canedit, username, folderurl):
+  '''Generate an access token for a given file of a given user, and returns a tuple with
+  the file's inode and the URL-encoded access token.
   Access to this function is protected by source IP address.'''
   try:
     # stat now the file to check for existence and get inode and modification time
@@ -141,10 +141,10 @@ def _generateAccessToken(ruid, rgid, filename, canedit, username, foldername):
     raise
   exptime = int(time.time()) + wopi.tokenvalidity
   acctok = jwt.encode({'ruid': ruid, 'rgid': rgid, 'filename': filename, 'username': username,
-                       'canedit': canedit, 'foldername': foldername, 'exp': exptime}, wopi.wopisecret, algorithm='HS256')
+                       'canedit': canedit, 'folderurl': folderurl, 'exp': exptime}, wopi.wopisecret, algorithm='HS256')
   wopi.log.info('msg="Access token generated" ruid="%s" rgid="%s" canedit="%r" filename="%s" inode="%s" ' \
-                'mtime="%s" foldername="%s" expiration="%d" acctok="%s"' % \
-                (ruid, rgid, canedit, filename, inode, mtime, foldername, exptime, acctok[-20:]))
+                'mtime="%s" folderurl="%s" expiration="%d" acctok="%s"' % \
+                (ruid, rgid, canedit, filename, inode, mtime, folderurl, exptime, acctok[-20:]))
   # return the inode == fileid and the access token
   return inode, acctok
 
@@ -300,12 +300,12 @@ def cboxOpen():
           # we got a match, generate the access token
           filename = urllib.unquote(req.args['filename'])
           canedit = 'canedit' in req.args and req.args['canedit'].lower() == 'true'
-          username = req.args['username'] if 'username' in req.args else 'Anonymous'
-          foldername = req.args['foldername']
+          username = req.args['username'] if 'username' in req.args else ''
+          folderurl = urllib.unquote(req.args['folderurl'])
           try:
             wopi.log.info('msg="cboxOpen: access granted, generating token" client="%s" user="%d:%d" friendlyname="%s"' % \
                           (req.remote_addr, ruid, rgid, username))
-            inode, acctok = _generateAccessToken(str(ruid), str(rgid), filename, canedit, username, foldername)
+            inode, acctok = _generateAccessToken(str(ruid), str(rgid), filename, canedit, username, folderurl)
             # return an URL-encoded WOPISrc URL for the Office Online server
             return urllib.quote_plus('%s/wopi/files/%s' % (_ourHostName(), inode)) + \
                    '&access_token=%s' % acctok      # no need to URL-encode the JWT token
@@ -392,10 +392,14 @@ def wopiCheckFileInfo(fileid):
     # populate metadata for this file
     filemd = {}
     filemd['BaseFileName'] = filemd['BreadcrumbDocName'] = os.path.basename(acctok['filename'])
-    filemd['BreadcrumbFolderName'] = 'Back to ' + acctok['filename'].split('/')[-2]
+    if acctok['username'] == '':
+      filemd['UserFriendlyName'] = 'Anonymous Guest'
+      filemd['BreadcrumbFolderName'] = 'Back to the CERNBox share'
+    else:
+      filemd['UserFriendlyName'] = acctok['username']
+      filemd['BreadcrumbFolderName'] = 'Back to ' + acctok['filename'].split('/')[-2]
     filemd['OwnerId'] = statInfo[5] + ':' + statInfo[6]
     filemd['UserId'] = acctok['ruid'] + ':' + acctok['rgid']    # typically same as OwnerId
-    filemd['UserFriendlyName'] = acctok['username']
     filemd['Size'] = long(statInfo[8])
     filemd['Version'] = statInfo[12]   # mtime is used as version here
     filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = \
@@ -405,7 +409,7 @@ def wopiCheckFileInfo(fileid):
     #filemd['UserCanPresent'] = True   # what about the broadcasting feature in Office Online?
     filemd['DownloadUrl'] = '%s?access_token=%s' % \
                             (wopi.config.get('general', 'downloadurl'), flask.request.args['access_token'])
-    filemd['BreadcrumbFolderUrl'] = '%s?dir=%s' % (wopi.config.get('general', 'folderurl'), acctok['foldername'])
+    filemd['BreadcrumbFolderUrl'] = acctok['folderurl']
     filemd['HostViewUrl'] = '%s&%s' % (ENDPOINTS[(fExt, 'view')], wopiSrc)
     filemd['HostEditUrl'] = '%s&%s' % (ENDPOINTS[(fExt, 'edit')], wopiSrc)
     wopi.log.debug('msg="File metadata response" metadata="%s"' % filemd)
@@ -575,7 +579,7 @@ def wopiPutRelative(fileid, reqheaders, acctok):
   # generate an access token for the new file
   wopi.log.info('msg="PutRelative: generating new access token" user="%s:%s" filename="%s" canedit="True" friendlyname="%s"' % \
            (acctok['ruid'], acctok['rgid'], targetName, acctok['username']))
-  inode, newacctok = _generateAccessToken(acctok['ruid'], acctok['rgid'], targetName, True, acctok['username'], acctok['foldername'])
+  inode, newacctok = _generateAccessToken(acctok['ruid'], acctok['rgid'], targetName, True, acctok['username'], acctok['folderurl'])
   # prepare and send the response as JSON
   putrelmd = {}
   putrelmd['Name'] = os.path.basename(targetName)
