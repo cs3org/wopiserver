@@ -240,7 +240,7 @@ def _storeWopiFile(request, acctok, targetname=''):
   if not targetname:
     targetname = acctok['filename']
   xrdcl.writefile(targetname, acctok['ruid'], acctok['rgid'], request.get_data())
-  # save the current time for later conflict checking: this is never lesser than the mtime of the file
+  # save the current time for later conflict checking: this is never older than the mtime of the file
   xrdcl.setxattr(targetname, acctok['ruid'], acctok['rgid'], LASTSAVETIMEKEY, int(time.time()))
 
 
@@ -279,7 +279,7 @@ def cboxOpen():
   req = flask.request
   # if running in https mode, first check if the shared secret matches ours
   if Wopi.useHttps and ('Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.ocsecret):
-    Wopi.log.info('msg="cboxOpen: unauthorized access attempt, missing authorization token" client="%s"' % req.remote_addr)
+    Wopi.log.warning('msg="cboxOpen: unauthorized access attempt, missing authorization token" client="%s"' % req.remote_addr)
     return 'Client not authorized', httplib.UNAUTHORIZED
   # now validate the user identity and deny root access
   try:
@@ -288,7 +288,7 @@ def cboxOpen():
     if ruid == 0 or rgid == 0:
       raise ValueError
   except ValueError:
-    Wopi.log.info('msg="cboxOpen: invalid user/group in request" client="%s" user="%s:%s"' % \
+    Wopi.log.warning('msg="cboxOpen: invalid user/group in request" client="%s" user="%s:%s"' % \
                   (req.remote_addr, req.args['ruid'], req.args['rgid']))
     return 'Client not authorized', httplib.UNAUTHORIZED
   # then resolve the client: only our OwnCloud servers shall use this API
@@ -314,7 +314,7 @@ def cboxOpen():
     except socket.gaierror:
       Wopi.log.warning('msg="cboxOpen: %s found in configured allowed clients but unknown by DNS resolution, ignoring"' % c)
   # no match found, fail
-  Wopi.log.info('msg="cboxOpen: unauthorized access attempt, client IP not whitelisted" client="%s"' % req.remote_addr)
+  Wopi.log.warning('msg="cboxOpen: unauthorized access attempt, client IP not whitelisted" client="%s"' % req.remote_addr)
   return 'Client not authorized', httplib.UNAUTHORIZED
 
 
@@ -361,7 +361,7 @@ def cboxGetOpenFiles():
   req = flask.request
   # if running in https mode, first check if the shared secret matches ours
   if Wopi.useHttps and ('Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.ocsecret):
-    Wopi.log.info('msg="cboxGetOpenFiles: unauthorized access attempt, missing authorization token" client="%s"' % req.remote_addr)
+    Wopi.log.warning('msg="cboxGetOpenFiles: unauthorized access attempt, missing authorization token" client="%s"' % req.remote_addr)
     return 'Client not authorized', httplib.UNAUTHORIZED
   # dump the current list of opened files in JSON format
   Wopi.log.info('msg="cboxGetOpenFiles: returning list of open files" client="%s"' % req.remote_addr)
