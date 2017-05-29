@@ -13,6 +13,7 @@ from platform import python_version
 import logging
 import logging.handlers
 import urllib, httplib, json
+#from urlparse import urlparse
 try:
   import flask                 # Flask app server, python-flask-0.10.1-4.el7.noarch.rpm + pyOpenSSL-0.13.1-3.el7.x86_64.rpm
   import jwt                   # PyJWT JSON Web Token, python-jwt-1.4.0-2.el7.noarch.rpm
@@ -392,12 +393,27 @@ def wopiCheckFileInfo(fileid):
     # populate metadata for this file
     filemd = {}
     filemd['BaseFileName'] = filemd['BreadcrumbDocName'] = os.path.basename(acctok['filename'])
+    furl = acctok['folderurl']
     if acctok['username'] == '':
       filemd['UserFriendlyName'] = 'Anonymous Guest'
-      filemd['BreadcrumbFolderName'] = 'Back to the CERNBox share'
+      if '?path' in furl and furl[-2:] != '=/':
+        # this is a subfolder of a public share, show it
+        filemd['BreadcrumbFolderName'] = 'Back to ' + furl[furl.find('?path'):].split('/')[-1]
+      else:
+        # this is the top level public share, which is anonymous
+        filemd['BreadcrumbFolderName'] = 'Back to the CERNBox share'
     else:
       filemd['UserFriendlyName'] = acctok['username']
       filemd['BreadcrumbFolderName'] = 'Back to ' + acctok['filename'].split('/')[-2]
+    filemd['BreadcrumbFolderUrl'] = furl
+    filemd['DownloadUrl'] = '%s?access_token=%s' % \
+                            (Wopi.config.get('general', 'downloadurl'), flask.request.args['access_token'])
+    filemd['HostViewUrl'] = '%s&%s' % (ENDPOINTS[(fExt, 'view')], wopiSrc)
+    filemd['HostEditUrl'] = '%s&%s' % (ENDPOINTS[(fExt, 'edit')], wopiSrc)
+    #u = urlparse(furl)
+    # to enable the 'Edit in Word/Excel/PowerPoint' (desktop), we need to provide here a WebDAV (not HTTP!) direct link
+    #filemd['ClientUrl'] = u.scheme + '://' + u.netloc + u.path + 'ajax/download.php?' + \
+    #    u.query + '&files=' + urllib.quote_plus(filemd['BaseFileName'])
     filemd['OwnerId'] = statInfo[5] + ':' + statInfo[6]
     filemd['UserId'] = acctok['ruid'] + ':' + acctok['rgid']    # typically same as OwnerId
     filemd['Size'] = long(statInfo[8])
@@ -407,11 +423,6 @@ def wopiCheckFileInfo(fileid):
     filemd['SupportsRename'] = filemd['UserCanRename'] = False   # XXX renaming is currently broken in all Office Online apps
     filemd['SupportsExtendedLockLength'] = True
     #filemd['UserCanPresent'] = True   # what about the broadcasting feature in Office Online?
-    filemd['DownloadUrl'] = '%s?access_token=%s' % \
-                            (Wopi.config.get('general', 'downloadurl'), flask.request.args['access_token'])
-    filemd['BreadcrumbFolderUrl'] = acctok['folderurl']
-    filemd['HostViewUrl'] = '%s&%s' % (ENDPOINTS[(fExt, 'view')], wopiSrc)
-    filemd['HostEditUrl'] = '%s&%s' % (ENDPOINTS[(fExt, 'edit')], wopiSrc)
     Wopi.log.debug('msg="File metadata response" metadata="%s"' % filemd)
     # send in JSON format
     return flask.Response(json.dumps(filemd), mimetype='application/json')
