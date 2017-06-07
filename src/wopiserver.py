@@ -410,7 +410,7 @@ def wopiCheckFileInfo(fileid):
     filemd['HostEditUrl'] = '%s&%s' % (ENDPOINTS[(fExt, 'edit')], wopiSrc)
     # the following is to enable the 'Edit in Word/Excel/PowerPoint' (desktop) action
     try:
-      filemd['ClientUrl'] = Wopi.config.get('general', 'webdavurl') + urllib.quote_plus(acctok['filename'])
+      filemd['ClientUrl'] = Wopi.config.get('general', 'webdavurl') + acctok['filename']
     except ConfigParser.NoOptionError:
       # if no WebDAV URL is provided, ignore this setting
       pass
