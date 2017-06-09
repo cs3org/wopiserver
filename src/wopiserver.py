@@ -29,14 +29,18 @@ LASTSAVETIMEKEY = 'oc.wopi.lastwritetime'
 
 # The supported Office Online end-points
 ENDPOINTS = {}
-ENDPOINTS[('.docx', 'view')] = 'https://oos.web.cern.ch/wv/wordviewerframe.aspx?edit=0'
-ENDPOINTS[('.docx', 'edit')] = 'https://oos.web.cern.ch/we/wordeditorframe.aspx?edit=1'
-ENDPOINTS[('.xlsx', 'view')] = 'https://oos.web.cern.ch/x/_layouts/xlviewerinternal.aspx?edit=0'
-ENDPOINTS[('.xlsx', 'edit')] = 'https://oos.web.cern.ch/x/_layouts/xlviewerinternal.aspx?edit=1'
-ENDPOINTS[('.pptx', 'view')] = 'https://oos.web.cern.ch/p/PowerPointFrame.aspx?PowerPointView=ReadingView'
-ENDPOINTS[('.pptx', 'edit')] = 'https://oos.web.cern.ch/p/PowerPointFrame.aspx?PowerPointView=EditView'
-ENDPOINTS[('.one', 'view')] = 'https://oos.web.cern.ch/o/onenoteframe.aspx?edit=0'
-ENDPOINTS[('.one', 'edit')] = 'https://oos.web.cern.ch/o/onenoteframe.aspx?edit=1'
+ENDPOINTS['.docx'] = {}
+ENDPOINTS['.xlsx'] = {}
+ENDPOINTS['.pptx'] = {}
+ENDPOINTS['.one'] = {}
+ENDPOINTS['.docx']['view'] = 'https://oos.web.cern.ch/wv/wordviewerframe.aspx?edit=0'
+ENDPOINTS['.docx']['edit'] = 'https://oos.web.cern.ch/we/wordeditorframe.aspx?edit=1'
+ENDPOINTS['.xlsx']['view'] = 'https://oos.web.cern.ch/x/_layouts/xlviewerinternal.aspx?edit=0'
+ENDPOINTS['.xlsx']['edit'] = 'https://oos.web.cern.ch/x/_layouts/xlviewerinternal.aspx?edit=1'
+ENDPOINTS['.pptx']['view'] = 'https://oos.web.cern.ch/p/PowerPointFrame.aspx?PowerPointView=ReadingView'
+ENDPOINTS['.pptx']['edit'] = 'https://oos.web.cern.ch/p/PowerPointFrame.aspx?PowerPointView=EditView'
+ENDPOINTS['.one']['view'] = 'https://oos.web.cern.ch/o/onenoteframe.aspx?edit=0'
+ENDPOINTS['.one']['edit'] = 'https://oos.web.cern.ch/o/onenoteframe.aspx?edit=1'
 
 class Wopi(object):
   '''A singleton container for all state information of the WOPI server'''
@@ -347,10 +351,10 @@ def cboxDownload():
 
 @Wopi.app.route("/cbox/endpoints", methods=['GET'])
 def cboxEndPoints():
-  '''Returns the supported end-points for Office Online at CERN'''
+  '''Returns the supported end-points for Office Online at CERN. This is used by the OwnCloud
+  client to discover which URLs it has to use.'''
   Wopi.log.info('msg="cboxEndPoints: returning list of valid Office Online end-points" client="%s"' % flask.request.remote_addr)
-  ep = [{str(k): ENDPOINTS[k]} for k in ENDPOINTS.keys()]   # flatten the tuples used as keys
-  return flask.Response(json.dumps(ep), mimetype='application/json')
+  return flask.Response(json.dumps(ENDPOINTS), mimetype='application/json')
 
 
 @Wopi.app.route("/cbox/open/list", methods=['GET'])
@@ -406,8 +410,8 @@ def wopiCheckFileInfo(fileid):
       filemd['BreadcrumbFolderName'] = 'Back to ' + acctok['filename'].split('/')[-2]
     filemd['DownloadUrl'] = '%s?access_token=%s' % \
                             (Wopi.config.get('general', 'downloadurl'), flask.request.args['access_token'])
-    filemd['HostViewUrl'] = '%s&%s' % (ENDPOINTS[(fExt, 'view')], wopiSrc)
-    filemd['HostEditUrl'] = '%s&%s' % (ENDPOINTS[(fExt, 'edit')], wopiSrc)
+    filemd['HostViewUrl'] = '%s&%s' % (ENDPOINTS[fExt]['view'], wopiSrc)
+    filemd['HostEditUrl'] = '%s&%s' % (ENDPOINTS[fExt]['edit'], wopiSrc)
     # the following is to enable the 'Edit in Word/Excel/PowerPoint' (desktop) action
     try:
       filemd['ClientUrl'] = Wopi.config.get('general', 'webdavurl') + acctok['filename']
@@ -596,7 +600,7 @@ def wopiPutRelative(fileid, reqheaders, acctok):
   putrelmd['Name'] = os.path.basename(targetName)
   putrelmd['Url'] = '%s/wopi/files/%s?access_token=%s' % (_ourHostName(), inode, newacctok)
   putrelmd['HostEditUrl'] = '%s&WOPISrc=%s&access_token=%s' % \
-                            (ENDPOINTS[(os.path.splitext(targetName)[1], 'edit')], \
+                            (ENDPOINTS[os.path.splitext(targetName)[1]]['edit'], \
                              urllib.quote_plus('%s/wopi/files/%s' % (_ourHostName(), inode)), \
                              newacctok)
   Wopi.log.debug('msg="PutRelative response" metadata="%s"' % putrelmd)
