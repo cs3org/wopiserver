@@ -35,12 +35,16 @@ ENDPOINTS['.pptx'] = {}
 ENDPOINTS['.one'] = {}
 ENDPOINTS['.docx']['view'] = 'https://oos.web.cern.ch/wv/wordviewerframe.aspx?edit=0'
 ENDPOINTS['.docx']['edit'] = 'https://oos.web.cern.ch/we/wordeditorframe.aspx?edit=1'
+ENDPOINTS['.docx']['new'] = 'https://oos.web.cern.ch/we/wordeditorframe.aspx?new=1'
 ENDPOINTS['.xlsx']['view'] = 'https://oos.web.cern.ch/x/_layouts/xlviewerinternal.aspx?edit=0'
 ENDPOINTS['.xlsx']['edit'] = 'https://oos.web.cern.ch/x/_layouts/xlviewerinternal.aspx?edit=1'
+ENDPOINTS['.xlsx']['new'] = 'https://oos.web.cern.ch/x/_layouts/xlviewerinternal.aspx?edit=1&new=1'
 ENDPOINTS['.pptx']['view'] = 'https://oos.web.cern.ch/p/PowerPointFrame.aspx?PowerPointView=ReadingView'
 ENDPOINTS['.pptx']['edit'] = 'https://oos.web.cern.ch/p/PowerPointFrame.aspx?PowerPointView=EditView'
+ENDPOINTS['.pptx']['new'] = 'https://oos.web.cern.ch/p/PowerPointFrame.aspx?PowerPointView=EditView&New=1'
 ENDPOINTS['.one']['view'] = 'https://oos.web.cern.ch/o/onenoteframe.aspx?edit=0'
 ENDPOINTS['.one']['edit'] = 'https://oos.web.cern.ch/o/onenoteframe.aspx?edit=1'
+ENDPOINTS['.one']['new'] = 'https://oos.web.cern.ch/o/onenoteframe.aspx?edit=1&new=1'
 
 class Wopi(object):
   '''A singleton container for all state information of the WOPI server'''
