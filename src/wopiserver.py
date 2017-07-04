@@ -182,7 +182,12 @@ def _retrieveWopiLock(fileid, operation, lock, acctok):
                 (operation.title(), acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, lock, retrievedLock['wopilock'], \
                  time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(retrievedLock['exp']))))
   if retrievedLock['exp'] < time.time():
-    # the retrieved lock is not valid any longer, discard
+    # the retrieved lock is not valid any longer, discard and remove it from the backend
+    try:
+      xrdcl.removefile(_getLockName(acctok['filename']), '0', '0')
+    except IOError:
+      # ignore, it's not worth to report anything here
+      pass
     return None
   return retrievedLock['wopilock']
 
