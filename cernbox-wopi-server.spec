@@ -13,7 +13,7 @@ Source: %{name}-%{version}.tar.gz
 
 # The required Python version makes this package depend on at least CentOS 7 to compile and run.
 BuildRequires: python >= 2.7
-Requires: python >= 2.7, python-flask, python-jwt, xrootd-python, pyOpenSSL, nginx
+Requires: python >= 2.7, python-flask, python-jwt, xrootd-python, pyOpenSSL
 # The following to avoid to pick up /bin/python as an automatic dependency
 AutoReq: no
 
@@ -45,7 +45,7 @@ install -m 755 src/wopicheckfile.py  %buildroot/usr/bin/wopicheckfile.py
 install -m 755 src/wopilistopenfiles.sh %buildroot/usr/bin/wopilistopenfiles.sh
 install -m 644 src/xrootiface.py     %buildroot/%_python_lib/xrootiface.py
 install -m 644 wopiserver.service    %buildroot/usr/lib/systemd/system/wopiserver.service
-install -m 644 wopiserver.conf       %buildroot/etc/wopi/wopiserver.defaults.conf
+#install -m 644 wopiserver.conf       %buildroot/etc/wopi/wopiserver.defaults.conf
 install -m 644 wopiserver.logrotate  %buildroot/etc/logrotate.d/cernbox-wopi-server
 
 %clean
