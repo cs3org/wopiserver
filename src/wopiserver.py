@@ -173,15 +173,15 @@ def _retrieveWopiLock(fileid, operation, lock, acctok):
       return None     # no pre-existing lock found
     # otherwise one iteration is largely sufficient to hit EOF
   try:
+    # check validity
     retrievedLock = jwt.decode(l, Wopi.wopisecret, algorithms=['HS256'])
-  except jwt.exceptions.DecodeError:
-    Wopi.log.warning('msg="%s" user="%s:%s" filename="%s" error="WOPI lock corrupted, ignoring"' % \
+    if retrievedLock['exp'] < time.time():
+      # we got an expired lock, reject. Note that we may get an ExpiredSignatureError
+      # by jwt.decode() as we had stored it with a timed signature.
+      raise jwt.exceptions.ExpiredSignatureError
+  except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
+    Wopi.log.warning('msg="%s" user="%s:%s" filename="%s" error="WOPI lock expired or invalid, ignoring"' % \
                      (operation.title(), acctok['ruid'], acctok['rgid'], acctok['filename']))
-    return None
-  Wopi.log.info('msg="%s" user="%s:%s" filename="%s" fileid="%s" lock="%s" retrievedLock="%s" expTime="%s"' % \
-                (operation.title(), acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, lock, retrievedLock['wopilock'], \
-                 time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(retrievedLock['exp']))))
-  if retrievedLock['exp'] < time.time():
     # the retrieved lock is not valid any longer, discard and remove it from the backend
     try:
       xrdcl.removefile(_getLockName(acctok['filename']), '0', '0')
@@ -189,6 +189,9 @@ def _retrieveWopiLock(fileid, operation, lock, acctok):
       # ignore, it's not worth to report anything here
       pass
     return None
+  Wopi.log.info('msg="%s" user="%s:%s" filename="%s" fileid="%s" lock="%s" retrievedLock="%s" expTime="%s"' % \
+                (operation.title(), acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, lock, retrievedLock['wopilock'], \
+                 time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(retrievedLock['exp']))))
   return retrievedLock['wopilock']
 
 
