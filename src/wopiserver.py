@@ -180,8 +180,8 @@ def _retrieveWopiLock(fileid, operation, lock, acctok):
       # by jwt.decode() as we had stored it with a timed signature.
       raise jwt.exceptions.ExpiredSignatureError
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
-    Wopi.log.warning('msg="%s" user="%s:%s" filename="%s" error="WOPI lock expired or invalid, ignoring"' % \
-                     (operation.title(), acctok['ruid'], acctok['rgid'], acctok['filename']))
+    Wopi.log.warning('msg="%s" user="%s:%s" filename="%s" error="WOPI lock expired or invalid, ignoring" exception="%s"' % \
+                     (operation.title(), acctok['ruid'], acctok['rgid'], acctok['filename'], type(e)))
     # the retrieved lock is not valid any longer, discard and remove it from the backend
     try:
       xrdcl.removefile(_getLockName(acctok['filename']), '0', '0')
@@ -319,8 +319,8 @@ def cboxOpen():
           username = req.args['username'] if 'username' in req.args else ''
           folderurl = urllib.unquote(req.args['folderurl'])
           try:
-            Wopi.log.info('msg="cboxOpen: access granted, generating token" client="%s" user="%d:%d" friendlyname="%s"' % \
-                          (req.remote_addr, ruid, rgid, username))
+            Wopi.log.info('msg="cboxOpen: access granted, generating token" client="%s" user="%d:%d" friendlyname="%s" canedit="%s"' % \
+                          (req.remote_addr, ruid, rgid, username, canedit))
             inode, acctok = _generateAccessToken(str(ruid), str(rgid), filename, canedit, username, folderurl)
             # return an URL-encoded WOPISrc URL for the Office Online server
             return urllib.quote_plus('%s/wopi/files/%s' % (_ourHostName(), inode)) + \
