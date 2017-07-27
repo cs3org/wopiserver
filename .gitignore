@@ -1,1 +1,3 @@
 *pyc
+*rpm
+docker/yum.repos.d/*.repo

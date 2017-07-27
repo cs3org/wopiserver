@@ -18,11 +18,5 @@ make clean
 popd
 mv ../cernbox-wopi*rpm .
 
-# if no secret was provided, provide one for bootstrapping the
-# image. Of course, the WOPI server won't show more than its index page.
-[[ -e ocsecret ]] || echo 'your OwnCloud secret' > ocsecret
-chmod 400 ocsecret
-
-# build and run the image
-docker build -t wopi .
-docker run -t -v /var/log/wopi:/var/log/wopi --net=host -d wopi
+sudo docker build -t your-personal-repo-area/cloudstor-wopi-server --pull=true --no-cache --force-rm . && \
+sudo docker push your-personal-repo-area/cloudstor-wopi-server
