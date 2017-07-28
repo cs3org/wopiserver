@@ -5,11 +5,11 @@ to embed Microsoft Office Online into the CERNBox/OwnCloud web interface
 
 Author: Giuseppe.LoPresti@cern.ch
 
-Modified by michael.dsilva@aarnet.edu.au
+Contributions: Michael.DSilva@aarnet.edu.au
 
 Initial revision: December 2016
 
-# Environment variables
+## Environment variables
 
 This container will take the following variables:
 
