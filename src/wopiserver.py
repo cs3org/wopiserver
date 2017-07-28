@@ -4,10 +4,8 @@ wopiserver.py
 
 The Web-application Open Platform Interface (WOPI) gateway for CERNBox
 
-Author: Giuseppe.LoPresti@cern.ch
-CERN/IT-ST
-
-Modified by michael.dsilva@aarnet.edu.au
+Author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
+Contributions: Michael.DSilva@aarnet.edu.au
 '''
 
 import sys, os, time, socket, traceback, ConfigParser
@@ -25,7 +23,7 @@ except ImportError:
   sys.exit(-1)
 
 # the following constant is replaced on the fly when generating the RPM (cf. spec file)
-WOPISERVERVERSION = '1.5-1.el7'
+WOPISERVERVERSION = 'git'
 
 # this is the xattr key used for conflicts resolution on the remote storage
 LASTSAVETIMEKEY = 'oc.wopi.lastwritetime'
@@ -65,8 +63,8 @@ class Wopi(object):
       cls.config.get('general', 'allowedclients')          # read this to make sure it is configured
       cls.useHttps = cls.config.get('security', 'usehttps').lower() == 'yes'
       cls.repeatedLockRequests = {}               # cf. the wopiLock() function below
-      cls.wopiurl = cls.config.get('general', 'wopiURL') 
-      cls.oos = cls.config.get('general', 'oosURL') 
+      cls.wopiurl = cls.config.get('general', 'wopiurl') 
+      cls.oos = cls.config.get('general', 'oosurl') 
       cls.lockruid = cls.config.get('general', 'lockruid') 
       cls.lockrgid = cls.config.get('general', 'lockrgid') 
 
@@ -103,30 +101,8 @@ class Wopi(object):
       # refresh some general parameters
       cls.tokenvalidity = cls.config.getint('general', 'tokenvalidity')
       cls.log.setLevel(cls.loglevels[cls.config.get('general', 'loglevel')])
-      cls.wopiurl = cls.config.get('general', 'wopiURL') 
-      cls.oos = cls.config.get('general', 'oosURL') 
       cls.lockruid = cls.config.get('general', 'lockruid') 
       cls.lockrgid = cls.config.get('general', 'lockrgid') 
-
-      # The supported Office Online end-points
-      cls.ENDPOINTS = {}
-      cls.ENDPOINTS['.docx'] = {}
-      cls.ENDPOINTS['.docx']['view'] = cls.oos + '/wv/wordviewerframe.aspx?edit=0'
-      cls.ENDPOINTS['.docx']['edit'] = cls.oos + '/we/wordeditorframe.aspx?edit=1'
-      cls.ENDPOINTS['.docx']['new']  = cls.oos + '/we/wordeditorframe.aspx?new=1'
-      cls.ENDPOINTS['.xlsx'] = {}
-      cls.ENDPOINTS['.xlsx']['view'] = cls.oos + '/x/_layouts/xlviewerinternal.aspx?edit=0'
-      cls.ENDPOINTS['.xlsx']['edit'] = cls.oos + '/x/_layouts/xlviewerinternal.aspx?edit=1'
-      cls.ENDPOINTS['.xlsx']['new']  = cls.oos + '/x/_layouts/xlviewerinternal.aspx?edit=1&new=1'
-      cls.ENDPOINTS['.pptx'] = {}
-      cls.ENDPOINTS['.pptx']['view'] = cls.oos + '/p/PowerPointFrame.aspx?PowerPointView=ReadingView'
-      cls.ENDPOINTS['.pptx']['edit'] = cls.oos + '/p/PowerPointFrame.aspx?PowerPointView=EditView'
-      cls.ENDPOINTS['.pptx']['new']  = cls.oos + '/p/PowerPointFrame.aspx?PowerPointView=EditView&New=1'
-      cls.ENDPOINTS['.one'] = {}
-      cls.ENDPOINTS['.one']['view']  = cls.oos + '/o/onenoteframe.aspx?edit=0'
-      cls.ENDPOINTS['.one']['edit']  = cls.oos + '/o/onenoteframe.aspx?edit=1'
-      cls.ENDPOINTS['.one']['new']   = cls.oos + '/o/onenoteframe.aspx?edit=1&new=1'
-
 
   @classmethod
   def run(cls):
@@ -137,7 +113,7 @@ class Wopi(object):
       cls.app.run(host='0.0.0.0', port=443, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'),
                   ssl_context=(cls.config.get('security', 'wopicert'), cls.config.get('security', 'wopikey')))
     else:
-      cls.log.info('msg="WOPI Server starting in standalone mode"') #some of us use docker and loadbalancer that handles ssl
+      cls.log.info('msg="WOPI Server starting in unsecure/embedded mode"')
       cls.app.run(host='0.0.0.0', port=8080, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'))
 
   @classmethod
@@ -152,7 +128,7 @@ class Wopi(object):
 # General utilities
 #
 def _ourHostName():
-  '''Returns the WOPI web address taking into account whether it's http or https'''
+  '''Returns the WOPI server web address'''
   return Wopi.wopiurl
 
 
@@ -198,15 +174,15 @@ def _getLockName(filename):
 
 def _retrieveWopiLock(fileid, operation, lock, acctok):
   '''Retrieves and logs an existing lock for a given file'''
-  ll = ''
-  for l in xrdcl.readfile(_getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid):
+  l = ''
+  for line in xrdcl.readfile(_getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid):
     if 'No such file or directory' in l:
       return None     # no pre-existing lock found
     # otherwise one iteration is largely sufficient to hit EOF
-    ll = ll + l
+    l = l + line
   try:
     # check validity
-    retrievedLock = jwt.decode(ll, Wopi.wopisecret, algorithms=['HS256'])
+    retrievedLock = jwt.decode(l, Wopi.wopisecret, algorithms=['HS256'])
     if retrievedLock['exp'] < time.time():
       # we got an expired lock, reject. Note that we may get an ExpiredSignatureError
       # by jwt.decode() as we had stored it with a timed signature.
@@ -237,7 +213,7 @@ def _storeWopiLock(operation, lock, acctok):
     s = jwt.encode(l, Wopi.wopisecret, algorithm='HS256')
     xrdcl.writefile(_getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid, s)
     Wopi.log.info('msg="%s" filename="%s" lock="%s" result="success"' % (operation.title(), acctok['filename'], lock))
-    Wopi.log.info('msg="lock" "%s" "%d"' % (s, len(s)))
+    Wopi.log.debug('msg="%s" encodedlock="%s" length="%d"' % (operation.title(), s, len(s)))
   except IOError, e:
     Wopi.log.warning('msg="%s" filename="%s" lock="%s" result="unable to store lock" reason="%s"' % \
                      (operation.title(), acctok['filename'], lock, e))
@@ -301,22 +277,21 @@ def _storeWopiFile(request, acctok, targetname=''):
 #
 #############################################################################################################
 
-#@Wopi.app.route("/wopi", methods=['GET'])
-#def index():
-#  '''Return a default index page with some user-friendly information about this service'''
-#  Wopi.log.info('msg="Accessed index page" client="%s"' % flask.request.remote_addr)
-#  return """
-#    <html><head><title>CERNBox WOPI</title></head>
-#    <body>
-#    <div align="center" style="color:#000080; padding-top:50px; font-family:Verdana; size:11">
-#    This is the CERNBox <a href=http://wopi.readthedocs.io>WOPI</a> server for Microsoft Office Online.<br>
-#    To use this service, please log in to your <a href=https://cernbox.cern.ch>CERNBox</a> account
-#    and click on your Microsoft Office documents.</div>
-#    <br><br><br><br><br><br><br><br><br><br><hr>
-#    <i>CERNBox WOPI Server %s. Powered by Flask %s for Python %s%s</i>.
-#    </body>
-#    </html>
-#    """ % (WOPISERVERVERSION, flask.__version__, python_version(), (' on Nginx' if Wopi.useNginx else ''))
+@Wopi.app.route("/", methods=['GET'])
+def index():
+  '''Return a default index page with some user-friendly information about this service'''
+  Wopi.log.info('msg="Accessed index page" client="%s"' % flask.request.remote_addr)
+  return """
+    <html><head><title>CERNBox WOPI</title></head>
+    <body>
+    <div align="center" style="color:#000080; padding-top:50px; font-family:Verdana; size:11">
+    This is the CERNBox <a href=http://wopi.readthedocs.io>WOPI</a> server for Microsoft Office Online.<br>
+    To use this service, please log in to your CERNBox account and click on your Microsoft Office documents.</div>
+    <br><br><br><br><br><br><br><br><br><br><hr>
+    <i>CERNBox WOPI Server %s. Powered by Flask %s for Python %s%s</i>.
+    </body>
+    </html>
+    """ % (WOPISERVERVERSION, flask.__version__, python_version(), (' on Nginx' if Wopi.useNginx else ''))
 
 
 @Wopi.app.route("/wopi/cbox/open", methods=['GET'])
@@ -460,8 +435,8 @@ def wopiCheckFileInfo(fileid):
     filemd['HostEditUrl'] = '%s&%s' % (Wopi.ENDPOINTS[fExt]['edit'], wopiSrc)
     # the following is to enable the 'Edit in Word/Excel/PowerPoint' (desktop) action
     try:
-      acctok['filename'] = '/' + acctok['filename'].split("/files/",1)[1]
-      filemd['ClientUrl'] = Wopi.config.get('general', 'webdavurl') + acctok['filename']
+      path = '/' + acctok['filename'].split("/files/",1)[1]    # XXX check if this works at CERN. It does at AARNet
+      filemd['ClientUrl'] = Wopi.config.get('general', 'webdavurl') + path
     except ConfigParser.NoOptionError:
       # if no WebDAV URL is provided, ignore this setting
       pass
@@ -469,7 +444,8 @@ def wopiCheckFileInfo(fileid):
     filemd['UserId'] = acctok['ruid'] + ':' + acctok['rgid']    # typically same as OwnerId
     filemd['Size'] = long(statInfo[8])
     filemd['Version'] = statInfo[12]   # mtime is used as version here
-    filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = filemd['SupportsGetLock'] = filemd['SupportsDeleteFile'] = acctok['canedit']
+    filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = \
+        filemd['SupportsGetLock'] = filemd['SupportsDeleteFile'] = acctok['canedit']
     filemd['SupportsRename'] = filemd['UserCanRename'] = False   # XXX renaming is currently broken in all Office Online apps
     filemd['SupportsExtendedLockLength'] = True
     #filemd['UserCanPresent'] = True   # what about the broadcasting feature in Office Online?
@@ -518,7 +494,7 @@ def wopiLock(fileid, reqheaders, acctok):
   # cf. http://wopi.readthedocs.io/projects/wopirest/en/latest/files/Lock.html
   op = reqheaders['X-WOPI-Override']
   lock = reqheaders['X-WOPI-Lock']
-  oldLock = reqheaders['X-WOPI-Oldlock'] if 'X-WOPI-Oldlock' in reqheaders else None 
+  oldLock = reqheaders['X-WOPI-OldLock'] if 'X-WOPI-OldLock' in reqheaders else None
   retrievedLock = _retrieveWopiLock(fileid, op, lock, acctok)
   # perform the required checks for the validity of the new lock
   if (oldLock is None and retrievedLock != None and not _compareWopiLocks(retrievedLock, lock)) or \
