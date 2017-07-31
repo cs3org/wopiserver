@@ -13,7 +13,7 @@ from platform import python_version
 import logging
 import logging.handlers
 import urllib, httplib, json
-import hashlib 
+import hashlib
 try:
   import flask                 # Flask app server, python-flask-0.10.1-4.el7.noarch.rpm + pyOpenSSL-0.13.1-3.el7.x86_64.rpm
   import jwt                   # PyJWT JSON Web Token, python-jwt-1.4.0-2.el7.noarch.rpm
@@ -63,10 +63,11 @@ class Wopi(object):
       cls.config.get('general', 'allowedclients')          # read this to make sure it is configured
       cls.useHttps = cls.config.get('security', 'usehttps').lower() == 'yes'
       cls.repeatedLockRequests = {}               # cf. the wopiLock() function below
-      cls.wopiurl = cls.config.get('general', 'wopiurl') 
-      cls.oos = cls.config.get('general', 'oosurl') 
-      cls.lockruid = cls.config.get('general', 'lockruid') 
-      cls.lockrgid = cls.config.get('general', 'lockrgid') 
+      cls.wopiurl = cls.config.get('general', 'wopiurl')
+      cls.oos = cls.config.get('general', 'oosurl')
+      cls.lockruid = cls.config.get('general', 'lockruid')
+      cls.lockrgid = cls.config.get('general', 'lockrgid')
+      cls.lockpath = cls.config.get('general', 'lockpath')
 
       # The supported Office Online end-points
       cls.ENDPOINTS = {}
@@ -101,8 +102,8 @@ class Wopi(object):
       # refresh some general parameters
       cls.tokenvalidity = cls.config.getint('general', 'tokenvalidity')
       cls.log.setLevel(cls.loglevels[cls.config.get('general', 'loglevel')])
-      cls.lockruid = cls.config.get('general', 'lockruid') 
-      cls.lockrgid = cls.config.get('general', 'lockrgid') 
+      cls.lockruid = cls.config.get('general', 'lockruid')
+      cls.lockrgid = cls.config.get('general', 'lockrgid')
 
   @classmethod
   def run(cls):
@@ -168,7 +169,11 @@ def _generateAccessToken(ruid, rgid, filename, canedit, username, folderurl):
 #
 def _getLockName(filename):
   '''Generates a hidden filename used to store the WOPI locks'''
-  lockfile = filename.split("/files/",1)[0] + '/wopi/wopilock.' + hashlib.sha1(filename).hexdigest() + '.' + os.path.basename(filename)
+  if Wopi.lockpath:
+    lockfile = filename.split("/files/", 1)[0] + Wopi.lockpath + 'wopilock.' + \
+               hashlib.sha1(filename).hexdigest() + '.' + os.path.basename(filename)
+  else:
+    lockfile = os.path.dirname(filename) + os.path.sep + '.sys.wopilock.' + os.path.basename(filename) + '.'
   return lockfile
 
 
