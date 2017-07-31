@@ -440,7 +440,7 @@ def wopiCheckFileInfo(fileid):
     filemd['HostEditUrl'] = '%s&%s' % (Wopi.ENDPOINTS[fExt]['edit'], wopiSrc)
     # the following is to enable the 'Edit in Word/Excel/PowerPoint' (desktop) action
     try:
-      path = '/' + acctok['filename'].split("/files/",1)[1]    # XXX check if this works at CERN. It does at AARNet
+      path = '/' + acctok['filename'].split("/files/", 1)[1]    # XXX check if this works at CERN. It does at AARNet
       filemd['ClientUrl'] = Wopi.config.get('general', 'webdavurl') + path
     except ConfigParser.NoOptionError:
       # if no WebDAV URL is provided, ignore this setting
@@ -512,7 +512,7 @@ def wopiLock(fileid, reqheaders, acctok):
     else:
       Wopi.repeatedLockRequests[retrievedLock] += 1
       if Wopi.repeatedLockRequests[retrievedLock] == 5:
-        xrdcl.removefile(_getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid) 
+        xrdcl.removefile(_getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid)
         Wopi.log.warning('msg="Lock: blindly removing the existing lock to unblock client" user="%s:%s" filename="%s"' % \
                          (acctok['ruid'], acctok['rgid'], acctok['filename']))
     return _makeConflictResponse(op, retrievedLock, lock, oldLock, acctok['filename'])
@@ -539,7 +539,7 @@ def wopiUnlock(fileid, reqheaders, acctok):
     return _makeConflictResponse('UNLOCK', retrievedLock, lock, '', acctok['filename'])
   # OK, the lock matches. Remove any extended attribute related to locks and conflicts handling
   try:
-    xrdcl.removefile(_getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid) 
+    xrdcl.removefile(_getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid)
   except IOError:
     # ignore, it's not worth to report anything here
     pass
@@ -605,7 +605,7 @@ def wopiPutRelative(fileid, reqheaders, acctok):
       # check for file existence + lock
       fileExists = retrievedLock = False
       fileExists = xrdcl.stat(relTarget, acctok['ruid'], acctok['rgid'])
-      retrievedLock = xrdcl.stat(_getLockName(relTarget), Wopi.lockruid, Wopi.lockrgid) 
+      retrievedLock = xrdcl.stat(_getLockName(relTarget), Wopi.lockruid, Wopi.lockrgid)
     except IOError:
       pass
     if fileExists and (not overwriteTarget or retrievedLock):
@@ -661,7 +661,7 @@ def wopiRenameFile(fileid, reqheaders, acctok):
     Wopi.log.info('msg="RenameFile" user="%s:%s" filename="%s" fileid="%s" targetname="%s"' % \
                   (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, targetName))
     xrdcl.renamefile(acctok['filename'], targetName, acctok['ruid'], acctok['rgid'])
-    xrdcl.renamefile(_getLockName(acctok['filename']), _getLockName(targetName), Wopi.lockruid, Wopi.lockrgid) 
+    xrdcl.renamefile(_getLockName(acctok['filename']), _getLockName(targetName), Wopi.lockruid, Wopi.lockrgid)
     # prepare and send the response as JSON
     renamemd = {}
     renamemd['Name'] = reqheaders['X-WOPI-RequestedName']
