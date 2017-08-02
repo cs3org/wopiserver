@@ -4,10 +4,15 @@ wopiserver.py
 
 The Web-application Open Platform Interface (WOPI) gateway for CERNBox
 
+<<<<<<< HEAD
 Author: Giuseppe.LoPresti@cern.ch
 CERN/IT-ST
 
 Modified by michael.dsilva@aarnet.edu.au
+=======
+Author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
+Contributions: Michael.DSilva@aarnet.edu.au
+>>>>>>> pr/1
 '''
 
 import sys, os, time, socket, traceback, ConfigParser
@@ -15,7 +20,11 @@ from platform import python_version
 import logging
 import logging.handlers
 import urllib, httplib, json
+<<<<<<< HEAD
 import hashlib 
+=======
+import hashlib
+>>>>>>> pr/1
 try:
   import flask                 # Flask app server, python-flask-0.10.1-4.el7.noarch.rpm + pyOpenSSL-0.13.1-3.el7.x86_64.rpm
   import jwt                   # PyJWT JSON Web Token, python-jwt-1.4.0-2.el7.noarch.rpm
@@ -65,10 +74,18 @@ class Wopi(object):
       cls.config.get('general', 'allowedclients')          # read this to make sure it is configured
       cls.useHttps = cls.config.get('security', 'usehttps').lower() == 'yes'
       cls.repeatedLockRequests = {}               # cf. the wopiLock() function below
+<<<<<<< HEAD
       cls.wopiurl = cls.config.get('general', 'wopiURL') 
       cls.oos = cls.config.get('general', 'oosURL') 
       cls.lockruid = cls.config.get('general', 'lockruid') 
       cls.lockrgid = cls.config.get('general', 'lockrgid') 
+=======
+      cls.wopiurl = cls.config.get('general', 'wopiurl')
+      cls.oos = cls.config.get('general', 'oosurl')
+      cls.lockruid = cls.config.get('general', 'lockruid')
+      cls.lockrgid = cls.config.get('general', 'lockrgid')
+      cls.lockpath = cls.config.get('general', 'lockpath')
+>>>>>>> pr/1
 
       # The supported Office Online end-points
       cls.ENDPOINTS = {}
@@ -103,6 +120,7 @@ class Wopi(object):
       # refresh some general parameters
       cls.tokenvalidity = cls.config.getint('general', 'tokenvalidity')
       cls.log.setLevel(cls.loglevels[cls.config.get('general', 'loglevel')])
+<<<<<<< HEAD
       cls.wopiurl = cls.config.get('general', 'wopiURL') 
       cls.oos = cls.config.get('general', 'oosURL') 
       cls.lockruid = cls.config.get('general', 'lockruid') 
@@ -127,6 +145,10 @@ class Wopi(object):
       cls.ENDPOINTS['.one']['edit']  = cls.oos + '/o/onenoteframe.aspx?edit=1'
       cls.ENDPOINTS['.one']['new']   = cls.oos + '/o/onenoteframe.aspx?edit=1&new=1'
 
+=======
+      cls.lockruid = cls.config.get('general', 'lockruid')
+      cls.lockrgid = cls.config.get('general', 'lockrgid')
+>>>>>>> pr/1
 
   @classmethod
   def run(cls):
@@ -137,7 +159,11 @@ class Wopi(object):
       cls.app.run(host='0.0.0.0', port=443, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'),
                   ssl_context=(cls.config.get('security', 'wopicert'), cls.config.get('security', 'wopikey')))
     else:
+<<<<<<< HEAD
       cls.log.info('msg="WOPI Server starting in standalone mode"') #some of us use docker and loadbalancer that handles ssl
+=======
+      cls.log.info('msg="WOPI Server starting in unsecure/embedded mode"')
+>>>>>>> pr/1
       cls.app.run(host='0.0.0.0', port=8080, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'))
 
   @classmethod
@@ -152,7 +178,11 @@ class Wopi(object):
 # General utilities
 #
 def _ourHostName():
+<<<<<<< HEAD
   '''Returns the WOPI web address taking into account whether it's http or https'''
+=======
+  '''Returns the WOPI server web address'''
+>>>>>>> pr/1
   return Wopi.wopiurl
 
 
@@ -192,18 +222,35 @@ def _generateAccessToken(ruid, rgid, filename, canedit, username, folderurl):
 #
 def _getLockName(filename):
   '''Generates a hidden filename used to store the WOPI locks'''
+<<<<<<< HEAD
   lockfile = filename.split("/files/",1)[0] + '/wopi/wopilock.' + hashlib.sha1(filename).hexdigest() + '.' + os.path.basename(filename)
+=======
+  if Wopi.lockpath:
+    lockfile = filename.split("/files/", 1)[0] + Wopi.lockpath + 'wopilock.' + \
+               hashlib.sha1(filename).hexdigest() + '.' + os.path.basename(filename)
+  else:
+    lockfile = os.path.dirname(filename) + os.path.sep + '.sys.wopilock.' + os.path.basename(filename) + '.'
+>>>>>>> pr/1
   return lockfile
 
 
 def _retrieveWopiLock(fileid, operation, lock, acctok):
   '''Retrieves and logs an existing lock for a given file'''
+<<<<<<< HEAD
   ll = ''
   for l in xrdcl.readfile(_getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid):
     if 'No such file or directory' in l:
       return None     # no pre-existing lock found
     # otherwise one iteration is largely sufficient to hit EOF
     ll = ll + l
+=======
+  l = ''
+  for line in xrdcl.readfile(_getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid):
+    if 'No such file or directory' in l:
+      return None     # no pre-existing lock found
+    # otherwise one iteration is largely sufficient to hit EOF
+    l = l + line
+>>>>>>> pr/1
   try:
     # check validity
     retrievedLock = jwt.decode(ll, Wopi.wopisecret, algorithms=['HS256'])
@@ -212,8 +259,8 @@ def _retrieveWopiLock(fileid, operation, lock, acctok):
       # by jwt.decode() as we had stored it with a timed signature.
       raise jwt.exceptions.ExpiredSignatureError
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
-    Wopi.log.warning('msg="%s" user="%s:%s" filename="%s" error="WOPI lock expired or invalid, ignoring"' % \
-                     (operation.title(), acctok['ruid'], acctok['rgid'], acctok['filename']))
+    Wopi.log.warning('msg="%s" user="%s:%s" filename="%s" error="WOPI lock expired or invalid, ignoring" exception="%s"' % \
+                     (operation.title(), acctok['ruid'], acctok['rgid'], acctok['filename'], type(e)))
     # the retrieved lock is not valid any longer, discard and remove it from the backend
     try:
       xrdcl.removefile(_getLockName(acctok['filename']), '0', '0')
@@ -237,7 +284,11 @@ def _storeWopiLock(operation, lock, acctok):
     s = jwt.encode(l, Wopi.wopisecret, algorithm='HS256')
     xrdcl.writefile(_getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid, s)
     Wopi.log.info('msg="%s" filename="%s" lock="%s" result="success"' % (operation.title(), acctok['filename'], lock))
+<<<<<<< HEAD
     Wopi.log.info('msg="lock" "%s" "%d"' % (s, len(s)))
+=======
+    Wopi.log.debug('msg="%s" encodedlock="%s" length="%d"' % (operation.title(), s, len(s)))
+>>>>>>> pr/1
   except IOError, e:
     Wopi.log.warning('msg="%s" filename="%s" lock="%s" result="unable to store lock" reason="%s"' % \
                      (operation.title(), acctok['filename'], lock, e))
@@ -301,6 +352,7 @@ def _storeWopiFile(request, acctok, targetname=''):
 #
 #############################################################################################################
 
+<<<<<<< HEAD
 #@Wopi.app.route("/wopi", methods=['GET'])
 #def index():
 #  '''Return a default index page with some user-friendly information about this service'''
@@ -317,6 +369,23 @@ def _storeWopiFile(request, acctok, targetname=''):
 #    </body>
 #    </html>
 #    """ % (WOPISERVERVERSION, flask.__version__, python_version(), (' on Nginx' if Wopi.useNginx else ''))
+=======
+@Wopi.app.route("/", methods=['GET'])
+def index():
+  '''Return a default index page with some user-friendly information about this service'''
+  Wopi.log.info('msg="Accessed index page" client="%s"' % flask.request.remote_addr)
+  return """
+    <html><head><title>CERNBox WOPI</title></head>
+    <body>
+    <div align="center" style="color:#000080; padding-top:50px; font-family:Verdana; size:11">
+    This is the CERNBox <a href=http://wopi.readthedocs.io>WOPI</a> server for Microsoft Office Online.<br>
+    To use this service, please log in to your CERNBox account and click on your Microsoft Office documents.</div>
+    <br><br><br><br><br><br><br><br><br><br><hr>
+    <i>CERNBox WOPI Server %s. Powered by Flask %s for Python %s%s</i>.
+    </body>
+    </html>
+    """ % (WOPISERVERVERSION, flask.__version__, python_version(), (' on Nginx' if Wopi.useNginx else ''))
+>>>>>>> pr/1
 
 
 @Wopi.app.route("/wopi/cbox/open", methods=['GET'])
@@ -353,8 +422,8 @@ def cboxOpen():
           username = req.args['username'] if 'username' in req.args else ''
           folderurl = urllib.unquote(req.args['folderurl'])
           try:
-            Wopi.log.info('msg="cboxOpen: access granted, generating token" client="%s" user="%d:%d" friendlyname="%s"' % \
-                          (req.remote_addr, ruid, rgid, username))
+            Wopi.log.info('msg="cboxOpen: access granted, generating token" client="%s" user="%d:%d" friendlyname="%s" canedit="%s"' % \
+                          (req.remote_addr, ruid, rgid, username, canedit))
             inode, acctok = _generateAccessToken(str(ruid), str(rgid), filename, canedit, username, folderurl)
             # return an URL-encoded WOPISrc URL for the Office Online server
             return urllib.quote_plus('%s/wopi/files/%s' % (_ourHostName(), inode)) + \
@@ -460,8 +529,13 @@ def wopiCheckFileInfo(fileid):
     filemd['HostEditUrl'] = '%s&%s' % (Wopi.ENDPOINTS[fExt]['edit'], wopiSrc)
     # the following is to enable the 'Edit in Word/Excel/PowerPoint' (desktop) action
     try:
+<<<<<<< HEAD
       acctok['filename'] = '/' + acctok['filename'].split("/files/",1)[1]
       filemd['ClientUrl'] = Wopi.config.get('general', 'webdavurl') + acctok['filename']
+=======
+      path = '/' + acctok['filename'].split("/files/", 1)[1]    # XXX check if this works at CERN. It does at AARNet
+      filemd['ClientUrl'] = Wopi.config.get('general', 'webdavurl') + path
+>>>>>>> pr/1
     except ConfigParser.NoOptionError:
       # if no WebDAV URL is provided, ignore this setting
       pass
@@ -531,7 +605,11 @@ def wopiLock(fileid, reqheaders, acctok):
     else:
       Wopi.repeatedLockRequests[retrievedLock] += 1
       if Wopi.repeatedLockRequests[retrievedLock] == 5:
+<<<<<<< HEAD
         xrdcl.removefile(_getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid) 
+=======
+        xrdcl.removefile(_getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid)
+>>>>>>> pr/1
         Wopi.log.warning('msg="Lock: blindly removing the existing lock to unblock client" user="%s:%s" filename="%s"' % \
                          (acctok['ruid'], acctok['rgid'], acctok['filename']))
     return _makeConflictResponse(op, retrievedLock, lock, oldLock, acctok['filename'])
@@ -558,7 +636,11 @@ def wopiUnlock(fileid, reqheaders, acctok):
     return _makeConflictResponse('UNLOCK', retrievedLock, lock, '', acctok['filename'])
   # OK, the lock matches. Remove any extended attribute related to locks and conflicts handling
   try:
+<<<<<<< HEAD
     xrdcl.removefile(_getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid) 
+=======
+    xrdcl.removefile(_getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid)
+>>>>>>> pr/1
   except IOError:
     # ignore, it's not worth to report anything here
     pass
@@ -624,7 +706,11 @@ def wopiPutRelative(fileid, reqheaders, acctok):
       # check for file existence + lock
       fileExists = retrievedLock = False
       fileExists = xrdcl.stat(relTarget, acctok['ruid'], acctok['rgid'])
+<<<<<<< HEAD
       retrievedLock = xrdcl.stat(_getLockName(relTarget), Wopi.lockruid, Wopi.lockrgid) 
+=======
+      retrievedLock = xrdcl.stat(_getLockName(relTarget), Wopi.lockruid, Wopi.lockrgid)
+>>>>>>> pr/1
     except IOError:
       pass
     if fileExists and (not overwriteTarget or retrievedLock):
@@ -680,7 +766,11 @@ def wopiRenameFile(fileid, reqheaders, acctok):
     Wopi.log.info('msg="RenameFile" user="%s:%s" filename="%s" fileid="%s" targetname="%s"' % \
                   (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, targetName))
     xrdcl.renamefile(acctok['filename'], targetName, acctok['ruid'], acctok['rgid'])
+<<<<<<< HEAD
     xrdcl.renamefile(_getLockName(acctok['filename']), _getLockName(targetName), Wopi.lockruid, Wopi.lockrgid) 
+=======
+    xrdcl.renamefile(_getLockName(acctok['filename']), _getLockName(targetName), Wopi.lockruid, Wopi.lockrgid)
+>>>>>>> pr/1
     # prepare and send the response as JSON
     renamemd = {}
     renamemd['Name'] = reqheaders['X-WOPI-RequestedName']
