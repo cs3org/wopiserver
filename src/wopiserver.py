@@ -23,7 +23,7 @@ except ImportError:
   sys.exit(-1)
 
 # the following constant is replaced on the fly when generating the RPM (cf. spec file)
-WOPISERVERVERSION = '1.5-1.el7'
+WOPISERVERVERSION = 'git'
 
 # this is the xattr key used for conflicts resolution on the remote storage
 LASTSAVETIMEKEY = 'oc.wopi.lastwritetime'
@@ -187,7 +187,7 @@ def _retrieveWopiLock(fileid, operation, lock, acctok):
     l = l + line
   try:
     # check validity
-    retrievedLock = jwt.decode(ll, Wopi.wopisecret, algorithms=['HS256'])
+    retrievedLock = jwt.decode(l, Wopi.wopisecret, algorithms=['HS256'])
     if retrievedLock['exp'] < time.time():
       # we got an expired lock, reject. Note that we may get an ExpiredSignatureError
       # by jwt.decode() as we had stored it with a timed signature.
@@ -449,7 +449,8 @@ def wopiCheckFileInfo(fileid):
     filemd['UserId'] = acctok['ruid'] + ':' + acctok['rgid']    # typically same as OwnerId
     filemd['Size'] = long(statInfo[8])
     filemd['Version'] = statInfo[12]   # mtime is used as version here
-    filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = filemd['SupportsGetLock'] = filemd['SupportsDeleteFile'] = acctok['canedit']
+    filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = \
+        filemd['SupportsGetLock'] = filemd['SupportsDeleteFile'] = acctok['canedit']
     filemd['SupportsRename'] = filemd['UserCanRename'] = False   # XXX renaming is currently broken in all Office Online apps
     filemd['SupportsExtendedLockLength'] = True
     #filemd['UserCanPresent'] = True   # what about the broadcasting feature in Office Online?
@@ -498,7 +499,7 @@ def wopiLock(fileid, reqheaders, acctok):
   # cf. http://wopi.readthedocs.io/projects/wopirest/en/latest/files/Lock.html
   op = reqheaders['X-WOPI-Override']
   lock = reqheaders['X-WOPI-Lock']
-  oldLock = reqheaders['X-WOPI-Oldlock'] if 'X-WOPI-Oldlock' in reqheaders else None 
+  oldLock = reqheaders['X-WOPI-OldLock'] if 'X-WOPI-OldLock' in reqheaders else None
   retrievedLock = _retrieveWopiLock(fileid, op, lock, acctok)
   # perform the required checks for the validity of the new lock
   if (oldLock is None and retrievedLock != None and not _compareWopiLocks(retrievedLock, lock)) or \

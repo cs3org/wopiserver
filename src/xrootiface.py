@@ -112,7 +112,7 @@ def readfile(filename, ruid, rgid):
     rc, statInfo_unused = f.open(fileurl, OpenFlags.READ)
     if not rc.ok:
       # the file could not be opened: as this is a generator, we yield the error string instead of the file's contents
-      log.warning('msg="Error opening the file for read" filename="%s" error="%s"' % (fileurl, rc.message.strip('\n')))
+      log.warning('msg="Error opening the file for read" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
       yield rc.message
     else:
       chunksize = config.getint('io', 'chunksize')
