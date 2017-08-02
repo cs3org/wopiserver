@@ -65,7 +65,6 @@ def init(inconfig, inlog):
   storageserver = 'root://' + storageserver
 
 def stat(filename, ruid, rgid):
-  filename = getFilename(filename)
   '''Stat a file via xroot on behalf of the given uid,gid. Uses the default xroot API.'''
   filename = _getfilename(filename)
   log.debug('msg="Invoking stat" filename="%s"' % filename)
@@ -77,7 +76,6 @@ def stat(filename, ruid, rgid):
   return statInfo
 
 def statx(filename, ruid, rgid):
-  filename = getFilename(filename)
   '''Get extended stat info via an xroot opaque query on behalf of the given uid,gid'''
   filename = _getfilename(filename)
   log.debug('msg="Invoking statx" filename="%s"' % filename)
