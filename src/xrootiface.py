@@ -62,7 +62,6 @@ def init(inconfig, inlog):
   homepath = config.get('general', 'storagehomepath')
   # prepare the xroot client
   xrdfs = XrdClient.FileSystem(storageserver)
-  storageserver = 'root://' + storageserver
 
 def stat(filename, ruid, rgid):
   '''Stat a file via xroot on behalf of the given uid,gid. Uses the default xroot API.'''
