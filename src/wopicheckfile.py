@@ -3,7 +3,7 @@
 Check the given file for WOPI extended attributes
 
 Author: Giuseppe.LoPresti@cern.ch
-CERN IT/ST
+Contributions: Michael.DSilva@aarnet.edu.au
 '''
 
 import sys, os, getopt, ConfigParser, logging, jwt
