@@ -5,7 +5,7 @@ echo "${WOPISECRET:-$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 12 | head 
 
 echo "${OCSECRET:-password}" > /etc/wopi/ocsecret
 
-/usr/bin/curl -o /etc/wopi/wopiserver.defaults.conf ${CONFIGURATION}/wopi/wopiserver.conf
+/usr/bin/curl -o /etc/wopi/wopiserver.conf ${CONFIGURATION}/wopi/wopiserver.conf
 
 /usr/bin/curl -o /etc/eos.keytab ${CONFIGURATION}/eos/eos.keytab
 
