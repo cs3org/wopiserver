@@ -67,7 +67,10 @@ class Wopi(object):
       cls.oos = cls.config.get('general', 'oosurl')
       cls.lockruid = cls.config.get('general', 'lockruid')
       cls.lockrgid = cls.config.get('general', 'lockrgid')
-      cls.lockpath = cls.config.get('general', 'lockpath')
+      if cls.config.has_option('general', 'lockpath'):
+        cls.lockpath = cls.config.get('general', 'lockpath')
+      else:
+        cls.lockpath = False
 
       # The supported Office Online end-points
       cls.ENDPOINTS = {}
