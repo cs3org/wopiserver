@@ -51,11 +51,11 @@ def _getfilename(filename):
 
 def init(inconfig, inlog):
   '''Init module-level variables'''
-  global config
-  global log
-  global storageserver
-  global xrdfs
-  global homepath
+  global config         # pylint: disable=global-statement
+  global log            # pylint: disable=global-statement
+  global storageserver  # pylint: disable=global-statement
+  global xrdfs          # pylint: disable=global-statement
+  global homepath       # pylint: disable=global-statement
   config = inconfig
   log = inlog
   storageserver = config.get('general', 'storageserver')
