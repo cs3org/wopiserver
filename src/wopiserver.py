@@ -200,7 +200,7 @@ def _retrieveWopiLock(fileid, operation, lock, acctok):
                      (operation.title(), acctok['ruid'], acctok['rgid'], acctok['filename'], type(e)))
     # the retrieved lock is not valid any longer, discard and remove it from the backend
     try:
-      xrdcl.removefile(_getLockName(acctok['filename']), '0', '0')
+      xrdcl.removefile(_getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid)
     except IOError:
       # ignore, it's not worth to report anything here
       pass
