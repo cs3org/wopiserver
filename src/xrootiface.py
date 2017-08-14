@@ -133,7 +133,7 @@ def writefile(filename, ruid, rgid, content):
   f = XrdClient.File()
   rc, statInfo_unused = f.open(storageserver + '/' + homepath + filename + _eosargs(ruid, rgid, 1, size), OpenFlags.DELETE)
   if not rc.ok:
-    log.info('msg="Error opening the file for write" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
+    log.warning('msg="Error opening the file for write" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
     raise IOError(rc.message.strip('\n'))
   # write the file. In a future implementation, we should find a way to only update the required chunks...
   rc, statInfo_unused = f.write(content, offset=0, size=size)

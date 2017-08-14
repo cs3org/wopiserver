@@ -77,19 +77,19 @@ class Wopi(object):
       cls.ENDPOINTS['.docx'] = {}
       cls.ENDPOINTS['.docx']['view'] = cls.oos + '/wv/wordviewerframe.aspx?edit=0'
       cls.ENDPOINTS['.docx']['edit'] = cls.oos + '/we/wordeditorframe.aspx?edit=1'
-      cls.ENDPOINTS['.docx']['new']  = cls.oos + '/we/wordeditorframe.aspx?new=1'
+      cls.ENDPOINTS['.docx']['new']  = cls.oos + '/we/wordeditorframe.aspx?new=1'                          # pylint: disable=bad-whitespace
       cls.ENDPOINTS['.xlsx'] = {}
       cls.ENDPOINTS['.xlsx']['view'] = cls.oos + '/x/_layouts/xlviewerinternal.aspx?edit=0'
       cls.ENDPOINTS['.xlsx']['edit'] = cls.oos + '/x/_layouts/xlviewerinternal.aspx?edit=1'
-      cls.ENDPOINTS['.xlsx']['new']  = cls.oos + '/x/_layouts/xlviewerinternal.aspx?edit=1&new=1'
+      cls.ENDPOINTS['.xlsx']['new']  = cls.oos + '/x/_layouts/xlviewerinternal.aspx?edit=1&new=1'          # pylint: disable=bad-whitespace
       cls.ENDPOINTS['.pptx'] = {}
       cls.ENDPOINTS['.pptx']['view'] = cls.oos + '/p/PowerPointFrame.aspx?PowerPointView=ReadingView'
       cls.ENDPOINTS['.pptx']['edit'] = cls.oos + '/p/PowerPointFrame.aspx?PowerPointView=EditView'
-      cls.ENDPOINTS['.pptx']['new']  = cls.oos + '/p/PowerPointFrame.aspx?PowerPointView=EditView&New=1'
+      cls.ENDPOINTS['.pptx']['new']  = cls.oos + '/p/PowerPointFrame.aspx?PowerPointView=EditView&New=1'   # pylint: disable=bad-whitespace
       cls.ENDPOINTS['.one'] = {}
-      cls.ENDPOINTS['.one']['view']  = cls.oos + '/o/onenoteframe.aspx?edit=0'
-      cls.ENDPOINTS['.one']['edit']  = cls.oos + '/o/onenoteframe.aspx?edit=1'
-      cls.ENDPOINTS['.one']['new']   = cls.oos + '/o/onenoteframe.aspx?edit=1&new=1'
+      cls.ENDPOINTS['.one']['view']  = cls.oos + '/o/onenoteframe.aspx?edit=0'                             # pylint: disable=bad-whitespace
+      cls.ENDPOINTS['.one']['edit']  = cls.oos + '/o/onenoteframe.aspx?edit=1'                             # pylint: disable=bad-whitespace
+      cls.ENDPOINTS['.one']['new']   = cls.oos + '/o/onenoteframe.aspx?edit=1&new=1'                       # pylint: disable=bad-whitespace
 
     except Exception, e:
       # any error we get here with the configuration is fatal
@@ -136,11 +136,11 @@ def _ourHostName():
   return Wopi.wopiurl
 
 
-def _logGeneralExceptionAndReturn(ex):
+def _logGeneralExceptionAndReturn(ex, req):
   '''Convenience function to log a stack trace and return HTTP 500'''
   ex_type, ex_value, ex_traceback = sys.exc_info()
-  Wopi.log.error('msg="Unexpected exception caught" exception="%s" type="%s" traceback="%s"' % \
-                 (ex, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback)))
+  Wopi.log.error('msg="Unexpected exception caught" exception="%s" type="%s" traceback="%s" client="%s" requestedUrl="%s"' % \
+                 (ex, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback), req.remote_addr, req.url))
   return 'Internal error', httplib.INTERNAL_SERVER_ERROR
 
 
@@ -366,7 +366,8 @@ def cboxDownload():
                   (acctok['filename'], acctok['ruid'], acctok['rgid'], flask.request.args['access_token'][-20:]))
     return resp
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
-    Wopi.log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
+    Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" token="%s"' % \
+                     (flask.request.remote_addr, flask.request.base_url, flask.request.args['access_token']))
     return 'Invalid access token', httplib.NOT_FOUND
   except IOError, e:
     Wopi.log.info('msg="Requested file not found" filename="%s" error="%s"' % (acctok['filename'], e))
@@ -375,13 +376,15 @@ def cboxDownload():
     Wopi.log.error('msg="Invalid access token or request argument" error="%s"' % e)
     return 'Invalid access token', httplib.UNAUTHORIZED
   except Exception, e:
-    return _logGeneralExceptionAndReturn(e)
+    return _logGeneralExceptionAndReturn(e, flask.request)
 
 
 @Wopi.app.route("/wopi/cbox/endpoints", methods=['GET'])
 def cboxEndPoints():
-  '''Returns the supported end-points for Office Online at CERN. This is used by the OwnCloud
-  client to discover which URLs it has to use.'''
+  '''Returns the supported end-points for Office Online. This is used by the OwnCloud
+  client to discover which Office Online frontends have to be used with this WOPI server.
+  Note that if the end-points are relocated and the corresponding configuration entry updated,
+  the WOPI server must be restarted.'''
   Wopi.log.info('msg="cboxEndPoints: returning list of valid Office Online end-points" client="%s"' % flask.request.remote_addr)
   return flask.Response(json.dumps(Wopi.ENDPOINTS), mimetype='application/json')
 
@@ -461,7 +464,8 @@ def wopiCheckFileInfo(fileid):
     # send in JSON format
     return flask.Response(json.dumps(filemd), mimetype='application/json')
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
-    Wopi.log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
+    Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" token="%s"' % \
+                     (flask.request.remote_addr, flask.request.base_url, flask.request.args['access_token']))
     return 'Invalid access token', httplib.NOT_FOUND
   except IOError, e:
     Wopi.log.info('msg="Requested file not found" filename="%s" error="%s"' % (acctok['filename'], e))
@@ -470,7 +474,7 @@ def wopiCheckFileInfo(fileid):
     Wopi.log.error('msg="Invalid access token or request argument" error="%s"' % e)
     return 'Invalid access token', httplib.UNAUTHORIZED
   except Exception, e:
-    return _logGeneralExceptionAndReturn(e)
+    return _logGeneralExceptionAndReturn(e, flask.request)
 
 
 @Wopi.app.route("/wopi/files/<fileid>/contents", methods=['GET'])
@@ -488,10 +492,11 @@ def wopiGetFile(fileid):
     resp.status_code = httplib.OK
     return resp
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
-    Wopi.log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
+    Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" token="%s"' % \
+                     (flask.request.remote_addr, flask.request.base_url, flask.request.args['access_token']))
     return 'Invalid access token', httplib.UNAUTHORIZED
   except Exception, e:
-    return _logGeneralExceptionAndReturn(e)
+    return _logGeneralExceptionAndReturn(e, flask.request)
 
 
 #
@@ -704,10 +709,11 @@ def wopiFilesPost(fileid):
       Wopi.log.warning('msg="Unknown/unsupported operation" operation="%s"' % op)
       return 'Not supported operation found in header', httplib.NOT_IMPLEMENTED
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
-    Wopi.log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
+    Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" token="%s"' % \
+                     (flask.request.remote_addr, flask.request.base_url, flask.request.args['access_token']))
     return 'Invalid access token', httplib.NOT_FOUND
   except Exception, e:
-    return _logGeneralExceptionAndReturn(e)
+    return _logGeneralExceptionAndReturn(e, flask.request)
 
 
 @Wopi.app.route("/wopi/files/<fileid>/contents", methods=['POST'])
@@ -775,13 +781,14 @@ def wopiPutFile(fileid):
     Wopi.log.info('msg="File successfully written" user="%s:%s" filename="%s"' % (acctok['ruid'], acctok['rgid'], acctok['filename']))
     return 'OK', httplib.OK
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
-    Wopi.log.warning('msg="Signature verification failed" token="%s"' % flask.request.args['access_token'])
+    Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" token="%s"' % \
+                     (flask.request.remote_addr, flask.request.base_url, flask.request.args['access_token']))
     return 'Invalid access token', httplib.NOT_FOUND
   except IOError, e:
     Wopi.log.info('msg="Error writing file" filename="%s" error="%s"' % (acctok['filename'], e))
     return 'I/O Error', httplib.INTERNAL_SERVER_ERROR
   except Exception, e:
-    return _logGeneralExceptionAndReturn(e)
+    return _logGeneralExceptionAndReturn(e, flask.request)
 
 
 #
