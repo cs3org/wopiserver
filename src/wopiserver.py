@@ -392,8 +392,7 @@ def cboxEndPoints():
 @Wopi.app.route("/wopi/cbox/open/list", methods=['GET'])
 def cboxGetOpenFiles():
   '''Returns a list of all currently opened files, for operations purposes only.
-  This call is protected by the same shared secret as the /cbox/open call.'''
-  Wopi.refreshconfig()
+  This call is protected by the same shared secret as the /wopi/cbox/open call.'''
   req = flask.request
   # if running in https mode, first check if the shared secret matches ours
   if Wopi.useHttps and ('Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.ocsecret):
