@@ -70,7 +70,7 @@ class Wopi(object):
       if cls.config.has_option('general', 'lockpath'):
         cls.lockpath = cls.config.get('general', 'lockpath')
       else:
-        cls.lockpath = False
+        cls.lockpath = ''
 
       # The supported Office Online end-points
       cls.ENDPOINTS = {}
@@ -415,7 +415,7 @@ def wopiCheckFileInfo(fileid):
     acctok = jwt.decode(flask.request.args['access_token'], Wopi.wopisecret, algorithms=['HS256'])
     if acctok['exp'] < time.time():
       raise jwt.exceptions.ExpiredSignatureError
-    Wopi.log.info('msg="CheckFileInfo" user="%s:%s" filename"%s" fileid="%s" acctok="%s"' % \
+    Wopi.log.info('msg="CheckFileInfo" user="%s:%s" filename="%s" fileid="%s" acctok="%s"' % \
                   (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
     statInfo = xrdcl.statx(acctok['filename'], acctok['ruid'], acctok['rgid'])
     # compute some entities for the response
@@ -445,8 +445,9 @@ def wopiCheckFileInfo(fileid):
     filemd['HostEditUrl'] = '%s&%s' % (Wopi.ENDPOINTS[fExt]['edit'], wopiSrc)
     # the following is to enable the 'Edit in Word/Excel/PowerPoint' (desktop) action
     try:
-      path = '/' + acctok['filename'].split("/files/", 1)[1]    # XXX check if this works at CERN. It does at AARNet
-      filemd['ClientUrl'] = Wopi.config.get('general', 'webdavurl') + path
+      # a path 'a-la owncloud' includes '/files/', which has to be stripped off. This is hopefully temporary code for the AARNet config
+      filemd['ClientUrl'] = Wopi.config.get('general', 'webdavurl') + '/' + \
+                            acctok['filename'].split("/files/", 1)[1] if '/files/' in acctok['filename'] else acctok['filename']
     except ConfigParser.NoOptionError:
       # if no WebDAV URL is provided, ignore this setting
       pass
