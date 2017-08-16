@@ -9,7 +9,7 @@ CERN/IT-ST
 from wopiserver import Wopi
 
 Wopi.init()
-Wopi.useNginx = True
-Wopi.log.info('msg="WOPI Server starting in Nginx embedded mode"')
 app = Wopi.app
-
+Wopi.log.info('msg="WOPI Server starting in Nginx mode"')
+Wopi.useHttps = False
+Wopi.run()

@@ -110,8 +110,7 @@ class Wopi(object):
 
   @classmethod
   def run(cls):
-    '''Runs the Flask app in standalone mode'''
-    cls.useNginx = False
+    '''Runs the Flask app in either standalone (https) or embedded (http) mode'''
     if cls.useHttps:
       cls.log.info('msg="WOPI Server starting in standalone secure mode"')
       cls.app.run(host='0.0.0.0', port=443, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'),
@@ -119,13 +118,6 @@ class Wopi(object):
     else:
       cls.log.info('msg="WOPI Server starting in unsecure/embedded mode"')
       cls.app.run(host='0.0.0.0', port=8080, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'))
-
-  @classmethod
-  def nginxrun(cls):
-    '''Runs the Flask app for embedding in wsgi and Nginx'''
-    cls.useNginx = True
-    cls.log.info('msg="WOPI Server starting in Nginx embedded mode"')
-    cls.app.run(debug=(cls.config.get('general', 'loglevel') == 'Debug'))
 
 
 #
@@ -299,7 +291,7 @@ def index():
     <i>CERNBox WOPI Server %s. Powered by Flask %s for Python %s%s</i>.
     </body>
     </html>
-    """ % (WOPISERVERVERSION, flask.__version__, python_version(), (' on Nginx' if Wopi.useNginx else ''))
+    """ % (WOPISERVERVERSION, flask.__version__, python_version())
 
 
 @Wopi.app.route("/wopi/cbox/open", methods=['GET'])
