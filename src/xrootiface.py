@@ -100,8 +100,12 @@ def readfile(filename, ruid, rgid):
   with XrdClient.File() as f:
     rc, statInfo_unused = f.open(storageserver + '/' + filename + _eosargs(ruid, rgid), OpenFlags.READ)
     if not rc.ok:
-      # the file could not be opened: as this is a generator, we yield the error string instead of the file's contents
-      log.warning('msg="Error opening the file for read" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
+      # the file could not be opened: check the case of ENOENT and log it as info to keep the logs cleaner
+      if 'No such file or directory' in rc.message:
+        log.info('msg="Error opening the file for read" filename="%s" error="No such file or directory"' % filename)
+      else:
+        log.warning('msg="Error opening the file for read" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
+      # as this is a generator, we yield the error string instead of the file's contents
       yield rc.message
     else:
       # the actual read is buffered and managed by the Flask server
@@ -136,4 +140,3 @@ def renamefile(origfilename, newfilename, ruid, rgid):
 def removefile(filename, ruid, rgid):
   '''Remove a file via a special open on behalf of the given uid,gid.'''
   _xrootcmd('rm', None, ruid, rgid, 'mgm.path=' + filename)
-
