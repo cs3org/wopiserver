@@ -47,7 +47,7 @@ def _xrootcmd(cmd, subcmd, ruid, rgid, args):
 
 def _getfilename(filename):
   '''map the given filename into the target namespace by prepending the homepath (see storagehomepath in wopiserver.conf)'''
-  return '/' + homepath + filename
+  return homepath + filename
 
 def init(inconfig, inlog):
   '''Init module-level variables'''
@@ -59,7 +59,10 @@ def init(inconfig, inlog):
   config = inconfig
   log = inlog
   storageserver = config.get('general', 'storageserver')
-  homepath = config.get('general', 'storagehomepath')
+  if config.has_option('general', 'storagehomepath'):
+    homepath = config.get('general', 'storagehomepath')
+  else:
+    homepath = ''
   # prepare the xroot client
   xrdfs = XrdClient.FileSystem(storageserver)
 
