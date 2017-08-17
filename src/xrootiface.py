@@ -160,9 +160,4 @@ def renamefile(origfilename, newfilename, ruid, rgid):
 
 def removefile(filename, ruid, rgid):
   '''Remove a file via a special open on behalf of the given uid,gid.'''
-<<<<<<< 6d899cab12ded081241205932b9e994aec537d60
-  filename = getFilename(filename) 
-  _xrootcmd('rm', None, ruid, rgid, 'mgm.path=' + filename)
-=======
   _xrootcmd('rm', None, ruid, rgid, 'mgm.path=' + _getfilename(filename))
->>>>>>> Several adaptations after having merged AARNet contributions.
