@@ -72,9 +72,10 @@ touch /etc/wopi/ocsecret
 %_python_lib/*
 
 %changelog
-* Mon Aug  7 2017 Giuseppe Lo Presti <lopresti@cern.ch> 2.0
+* Mon Aug 27 2017 Giuseppe Lo Presti <lopresti@cern.ch> 2.0
 - Incorporated contributions from AARNet, introduced many configurable items
-- Support deployment with nginx as opposed to standalone Flask
+- Improved docker image configuration for running behind a load balancer
+- Included support for nginx as load balancer (not required)
 * Fri May 19 2017 Giuseppe Lo Presti <lopresti@cern.ch> 1.5
 - Improved support for anonymous shares
 - Added support for desktop access via WebDAV
