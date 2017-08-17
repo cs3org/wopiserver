@@ -124,7 +124,7 @@ class Wopi(object):
 # General utilities
 #
 def _ourHostName():
-  '''Returns the WOPI server web address'''
+  '''Returns the WOPI server web address. XXX to be removed once the nginx setup is proven to work'''
   return Wopi.wopiurl
 
 
