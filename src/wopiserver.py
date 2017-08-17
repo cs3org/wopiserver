@@ -229,12 +229,12 @@ def _compareWopiLocks(lock1, lock2):
         #elif 'L' in lock1 and 'L' in lock2:
         #  Wopi.log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="%r"' % (lock1, lock2, lock1['L'] == lock2['L']))
         #  return lock1['L'] == lock2['L']     # used by Excel and PowerPoint
-      except ValueError:
+      except (TypeError, ValueError):
         # lock2 is not a JSON dictionary
         if 'S' in l1:
           Wopi.log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="%r"' % (lock1, lock2, l1['S'] == lock2))
           return l1['S'] == lock2          # also used by Word (BUG!)
-    except ValueError:
+    except (TypeError, ValueError):
       # lock1 is not a JSON dictionary: log the lock values and fail the comparison
       Wopi.log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="False"' % (lock1, lock2))
       return False
