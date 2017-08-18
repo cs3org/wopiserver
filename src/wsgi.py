@@ -9,7 +9,6 @@ CERN/IT-ST
 from wopiserver import Wopi
 
 Wopi.init()
-app = Wopi.app
 Wopi.log.info('msg="WOPI Server starting in Nginx mode"')
-Wopi.useHttps = False
-Wopi.run()
+Wopi.useHttps = False    # force http as SSL is handled by nginx
+application = Wopi.app        # from now on control is given to uwsgi
