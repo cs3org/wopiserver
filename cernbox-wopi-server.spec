@@ -66,17 +66,19 @@ touch /etc/wopi/ocsecret
 %defattr(-,root,root,-)
 /etc/wopi
 /etc/logrotate.d/cernbox-wopi-server
+/etc/nginx/conf.d/wopiserver.conf
+/etc/uwsgi.d/wopiserver.ini
 %attr(-,cboxwopi,def-cg) /var/log/wopi
 /usr/lib/systemd/system/wopiserver.service
 /usr/bin/*
 %_python_lib/*
 
 %changelog
-* Mon Aug 27 2017 Giuseppe Lo Presti <lopresti@cern.ch> 2.0
+* Mon Aug 21 2017 Giuseppe Lo Presti <lopresti@cern.ch> 2.0
 - Incorporated contributions from AARNet, introduced many configurable items
 - Improved docker image configuration for running behind a load balancer
 - Included support for nginx as load balancer (not required)
-- Improved logs for monitoring purposes
+- Improved logging for monitoring purposes
 * Fri May 19 2017 Giuseppe Lo Presti <lopresti@cern.ch> 1.5
 - Improved support for anonymous shares
 - Added support for desktop access via WebDAV
@@ -89,7 +91,7 @@ touch /etc/wopi/ocsecret
 - Improved navigation and properties in Office Online
 - Fixed lock handling to adhere to specifications (this is known
   to break renaming in Word and PowerPoint)
-* Fri Mar 22 2017 Giuseppe Lo Presti <lopresti@cern.ch> 1.2
+* Wed Mar 22 2017 Giuseppe Lo Presti <lopresti@cern.ch> 1.2
 - Support creation of new documents
 * Wed Mar  1 2017 Giuseppe Lo Presti <lopresti@cern.ch> 1.1
 - Improved lock handling to fully support concurrent editing
