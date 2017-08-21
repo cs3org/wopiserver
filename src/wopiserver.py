@@ -8,12 +8,20 @@ Author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 Contributions: Michael.DSilva@aarnet.edu.au
 '''
 
-import sys, os, time, socket, traceback, ConfigParser
+import sys
+import os
+import time
+import traceback
+import socket
+import ConfigParser
 from platform import python_version
 import logging
 import logging.handlers
-import urllib, httplib, json
+import urllib
+import httplib
+import json
 import hashlib
+import sets
 try:
   import flask                 # Flask app server, python-flask-0.10.1-4.el7.noarch.rpm + pyOpenSSL-0.13.1-3.el7.x86_64.rpm
   import jwt                   # PyJWT JSON Web Token, python-jwt-1.4.0-2.el7.noarch.rpm
@@ -386,8 +394,8 @@ def cboxGetOpenFiles():
   '''Returns a list of all currently opened files, for operations purposes only.
   This call is protected by the same shared secret as the /wopi/cbox/open call.'''
   req = flask.request
-  # if running in https mode, first check if the shared secret matches ours
-  if Wopi.useHttps and ('Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.ocsecret):
+  # first check if the shared secret matches ours
+  if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.ocsecret:
     Wopi.log.warning('msg="cboxGetOpenFiles: unauthorized access attempt, missing authorization token" client="%s"' % req.remote_addr)
     return 'Client not authorized', httplib.UNAUTHORIZED
   # dump the current list of opened files in JSON format
@@ -437,7 +445,8 @@ def wopiCheckFileInfo(fileid):
     filemd['HostEditUrl'] = '%s&%s' % (Wopi.ENDPOINTS[fExt]['edit'], wopiSrc)
     # the following is to enable the 'Edit in Word/Excel/PowerPoint' (desktop) action
     try:
-      # a path 'a-la owncloud' includes '/files/', which has to be stripped off. This is hopefully temporary code for the AARNet config
+      # a path 'a-la owncloud' includes '/files/', which has to be stripped off.
+      # XXX This is temporary code for the AARNet config. Note this is not robust as a user path including '/files/' will be broken.
       filemd['ClientUrl'] = Wopi.config.get('general', 'webdavurl') + '/' + \
                             acctok['filename'].split("/files/", 1)[1] if '/files/' in acctok['filename'] else acctok['filename']
     except ConfigParser.NoOptionError:
@@ -527,7 +536,16 @@ def wopiLock(fileid, reqheaders, acctok):
       Wopi.log.warning('msg="Unable to set lastwritetime xattr" user="%s:%s" filename="%s" reason="%s"' % \
                        (acctok['ruid'], acctok['rgid'], acctok['filename'], e))
     # and keep track of the fact that this file has been opened for write
-    Wopi.openfiles[acctok['filename']] = (acctok['ruid'], acctok['rgid'], time.asctime())
+    if acctok['filename'] in Wopi.openfiles:
+      # the file was already opened for write, check whether this is a new user
+      Wopi.openfiles[acctok['filename']][1].add(acctok['username'])
+      if len(Wopi.openfiles[acctok['filename']][1]) > 1:
+        # this is the case, log for statistical purposes
+        Wopi.log.info('msg="Collaborative editing detected" filename="%s" users="%s"' % \
+                       (acctok['filename'], list(Wopi.openfiles[acctok['filename']][1])))
+    else:
+      # first time this file was opened for write
+      Wopi.openfiles[acctok['filename']] = (time.asctime(), sets.Set([acctok['username']]))
   return 'OK', httplib.OK
 
 
@@ -548,12 +566,17 @@ def wopiUnlock(fileid, reqheaders, acctok):
   except IOError:
     # same as above
     pass
-  # and remove the file from our internal list of opened files
+  # and update our internal list of opened files
   try:
-    del Wopi.openfiles[acctok['filename']]
+    Wopi.openfiles[acctok['filename']][1].remove(acctok['username'])
+    if len(Wopi.openfiles[acctok['filename']][1]) == 0:
+      del Wopi.openfiles[acctok['filename']]
   except KeyError:
     # already removed?
-    pass
+    try:
+      del Wopi.openfiles[acctok['filename']]
+    except KeyError:
+      pass
   return 'OK', httplib.OK
 
 
