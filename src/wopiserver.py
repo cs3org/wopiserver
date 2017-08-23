@@ -200,7 +200,7 @@ def _retrieveWopiLock(fileid, operation, lock, acctok):
                      (operation.title(), acctok['ruid'], acctok['rgid'], acctok['filename'], type(e)))
     # the retrieved lock is not valid any longer, discard and remove it from the backend
     try:
-      xrdcl.removefile(_getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid)
+      xrdcl.removefile(_getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid, 1)
     except IOError:
       # ignore, it's not worth to report anything here
       pass
@@ -219,7 +219,7 @@ def _storeWopiLock(operation, lock, acctok):
   l['exp'] = int(time.time()) + Wopi.config.getint('general', 'wopilockexpiration')
   try:
     s = jwt.encode(l, Wopi.wopisecret, algorithm='HS256')
-    xrdcl.writefile(_getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid, s)
+    xrdcl.writefile(_getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid, s, 1)
     Wopi.log.info('msg="%s" filename="%s" lock="%s" result="success"' % (operation.title(), acctok['filename'], lock))
     Wopi.log.debug('msg="%s" encodedlock="%s" length="%d"' % (operation.title(), s, len(s)))
   except IOError, e:
@@ -521,7 +521,7 @@ def wopiLock(fileid, reqheaders, acctok):
     else:
       Wopi.repeatedLockRequests[retrievedLock] += 1
       if Wopi.repeatedLockRequests[retrievedLock] == 5:
-        xrdcl.removefile(_getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid)
+        xrdcl.removefile(_getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid, 1)
         Wopi.log.warning('msg="Lock: blindly removing the existing lock to unblock client" user="%s:%s" filename="%s"' % \
                          (acctok['ruid'], acctok['rgid'], acctok['filename']))
     return _makeConflictResponse(op, retrievedLock, lock, oldLock, acctok['filename'])
@@ -557,7 +557,7 @@ def wopiUnlock(fileid, reqheaders, acctok):
     return _makeConflictResponse('UNLOCK', retrievedLock, lock, '', acctok['filename'])
   # OK, the lock matches. Remove any extended attribute related to locks and conflicts handling
   try:
-    xrdcl.removefile(_getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid)
+    xrdcl.removefile(_getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid, 1)
   except IOError:
     # ignore, it's not worth to report anything here
     pass

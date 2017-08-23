@@ -129,16 +129,18 @@ def readfile(filename, ruid, rgid):
       for chunk in f.readchunks(offset=0, chunksize=chunksize):
         yield chunk
 
-def writefile(filename, ruid, rgid, content):
+def writefile(filename, ruid, rgid, content, noversion=0):
   '''Write a file via xroot on behalf of the given uid,gid. The entire content is written
-     and any pre-existing file is deleted.'''
+     and any pre-existing file is deleted (or moved to the previous version if supported).
+     If noversion=1, the write explicitly disables versioning: this is useful for lock files.'''
   log.debug('msg="Invoking writeFile" filename="%s"' % filename)
   size = len(content)
   log.debug('msg="Invoking writeFile" filename="%s" size="%d"' % (filename, size))
   if not xrdfs:
     raise ValueError
   f = XrdClient.File()
-  rc, statInfo_unused = f.open(storageserver + '/' + homepath + filename + _eosargs(ruid, rgid, 1, size), OpenFlags.DELETE)
+  rc, statInfo_unused = f.open(storageserver + '/' + homepath + filename + _eosargs(ruid, rgid, 1, size) + \
+                               ('&sys.versioning=0' if noversion else ''), OpenFlags.DELETE)
   if not rc.ok:
     log.warning('msg="Error opening the file for write" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
     raise IOError(rc.message.strip('\n'))
@@ -161,6 +163,9 @@ def renamefile(origfilename, newfilename, ruid, rgid):
   _xrootcmd('file', 'rename', ruid, rgid, 'mgm.path=' + _getfilename(origfilename) + \
             '&mgm.file.source=' + _getfilename(origfilename) + '&mgm.file.target=' + _getfilename(newfilename))
 
-def removefile(filename, ruid, rgid):
-  '''Remove a file via a special open on behalf of the given uid,gid.'''
-  _xrootcmd('rm', None, ruid, rgid, 'mgm.path=' + _getfilename(filename))
+def removefile(filename, ruid, rgid, force=0):
+  '''Remove a file via a special open on behalf of the given uid,gid.
+     If force=1 or True, then pass the f option, that is skip the recycle bin.
+     This is useful for lock files, but it requires uid,gid to be root.'''
+  _xrootcmd('rm', None, ruid, rgid, 'mgm.path=' + _getfilename(filename) + \
+                                     ('&mgm.option=f' if force and int(ruid) == 0 and int(rgid) == 0 else ''))
