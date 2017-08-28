@@ -398,9 +398,13 @@ def cboxGetOpenFiles():
   if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.ocsecret:
     Wopi.log.warning('msg="cboxGetOpenFiles: unauthorized access attempt, missing authorization token" client="%s"' % req.remote_addr)
     return 'Client not authorized', httplib.UNAUTHORIZED
+  # first convert the sets into lists, otherwise sets cannot be serialized in JSON format
+  jl = {}
+  for f in Wopi.openfiles.keys():
+    jl[f] = (Wopi.openfiles[f][0], tuple(Wopi.openfiles[f][1]))
   # dump the current list of opened files in JSON format
   Wopi.log.info('msg="cboxGetOpenFiles: returning list of open files" client="%s"' % req.remote_addr)
-  return flask.Response(json.dumps(Wopi.openfiles), mimetype='application/json')
+  return flask.Response(json.dumps(jl), mimetype='application/json')
 
 
 #
@@ -535,17 +539,9 @@ def wopiLock(fileid, reqheaders, acctok):
       # not fatal, but will generate a conflict file later on, so log a warning
       Wopi.log.warning('msg="Unable to set lastwritetime xattr" user="%s:%s" filename="%s" reason="%s"' % \
                        (acctok['ruid'], acctok['rgid'], acctok['filename'], e))
-    # and keep track of the fact that this file has been opened for write
-    if acctok['filename'] in Wopi.openfiles:
-      # the file was already opened for write, check whether this is a new user
-      Wopi.openfiles[acctok['filename']][1].add(acctok['username'])
-      if len(Wopi.openfiles[acctok['filename']][1]) > 1:
-        # this is the case, log for statistical purposes
-        Wopi.log.info('msg="Collaborative editing detected" filename="%s" users="%s"' % \
-                       (acctok['filename'], list(Wopi.openfiles[acctok['filename']][1])))
-    else:
-      # first time this file was opened for write
-      Wopi.openfiles[acctok['filename']] = (time.asctime(), sets.Set([acctok['username']]))
+    # also, keep track of files that have been opened for write: this is for statistical purposes only
+    # (cf. the GetLock WOPI call and the /wopi/cbox/open/list action)
+    Wopi.openfiles[acctok['filename']] = (time.asctime(), sets.Set([acctok['username']]))
   return 'OK', httplib.OK
 
 
@@ -568,23 +564,33 @@ def wopiUnlock(fileid, reqheaders, acctok):
     pass
   # and update our internal list of opened files
   try:
-    Wopi.openfiles[acctok['filename']][1].remove(acctok['username'])
-    if len(Wopi.openfiles[acctok['filename']][1]) == 0:
-      del Wopi.openfiles[acctok['filename']]
+    del Wopi.openfiles[acctok['filename']]
   except KeyError:
     # already removed?
-    try:
-      del Wopi.openfiles[acctok['filename']]
-    except KeyError:
-      pass
+    pass
   return 'OK', httplib.OK
 
 
 def wopiGetLock(fileid, reqheaders_unused, acctok):
   '''Implements the GetLock WOPI call'''
   resp = flask.Response()
+  # throws exception if no lock
   resp.headers['X-WOPI-Lock'] = _retrieveWopiLock(fileid, 'GETLOCK', '', acctok)
   resp.status_code = httplib.OK
+  # for statistical purposes, check whether a lock exists and update internal bookkeeping
+  if resp.headers['X-WOPI-Lock']:
+    try:
+      # the file was already opened for write, check whether this is a new user
+      if not acctok['username'] in Wopi.openfiles[acctok['filename']][1]:
+        # yes it's a new user
+        Wopi.openfiles[acctok['filename']][1].add(acctok['username'])
+        if len(Wopi.openfiles[acctok['filename']][1]) > 1:
+          # for later monitoring, explicitly log that this file is being edited by at least two users
+          Wopi.log.info('msg="Collaborative editing detected" filename="%s" users="%s"' % \
+                         (acctok['filename'], list(Wopi.openfiles[acctok['filename']][1])))
+    except KeyError:
+      # existing lock but missing Wopi.openfiles[acctok['filename']] ?
+      Wopi.openfiles[acctok['filename']] = (time.asctime(), sets.Set([acctok['username']]))
   return resp
 
 
