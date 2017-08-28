@@ -77,8 +77,10 @@ touch /etc/wopi/ocsecret
 * Mon Aug 21 2017 Giuseppe Lo Presti <lopresti@cern.ch> 2.0
 - Incorporated contributions from AARNet, introduced many configurable items
 - Improved docker image configuration for running behind a load balancer
-- Included support for nginx as load balancer (not required)
-- Improved logging for monitoring purposes
+- Included support for nginx as load balancer (this is still experimental
+  and not required for the functioning of the WOPI server)
+- Improved logging for monitoring purposes, introduced script
+  to populate a grafana instance with relevant metrics
 * Fri May 19 2017 Giuseppe Lo Presti <lopresti@cern.ch> 1.5
 - Improved support for anonymous shares
 - Added support for desktop access via WebDAV
