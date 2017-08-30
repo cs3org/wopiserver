@@ -3,6 +3,10 @@
 wopi_grafana_feeder.py
 
 A daemon pushing CERNBox WOPI monitoring data to Grafana.
+TODO: make it a collectd plugin. References:
+https://collectd.org/documentation/manpages/collectd-python.5.shtml
+https://blog.dbrgn.ch/2017/3/10/write-a-collectd-python-plugin/
+https://github.com/dbrgn/collectd-python-plugins
 
 author: Giuseppe.LoPresti@cern.ch
 CERN/IT-ST
@@ -47,9 +51,11 @@ def get_wopi_metrics(data):
       wrfiles['xlsx'] = {}
       wrfiles['pptx'] = {}
       wrfiles['one'] = {}
+      collab = 0
     try:
       if ' ERROR ' in line:
         errors += 1
+      # all opened files
       elif 'CheckFileInfo' in line:
         # count of unique users
         l = line.split()
@@ -59,8 +65,7 @@ def get_wopi_metrics(data):
         else:
           users[u] = 1
         # count of open files per type: look for the file extension
-        # XXX to be fixed once the log is fixed: we should look for "filename=" as below
-        fname = line[line.find('filename')+9:line.rfind('fileid=')-2]
+        fname = line[line.find('filename=')+10:line.rfind('fileid=')-2]
         fext = fname[fname.rfind('.')+1:]
         if fext not in openfiles:
           openfiles[fext] = {}
@@ -68,16 +73,7 @@ def get_wopi_metrics(data):
           openfiles[fext][fname] += 1
         else:
           openfiles[fext][fname] = 1
-#        p = 5
-#        while True:
-#          try:
-#            fext = l[p][-5:-1]
-#            openfiles[fext] += 1
-#            break
-#          except KeyError:
-#            p += 1
-#          except IndexError:
-#            break
+      # files opened for write
       elif 'successfully written' in line:
         # count of written files
         fname = line[line.find('filename=')+10:-2]
@@ -86,6 +82,10 @@ def get_wopi_metrics(data):
           wrfiles[fext][fname] += 1
         else:
           wrfiles[fext][fname] = 1
+      # collaborative editing sessions
+      elif 'Collaborative' in line:
+        collab += 1
+        # we could extract the filename and the users list for further statistics
     except Exception:
       print 'Error occurred at line: %s' % line
       raise
@@ -105,6 +105,7 @@ def get_wopi_metrics(data):
     output.append(( prefix + '.openfiles.' + fext, (int(timestamp), len(openfiles[fext])) ))
   for fext in wrfiles:
     output.append(( prefix + '.writtenfiles.' + fext, (int(timestamp), len(wrfiles[fext])) ))
+  output.append(( prefix + '.collab', (int(timestamp), collab) ))
   # print and send all collected data
   send_metric(output)
   print output
