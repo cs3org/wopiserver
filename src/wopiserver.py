@@ -452,7 +452,7 @@ def wopiCheckFileInfo(fileid):
       # a path 'a-la owncloud' includes '/files/', which has to be stripped off.
       # XXX This is temporary code for the AARNet config. Note this is not robust as a user path including '/files/' will be broken.
       filemd['ClientUrl'] = Wopi.config.get('general', 'webdavurl') + '/' + \
-                            acctok['filename'].split("/files/", 1)[1] if '/files/' in acctok['filename'] else acctok['filename']
+                            (acctok['filename'].split("/files/", 1)[1] if '/files/' in acctok['filename'] else acctok['filename'])
     except ConfigParser.NoOptionError:
       # if no WebDAV URL is provided, ignore this setting
       pass
