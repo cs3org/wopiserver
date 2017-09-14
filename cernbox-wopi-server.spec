@@ -4,7 +4,7 @@
 Name:      cernbox-wopi-server
 Summary:   A WOPI server to support Microsoft Office online on CERNBox
 Version:   2.0
-Release:   0%{?dist}
+Release:   1%{?dist}
 License:   GPLv3
 Buildroot: %{_tmppath}/%{name}-buildroot
 Group:     CERN-IT/ST
@@ -81,6 +81,7 @@ touch /etc/wopi/ocsecret
   and not required for the functioning of the WOPI server)
 - Improved logging for monitoring purposes, introduced script
   to populate a grafana instance with relevant metrics
+- Fixed WebDAV URL
 * Fri May 19 2017 Giuseppe Lo Presti <lopresti@cern.ch> 1.5
 - Improved support for anonymous shares
 - Added support for desktop access via WebDAV
