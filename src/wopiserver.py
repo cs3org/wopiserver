@@ -527,8 +527,11 @@ def wopiLock(fileid, reqheaders, acctok):
     else:
       Wopi.repeatedLockRequests[retrievedLock] += 1
       if Wopi.repeatedLockRequests[retrievedLock] == 5:
-        xrdcl.removefile(_getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid, 1)
-        Wopi.log.warning('msg="Lock: blindly removing the existing lock to unblock client" user="%s:%s" filename="%s"' % \
+        try:
+          xrdcl.removefile(_getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid, 1)
+        except IOError:
+          pass
+        Wopi.log.warning('msg="Lock: blindly removed the existing lock to unblock client" user="%s:%s" filename="%s"' % \
                          (acctok['ruid'], acctok['rgid'], acctok['filename']))
     return _makeConflictResponse(op, retrievedLock, lock, oldLock, acctok['filename'])
   # LOCK or REFRESH_LOCK: set the lock to the given one, including the expiration time
