@@ -431,7 +431,9 @@ def wopiCheckFileInfo(fileid):
     # populate metadata for this file
     filemd = {}
     filemd['BaseFileName'] = filemd['BreadcrumbDocName'] = os.path.basename(acctok['filename'])
-    furl = filemd['BreadcrumbFolderUrl'] = acctok['folderurl']
+    furl = acctok['folderurl']
+    # encode the path part as it is going to be an URL GET argument
+    filemd['BreadcrumbFolderUrl'] = furl[:furl.find('=')+1] + urllib.quote_plus(furl[furl.find('=')+1:])
     if acctok['username'] == '':
       filemd['UserFriendlyName'] = 'Anonymous Guest'
       if '?path' in furl and furl[-2:] != '=/':
