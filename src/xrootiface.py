@@ -7,6 +7,7 @@ Author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 Contributions: Michael.DSilva@aarnet.edu.au
 '''
 
+import time
 from XRootD import client as XrdClient      # the xroot bindings for python, xrootd-python-4.4.x.el7.x86_64.rpm
 from XRootD.client.flags import OpenFlags, QueryCode
 
@@ -30,8 +31,11 @@ def _xrootcmd(cmd, subcmd, ruid, rgid, args):
   with XrdClient.File() as f:
     url = storageserver + '//proc/user/' + _eosargs(ruid, rgid) + '&mgm.cmd=' + cmd + \
           ('&mgm.subcmd=' + subcmd if subcmd else '') + '&' + args
-    log.debug('msg="Invoking _xrootcmd" cmd="%s%s" url="%s"' % (cmd, ('/' + subcmd if subcmd else ''), url))
+    tstart = time.clock()
     rc, statInfo_unused = f.open(url, OpenFlags.READ)
+    tend = time.clock()
+    log.info('msg="Invoked _xrootcmd" cmd="%s%s" url="%s" elapsedTimems=%.3f' %
+             (cmd, ('/' + subcmd if subcmd else ''), url, (tend-tstart)*1000))
     res = f.readline().strip('\n').split('&')
     if len(res) == 3:    # we may only just get stdout: in that case, assume it's all OK
       rc = res[2]
@@ -69,10 +73,12 @@ def init(inconfig, inlog):
 def stat(filename, ruid, rgid):
   '''Stat a file via xroot on behalf of the given uid,gid. Uses the default xroot API.'''
   filename = _getfilename(filename)
-  log.debug('msg="Invoking stat" filename="%s"' % filename)
   if not xrdfs:
     raise ValueError
+  tstart = time.clock()
   rc, statInfo = xrdfs.stat(filename + _eosargs(ruid, rgid))
+  tend = time.clock()
+  log.info('msg="Invoked stat" filename="%s" elapsedTimems="%.3f"' % (filename, (tend-tstart)*1000))
   if statInfo is None:
     raise IOError(rc.message.strip('\n'))
   return statInfo
@@ -80,10 +86,12 @@ def stat(filename, ruid, rgid):
 def statx(filename, ruid, rgid):
   '''Get extended stat info via an xroot opaque query on behalf of the given uid,gid'''
   filename = _getfilename(filename)
-  log.debug('msg="Invoking statx" filename="%s"' % filename)
   if not xrdfs:
     raise ValueError
+  tstart = time.clock()
   rc, rawinfo = xrdfs.query(QueryCode.OPAQUEFILE, filename + _eosargs(ruid, rgid) + '&mgm.pcmd=stat')
+  tend = time.clock()
+  log.info('msg="Invoked stat" filename="%s" elapsedTimems="%.3f"' % (filename, (tend-tstart)*1000))
   if str(rc).find('[SUCCESS]') == -1:
     raise IOError(str(rc).strip('\n'))
   if rawinfo.find('retc=') > 0:
@@ -112,7 +120,10 @@ def readfile(filename, ruid, rgid):
     raise ValueError
   with XrdClient.File() as f:
     fileurl = storageserver + '/' + homepath + filename + _eosargs(ruid, rgid)
+    tstart = time.clock()
     rc, statInfo_unused = f.open(fileurl, OpenFlags.READ)
+    tend = time.clock()
+    log.info('msg="File open" filename="%s" elapsedTimems="%.3f"' % (filename, (tend-tstart)*1000))
     if not rc.ok:
       # the file could not be opened: check the case of ENOENT and log it as info to keep the logs cleaner
       if 'No such file or directory' in rc.message:
@@ -139,8 +150,11 @@ def writefile(filename, ruid, rgid, content, noversion=0):
   if not xrdfs:
     raise ValueError
   f = XrdClient.File()
+  tstart = time.clock()
   rc, statInfo_unused = f.open(storageserver + '/' + homepath + filename + _eosargs(ruid, rgid, 1, size) + \
                                ('&sys.versioning=0' if noversion else ''), OpenFlags.DELETE)
+  tend = time.clock()
+  log.info('msg="File open" filename="%s" elapsedTimems="%.3f"' % (filename, (tend-tstart)*1000))
   if not rc.ok:
     log.warning('msg="Error opening the file for write" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
     raise IOError(rc.message.strip('\n'))

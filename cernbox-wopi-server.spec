@@ -3,8 +3,8 @@
 #
 Name:      cernbox-wopi-server
 Summary:   A WOPI server to support Microsoft Office online on CERNBox
-Version:   2.0
-Release:   2%{?dist}
+Version:   2.1
+Release:   0%{?dist}
 License:   GPLv3
 Buildroot: %{_tmppath}/%{name}-buildroot
 Group:     CERN-IT/ST
@@ -74,6 +74,8 @@ touch /etc/wopi/ocsecret
 %_python_lib/*
 
 %changelog
+* Tue Nov 21 2017 Giuseppe Lo Presti <lopresti@cern.ch> 2.1
+- Improved logging to get time statistics about xrootd remote calls
 * Mon Aug 21 2017 Giuseppe Lo Presti <lopresti@cern.ch> 2.0
 - Incorporated contributions from AARNet, introduced many configurable items
 - Improved docker image configuration for running behind a load balancer
