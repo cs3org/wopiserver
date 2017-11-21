@@ -4,7 +4,7 @@
 Name:      cernbox-wopi-server
 Summary:   A WOPI server to support Microsoft Office online on CERNBox
 Version:   2.1
-Release:   0%{?dist}
+Release:   1%{?dist}
 License:   GPLv3
 Buildroot: %{_tmppath}/%{name}-buildroot
 Group:     CERN-IT/ST

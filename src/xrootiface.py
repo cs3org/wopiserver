@@ -34,7 +34,7 @@ def _xrootcmd(cmd, subcmd, ruid, rgid, args):
     tstart = time.clock()
     rc, statInfo_unused = f.open(url, OpenFlags.READ)
     tend = time.clock()
-    log.info('msg="Invoked _xrootcmd" cmd="%s%s" url="%s" elapsedTimems=%.3f' %
+    log.info('msg="Invoked _xrootcmd" cmd="%s%s" url="%s" elapsedTimems="%.1f"' %
              (cmd, ('/' + subcmd if subcmd else ''), url, (tend-tstart)*1000))
     res = f.readline().strip('\n').split('&')
     if len(res) == 3:    # we may only just get stdout: in that case, assume it's all OK
@@ -78,7 +78,7 @@ def stat(filename, ruid, rgid):
   tstart = time.clock()
   rc, statInfo = xrdfs.stat(filename + _eosargs(ruid, rgid))
   tend = time.clock()
-  log.info('msg="Invoked stat" filename="%s" elapsedTimems="%.3f"' % (filename, (tend-tstart)*1000))
+  log.info('msg="Invoked stat" filename="%s" elapsedTimems="%.1f"' % (filename, (tend-tstart)*1000))
   if statInfo is None:
     raise IOError(rc.message.strip('\n'))
   return statInfo
@@ -91,7 +91,7 @@ def statx(filename, ruid, rgid):
   tstart = time.clock()
   rc, rawinfo = xrdfs.query(QueryCode.OPAQUEFILE, filename + _eosargs(ruid, rgid) + '&mgm.pcmd=stat')
   tend = time.clock()
-  log.info('msg="Invoked stat" filename="%s" elapsedTimems="%.3f"' % (filename, (tend-tstart)*1000))
+  log.info('msg="Invoked stat" filename="%s" elapsedTimems="%.1f"' % (filename, (tend-tstart)*1000))
   if str(rc).find('[SUCCESS]') == -1:
     raise IOError(str(rc).strip('\n'))
   if rawinfo.find('retc=') > 0:
@@ -123,7 +123,7 @@ def readfile(filename, ruid, rgid):
     tstart = time.clock()
     rc, statInfo_unused = f.open(fileurl, OpenFlags.READ)
     tend = time.clock()
-    log.info('msg="File open" filename="%s" elapsedTimems="%.3f"' % (filename, (tend-tstart)*1000))
+    log.info('msg="File open" filename="%s" elapsedTimems="%.1f"' % (filename, (tend-tstart)*1000))
     if not rc.ok:
       # the file could not be opened: check the case of ENOENT and log it as info to keep the logs cleaner
       if 'No such file or directory' in rc.message:
@@ -154,7 +154,7 @@ def writefile(filename, ruid, rgid, content, noversion=0):
   rc, statInfo_unused = f.open(storageserver + '/' + homepath + filename + _eosargs(ruid, rgid, 1, size) + \
                                ('&sys.versioning=0' if noversion else ''), OpenFlags.DELETE)
   tend = time.clock()
-  log.info('msg="File open" filename="%s" elapsedTimems="%.3f"' % (filename, (tend-tstart)*1000))
+  log.info('msg="File open" filename="%s" elapsedTimems="%.1f"' % (filename, (tend-tstart)*1000))
   if not rc.ok:
     log.warning('msg="Error opening the file for write" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
     raise IOError(rc.message.strip('\n'))
