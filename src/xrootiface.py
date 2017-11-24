@@ -123,7 +123,7 @@ def readfile(filename, ruid, rgid):
     tstart = time.clock()
     rc, statInfo_unused = f.open(fileurl, OpenFlags.READ)
     tend = time.clock()
-    log.info('msg="File open" filename="%s" elapsedTimems="%.1f"' % (filename, (tend-tstart)*1000))
+    log.info('msg="File open for read" filename="%s" elapsedTimems="%.1f"' % (filename, (tend-tstart)*1000))
     if not rc.ok:
       # the file could not be opened: check the case of ENOENT and log it as info to keep the logs cleaner
       if 'No such file or directory' in rc.message:
@@ -154,7 +154,7 @@ def writefile(filename, ruid, rgid, content, noversion=0):
   rc, statInfo_unused = f.open(storageserver + '/' + homepath + filename + _eosargs(ruid, rgid, 1, size) + \
                                ('&sys.versioning=0' if noversion else ''), OpenFlags.DELETE)
   tend = time.clock()
-  log.info('msg="File open" filename="%s" elapsedTimems="%.1f"' % (filename, (tend-tstart)*1000))
+  log.info('msg="File open for write" filename="%s" elapsedTimems="%.1f"' % (filename, (tend-tstart)*1000))
   if not rc.ok:
     log.warning('msg="Error opening the file for write" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
     raise IOError(rc.message.strip('\n'))
