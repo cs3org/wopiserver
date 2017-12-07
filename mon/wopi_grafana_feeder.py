@@ -76,7 +76,7 @@ def get_wopi_metrics(data):
       # files opened for write
       elif 'successfully written' in line:
         # count of written files
-        fname = line[line.find('filename=')+10:-2]
+        fname = line[line.find('filename=')+10:line.rfind('token=')-2]
         fext = fname[fname.rfind('.')+1:]
         if fname in wrfiles[fext]:
           wrfiles[fext][fname] += 1
