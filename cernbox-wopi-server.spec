@@ -4,7 +4,7 @@
 Name:      cernbox-wopi-server
 Summary:   A WOPI server to support Microsoft Office online on CERNBox
 Version:   2.5
-Release:   0%{?dist}
+Release:   1%{?dist}
 License:   GPLv3
 Buildroot: %{_tmppath}/%{name}-buildroot
 Group:     CERN-IT/ST
@@ -53,6 +53,8 @@ install -m 644 wopiserver.logrotate  %buildroot/etc/logrotate.d/cernbox-wopi-ser
 install -m 644 nginx.conf            %buildroot/etc/nginx/conf.d/wopiserver.conf
 install -m 644 uwsgi-wopiserver.ini  %buildroot/etc/uwsgi.d/wopiserver.ini
 
+install -m 755 mon/wopi_grafana_feeder.py  %buildroot/usr/bin/wopi_grafana_feeder.py
+
 %clean
 rm -rf %buildroot/
 
@@ -74,9 +76,10 @@ touch /etc/wopi/ocsecret
 %_python_lib/*
 
 %changelog
-* Mon Nov 27 2017 Giuseppe Lo Presti <lopresti@cern.ch> 2.5
+* Thu Dec  7 2017 Giuseppe Lo Presti <lopresti@cern.ch> 2.5
 - Improved logging to get time statistics about xrootd remote calls
   and consistently log the access token across all relevant log messages
+- Included script to parse logs and send statistics to grafana
 * Mon Aug 21 2017 Giuseppe Lo Presti <lopresti@cern.ch> 2.0
 - Incorporated contributions from AARNet, introduced many configurable items
 - Improved docker image configuration for running behind a load balancer
