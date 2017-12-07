@@ -1,4 +1,4 @@
-FILES_TO_RPM = src wopiserver.conf wopiserver.service wopiserver.logrotate nginx.conf uwsgi-wopiserver.ini
+FILES_TO_RPM = src mon wopiserver.conf wopiserver.service wopiserver.logrotate nginx.conf uwsgi-wopiserver.ini
 SPECFILE = $(shell find . -type f -name *.spec)
 PACKAGE  = $(shell awk '$$1 == "Name:"     { print $$2 }' $(SPECFILE) )
 VERSION  = $(shell awk '$$1 == "Version:"  { print $$2 }' $(SPECFILE) )
