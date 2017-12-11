@@ -18,23 +18,33 @@ import time
 import pickle
 import struct
 import datetime
+import getopt
+import sys
 
-CARBON_HOST = 'filer-carbon.cern.ch'
 CARBON_TCPPORT = 2004
+carbonHost = ''
+verbose = False
 prefix = 'cernbox.wopi'
 epoch = datetime.datetime(1970, 1, 1)
 
+
+def usage(exitCode):
+  '''prints usage'''
+  print 'Usage : cat <logfile> | ' + sys.argv[0] + ' [-h|--help] -g|--grafanahost <hostname>'
+  sys.exit(exitCode)
+
 def send_metric(data):
+  '''send data to grafana using the pickle protocol'''
   payload = pickle.dumps(data, protocol=2)
   header = struct.pack("!L", len(payload))
   message = header + payload
   sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-  sock.connect((CARBON_HOST, CARBON_TCPPORT))
+  sock.connect((carbonHost, CARBON_TCPPORT))
   sock.sendall(message)
   sock.close()
 
-# WOPI usage metrics
 def get_wopi_metrics(data):
+  '''Parse WOPI usage metrics'''
   for line in data:
     if data.isfirstline():
       logdate = line.split('T')[0].split('-')    # keeps the date until 'T', splits
@@ -87,7 +97,8 @@ def get_wopi_metrics(data):
         collab += 1
         # we could extract the filename and the users list for further statistics
     except Exception:
-      print 'Error occurred at line: %s' % line
+      if verbose:
+        print 'Error occurred at line: %s' % line
       raise
 
   if 'timestamp' not in locals():
@@ -106,9 +117,35 @@ def get_wopi_metrics(data):
   for fext in wrfiles:
     output.append(( prefix + '.writtenfiles.' + fext, (int(timestamp), len(wrfiles[fext])) ))
   output.append(( prefix + '.collab', (int(timestamp), collab) ))
-  # print and send all collected data
+  # send and print all collected data
   send_metric(output)
-  print output
+  if verbose:
+    print output
 
-if __name__ == '__main__':
-  get_wopi_metrics(fileinput.input())
+
+# first parse options
+try:
+  options, args = getopt.getopt(sys.argv[1:], 'hvg:', ['help', 'verbose', 'grafanahost'])
+except Exception, e:
+  print e
+  usage(1)
+for f, v in options:
+  if f == '-h' or f == '--help':
+    usage(0)
+  elif f == '-v' or f == '--verbose':
+    verbose = True
+  elif f == '-g' or f == '--grafanahost':
+    carbonHost = v
+  else:
+    print "unknown option : " + f
+    usage(1)
+if carbonHost == '':
+  print 'grafanahost option is mandatory'
+  usage(1)
+# now parse input and collect statistics
+try:
+  get_wopi_metrics(fileinput.input('-'))
+except Exception, e:
+  print 'Error with collecting metrics:', e
+  if verbose:
+    raise
