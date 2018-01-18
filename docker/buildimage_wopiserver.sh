@@ -12,11 +12,10 @@
 # the generated docker image, and copy them into the generated image.
 
 pushd ..
-sed -i 's/, nginx//' *spec
 make rpm
 make clean
 popd
 mv ../cernbox-wopi*rpm .
 
-sudo docker build -t your-personal-repo-area/cloudstor-wopi-server --pull=true --no-cache --force-rm . && \
+sudo docker build -t your-personal-repo-area/cloudstor-wopi-server --pull=true --no-cache --force-rm wopiserver.Dockerfile && \
 sudo docker push your-personal-repo-area/cloudstor-wopi-server

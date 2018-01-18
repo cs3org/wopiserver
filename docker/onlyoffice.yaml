@@ -1,0 +1,27 @@
+# docker-compose configuration file
+version: "2"
+services:
+
+  # OnlyOffice Document Server
+  onlyoffice:
+    build:
+     context: .
+     dockerfile: onlyoffice.Dockerfile
+    image: onlyoffice:cern
+    container_name: onlyoffice
+    hostname: onlyoffice
+    #domainname: demonet
+    stdin_open: true
+    tty: true
+    restart: always
+    ports:
+      - 8000:80
+      - 8443:443
+    volumes:
+      - onlyoffice_data:/var/www/onlyoffice/Data
+      - onlyoffice_logs:/var/log/onlyoffice
+
+volumes:
+  onlyoffice_data:
+  onlyoffice_logs:
+

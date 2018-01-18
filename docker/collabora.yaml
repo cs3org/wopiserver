@@ -1,0 +1,29 @@
+# docker-compose configuration file
+version: "2"
+services:
+
+  # Collabora Document Server
+  collabora:
+    build:
+     context: .
+     dockerfile: collabora.Dockerfile
+    image: collabora:cern
+    #image: docker.io/collabora/code:2.1.5
+    container_name: collabora
+    hostname: collabora
+    #domainname: demonet
+    stdin_open: true
+    tty: true
+    restart: always
+    cap_add:
+      - MKNOD
+    ports:
+      - 443:9980
+    environment:
+      #domain: "wopiserver-test.cern.ch:8080"
+      domain: "cbox-web-04.cern.ch"
+      server_name: "wopiserver-test.cern.ch"
+      username: "dummy_admin"
+      passowrd: "4RhPT2J0KX"
+      DONT_GEN_SSL_CERT: "True"
+
