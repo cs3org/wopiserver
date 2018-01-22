@@ -3,8 +3,8 @@
 #
 Name:      cernbox-wopi-server
 Summary:   A WOPI server to support Microsoft Office online on CERNBox
-Version:   2.5
-Release:   2%{?dist}
+Version:   2.6
+Release:   0%{?dist}
 License:   GPLv3
 Buildroot: %{_tmppath}/%{name}-buildroot
 Group:     CERN-IT/ST
@@ -13,7 +13,7 @@ Source: %{name}-%{version}.tar.gz
 
 # The required Python version makes this package depend on at least CentOS 7 to compile and run.
 BuildRequires: python >= 2.7
-Requires: python >= 2.7, python-flask, python-jwt, xrootd-python, pyOpenSSL
+Requires: python >= 2.7, python-flask, python-jwt, python2-xrootd, pyOpenSSL
 # The following to avoid to pick up /bin/python as an automatic dependency
 AutoReq: no
 
@@ -76,6 +76,9 @@ touch /etc/wopi/ocsecret
 %_python_lib/*
 
 %changelog
+* Mon Jan 22 2018 Giuseppe Lo Presti <lopresti@cern.ch> 2.6
+- Port to xrootd 4.8 and its python bindings
+- Docker and docker-compose files made available in the repo
 * Thu Dec  7 2017 Giuseppe Lo Presti <lopresti@cern.ch> 2.5
 - Improved logging to get time statistics about xrootd remote calls
   and consistently log the access token across all relevant log messages
