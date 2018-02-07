@@ -93,7 +93,7 @@ def get_wopi_metrics(data):
         else:
           wrfiles[fext][fname] = 1
       # collaborative editing sessions
-      elif 'Collaborative' in line:
+      elif 'Collaborative editing detected' in line:
         collab += 1
         # we could extract the filename and the users list for further statistics
     except Exception:
