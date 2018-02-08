@@ -49,7 +49,7 @@ def get_wopi_metrics(data):
   for line in data:
     if data.isfirstline():
       logdate = line.split('T')[0].split('-')    # keeps the date until 'T', splits
-      timestamp = (datetime.datetime(int(logdate[0]), int(logdate[1]), int(logdate[2])) - epoch).total_seconds() + time.altzone
+      timestamp = (datetime.datetime(int(logdate[0]), int(logdate[1]), int(logdate[2]), 1, 0, 0) - epoch).total_seconds() + time.altzone
       errors = 0
       users = {}
       openfiles = {}
