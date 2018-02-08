@@ -20,11 +20,12 @@ import struct
 import datetime
 import getopt
 import sys
+import socket
 
 CARBON_TCPPORT = 2004
 carbonHost = ''
 verbose = False
-prefix = 'cernbox.wopi'
+prefix = 'cernbox.wopi.' + socket.gethostname()
 epoch = datetime.datetime(1970, 1, 1)
 
 
@@ -149,3 +150,4 @@ except Exception, e:
   print 'Error with collecting metrics:', e
   if verbose:
     raise
+
