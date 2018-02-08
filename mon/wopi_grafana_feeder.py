@@ -25,7 +25,7 @@ import socket
 CARBON_TCPPORT = 2004
 carbonHost = ''
 verbose = False
-prefix = 'cernbox.wopi.' + socket.gethostname()
+prefix = 'cernbox.wopi.' + socket.gethostname().split('.')[0]
 epoch = datetime.datetime(1970, 1, 1)
 
 
