@@ -1,4 +1,21 @@
 ==========
+WOPISERVER
+
+Build with:
+  `docker-compose -f wopiserver.yaml build`
+
+Run with:
+  `docker-compose -f wopiserver.yaml up -d`
+
+Inspect the logs
+  `docker-compose -f wopiserver.yaml logs -f`
+
+Specs:
+  - listening on ports 8080 for HTTP (internal port is 8080)
+  - volume for path `/var/log/wopi`
+
+
+==========
 ONLYOFFICE
 
 Build with:
@@ -13,7 +30,6 @@ Inspect the logs
 Specs:
   - listening on ports 8000 and 8443 for HTTP and HTTPS, respectively (internal ports are 80 and 443)
   - volumes for paths `/var/www/onlyoffice/Data` and `/var/log/onlyoffice`
-
 
 
 ==========

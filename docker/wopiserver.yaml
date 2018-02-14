@@ -1,0 +1,23 @@
+# docker-compose configuration file
+version: "2"
+services:
+
+  # WOPI server
+  wopiserver:
+    build:
+     context: .
+     dockerfile: wopiserver.Dockerfile
+    image: wopiserver:cern
+    container_name: wopiserver
+    hostname: wopiserver
+    #stdin_open: true
+    #tty: true
+    restart: always
+    ports:
+      - 8080:8080
+    volumes:
+      - wopiserver_logs:/var/log/wopi
+
+volumes:
+  wopiserver_logs:
+
