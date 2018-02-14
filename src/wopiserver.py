@@ -599,6 +599,8 @@ def wopiGetLock(fileid, reqheaders_unused, acctok):
                          (acctok['filename'], flask.request.args['access_token'][-20:], list(Wopi.openfiles[acctok['filename']][1])))
     except KeyError:
       # existing lock but missing Wopi.openfiles[acctok['filename']] ?
+      Wopi.log.warning('msg="Repopulating missing metadata" filename="%s" token="%s" user="%s"' % \
+                       (acctok['filename'], flask.request.args['access_token'][-20:], acctok['username']))
       Wopi.openfiles[acctok['filename']] = (time.asctime(), sets.Set([acctok['username']]))
   return resp
 
@@ -714,6 +716,25 @@ def wopiRenameFile(fileid, reqheaders, acctok):
     return resp
 
 
+def wopiCreateNewFile(fileid, acctok):
+  '''Implements the editnew action as part of the PutFile WOPI call.'''
+  Wopi.log.info('msg="PutFile" user="%s:%s" filename="%s" fileid="%s" action="editnew" token="%s"' % \
+                (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
+  try:
+    # try to stat the file and raise IOError if not there
+    if xrdcl.stat(acctok['filename'], acctok['ruid'], acctok['rgid']).size == 0:
+      # a 0-size file is equivalent to not existing
+      raise IOError
+    Wopi.log.warning('msg="PutFile" error="File exists but no WOPI lock provided" filename="%s" token="%s"' %
+                     (acctok['filename'], flask.request.args['access_token']))
+    return 'File exists', httplib.CONFLICT
+  except IOError:
+    _storeWopiFile(flask.request, acctok)
+    Wopi.log.info('msg="File successfully written" action="editnew" user="%s:%s" filename="%s" token="%s"' % \
+                  (acctok['ruid'], acctok['rgid'], acctok['filename'], flask.request.args['access_token']))
+    return 'OK', httplib.OK
+
+
 @Wopi.app.route("/wopi/files/<fileid>", methods=['POST'])
 def wopiFilesPost(fileid):
   '''A dispatcher metod for all POST operations on files'''
@@ -758,19 +779,7 @@ def wopiPutFile(fileid):
       raise jwt.exceptions.ExpiredSignatureError
     if 'X-WOPI-Lock' not in flask.request.headers:
       # no lock given: check if the file exists, if not assume we are in creation mode (cf. editnew WOPI action)
-      Wopi.log.info('msg="PutFile" user="%s:%s" filename="%s" fileid="%s" action="editnew" token="%s"' % \
-                    (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
-      try:
-        if xrdcl.stat(acctok['filename'], acctok['ruid'], acctok['rgid']).size == 0:   # a 0-size file is equivalent to not existing
-          raise IOError
-        Wopi.log.warning('msg="PutFile" error="File exists and no WOPI lock provided" filename="%s" token="%s"' %
-                         (acctok['filename'], flask.request.args['access_token']))
-        return 'File exists', httplib.CONFLICT
-      except IOError:
-        _storeWopiFile(flask.request, acctok)
-        Wopi.log.info('msg="File successfully written" user="%s:%s" filename="%s" token="%s"' % \
-                      (acctok['ruid'], acctok['rgid'], acctok['filename'], flask.request.args['access_token']))
-        return 'OK', httplib.OK
+      return wopiCreateNewFile(fileid, acctok)
     # otherwise, check that the caller holds the current lock on the file
     lock = flask.request.headers['X-WOPI-Lock']
     retrievedLock = _retrieveWopiLock(fileid, 'PUTFILE', lock, acctok)
@@ -813,7 +822,7 @@ def wopiPutFile(fileid):
     # as OwnCloud does not seem to provide anything better...
     # Anyhow, previous versions are all stored and recoverable by the user.
     _storeWopiFile(flask.request, acctok)
-    Wopi.log.info('msg="File successfully written" user="%s:%s" filename="%s" token="%s"' % \
+    Wopi.log.info('msg="File successfully written" action="edit" user="%s:%s" filename="%s" token="%s"' % \
                   (acctok['ruid'], acctok['rgid'], acctok['filename'], flask.request.args['access_token']))
     return 'OK', httplib.OK
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
