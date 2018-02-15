@@ -466,8 +466,8 @@ def wopiCheckFileInfo(fileid):
     filemd['Size'] = long(statInfo[8])
     filemd['Version'] = statInfo[12]   # mtime is used as version here
     filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = \
-        filemd['SupportsGetLock'] = filemd['SupportsDeleteFile'] = \
-        filemd['SupportsRename'] = filemd['UserCanRename'] = acctok['canedit']
+        filemd['SupportsGetLock'] = filemd['SupportsDeleteFile'] = acctok['canedit']
+        #filemd['SupportsRename'] = filemd['UserCanRename'] = acctok['canedit']      # XXX broken in Office Online
     filemd['SupportsExtendedLockLength'] = True
     #filemd['UserCanPresent'] = True   # what about the broadcasting feature in Office Online?
     Wopi.log.info('msg="File metadata response" token="%s" metadata="%s"' % (flask.request.args['access_token'][-20:], filemd))

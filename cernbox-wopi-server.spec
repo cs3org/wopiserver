@@ -77,7 +77,6 @@ touch /etc/wopi/ocsecret
 
 %changelog
 * Thu Feb 15 2018 Giuseppe Lo Presti <lopresti@cern.ch> 2.7
-- Enabled file renaming from Office Online
 - Improved handling of newly created files
 * Mon Jan 22 2018 Giuseppe Lo Presti <lopresti@cern.ch> 2.6
 - Port to xrootd 4.8 and its python bindings
