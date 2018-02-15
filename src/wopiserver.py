@@ -729,9 +729,11 @@ def wopiCreateNewFile(fileid, acctok):
                      (acctok['filename'], flask.request.args['access_token']))
     return 'File exists', httplib.CONFLICT
   except IOError:
+    # indeed the file did not exist, so we write it for the first time
     _storeWopiFile(flask.request, acctok)
     Wopi.log.info('msg="File successfully written" action="editnew" user="%s:%s" filename="%s" token="%s"' % \
                   (acctok['ruid'], acctok['rgid'], acctok['filename'], flask.request.args['access_token']))
+    Wopi.openfiles[acctok['filename']] = (time.asctime(), sets.Set([acctok['username']]))
     return 'OK', httplib.OK
 
 
@@ -778,7 +780,7 @@ def wopiPutFile(fileid):
     if acctok['exp'] < time.time():
       raise jwt.exceptions.ExpiredSignatureError
     if 'X-WOPI-Lock' not in flask.request.headers:
-      # no lock given: check if the file exists, if not assume we are in creation mode (cf. editnew WOPI action)
+      # no lock given: assume we are in creation mode (cf. editnew WOPI action)
       return wopiCreateNewFile(fileid, acctok)
     # otherwise, check that the caller holds the current lock on the file
     lock = flask.request.headers['X-WOPI-Lock']
