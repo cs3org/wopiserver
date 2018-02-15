@@ -144,7 +144,6 @@ def writefile(filename, ruid, rgid, content, noversion=0):
   '''Write a file via xroot on behalf of the given uid,gid. The entire content is written
      and any pre-existing file is deleted (or moved to the previous version if supported).
      If noversion=1, the write explicitly disables versioning: this is useful for lock files.'''
-  log.debug('msg="Invoking writeFile" filename="%s"' % filename)
   size = len(content)
   log.debug('msg="Invoking writeFile" filename="%s" size="%d"' % (filename, size))
   if not xrdfs:
