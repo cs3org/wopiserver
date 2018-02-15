@@ -61,12 +61,13 @@ try:
   try:
     wopiTime = xrootiface.getxattr(filename, '0', '0', 'oc.wopi.lastwritetime')
     try:
-      for l in xrootiface.readfile(_getLockName(filename), '0', '0'):
-        wopiLock = l
-      wopiLock = jwt.decode(wopiLock, wopisecret, algorithms=['HS256'])
+      l = ''
+      for line in xrootiface.readfile(_getLockName(filename), '0', '0'):
+        l += line
+      wopiLock = jwt.decode(l, wopisecret, algorithms=['HS256'])
       print '%s: inode = %s, mtime = %s, last WOPI write time = %s, locked: %s' % (filename, statInfo[2], statInfo[12], wopiTime, wopiLock)
     except jwt.exceptions.DecodeError:
-      print '%s: inode = %s, mtime = %s, last WOPI write time = %s, not locked' % (filename, statInfo[2], statInfo[12], wopiTime)
+      print '%s: inode = %s, mtime = %s, last WOPI write time = %s, unreadable lock' % (filename, statInfo[2], statInfo[12], wopiTime)
   except IOError:
     print '%s: inode = %s, mtime = %s, not being written by the WOPI server' % (filename, statInfo[2], statInfo[12])
 except IOError, e:

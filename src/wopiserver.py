@@ -188,7 +188,7 @@ def _retrieveWopiLock(fileid, operation, lock, acctok):
     if 'No such file or directory' in line:
       return None     # no pre-existing lock found
     # otherwise one iteration is largely sufficient to hit EOF
-    l = l + line
+    l += line
   try:
     # check validity
     retrievedLock = jwt.decode(l, Wopi.wopisecret, algorithms=['HS256'])
