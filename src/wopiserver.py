@@ -466,8 +466,8 @@ def wopiCheckFileInfo(fileid):
     filemd['Size'] = long(statInfo[8])
     filemd['Version'] = statInfo[12]   # mtime is used as version here
     filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = \
-        filemd['SupportsGetLock'] = filemd['SupportsDeleteFile'] = acctok['canedit']
-    filemd['SupportsRename'] = filemd['UserCanRename'] = False   # XXX renaming is currently broken in all Office Online apps
+        filemd['SupportsGetLock'] = filemd['SupportsDeleteFile'] = \
+        filemd['SupportsRename'] = filemd['UserCanRename'] = acctok['canedit']
     filemd['SupportsExtendedLockLength'] = True
     #filemd['UserCanPresent'] = True   # what about the broadcasting feature in Office Online?
     Wopi.log.info('msg="File metadata response" token="%s" metadata="%s"' % (flask.request.args['access_token'][-20:], filemd))
@@ -690,7 +690,7 @@ def wopiDeleteFile(fileid, reqheaders_unused, acctok):
 
 
 def wopiRenameFile(fileid, reqheaders, acctok):
-  '''Implements the RenameFile WOPI call. This seems to be broken in Office Online, thus it is disabled for the time being.'''
+  '''Implements the RenameFile WOPI call.'''
   targetName = reqheaders['X-WOPI-RequestedName']
   lock = reqheaders['X-WOPI-Lock']
   retrievedLock = _retrieveWopiLock(fileid, 'RENAMEFILE', lock, acctok)
