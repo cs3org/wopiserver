@@ -18,11 +18,10 @@ services:
     cap_add:
       - MKNOD
     ports:
-      - 443:9980
+      - 9980:9980
     environment:
-      #domain: "wopiserver-test.cern.ch:8080"
-      domain: "cbox-web-04.cern.ch"
-      server_name: "wopiserver-test.cern.ch"
+      domain: "cbox-web-07.cern.ch"
+      server_name: "cbox-wopi-01.cern.ch:9980"
       username: "dummy_admin"
       passowrd: "4RhPT2J0KX"
       DONT_GEN_SSL_CERT: "True"

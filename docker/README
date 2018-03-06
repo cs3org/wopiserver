@@ -45,7 +45,7 @@ Inspect the logs
   `docker-compose -f collabora.yaml logs -f`
 
 Specs:
-  - listening on ports 443 (interal ports is 9980)
+  - listening on ports 9980 (https, mapped to 9980 internally)
 
 Note:
   - please check envvars passed to the container for configuration
