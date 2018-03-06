@@ -337,6 +337,11 @@ def cboxOpen():
           canedit = 'canedit' in req.args and req.args['canedit'].lower() == 'true'
           username = req.args['username'] if 'username' in req.args else ''
           folderurl = urllib.unquote(req.args['folderurl'])
+          # XXX workaround for new files that cannot be opened in collaborative edit mode until they're closed for the first time
+          if canedit and filename in Wopi.openfiles and Wopi.openfiles[filename][0] == 0:
+            Wopi.log.warning('msg="cboxOpen: overriding edit mode to read-only on collaborative editing of new files" client="%s" user="%d:%d"' % \
+                             (req.remote_addr, ruid, rgid))
+            canedit = False
           try:
             Wopi.log.info('msg="cboxOpen: access granted, generating token" client="%s" user="%d:%d" friendlyname="%s" canedit="%s"' % \
                           (req.remote_addr, ruid, rgid, username, canedit))
@@ -388,7 +393,7 @@ def cboxEndPoints():
   client to discover which Office Online frontends have to be used with this WOPI server.
   Note that if the end-points are relocated and the corresponding configuration entry updated,
   the WOPI server must be restarted.'''
-  Wopi.log.info('msg="cboxEndPoints: returning list of valid Office Online end-points" client="%s"' % flask.request.remote_addr)
+  Wopi.log.info('msg="cboxEndPoints: returning Office Online end-points" client="%s"' % flask.request.remote_addr)
   return flask.Response(json.dumps(Wopi.ENDPOINTS), mimetype='application/json')
 
 
@@ -523,9 +528,9 @@ def wopiLock(fileid, reqheaders, acctok):
   # perform the required checks for the validity of the new lock
   if (oldLock is None and retrievedLock != None and not _compareWopiLocks(retrievedLock, lock)) or \
      (oldLock != None and not _compareWopiLocks(retrievedLock, oldLock)):
-    # we got a locking conflict: as we've seen cases of looping clients attempting to restate the same
-    # lock over and over again, we keep track of this request and we forcefully clean up the lock
-    # once 'too many' requests come for the same lock
+    # XXX we got a locking conflict: as we've seen cases of looping clients attempting to restate the same
+    # XXX lock over and over again, we keep track of this request and we forcefully clean up the lock
+    # XXX once 'too many' requests come for the same lock
     if retrievedLock not in Wopi.repeatedLockRequests:
       Wopi.repeatedLockRequests[retrievedLock] = 1
     else:
@@ -550,7 +555,12 @@ def wopiLock(fileid, reqheaders, acctok):
                        (acctok['ruid'], acctok['rgid'], acctok['filename'], flask.request.args['access_token'][-20:], e))
     # also, keep track of files that have been opened for write: this is for statistical purposes only
     # (cf. the GetLock WOPI call and the /wopi/cbox/open/list action)
-    Wopi.openfiles[acctok['filename']] = (time.asctime(), sets.Set([acctok['username']]))
+    if acctok['filename'] not in Wopi.openfiles:
+      Wopi.openfiles[acctok['filename']] = (time.asctime(), sets.Set([acctok['username']]))
+    else:
+      # the file was already opened but without lock: this happens on new files (cf. editnew action), just log
+      Wopi.log.info('msg="First lock for new file" user="%s:%s" filename="%s" token="%s"' % \
+                    (acctok['ruid'], acctok['rgid'], acctok['filename'], flask.request.args['access_token'][-20:]))
   return 'OK', httplib.OK
 
 
@@ -733,7 +743,8 @@ def wopiCreateNewFile(fileid, acctok):
     _storeWopiFile(flask.request, acctok)
     Wopi.log.info('msg="File successfully written" action="editnew" user="%s:%s" filename="%s" token="%s"' % \
                   (acctok['ruid'], acctok['rgid'], acctok['filename'], flask.request.args['access_token']))
-    Wopi.openfiles[acctok['filename']] = (time.asctime(), sets.Set([acctok['username']]))
+    # and we keep track of it as an open file with timestamp = Epoch, despite not having any lock yet
+    Wopi.openfiles[acctok['filename']] = (0, sets.Set([acctok['username']]))
     return 'OK', httplib.OK
 
 
@@ -796,7 +807,7 @@ def wopiPutFile(fileid):
       # we got our xattr: if mtime is greater, someone may have updated the file from a FUSE or SMB mount
       mtime = xrdcl.stat(acctok['filename'], acctok['ruid'], acctok['rgid']).modtime
       Wopi.log.info('msg="Got lastWopiSaveTime" user="%s:%s" filename="%s" token="%s" savetime="%ld" lastmtime="%ld"' % \
-                    (acctok['ruid'], acctok['rgid'], acctok['filename'], flask.request.args['access_token'], savetime, mtime))
+                    (acctok['ruid'], acctok['rgid'], acctok['filename'], flask.request.args['access_token'][-20:], savetime, mtime))
       if mtime > savetime:
         # this is the case, force conflict
         raise IOError
@@ -825,7 +836,7 @@ def wopiPutFile(fileid):
     # Anyhow, previous versions are all stored and recoverable by the user.
     _storeWopiFile(flask.request, acctok)
     Wopi.log.info('msg="File successfully written" action="edit" user="%s:%s" filename="%s" token="%s"' % \
-                  (acctok['ruid'], acctok['rgid'], acctok['filename'], flask.request.args['access_token']))
+                  (acctok['ruid'], acctok['rgid'], acctok['filename'], flask.request.args['access_token'][-20:]))
     return 'OK', httplib.OK
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
     Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" token="%s"' % \
