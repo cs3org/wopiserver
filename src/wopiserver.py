@@ -338,7 +338,7 @@ def cboxOpen():
           username = req.args['username'] if 'username' in req.args else ''
           folderurl = urllib.unquote(req.args['folderurl'])
           # XXX workaround for new files that cannot be opened in collaborative edit mode until they're closed for the first time
-          if canedit and filename in Wopi.openfiles and Wopi.openfiles[filename][0] == 0:
+          if canedit and filename in Wopi.openfiles and Wopi.openfiles[filename][0] == '0':
             Wopi.log.warning('msg="cboxOpen: overriding edit mode to read-only on collaborative editing of new files" client="%s" user="%d:%d"' % \
                              (req.remote_addr, ruid, rgid))
             canedit = False
@@ -743,8 +743,9 @@ def wopiCreateNewFile(fileid, acctok):
     _storeWopiFile(flask.request, acctok)
     Wopi.log.info('msg="File successfully written" action="editnew" user="%s:%s" filename="%s" token="%s"' % \
                   (acctok['ruid'], acctok['rgid'], acctok['filename'], flask.request.args['access_token']))
-    # and we keep track of it as an open file with timestamp = Epoch, despite not having any lock yet
-    Wopi.openfiles[acctok['filename']] = (0, sets.Set([acctok['username']]))
+    # and we keep track of it as an open file with timestamp = Epoch, despite not having any lock yet.
+    # XXX this is to work around an issue with concurrent editing of newly created files (cf. cboxOpen)
+    Wopi.openfiles[acctok['filename']] = ('0', sets.Set([acctok['username']]))
     return 'OK', httplib.OK
 
 
