@@ -198,7 +198,8 @@ def _retrieveWopiLock(fileid, operation, lock, acctok):
       raise jwt.exceptions.ExpiredSignatureError
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
     Wopi.log.warning('msg="%s" user="%s:%s" filename="%s" token="%s" error="WOPI lock expired or invalid, ignoring" exception="%s"' % \
-                     (operation.title(), acctok['ruid'], acctok['rgid'], acctok['filename'], flask.request.args['access_token'][-20:], type(e)))
+                     (operation.title(), acctok['ruid'], acctok['rgid'], acctok['filename'], \
+                      flask.request.args['access_token'][-20:], type(e)))
     # the retrieved lock is not valid any longer, discard and remove it from the backend
     try:
       xrdcl.removefile(_getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid, 1)
@@ -298,10 +299,10 @@ def index():
     This is the CERNBox <a href=http://wopi.readthedocs.io>WOPI</a> server for Microsoft Office Online.<br>
     To use this service, please log in to your CERNBox account and click on your Microsoft Office documents.</div>
     <br><br><br><br><br><br><br><br><br><br><hr>
-    <i>CERNBox WOPI Server %s. Powered by Flask %s for Python %s</i>.
+    <i>CERNBox WOPI Server %s at %s. Powered by Flask %s for Python %s</i>.
     </body>
     </html>
-    """ % (WOPISERVERVERSION, flask.__version__, python_version())
+    """ % (WOPISERVERVERSION, socket.getfqdn(), flask.__version__, python_version())
 
 
 @Wopi.app.route("/wopi/cbox/open", methods=['GET'])
@@ -339,7 +340,7 @@ def cboxOpen():
           folderurl = urllib.unquote(req.args['folderurl'])
           # XXX workaround for new files that cannot be opened in collaborative edit mode until they're closed for the first time
           if canedit and filename in Wopi.openfiles and Wopi.openfiles[filename][0] == '0':
-            Wopi.log.warning('msg="cboxOpen: overriding edit mode to read-only on collaborative editing of new files" client="%s" user="%d:%d"' % \
+            Wopi.log.warning('msg="cboxOpen: forcing read-only mode on collaborative editing of a new file" client="%s" user="%d:%d"' % \
                              (req.remote_addr, ruid, rgid))
             canedit = False
           try:
