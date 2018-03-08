@@ -4,7 +4,7 @@
 Name:      cernbox-wopi-server
 Summary:   A WOPI server to support Microsoft Office online on CERNBox
 Version:   2.7
-Release:   0%{?dist}
+Release:   1%{?dist}
 License:   GPLv3
 Buildroot: %{_tmppath}/%{name}-buildroot
 Group:     CERN-IT/ST
@@ -77,7 +77,8 @@ touch /etc/wopi/ocsecret
 
 %changelog
 * Thu Feb 15 2018 Giuseppe Lo Presti <lopresti@cern.ch> 2.7
-- Improved handling of newly created files
+- Improved handling of newly created files, including working
+  around an issue with concurrent editing from Office Online
 * Mon Jan 22 2018 Giuseppe Lo Presti <lopresti@cern.ch> 2.6
 - Port to xrootd 4.8 and its python bindings
 - Docker and docker-compose files made available in the repo
