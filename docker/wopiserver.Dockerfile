@@ -12,8 +12,7 @@ ADD cernbox-wopi*rpm /tmp
 RUN yum -y update && \
     yum -y install sudo xrootd-client xrootd-python python-flask python-jwt /tmp/cernbox-wopi*rpm && \
     yum clean all && \
-    mkdir /etc/certs && \
-    setcap 'cap_net_bind_service=+ep' /usr/bin/python2.7
+    mkdir /etc/certs
 
 VOLUME ['/var/log/wopi']
 

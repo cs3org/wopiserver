@@ -121,7 +121,7 @@ class Wopi(object):
     '''Runs the Flask app in either standalone (https) or embedded (http) mode'''
     if cls.useHttps:
       cls.log.info('msg="WOPI Server starting in standalone secure mode"')
-      cls.app.run(host='0.0.0.0', port=443, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'),
+      cls.app.run(host='0.0.0.0', port=8443, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'),
                   ssl_context=(cls.config.get('security', 'wopicert'), cls.config.get('security', 'wopikey')))
     else:
       cls.log.info('msg="WOPI Server starting in unsecure/embedded mode"')
