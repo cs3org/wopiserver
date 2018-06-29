@@ -14,22 +14,39 @@ from XRootD.client.flags import OpenFlags, QueryCode
 # module-wide state
 config = None
 log = None
-storageserver = None
-xrdfs = None
+xrdfs = {}    # this is a dictionary to map each endpoint [string] to its XrdClient
+defaultstorage = None
 homepath = None
+
+def _getxrdfor(endpoint):
+  '''Look up the xrootd client for the given endpoint, create it if missing. Supports "default" for the defaultstorage endpoint.'''
+  global xrdfs           # pylint: disable=global-statement
+  global defaultstorage  # pylint: disable=global-statement
+  if endpoint == 'default':
+    return xrdfs[defaultstorage]
+  try:
+    return xrdfs[endpoint]
+  except KeyError:
+    # not found, create it
+    xrdfs[endpoint] = XrdClient.FileSystem(endpoint)
+    return xrdfs[endpoint]
+
+def _geturlfor(endpoint):
+  '''Look up the URL for a given endpoint: "default" corresponds to the defaultstorage one'''
+  if endpoint == 'default':
+    return defaultstorage
+  return 'root://' + endpoint
 
 def _eosargs(ruid, rgid, atomicwrite=0, bookingsize=0):
   '''One-liner to generate extra EOS-specific arguments for the xroot URL'''
   return '?eos.ruid=' + ruid + '&eos.rgid=' + rgid + ('&eos.atomic=1' if atomicwrite else '') + \
           (('&eos.bookingsize='+str(bookingsize)) if bookingsize else '') + '&eos.app=wopi'
 
-def _xrootcmd(cmd, subcmd, ruid, rgid, args):
+def _xrootcmd(endpoint, cmd, subcmd, ruid, rgid, args):
   '''Perform the <cmd>/<subcmd> action on the special /proc/user path on behalf of the given uid,gid.
      Note that this is entirely EOS-specific.'''
-  if not xrdfs:
-    raise ValueError
   with XrdClient.File() as f:
-    url = storageserver + '//proc/user/' + _eosargs(ruid, rgid) + '&mgm.cmd=' + cmd + \
+    url = _geturlfor(endpoint) + '//proc/user/' + _eosargs(ruid, rgid) + '&mgm.cmd=' + cmd + \
           ('&mgm.subcmd=' + subcmd if subcmd else '') + '&' + args
     tstart = time.clock()
     rc, statInfo_unused = f.open(url, OpenFlags.READ)
@@ -57,39 +74,34 @@ def init(inconfig, inlog):
   '''Init module-level variables'''
   global config         # pylint: disable=global-statement
   global log            # pylint: disable=global-statement
-  global storageserver  # pylint: disable=global-statement
-  global xrdfs          # pylint: disable=global-statement
+  global defaultstorage # pylint: disable=global-statement
   global homepath       # pylint: disable=global-statement
   config = inconfig
   log = inlog
-  storageserver = config.get('general', 'storageserver')
+  defaultstorage = config.get('general', 'storageserver')
+  # prepare the xroot client for the default storageserver
+  _getxrdfor(defaultstorage)
   if config.has_option('general', 'storagehomepath'):
     homepath = config.get('general', 'storagehomepath')
   else:
     homepath = ''
-  # prepare the xroot client
-  xrdfs = XrdClient.FileSystem(storageserver)
 
-def stat(filename, ruid, rgid):
+def stat(endpoint, filename, ruid, rgid):
   '''Stat a file via xroot on behalf of the given uid,gid. Uses the default xroot API.'''
   filename = _getfilename(filename)
-  if not xrdfs:
-    raise ValueError
   tstart = time.clock()
-  rc, statInfo = xrdfs.stat(filename + _eosargs(ruid, rgid))
+  rc, statInfo = _getxrdfor(endpoint).stat(filename + _eosargs(ruid, rgid))
   tend = time.clock()
   log.info('msg="Invoked stat" filename="%s" elapsedTimems="%.1f"' % (filename, (tend-tstart)*1000))
   if statInfo is None:
     raise IOError(rc.message.strip('\n'))
   return statInfo
 
-def statx(filename, ruid, rgid):
+def statx(endpoint, filename, ruid, rgid):
   '''Get extended stat info via an xroot opaque query on behalf of the given uid,gid'''
   filename = _getfilename(filename)
-  if not xrdfs:
-    raise ValueError
   tstart = time.clock()
-  rc, rawinfo = xrdfs.query(QueryCode.OPAQUEFILE, filename + _eosargs(ruid, rgid) + '&mgm.pcmd=stat')
+  rc, rawinfo = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, filename + _eosargs(ruid, rgid) + '&mgm.pcmd=stat')
   tend = time.clock()
   log.info('msg="Invoked stat" filename="%s" elapsedTimems="%.1f"' % (filename, (tend-tstart)*1000))
   if str(rc).find('[SUCCESS]') == -1:
@@ -98,28 +110,26 @@ def statx(filename, ruid, rgid):
     raise IOError(rawinfo.strip('\n'))
   return rawinfo.split()
 
-def setxattr(filename, ruid, rgid, key, value):
+def setxattr(endpoint, filename, ruid, rgid, key, value):
   '''Set the extended attribute <key> to <value> via a special open on behalf of the given uid,gid'''
-  _xrootcmd('attr', 'set', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.attr.value=' + str(value) + '&mgm.path=' + _getfilename(filename))
+  _xrootcmd(endpoint, 'attr', 'set', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.attr.value=' + str(value) + '&mgm.path=' + _getfilename(filename))
 
-def getxattr(filename, ruid, rgid, key):
+def getxattr(endpoint, filename, ruid, rgid, key):
   '''Get the extended attribute <key> via a special open on behalf of the given uid,gid'''
-  res = _xrootcmd('attr', 'get', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.path=' + _getfilename(filename))
+  res = _xrootcmd(endpoint, 'attr', 'get', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.path=' + _getfilename(filename))
   # if no error, the response comes in the format <key>="<value>"
   return res.split('"')[1]
 
-def rmxattr(filename, ruid, rgid, key):
+def rmxattr(endpoint, filename, ruid, rgid, key):
   '''Remove the extended attribute <key> via a special open on behalf of the given uid,gid'''
   filename = _getfilename(filename)
-  _xrootcmd('attr', 'rm', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.path=' + filename)
+  _xrootcmd(endpoint, 'attr', 'rm', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.path=' + filename)
 
-def readfile(filename, ruid, rgid):
+def readfile(endpoint, filename, ruid, rgid):
   '''Read a file via xroot on behalf of the given uid,gid. Note that the function is a generator, managed by Flask.'''
   log.debug('msg="Invoking readFile" filename="%s"' % filename)
-  if not xrdfs:
-    raise ValueError
   with XrdClient.File() as f:
-    fileurl = storageserver + '/' + homepath + filename + _eosargs(ruid, rgid)
+    fileurl = _geturlfor(endpoint) + '/' + homepath + filename + _eosargs(ruid, rgid)
     tstart = time.clock()
     rc, statInfo_unused = f.open(fileurl, OpenFlags.READ)
     tend = time.clock()
@@ -140,17 +150,15 @@ def readfile(filename, ruid, rgid):
       for chunk in f.readchunks(offset=0, chunksize=chunksize):
         yield chunk
 
-def writefile(filename, ruid, rgid, content, noversion=0):
+def writefile(endpoint, filename, ruid, rgid, content, noversion=0):
   '''Write a file via xroot on behalf of the given uid,gid. The entire content is written
      and any pre-existing file is deleted (or moved to the previous version if supported).
      If noversion=1, the write explicitly disables versioning: this is useful for lock files.'''
   size = len(content)
   log.debug('msg="Invoking writeFile" filename="%s" size="%d"' % (filename, size))
-  if not xrdfs:
-    raise ValueError
   f = XrdClient.File()
   tstart = time.clock()
-  rc, statInfo_unused = f.open(storageserver + '/' + homepath + filename + _eosargs(ruid, rgid, 1, size) + \
+  rc, statInfo_unused = f.open(_geturlfor(endpoint) + '/' + homepath + filename + _eosargs(ruid, rgid, 1, size) + \
                                ('&sys.versioning=0' if noversion else ''), OpenFlags.DELETE)
   tend = time.clock()
   log.info('msg="File open for write" filename="%s" elapsedTimems="%.1f"' % (filename, (tend-tstart)*1000))
@@ -171,14 +179,14 @@ def writefile(filename, ruid, rgid, content, noversion=0):
     log.warning('msg="Error closing the file" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
     raise IOError(rc.message.strip('\n'))
 
-def renamefile(origfilename, newfilename, ruid, rgid):
+def renamefile(endpoint, origfilename, newfilename, ruid, rgid):
   '''Rename a file via a special open from origfilename to newfilename on behalf of the given uid,gid.'''
-  _xrootcmd('file', 'rename', ruid, rgid, 'mgm.path=' + _getfilename(origfilename) + \
+  _xrootcmd(endpoint, 'file', 'rename', ruid, rgid, 'mgm.path=' + _getfilename(origfilename) + \
             '&mgm.file.source=' + _getfilename(origfilename) + '&mgm.file.target=' + _getfilename(newfilename))
 
-def removefile(filename, ruid, rgid, force=0):
+def removefile(endpoint, filename, ruid, rgid, force=0):
   '''Remove a file via a special open on behalf of the given uid,gid.
      If force=1 or True, then pass the f option, that is skip the recycle bin.
      This is useful for lock files, but it requires uid,gid to be root.'''
-  _xrootcmd('rm', None, ruid, rgid, 'mgm.path=' + _getfilename(filename) + \
+  _xrootcmd(endpoint, 'rm', None, ruid, rgid, 'mgm.path=' + _getfilename(filename) + \
                                      ('&mgm.option=f' if force and int(ruid) == 0 and int(rgid) == 0 else ''))
