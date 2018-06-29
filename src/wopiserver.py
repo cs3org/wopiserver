@@ -99,9 +99,9 @@ class Wopi(object):
       cls.ENDPOINTS['.one']['edit']  = cls.oos + '/o/onenoteframe.aspx?edit=1'                             # pylint: disable=bad-whitespace
       cls.ENDPOINTS['.one']['new']   = cls.oos + '/o/onenoteframe.aspx?edit=1&new=1'                       # pylint: disable=bad-whitespace
 
-    except Exception, e:
+    except Exception as e:
       # any error we get here with the configuration is fatal
-      print "Failed to initialize the service, bailing out:", e
+      print("Failed to initialize the service, bailing out. Exception was: %s" % e)
       sys.exit(-1)
 
   @classmethod
@@ -155,7 +155,7 @@ def _generateAccessToken(ruid, rgid, filename, canedit, username, folderurl, end
     statx = xrdcl.statx(endpoint, filename, ruid, rgid)
     inode = statx[2]
     mtime = statx[12]
-  except IOError, e:
+  except IOError as e:
     Wopi.log.info('msg="Requested file not found" filename="%s" error="%s"' % (filename, e))
     raise
   exptime = int(time.time()) + Wopi.tokenvalidity
@@ -225,7 +225,7 @@ def _storeWopiLock(operation, lock, acctok):
     Wopi.log.info('msg="%s" filename="%s" token="%s" lock="%s" result="success"' % \
                   (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
     Wopi.log.debug('msg="%s" encodedlock="%s" length="%d"' % (operation.title(), s, len(s)))
-  except IOError, e:
+  except IOError as e:
     Wopi.log.warning('msg="%s" filename="%s" token="%s" lock="%s" result="unable to store lock" reason="%s"' % \
                      (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
 
@@ -379,14 +379,14 @@ def cboxDownload():
     Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" token="%s"' % \
                      (flask.request.remote_addr, flask.request.base_url, flask.request.args['access_token']))
     return 'Invalid access token', httplib.NOT_FOUND
-  except IOError, e:
+  except IOError as e:
     Wopi.log.info('msg="Requested file not found" filename="%s" token="%s" error="%s"' % \
                   (acctok['filename'], flask.request.args['access_token'][-20:], e))
     return 'File not found', httplib.NOT_FOUND
-  except KeyError, e:
+  except KeyError as e:
     Wopi.log.error('msg="Invalid access token or request argument" error="%s"' % e)
     return 'Invalid access token', httplib.UNAUTHORIZED
-  except Exception, e:
+  except Exception as e:
     return _logGeneralExceptionAndReturn(e, flask.request)
 
 
@@ -485,14 +485,14 @@ def wopiCheckFileInfo(fileid):
     Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" token="%s"' % \
                      (flask.request.remote_addr, flask.request.base_url, flask.request.args['access_token']))
     return 'Invalid access token', httplib.NOT_FOUND
-  except IOError, e:
+  except IOError as e:
     Wopi.log.info('msg="Requested file not found" filename="%s" token="%s" error="%s"' % \
                   (acctok['filename'], flask.request.args['access_token'][-20:], e))
     return 'File not found', httplib.NOT_FOUND
-  except KeyError, e:
+  except KeyError as e:
     Wopi.log.error('msg="Invalid access token or request argument" error="%s"' % e)
     return 'Invalid access token', httplib.UNAUTHORIZED
-  except Exception, e:
+  except Exception as e:
     return _logGeneralExceptionAndReturn(e, flask.request)
 
 
@@ -515,7 +515,7 @@ def wopiGetFile(fileid):
     Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" token="%s"' % \
                      (flask.request.remote_addr, flask.request.base_url, flask.request.args['access_token']))
     return 'Invalid access token', httplib.UNAUTHORIZED
-  except Exception, e:
+  except Exception as e:
     return _logGeneralExceptionAndReturn(e, flask.request)
 
 
@@ -553,7 +553,7 @@ def wopiLock(fileid, reqheaders, acctok):
     # on first lock, set an xattr with the current time for later conflicts checking
     try:
       xrdcl.setxattr(acctok['endpoint'], acctok['filename'], acctok['ruid'], acctok['rgid'], LASTSAVETIMEKEY, int(time.time()))
-    except IOError, e:
+    except IOError as e:
       # not fatal, but will generate a conflict file later on, so log a warning
       Wopi.log.warning('msg="Unable to set lastwritetime xattr" user="%s:%s" filename="%s" token="%s" reason="%s"' % \
                        (acctok['ruid'], acctok['rgid'], acctok['filename'], flask.request.args['access_token'][-20:], e))
@@ -644,7 +644,7 @@ def wopiPutRelative(fileid, reqheaders, acctok):
         # the file exists: try a different name
         name, ext = os.path.splitext(targetName)
         targetName = name + '_copy' + ext
-      except IOError, e:
+      except IOError as e:
         if 'No such file or directory' in str(e):
           # OK, the targetName is good to go
           break
@@ -669,7 +669,7 @@ def wopiPutRelative(fileid, reqheaders, acctok):
   # either way, we now have a targetName to save the file: attempt to do so
   try:
     _storeWopiFile(flask.request, acctok, targetName)
-  except IOError, e:
+  except IOError as e:
     Wopi.log.info('msg="Error writing file" filename="%s" token="%s" error="%s"' % \
                   (targetName, flask.request.args['access_token'][-20:], e))
     return 'I/O Error', httplib.INTERNAL_SERVER_ERROR
@@ -698,7 +698,7 @@ def wopiDeleteFile(fileid, reqheaders_unused, acctok):
   try:
     xrdcl.removefile(acctok['endpoint'], acctok['filename'], acctok['ruid'], acctok['rgid'])
     return 'OK', httplib.OK
-  except IOError, e:
+  except IOError as e:
     Wopi.log.info('msg="DeleteFile" token="%s" error="%s"' % (flask.request.args['access_token'][-20:], e))
     return 'Internal error', httplib.INTERNAL_SERVER_ERROR
 
@@ -721,7 +721,7 @@ def wopiRenameFile(fileid, reqheaders, acctok):
     renamemd = {}
     renamemd['Name'] = reqheaders['X-WOPI-RequestedName']
     return flask.Response(json.dumps(renamemd), mimetype='application/json')
-  except IOError, e:
+  except IOError as e:
     # assume the rename failed because of the destination filename and report the error
     Wopi.log.info('msg="RenameFile" token="%s" error="%s"' % (flask.request.args['access_token'][-20:], e))
     resp = flask.Response()
@@ -783,7 +783,7 @@ def wopiFilesPost(fileid):
     Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" token="%s"' % \
                      (flask.request.remote_addr, flask.request.base_url, flask.request.args['access_token']))
     return 'Invalid access token', httplib.NOT_FOUND
-  except Exception, e:
+  except Exception as e:
     return _logGeneralExceptionAndReturn(e, flask.request)
 
 
@@ -847,11 +847,11 @@ def wopiPutFile(fileid):
     Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" token="%s"' % \
                      (flask.request.remote_addr, flask.request.base_url, flask.request.args['access_token']))
     return 'Invalid access token', httplib.NOT_FOUND
-  except IOError, e:
+  except IOError as e:
     Wopi.log.info('msg="Error writing file" filename="%s" token="%s" error="%s"' % \
                   (acctok['filename'], flask.request.args['access_token'], e))
     return 'I/O Error', httplib.INTERNAL_SERVER_ERROR
-  except Exception, e:
+  except Exception as e:
     return _logGeneralExceptionAndReturn(e, flask.request)
 
 
