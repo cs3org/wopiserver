@@ -6,10 +6,10 @@ services:
   onlyoffice:
     build:
      context: .
-     dockerfile: onlyoffice.Dockerfile
-    image: onlyoffice:cern
-    container_name: onlyoffice
-    hostname: onlyoffice
+     dockerfile: onlyoffice-poc.Dockerfile
+    image: onlyoffice-poc:cern
+    container_name: onlyoffice-poc
+    hostname: onlyoffice-poc
     stdin_open: true
     tty: true
     restart: always

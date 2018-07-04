@@ -20,7 +20,7 @@ services:
     ports:
       - 9980:9980
     environment:
-      domain: "cbox-web-07.cern.ch"
+      domain: "cernboxwebpreview.cern.ch"
       server_name: "cbox-wopi-01.cern.ch:9980"
       username: "dummy_admin"
       passowrd: "4RhPT2J0KX"

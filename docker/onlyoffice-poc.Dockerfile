@@ -1,4 +1,4 @@
-FROM onlyoffice/documentserver:working
+FROM onlyoffice/documentserver-de
 
 MAINTAINER Enrico Bocchi <enrico.bocchi@cern.ch>
 
@@ -15,6 +15,9 @@ ADD ./etc/default.json /etc/onlyoffice/documentserver/default.json
 
 # More custom configuration to enable metrics gathering
 ADD ./etc/config.js /var/www/onlyoffice/documentserver/server/Metrics/config/
+
+# Copy license
+ADD ./etc/license.lic /app/onlyoffice/DocumentServer/data/
 
 EXPOSE 80 443
 

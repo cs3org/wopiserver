@@ -4,16 +4,27 @@ LABEL maintainer="cernbox-admins@cern.ch" name="wopiserver: The CERNBox WOPI ser
 MAINTAINER Michael D'Silva <md@aarnet.edu.au>
 
 COPY scripts/* /scripts/
-
+COPY wopiserver.d/repos/xrootd.repo /etc/yum.repos.d/
 #if you are missing some repos
-#COPY yum.repos.d/* /etc/yum.repos.d/
+#COPY wopiserver.d/repos/*repo /etc/yum.repos.d/
 
 ADD cernbox-wopi*rpm /tmp
-RUN yum -y update && \
-    yum -y install sudo xrootd-client xrootd-python python-flask python-jwt /tmp/cernbox-wopi*rpm && \
-    yum clean all && \
-    mkdir /etc/certs
+
+RUN yum -y install \
+	sudo \
+	python-flask \
+	python-jwt
+
+RUN yum -y install --disablerepo=epel \
+	xrootd-client \
+	xrootd-python \
+        /tmp/cernbox-wopi*rpm
+
+COPY wopiserver.d/* /etc/wopi/
+RUN mkdir /etc/certs
 
 VOLUME ['/var/log/wopi']
 
-CMD /scripts/entrypoint
+#CMD /scripts/entrypoint
+CMD ["python", "/usr/bin/wopiserver.py"]
+
