@@ -35,7 +35,7 @@ def _geturlfor(endpoint):
   '''Look up the URL for a given endpoint: "default" corresponds to the defaultstorage one'''
   if endpoint == 'default':
     return defaultstorage
-  return 'root://' + endpoint
+  return endpoint
 
 def _eosargs(ruid, rgid, atomicwrite=0, bookingsize=0):
   '''One-liner to generate extra EOS-specific arguments for the xroot URL'''
