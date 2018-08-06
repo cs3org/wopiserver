@@ -15,7 +15,7 @@ services:
     restart: always
     ports:
       - 8000:80
-      - 8443:443
+      - 4443:443
     volumes:
       - onlyofficedata:/var/www/onlyoffice/Data
       - onlyofficelogs:/var/log/onlyoffice
