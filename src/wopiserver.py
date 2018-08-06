@@ -24,10 +24,10 @@ import hashlib
 import sets
 try:
   import flask                 # Flask app server, python-flask-0.10.1-4.el7.noarch.rpm + pyOpenSSL-0.13.1-3.el7.x86_64.rpm
-  import jwt                   # PyJWT JSON Web Token, python-jwt-1.4.0-2.el7.noarch.rpm
-  import xrootiface as xrdcl   # a wrapper around the xrootd python bindings, xrootd-python-4.4.x.el7.x86_64.rpm
+  import jwt                   # PyJWT JSON Web Token, python-jwt-1.5.x.el7.noarch.rpm or above
+  import xrootiface as xrdcl   # a wrapper around the xrootd python bindings, python2-xrootd-4.8.x.el7.x86_64.rpm or above
 except ImportError:
-  print("Missing modules, please install xrootd-python, python-flask, python-jwt")
+  print("Missing modules, please install python2-xrootd, python-flask, python-jwt")
   sys.exit(-1)
 
 # the following constant is replaced on the fly when generating the RPM (cf. spec file)
