@@ -36,6 +36,8 @@ WOPISERVERVERSION = 'git'
 # this is the xattr key used for conflicts resolution on the remote storage
 LASTSAVETIMEKEY = 'oc.wopi.lastwritetime'
 
+# port where this server is listening
+PORT = 8443
 
 class Wopi(object):
   '''A singleton container for all state information of the WOPI server'''
@@ -121,11 +123,11 @@ class Wopi(object):
     '''Runs the Flask app in either standalone (https) or embedded (http) mode'''
     if cls.useHttps:
       cls.log.info('msg="WOPI Server starting in standalone secure mode"')
-      cls.app.run(host='0.0.0.0', port=8443, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'),
+      cls.app.run(host='0.0.0.0', port=PORT, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'),
                   ssl_context=(cls.config.get('security', 'wopicert'), cls.config.get('security', 'wopikey')))
     else:
       cls.log.info('msg="WOPI Server starting in unsecure/embedded mode"')
-      cls.app.run(host='0.0.0.0', port=8080, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'))
+      cls.app.run(host='0.0.0.0', port=PORT, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'))
 
 
 #
@@ -349,7 +351,7 @@ def cboxOpen():
                           (req.remote_addr, ruid, rgid, username, canedit, endpoint))
             inode, acctok = _generateAccessToken(str(ruid), str(rgid), filename, canedit, username, folderurl, endpoint)
             # return an URL-encoded WOPISrc URL for the Office Online server
-            return urllib.quote_plus('%s/wopi/files/%s' % (_ourHostName(), inode)) + \
+            return urllib.quote_plus('%s:%d/wopi/files/%s' % (_ourHostName(), PORT, inode)) + \
                    '&access_token=%s' % acctok      # no need to URL-encode the JWT token
           except IOError:
             return 'Remote error or file not found', httplib.NOT_FOUND
@@ -436,7 +438,7 @@ def wopiCheckFileInfo(fileid):
     statInfo = xrdcl.statx(acctok['endpoint'], acctok['filename'], acctok['ruid'], acctok['rgid'])
     # compute some entities for the response
     wopiSrc = 'WOPISrc=%s&access_token=%s' % \
-              (urllib.quote_plus('%s/wopi/files/%s' % (_ourHostName(), fileid)), flask.request.args['access_token'])
+              (urllib.quote_plus('%s:%d/wopi/files/%s' % (_ourHostName(), PORT, fileid)), flask.request.args['access_token'])
     fExt = os.path.splitext(acctok['filename'])[1]
     if fExt[-1] != 'x':          # new Office extensions scheme
       fExt += 'x'
