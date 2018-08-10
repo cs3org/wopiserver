@@ -186,7 +186,7 @@ def _getLockName(filename):
 def _retrieveWopiLock(fileid, operation, lock, acctok):
   '''Retrieves and logs an existing lock for a given file'''
   l = ''
-  for line in xrdcl.readfile(_getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid):
+  for line in xrdcl.readfile(acctok['endpoint'], _getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid):
     if 'No such file or directory' in line:
       return None     # no pre-existing lock found
     # otherwise one iteration is largely sufficient to hit EOF
