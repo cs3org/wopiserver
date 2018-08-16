@@ -57,12 +57,12 @@ xrootiface.init(config, logging.getLogger(''))
 
 # stat + getxattr the given file
 try:
-  statInfo = xrootiface.statx(filename, '0', '0')
+  statInfo = xrootiface.statx('default', filename, '0', '0')
   try:
-    wopiTime = xrootiface.getxattr(filename, '0', '0', 'oc.wopi.lastwritetime')
+    wopiTime = xrootiface.getxattr('default', filename, '0', '0', 'oc.wopi.lastwritetime')
     try:
       l = ''
-      for line in xrootiface.readfile(_getLockName(filename), '0', '0'):
+      for line in xrootiface.readfile('default', _getLockName(filename), '0', '0'):
         l += line
       wopiLock = jwt.decode(l, wopisecret, algorithms=['HS256'])
       print '%s: inode = %s, mtime = %s, last WOPI write time = %s, locked: %s' % (filename, statInfo[2], statInfo[12], wopiTime, wopiLock)
