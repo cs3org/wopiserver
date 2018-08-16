@@ -14,10 +14,9 @@ services:
     #tty: true
     restart: always
     ports:
-      - 8080:8080
+      - 8443:8443
     volumes:
       - wopiserver_logs:/var/log/wopi
 
 volumes:
   wopiserver_logs:
-
