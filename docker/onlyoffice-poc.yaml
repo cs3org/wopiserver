@@ -14,8 +14,8 @@ services:
     tty: true
     restart: always
     ports:
-      - 8000:80
-      - 4443:443
+      - 9080:80
+      - 9443:443
     volumes:
       - onlyofficedata:/var/www/onlyoffice/Data
       - onlyofficelogs:/var/log/onlyoffice
