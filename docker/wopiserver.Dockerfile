@@ -1,6 +1,12 @@
+# Dockerfile for Wopi Server
+#
+# Please, build and run via docker-compose file: wopiserver.yaml
+
+
 FROM cern/cc7-base
-#FROM your-own-custom-rhel7:latest
+
 LABEL maintainer="cernbox-admins@cern.ch" name="wopiserver: The CERNBox WOPI server" version="1.0"
+
 MAINTAINER Michael D'Silva <md@aarnet.edu.au>
 
 COPY scripts/* /scripts/
@@ -13,7 +19,8 @@ ADD cernbox-wopi*rpm /tmp
 RUN yum -y install \
 	sudo \
 	python-flask \
-	python-jwt
+	python-jwt \
+        curl
 
 RUN yum -y install --disablerepo=epel \
 	xrootd-client \
@@ -22,7 +29,7 @@ RUN yum -y install --disablerepo=epel \
 
 COPY wopiserver.d/* /etc/wopi/
 RUN mkdir /etc/certs
-
+ADD ./etc/*.pem /etc/certs/
 VOLUME ['/var/log/wopi']
 
 #CMD /scripts/entrypoint

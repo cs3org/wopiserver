@@ -1,26 +1,35 @@
-# docker-compose configuration file
-version: "2"
+# docker-compose configuration file for OnlyOffice
+#
+# Build with:   docker-compose -f onlyoffice.yaml build
+# Run with:     docker-compose --project-name onlyoffice -f onlyoffice.yaml up -d
+#
+#
+version: "2.3"
 services:
-
-  # OnlyOffice Document Server
   onlyoffice:
     build:
      context: .
      dockerfile: onlyoffice.Dockerfile
     image: onlyoffice:cern
     container_name: onlyoffice
-    hostname: onlyoffice
+    network_mode: "bridge"
     stdin_open: true
     tty: true
     restart: always
     ports:
-      - 8000:80
-      - 8443:443
+      - 9080:80
+      - 9443:443
     volumes:
-      - onlyofficedata:/var/www/onlyoffice/Data
-      - onlyofficelogs:/var/log/onlyoffice
+      - data:/var/www/onlyoffice/Data
+      - logs:/var/log/onlyoffice
+    healthcheck:
+      test: ["CMD", "curl", "--insecure", "https://localhost"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
 
 volumes:
-  onlyofficedata:
-  onlyofficelogs:
+  data:
+  logs:
 
