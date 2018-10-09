@@ -3,17 +3,17 @@
 #
 Name:      cernbox-wopi-server
 Summary:   A WOPI server to support Microsoft Office online on CERNBox
-Version:   2.8
-Release:   3%{?dist}
+Version:   3.0
+Release:   0%{?dist}
 License:   GPLv3
 Buildroot: %{_tmppath}/%{name}-buildroot
 Group:     CERN-IT/ST
 BuildArch: noarch
 Source: %{name}-%{version}.tar.gz
 
-# The required Python version makes this package depend on at least CentOS 7 to compile and run.
-BuildRequires: python >= 2.7
-Requires: python >= 2.7, python-flask, python-jwt, python2-xrootd, pyOpenSSL
+# The required Python version makes this package depend on Fedora 29 or similar recent distros to compile and run.
+BuildRequires: python3 >= 3.7
+Requires: python3 >= 3.7, python3-flask, python3-jwt, python3-xrootd, python3-pyOpenSSL
 # The following to avoid to pick up /bin/python as an automatic dependency
 AutoReq: no
 
@@ -24,7 +24,7 @@ This RPM provides a Flask-based web server to implement the Microsoft WOPI proto
 %define __os_install_post %{nil}
 
 # Get the python lib directory
-%define _python_lib %(python -c "from distutils import sysconfig; print sysconfig.get_python_lib()")
+%define _python_lib %(python3 -c "from distutils import sysconfig; print(sysconfig.get_python_lib())")
 
 %prep
 %setup -n %{name}-%{version}
@@ -68,6 +68,9 @@ touch /etc/wopi/ocsecret
 %_python_lib/*
 
 %changelog
+* Tue Oct  9 2018 Giuseppe Lo Presti <lopresti@cern.ch> 3.0
+- Ported software to Python 3.7
+- Removed experimental nginx configuration
 * Mon Jul  2 2018 Giuseppe Lo Presti <lopresti@cern.ch> 2.8
 - Introduced support for multiple storage backends
 * Thu Feb 15 2018 Giuseppe Lo Presti <lopresti@cern.ch> 2.7
@@ -117,4 +120,3 @@ touch /etc/wopi/ocsecret
 - First nearly complete version for test deployment with eosbackup
 * Thu Jan  5 2017 Giuseppe Lo Presti <lopresti@cern.ch> 0.1
 - First packaging for the WOPI server prototype
-
