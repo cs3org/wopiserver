@@ -38,21 +38,15 @@ mkdir -p %buildroot/usr/bin
 mkdir -p %buildroot/%_python_lib
 mkdir -p %buildroot/etc/wopi
 mkdir -p %buildroot/etc/logrotate.d
-mkdir -p %buildroot/etc/nginx/conf.d
-mkdir -p %buildroot/etc/uwsgi.d
 mkdir -p %buildroot/usr/lib/systemd/system
 mkdir -p %buildroot/var/log/wopi
 install -m 755 src/wopiserver.py     %buildroot/usr/bin/wopiserver.py
 install -m 755 src/wopicheckfile.py  %buildroot/usr/bin/wopicheckfile.py
 install -m 755 src/wopilistopenfiles.sh %buildroot/usr/bin/wopilistopenfiles.sh
 install -m 644 src/xrootiface.py     %buildroot/%_python_lib/xrootiface.py
-install -m 644 src/wsgi.py           %buildroot/usr/bin/wsgi.py
 install -m 644 wopiserver.service    %buildroot/usr/lib/systemd/system/wopiserver.service
 install -m 644 wopiserver.conf       %buildroot/etc/wopi/wopiserver.defaults.conf
 install -m 644 wopiserver.logrotate  %buildroot/etc/logrotate.d/cernbox-wopi-server
-install -m 644 nginx.conf            %buildroot/etc/nginx/conf.d/wopiserver.conf
-install -m 644 uwsgi-wopiserver.ini  %buildroot/etc/uwsgi.d/wopiserver.ini
-
 install -m 755 mon/wopi_grafana_feeder.py  %buildroot/usr/bin/wopi_grafana_feeder.py
 
 %clean
@@ -68,8 +62,6 @@ touch /etc/wopi/ocsecret
 %defattr(-,root,root,-)
 /etc/wopi
 /etc/logrotate.d/cernbox-wopi-server
-/etc/nginx/conf.d/wopiserver.conf
-/etc/uwsgi.d/wopiserver.ini
 %attr(-,cboxwopi,def-cg) /var/log/wopi
 /usr/lib/systemd/system/wopiserver.service
 /usr/bin/*

@@ -858,8 +858,7 @@ def wopiPutFile(fileid):
 
 
 #
-# If started in standalone mode, start the Flask endless listening loop.
-# The solution chosen for production is to start the server inside Nginx (cf. wsgi.py)
+# Start the Flask endless listening loop if started in standalone mode
 #
 if __name__ == '__main__':
   Wopi.init()
