@@ -4,7 +4,7 @@
 # Run with:     docker-compose --project-name wopiserver -f wopiserver.yaml up -d
 #
 #
-version: "2.3"
+version: "3.3"
 services:
   wopiserver:
     build:
@@ -24,7 +24,7 @@ services:
       interval: 60s
       timeout: 5s
       retries: 3
-      start_period: 60s
+      #start_period: 60s
 
 volumes:
   logs:
