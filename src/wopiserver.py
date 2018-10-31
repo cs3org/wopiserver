@@ -126,7 +126,7 @@ class Wopi:
                   ssl_context=(cls.config.get('security', 'wopicert'), cls.config.get('security', 'wopikey')))
     else:
       cls.log.info('msg="WOPI Server starting in unsecure/embedded mode"')
-      cls.app.run(host='0.0.0.0', port=8080, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'))
+      cls.app.run(host='0.0.0.0', port=8880, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'))
 
 
 #
@@ -297,8 +297,8 @@ def index():
     <html><head><title>CERNBox WOPI</title></head>
     <body>
     <div align="center" style="color:#000080; padding-top:50px; font-family:Verdana; size:11">
-    This is the CERNBox <a href=http://wopi.readthedocs.io>WOPI</a> server for Microsoft Office Online.<br>
-    To use this service, please log in to your CERNBox account and click on your Microsoft Office documents.</div>
+    This is the CERNBox <a href=http://wopi.readthedocs.io>WOPI</a> server to support online office platforms.<br>
+    To use this service, please log in to your CERNBox account and click on your office documents.</div>
     <br><br><br><br><br><br><br><br><br><br><hr>
     <i>CERNBox WOPI Server %s at %s. Powered by Flask %s for Python %s</i>.
     </body>
@@ -524,7 +524,7 @@ def wopiGetFile(fileid):
 # The following operations are all called on POST /wopi/files/<fileid>
 #
 def wopiLock(fileid, reqheaders, acctok):
-  '''Implements the Lock and RefreshLock WOPI calls'''
+  '''Implements the Lock, RefreshLock, and UnlockAndRelock WOPI calls'''
   # cf. http://wopi.readthedocs.io/projects/wopirest/en/latest/files/Lock.html
   op = reqheaders['X-WOPI-Override']
   lock = reqheaders['X-WOPI-Lock']
@@ -852,6 +852,87 @@ def wopiPutFile(fileid):
     Wopi.log.info('msg="Error writing file" filename="%s" token="%s" error="%s"' % \
                   (acctok['filename'], flask.request.args['access_token'], e))
     return 'I/O Error', http.client.INTERNAL_SERVER_ERROR
+  except Exception as e:
+    return _logGeneralExceptionAndReturn(e, flask.request)
+
+
+#
+# WOPI extensions for OnlyOffice
+#
+
+@Wopi.app.route("/xwopi/healthcheck", methods=['GET'])
+def xwopiHealthCheck():
+  Wopi.log.debug('msg="healthcheck" headers="%s"' % flask.request.headers)
+  return 'OK', http.client.OK
+
+@Wopi.app.route("/xwopi/download", methods=['GET'])
+def xwopiDownload():
+  '''Implements the OO download call. Cf. /wopi/files/<fileid>/contents'''
+  Wopi.refreshconfig()
+  try:
+    acctok = jwt.decode(flask.request.headers['Bearer'], Wopi.wopisecret, algorithms=['HS256'])
+    Wopi.log.debug('msg="xwopiDownload" acctok=%s' % acctok)
+    #Wopi.log.info('msg="xwopiDownload" user="%s:%s" filename="%s" token="%s"' % \
+    #              (0, 0, acctok['filename'], flask.request.args['access_token'][-20:]))
+    # stream file from storage to client
+    #resp = flask.Response(xrdcl.readfile(acctok['endpoint'], acctok['filename'], 0, 0), \
+    #                      mimetype='application/octet-stream')
+    #resp.status_code = http.client.OK
+    #return resp
+    return 'OK', http.client.OK
+  except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
+    Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" token="%s"' % \
+                     (flask.request.remote_addr, flask.request.base_url, flask.request.headers['Bearer']))
+    return 'Invalid access token', http.client.NOT_FOUND
+  except Exception as e:
+    return _logGeneralExceptionAndReturn(e, flask.request)
+
+
+@Wopi.app.route("/xwopi/emptyfile", methods=['GET'])
+def xwopiEmptyFile():
+  '''Implements the OO emptyfile call. Cf. wopiCreateNew()'''
+  try:
+    acctok = jwt.decode(flask.request.headers['Bearer'], Wopi.wopisecret, algorithms=['HS256'])
+    Wopi.log.debug('msg="xwopiEmptyFile" acctok=%s' % acctok)
+    # try to stat the file and raise IOError if not there
+    if xrdcl.stat(acctok['endpoint'], acctok['filename'], 0, 0).size == 0:
+      # a 0-size file is equivalent to not existing
+      raise IOError
+    Wopi.log.warning('msg="xwopiEmptyFile" error="File exists" filename="%s" token="%s"' %
+                     (acctok['filename'], flask.request.args['access_token']))
+    return 'File exists', http.client.CONFLICT
+  except IOError:
+    # indeed the file does not exist, so we write it for the first time
+    _storeWopiFile(flask.request, acctok)
+    Wopi.log.info('msg="File successfully written" action="editnew" user="%s:%s" filename="%s" token="%s"' % \
+                  (0, 0, acctok['filename'], flask.request.args['access_token']))
+    return 'OK', http.client.OK
+  except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
+    Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" token="%s"' % \
+                     (flask.request.remote_addr, flask.request.base_url, flask.request.headers['Bearer']))
+    return 'Invalid access token', http.client.NOT_FOUND
+  except Exception as e:
+    return _logGeneralExceptionAndReturn(e, flask.request)
+
+
+@Wopi.app.route("/xwopi/track", methods=['POST'])
+def xwopiPutFile():
+  '''Implements the OO track call. Cf. POST /wopi/files/<fileid>/contents'''
+  try:
+    acctok = jwt.decode(flask.request.headers['Bearer'], Wopi.wopisecret, algorithms=['HS256'])
+    Wopi.log.debug('msg="xwopiTrack" acctok=%s' % acctok)
+    _storeWopiFile(flask.request, acctok)
+    Wopi.log.info('msg="File successfully written" action="edit" user="%s:%s" filename="%s" token="%s"' % \
+                  (0, 0, acctok['filename'], flask.request.args['access_token'][-20:]))
+    return 'OK', http.client.OK
+  except IOError as e:
+    Wopi.log.info('msg="Error writing file" filename="%s" token="%s" error="%s"' % \
+                  (acctok['filename'], flask.request.args['access_token'], e))
+    return 'I/O Error', http.client.INTERNAL_SERVER_ERROR
+  except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
+    Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" token="%s"' % \
+                     (flask.request.remote_addr, flask.request.base_url, flask.request.headers['Bearer']))
+    return 'Invalid access token', http.client.NOT_FOUND
   except Exception as e:
     return _logGeneralExceptionAndReturn(e, flask.request)
 
