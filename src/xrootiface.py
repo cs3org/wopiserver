@@ -118,7 +118,11 @@ def getxattr(endpoint, filename, ruid, rgid, key):
   '''Get the extended attribute <key> via a special open on behalf of the given uid,gid'''
   res = _xrootcmd(endpoint, 'attr', 'get', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.path=' + _getfilename(filename))
   # if no error, the response comes in the format <key>="<value>"
-  return res.split('"')[1]
+  try:
+    return res.split('"')[1]
+  except IndexError:
+    log.warning('msg="Failed to getxattr" filename="%s" key="%s" res="%s"' % (filename, key, res))
+    return None
 
 def rmxattr(endpoint, filename, ruid, rgid, key):
   '''Remove the extended attribute <key> via a special open on behalf of the given uid,gid'''
