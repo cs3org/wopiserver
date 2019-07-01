@@ -104,9 +104,9 @@ def statx(endpoint, filename, ruid, rgid):
   rc, rawinfo = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, filename + _eosargs(ruid, rgid) + '&mgm.pcmd=stat')
   tend = time.clock()
   log.info('msg="Invoked stat" filename="%s" elapsedTimems="%.1f"' % (filename, (tend-tstart)*1000))
-  if str(rc).find('[SUCCESS]') == -1:
+  if '[SUCCESS]' not in str(rc):
     raise IOError(str(rc).strip('\n'))
-  if rawinfo.find('retc=') > 0:
+  if 'retc=' in rawinfo:
     raise IOError(rawinfo.strip('\n'))
   return rawinfo.split()
 
