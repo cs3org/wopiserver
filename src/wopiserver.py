@@ -162,7 +162,7 @@ def _generateAccessToken(ruid, rgid, filename, canedit, username, folderurl, end
   exptime = int(time.time()) + Wopi.tokenvalidity
   acctok = jwt.encode({'ruid': ruid, 'rgid': rgid, 'filename': filename, 'username': username,
                        'canedit': canedit, 'folderurl': folderurl, 'exp': exptime, 'endpoint': endpoint},
-                      Wopi.wopisecret, algorithm='HS256')
+                      Wopi.wopisecret, algorithm='HS256').decode('UTF-8')
   Wopi.log.info('msg="Access token generated" ruid="%s" rgid="%s" canedit="%r" filename="%s" inode="%s" ' \
                 'mtime="%s" folderurl="%s" expiration="%d" token="%s"' % \
                 (ruid, rgid, canedit, filename, inode, mtime, folderurl, exptime, acctok[-20:]))
@@ -185,9 +185,9 @@ def _getLockName(filename):
 
 def _retrieveWopiLock(fileid, operation, lock, acctok):
   '''Retrieves and logs an existing lock for a given file'''
-  l = ''
+  l = b''
   for line in xrdcl.readfile(acctok['endpoint'], _getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid):
-    if 'No such file or directory' in line:
+    if 'No such file or directory' in str(line):
       return None     # no pre-existing lock found
     # otherwise one iteration is largely sufficient to hit EOF
     l += line

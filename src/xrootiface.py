@@ -53,7 +53,7 @@ def _xrootcmd(endpoint, cmd, subcmd, ruid, rgid, args):
     tend = time.clock()
     log.info('msg="Invoked _xrootcmd" cmd="%s%s" url="%s" elapsedTimems="%.1f"' %
              (cmd, ('/' + subcmd if subcmd else ''), url, (tend-tstart)*1000))
-    res = f.readline().strip('\n').split('&')
+    res = f.readline().decode('utf-8').strip('\n').split('&')
     if len(res) == 3:    # we may only just get stdout: in that case, assume it's all OK
       rc = res[2]
       rc = rc[rc.find('=')+1:]
@@ -106,7 +106,8 @@ def statx(endpoint, filename, ruid, rgid):
   log.info('msg="Invoked stat" filename="%s" elapsedTimems="%.1f"' % (filename, (tend-tstart)*1000))
   if '[SUCCESS]' not in str(rc):
     raise IOError(str(rc).strip('\n'))
-  if 'retc=' in str(rawinfo):
+  rawinfo = str(rawinfo)
+  if 'retc=' in rawinfo:
     raise IOError(rawinfo.strip('\n'))
   return rawinfo.split()
 
