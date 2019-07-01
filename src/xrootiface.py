@@ -106,7 +106,7 @@ def statx(endpoint, filename, ruid, rgid):
   log.info('msg="Invoked stat" filename="%s" elapsedTimems="%.1f"' % (filename, (tend-tstart)*1000))
   if '[SUCCESS]' not in str(rc):
     raise IOError(str(rc).strip('\n'))
-  if 'retc=' in rawinfo:
+  if 'retc=' in str(rawinfo):
     raise IOError(rawinfo.strip('\n'))
   return rawinfo.split()
 
