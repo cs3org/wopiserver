@@ -3,7 +3,7 @@
 #
 Name:      cernbox-wopi-server
 Summary:   A WOPI server to support Microsoft Office online on CERNBox
-Version:   3.0
+Version:   3.1
 Release:   0%{?dist}
 License:   GPLv3
 Buildroot: %{_tmppath}/%{name}-buildroot
@@ -12,8 +12,9 @@ BuildArch: noarch
 Source: %{name}-%{version}.tar.gz
 
 # The required Python version makes this package depend on Fedora 29 or similar recent distros to compile and run.
-BuildRequires: python3 >= 3.7
-Requires: python3 >= 3.7, python3-flask, python3-jwt, python3-xrootd, python3-pyOpenSSL
+BuildRequires: python(abi) >= 3.6
+Requires: python(abi) >= 3.6, python36-xrootd, python36-pip
+# we'd also need python3-flask, python3-jwt, python3-pyOpenSSL, but we install them with pip3
 # The following to avoid to pick up /bin/python as an automatic dependency
 AutoReq: no
 
@@ -68,8 +69,11 @@ touch /etc/wopi/ocsecret
 %_python_lib/*
 
 %changelog
+* Mon Jul  1 2019 Giuseppe Lo Presti <lopresti@cern.ch> 3.1
+- Fixed handling of strings/byte-arrays
+- Packaging adapted to CentOS7 and pip3
 * Tue Oct  9 2018 Giuseppe Lo Presti <lopresti@cern.ch> 3.0
-- Ported software to Python 3.7
+- Ported software to Python 3
 - Removed experimental nginx configuration
 * Mon Jul  2 2018 Giuseppe Lo Presti <lopresti@cern.ch> 2.8
 - Introduced support for multiple storage backends
