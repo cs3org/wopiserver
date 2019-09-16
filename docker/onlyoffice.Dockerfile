@@ -15,6 +15,10 @@ RUN chmod 400 /var/www/onlyoffice/Data/certs/onlyoffice.key
 
 # workaround until we have nodejs 8.x + custom config for metrics
 RUN sed -i 's/"rejectUnauthorized": true/"rejectUnauthorized": false/' /etc/onlyoffice/documentserver/default.json
+
+# configure caching area retention time to 1 month (default is 1 day)
+RUN sed -i 's/"files": 86400/"files": 2592000/' /etc/onlyoffice/documentserver/default.json
+
 #ADD ./etc/server.js /var/www/onlyoffice/documentserver/server/DocService/sources/
 
 EXPOSE 80 443
