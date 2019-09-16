@@ -19,6 +19,9 @@ RUN sed -i 's/"rejectUnauthorized": true/"rejectUnauthorized": false/' /etc/only
 # configure caching area retention time to 1 month (default is 1 day)
 RUN sed -i 's/"files": 86400/"files": 2592000/' /etc/onlyoffice/documentserver/default.json
 
+# configure delay time to start saving a doc to 2 secs (default is 5 secs)
+RUN sed -i 's/"savetimeoutdelay": 5000/"savetimeoutdelay": 2000/' /etc/onlyoffice/documentserver/default.json
+
 #ADD ./etc/server.js /var/www/onlyoffice/documentserver/server/DocService/sources/
 
 EXPOSE 80 443
