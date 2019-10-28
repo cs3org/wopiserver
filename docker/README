@@ -11,41 +11,6 @@ Inspect the logs
   `docker-compose -f wopiserver.yaml logs -f`
 
 Specs:
-  - listening on ports 8080 for HTTP (internal port is 8080)
+  - listening on ports 8443 for HTTPS (internal port is 8443)
   - volume for path `/var/log/wopi`
 
-
-==========
-ONLYOFFICE
-
-Build with:
-  `docker-compose -f onlyoffice.yaml build`
-
-Run with:
-  `docker-compose -f onlyoffice.yaml up -d`
-
-Inspect the logs
-  `docker-compose -f onlyoffice.yaml logs -f`
-
-Specs:
-  - listening on ports 8000 and 8443 for HTTP and HTTPS, respectively (internal ports are 80 and 443)
-  - volumes for paths `/var/www/onlyoffice/Data` and `/var/log/onlyoffice`
-
-
-==========
-COLLABORA
-
-Build with:
-  `docker-compose -f collabora.yaml build`
-
-Run with:
-  `docker-compose -f collabora.yaml up -d`
-
-Inspect the logs
-  `docker-compose -f collabora.yaml logs -f`
-
-Specs:
-  - listening on ports 9980 (https, mapped to 9980 internally)
-
-Note:
-  - please check envvars passed to the container for configuration
