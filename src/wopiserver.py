@@ -829,7 +829,7 @@ def wopiPutFile(fileid):
                     (acctok['ruid'], acctok['rgid'], flask.request.args['access_token'], newname))
       # and report failure to Office Online: it will retry a couple of times and eventually it will notify the user
       return 'Conflicting copy created', http.client.INTERNAL_SERVER_ERROR
-    except ValueError:
+    except (ValueError, TypeError) as e:
       # the xattr was not an integer: assume Office Online is looping on an already conflicting file,
       # therefore do nothing and keep reporting internal error. Of course if the attribute was modified by hand,
       # this mechanism fails.
