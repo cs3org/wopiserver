@@ -18,7 +18,7 @@ services:
     ports:
       - 8443:8443
     volumes:
-      - logs:/var/log/wopi
+      - wopi_logs:/var/log/wopi
     healthcheck:
       test: ["CMD", "curl", "--insecure", "https://localhost:8443"]
       interval: 60s
@@ -27,4 +27,4 @@ services:
       #start_period: 60s
 
 volumes:
-  logs:
+  wopi_logs:
