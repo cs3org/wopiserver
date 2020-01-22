@@ -3,7 +3,7 @@
   compress
   daily
   missingok
-  rotate 200
+  rotate 380
   postrotate
     systemctl restart wopiserver
   endscript
