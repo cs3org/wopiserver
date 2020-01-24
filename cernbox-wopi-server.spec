@@ -13,7 +13,7 @@ Source: %{name}-%{version}.tar.gz
 
 # The required Python version makes this package depend on Fedora 29 or similar recent distros to compile and run.
 BuildRequires: python(abi) >= 3.6
-Requires: python(abi) >= 3.6, python36-xrootd, python36-pip
+Requires: python(abi) >= 3.6, python3-xrootd, python36-pip
 # we'd also need python3-flask, python3-jwt, python3-pyOpenSSL, but we install them with pip3
 # The following to avoid to pick up /bin/python as an automatic dependency
 AutoReq: no
