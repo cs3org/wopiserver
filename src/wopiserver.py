@@ -24,9 +24,8 @@ import hashlib
 try:
   import flask                   # Flask app server, python3-flask-0.12.2 + python3-pyOpenSSL-17.3.0
   import jwt                     # PyJWT JSON Web Token, python3-jwt-1.6.1 or above
-  import xrootiface as storage   # a wrapper around the xrootd python bindings, python3-xrootd-4.8.x.el7.x86_64.rpm or above
 except ImportError:
-  print("Missing modules, please install python3-xrootd, python3-flask, python3-jwt")
+  print("Missing modules, please install Flask and JWT with `pip3 install flask PyJWT pyOpenSSL`")
   raise
 
 # the following constant is replaced on the fly when generating the RPM (cf. spec file)
@@ -37,6 +36,23 @@ LASTSAVETIMEKEY = 'oc.wopi.lastwritetime'
 
 # port where this server is listening
 PORT = 8443
+
+# alias of the storage layer module, see function below
+storage = None
+
+def storage_layer_import(storagetype):
+  '''A convenience function to import the storage layer module specified in the config and make it globally available'''
+  global storage        # pylint: disable=global-statement
+  if storagetype in ['local', 'xroot', 'cs3']:
+    storagetype += 'iface'
+  else:
+    raise ImportError('Unsupported/Unknown storage type %s' % storagetype)
+  try:
+    storage = __import__(storagetype, globals(), locals())
+  except ImportError:
+    print("Missing module when attempting to import {}. Please make sure dependencies are met.", storagetype)
+    raise
+
 
 class Wopi:
   '''A singleton container for all state information of the WOPI server'''
@@ -59,6 +75,9 @@ class Wopi:
       cls.config = configparser.ConfigParser()
       cls.config.read_file(open('/etc/wopi/wopiserver.defaults.conf'))
       cls.config.read('/etc/wopi/wopiserver.conf')
+      # load the requested storage layer
+      storage_layer_import(cls.config.get('storagetype'))
+
       # prepare the Flask web app
       cls.log.setLevel(cls.loglevels[cls.config.get('general', 'loglevel')])
       loghandler = logging.FileHandler('/var/log/wopi/wopiserver.log')
@@ -74,6 +93,7 @@ class Wopi:
       cls.repeatedLockRequests = {}               # cf. the wopiLock() function below
       cls.wopiurl = cls.config.get('general', 'wopiurl')
       cls.oos = cls.config.get('general', 'oosurl')
+      cls.code = cls.config.get('general', 'codeurl')
       cls.lockruid = cls.config.get('general', 'lockruid')
       cls.lockrgid = cls.config.get('general', 'lockrgid')
       if cls.config.has_option('general', 'lockpath'):
@@ -81,8 +101,11 @@ class Wopi:
       else:
         cls.lockpath = ''
 
-      # The supported Office Online end-points
+      # TODO all the following declarations are supposed to go to
+      # the CERNBox Apps Registry microservice at some stage in the future
       cls.ENDPOINTS = {}
+
+      # The supported Microsoft Office Online end-points
       cls.ENDPOINTS['.docx'] = {}
       cls.ENDPOINTS['.docx']['view'] = cls.oos + '/wv/wordviewerframe.aspx?edit=0'
       cls.ENDPOINTS['.docx']['edit'] = cls.oos + '/we/wordeditorframe.aspx?edit=1'
@@ -99,6 +122,26 @@ class Wopi:
       cls.ENDPOINTS['.one']['view']  = cls.oos + '/o/onenoteframe.aspx?edit=0'                             # pylint: disable=bad-whitespace
       cls.ENDPOINTS['.one']['edit']  = cls.oos + '/o/onenoteframe.aspx?edit=1'                             # pylint: disable=bad-whitespace
       cls.ENDPOINTS['.one']['new']   = cls.oos + '/o/onenoteframe.aspx?edit=1&new=1'                       # pylint: disable=bad-whitespace
+
+      # The supported Collabora end-points
+      cls.ENDPOINTS['.odt'] = {}
+      cls.ENDPOINTS['.odt']['view'] = cls.code + ''
+      cls.ENDPOINTS['.odt']['edit'] = cls.code + ''
+      cls.ENDPOINTS['.odt']['new']  = cls.code + ''                  # pylint: disable=bad-whitespace
+      cls.ENDPOINTS['.ods'] = {}
+      cls.ENDPOINTS['.ods']['view'] = cls.code + ''
+      cls.ENDPOINTS['.ods']['edit'] = cls.code + ''
+      cls.ENDPOINTS['.ods']['new']  = cls.code + ''                  # pylint: disable=bad-whitespace
+      cls.ENDPOINTS['.odp'] = {}
+      cls.ENDPOINTS['.odp']['view'] = cls.code + ''
+      cls.ENDPOINTS['.odp']['edit'] = cls.code + ''
+      cls.ENDPOINTS['.odp']['new']  = cls.code + ''                  # pylint: disable=bad-whitespace
+
+      # The future-supported Slides end-point
+      #cls.ENDPOINTS['.slide'] = {}
+      #cls.ENDPOINTS['.slide']['view'] =
+      #cls.ENDPOINTS['.slide']['edit'] =
+      #cls.ENDPOINTS['.slide']['new'] =
 
     except Exception as e:
       # any error we get here with the configuration is fatal
@@ -153,9 +196,7 @@ def _generateAccessToken(ruid, rgid, filename, canedit, username, folderurl, end
   try:
     # stat now the file to check for existence and get inode and modification time
     # the inode serves as fileid, the mtime can be used for version information
-    statx = storage.statx(endpoint, filename, ruid, rgid)
-    inode = statx[2]
-    mtime = statx[12]
+    statInfo = storage.statx(endpoint, filename, ruid, rgid)
   except IOError as e:
     Wopi.log.info('msg="Requested file not found" filename="%s" error="%s"' % (filename, e))
     raise
@@ -165,9 +206,9 @@ def _generateAccessToken(ruid, rgid, filename, canedit, username, folderurl, end
                       Wopi.wopisecret, algorithm='HS256').decode('UTF-8')
   Wopi.log.info('msg="Access token generated" ruid="%s" rgid="%s" canedit="%r" filename="%s" inode="%s" ' \
                 'mtime="%s" folderurl="%s" expiration="%d" token="%s"' % \
-                (ruid, rgid, canedit, filename, inode, mtime, folderurl, exptime, acctok[-20:]))
+                (ruid, rgid, canedit, filename, statInfo['inode'], statInfo['mtime'], folderurl, exptime, acctok[-20:]))
   # return the inode == fileid and the access token
-  return inode, acctok
+  return statInfo['inode'], acctok
 
 
 #
@@ -470,10 +511,10 @@ def wopiCheckFileInfo(fileid):
     except configparser.NoOptionError:
       # if no WebDAV URL is provided, ignore this setting
       pass
-    filemd['OwnerId'] = statInfo[5] + ':' + statInfo[6]
+    filemd['OwnerId'] = statInfo['ouid'] + ':' + statInfo['ogid']
     filemd['UserId'] = acctok['ruid'] + ':' + acctok['rgid']    # typically same as OwnerId
-    filemd['Size'] = int(statInfo[8])
-    filemd['Version'] = statInfo[12]   # mtime is used as version here
+    filemd['Size'] = statInfo['size']
+    filemd['Version'] = statInfo['mtime']   # mtime is used as version here
     filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = \
         filemd['SupportsGetLock'] = filemd['SupportsDeleteFile'] = acctok['canedit']
         #filemd['SupportsRename'] = filemd['UserCanRename'] = acctok['canedit']      # XXX broken in Office Online
@@ -737,7 +778,7 @@ def wopiCreateNewFile(fileid, acctok):
                 (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
   try:
     # try to stat the file and raise IOError if not there
-    if storage.stat(acctok['endpoint'], acctok['filename'], acctok['ruid'], acctok['rgid']).size == 0:
+    if storage.stat(acctok['endpoint'], acctok['filename'], acctok['ruid'], acctok['rgid'])['size'] == 0:
       # a 0-size file is equivalent to not existing
       raise IOError
     Wopi.log.warning('msg="PutFile" error="File exists but no WOPI lock provided" filename="%s" token="%s"' %
@@ -811,7 +852,7 @@ def wopiPutFile(fileid):
       # check now the destination file against conflicts
       savetime = int(storage.getxattr(acctok['endpoint'], acctok['filename'], acctok['ruid'], acctok['rgid'], LASTSAVETIMEKEY))
       # we got our xattr: if mtime is greater, someone may have updated the file from a FUSE or SMB mount
-      mtime = storage.stat(acctok['endpoint'], acctok['filename'], acctok['ruid'], acctok['rgid']).modtime
+      mtime = storage.stat(acctok['endpoint'], acctok['filename'], acctok['ruid'], acctok['rgid'])['mtime']
       Wopi.log.info('msg="Got lastWopiSaveTime" user="%s:%s" filename="%s" token="%s" savetime="%ld" lastmtime="%ld"' % \
                     (acctok['ruid'], acctok['rgid'], acctok['filename'], flask.request.args['access_token'][-20:], savetime, mtime))
       if mtime > savetime:
@@ -895,7 +936,7 @@ def xwopiEmptyFile():
     acctok = jwt.decode(flask.request.headers['Bearer'], Wopi.wopisecret, algorithms=['HS256'])
     Wopi.log.debug('msg="xwopiEmptyFile" acctok=%s' % acctok)
     # try to stat the file and raise IOError if not there
-    if storage.stat(acctok['endpoint'], acctok['filename'], 0, 0).size == 0:
+    if storage.stat(acctok['endpoint'], acctok['filename'], 0, 0)['size'] == 0:
       # a 0-size file is equivalent to not existing
       raise IOError
     Wopi.log.warning('msg="xwopiEmptyFile" error="File exists" filename="%s" token="%s"' %

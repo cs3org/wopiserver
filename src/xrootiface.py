@@ -14,7 +14,7 @@ from XRootD.client.flags import OpenFlags, QueryCode
 # module-wide state
 config = None
 log = None
-xrdfs = {}    # this is a dictionary to map each endpoint [string] to its XrdClient
+xrdfs = {}    # this is to map each endpoint [string] to its XrdClient
 defaultstorage = None
 homepath = None
 
@@ -78,16 +78,16 @@ def init(inconfig, inlog):
   global homepath       # pylint: disable=global-statement
   config = inconfig
   log = inlog
-  defaultstorage = config.get('general', 'storageserver')
+  defaultstorage = config.get('xroot', 'storageserver')
   # prepare the xroot client for the default storageserver
   _getxrdfor(defaultstorage)
-  if config.has_option('general', 'storagehomepath'):
-    homepath = config.get('general', 'storagehomepath')
+  if config.has_option('xroot', 'storagehomepath'):
+    homepath = config.get('xroot', 'storagehomepath')
   else:
     homepath = ''
 
 def stat(endpoint, filename, ruid, rgid):
-  '''Stat a file via xroot on behalf of the given uid,gid. Uses the default xroot API.'''
+  '''Stat a file via xroot on behalf of the given uid,gid, and returns (size, mtime). Uses the default xroot API.'''
   filename = _getfilename(filename)
   tstart = time.clock()
   rc, statInfo = _getxrdfor(endpoint).stat(filename + _eosargs(ruid, rgid))
@@ -95,10 +95,10 @@ def stat(endpoint, filename, ruid, rgid):
   log.info('msg="Invoked stat" filename="%s" elapsedTimems="%.1f"' % (filename, (tend-tstart)*1000))
   if statInfo is None:
     raise IOError(rc.message.strip('\n'))
-  return statInfo
+  return {'size': statInfo.size, 'mtime': statInfo.modtime}
 
 def statx(endpoint, filename, ruid, rgid):
-  '''Get extended stat info via an xroot opaque query on behalf of the given uid,gid'''
+  '''Get extended stat info (inode, ouid, ogid, size, mtime) via an xroot opaque query on behalf of the given uid,gid'''
   filename = _getfilename(filename)
   tstart = time.clock()
   rc, rawinfo = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, filename + _eosargs(ruid, rgid) + '&mgm.pcmd=stat')
@@ -109,14 +109,19 @@ def statx(endpoint, filename, ruid, rgid):
   rawinfo = str(rawinfo)
   if 'retc=' in rawinfo:
     raise IOError(rawinfo.strip('\n'))
-  return rawinfo.split()
+  statxdata = rawinfo.split()
+  return {'inode': statxdata[2],
+          'ouid': statxdata[5],
+          'ogid': statxdata[6],
+          'size': int(statxdata[8]),
+          'mtime': statxdata[12]}
 
 def setxattr(endpoint, filename, ruid, rgid, key, value):
-  '''Set the extended attribute <key> to <value> via a special open on behalf of the given uid,gid'''
+  '''Set the extended attribute <key> to <value> via a special open on behalf of the given uid, gid'''
   _xrootcmd(endpoint, 'attr', 'set', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.attr.value=' + str(value) + '&mgm.path=' + _getfilename(filename))
 
 def getxattr(endpoint, filename, ruid, rgid, key):
-  '''Get the extended attribute <key> via a special open on behalf of the given uid,gid'''
+  '''Get the extended attribute <key> via a special open on behalf of the given uid, gid'''
   res = _xrootcmd(endpoint, 'attr', 'get', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.path=' + _getfilename(filename))
   # if no error, the response comes in the format <key>="<value>"
   try:
@@ -126,12 +131,12 @@ def getxattr(endpoint, filename, ruid, rgid, key):
     return None
 
 def rmxattr(endpoint, filename, ruid, rgid, key):
-  '''Remove the extended attribute <key> via a special open on behalf of the given uid,gid'''
+  '''Remove the extended attribute <key> via a special open on behalf of the given uid, gid'''
   filename = _getfilename(filename)
   _xrootcmd(endpoint, 'attr', 'rm', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.path=' + filename)
 
 def readfile(endpoint, filename, ruid, rgid):
-  '''Read a file via xroot on behalf of the given uid,gid. Note that the function is a generator, managed by Flask.'''
+  '''Read a file via xroot on behalf of the given uid, gid. Note that the function is a generator, managed by Flask.'''
   log.debug('msg="Invoking readFile" filename="%s"' % filename)
   with XrdClient.File() as f:
     fileurl = _geturlfor(endpoint) + '/' + homepath + filename + _eosargs(ruid, rgid)
@@ -156,7 +161,7 @@ def readfile(endpoint, filename, ruid, rgid):
         yield chunk
 
 def writefile(endpoint, filename, ruid, rgid, content, noversion=0):
-  '''Write a file via xroot on behalf of the given uid,gid. The entire content is written
+  '''Write a file via xroot on behalf of the given uid, gid. The entire content is written
      and any pre-existing file is deleted (or moved to the previous version if supported).
      If noversion=1, the write explicitly disables versioning: this is useful for lock files.'''
   size = len(content)
@@ -177,7 +182,7 @@ def writefile(endpoint, filename, ruid, rgid, content, noversion=0):
     raise IOError(rc.message.strip('\n'))
   rc, statInfo_unused = f.truncate(size)
   if not rc.ok:
-    log.warning('msg="Error truncing the file" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
+    log.warning('msg="Error truncating the file" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
     raise IOError(rc.message.strip('\n'))
   rc, statInfo_unused = f.close()
   if not rc.ok:
@@ -185,12 +190,12 @@ def writefile(endpoint, filename, ruid, rgid, content, noversion=0):
     raise IOError(rc.message.strip('\n'))
 
 def renamefile(endpoint, origfilename, newfilename, ruid, rgid):
-  '''Rename a file via a special open from origfilename to newfilename on behalf of the given uid,gid.'''
+  '''Rename a file via a special open from origfilename to newfilename on behalf of the given uid, gid.'''
   _xrootcmd(endpoint, 'file', 'rename', ruid, rgid, 'mgm.path=' + _getfilename(origfilename) + \
             '&mgm.file.source=' + _getfilename(origfilename) + '&mgm.file.target=' + _getfilename(newfilename))
 
 def removefile(endpoint, filename, ruid, rgid, force=0):
-  '''Remove a file via a special open on behalf of the given uid,gid.
+  '''Remove a file via a special open on behalf of the given uid, gid.
      If force=1 or True, then pass the f option, that is skip the recycle bin.
      This is useful for lock files, but it requires uid,gid to be root.'''
   _xrootcmd(endpoint, 'rm', None, ruid, rgid, 'mgm.path=' + _getfilename(filename) + \
