@@ -9,6 +9,8 @@ Author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 import time
 import os
 from stat import S_ISDIR
+import sys
+import traceback
 
 # module-wide state
 config = None
@@ -17,7 +19,7 @@ homepath = None
 
 def _getfilename(filename):
   '''map the given filename into the target namespace by prepending the homepath (see storagehomepath in wopiserver.conf)'''
-  return homepath + filename
+  return os.path.normpath(homepath + os.sep + filename)
 
 def init(inconfig, inlog):
   '''Init module-level variables'''
@@ -45,8 +47,8 @@ def stat(_endpoint, filename, _ruid, _rgid):
     log.info('msg="Invoked stat" filename="%s" elapsedTimems="%.1f"' % (filename, (tend-tstart)*1000))
     return {
         'inode': statInfo.st_ino,
-        'ouid': statInfo.st_uid,
-        'ogid': statInfo.st_gid,
+        'ouid': str(statInfo.st_uid),
+        'ogid': str(statInfo.st_gid),
         'size': statInfo.st_size,
         'mtime': statInfo.st_mtime
         }
@@ -60,23 +62,26 @@ def statx(_endpoint, filename, _ruid, _rgid):
 def setxattr(_endpoint, filename, _ruid, _rgid, key, value):
   '''Set the extended attribute <key> to <value> on behalf of the given uid, gid'''
   try:
-    os.setxattr(_getfilename(filename), key, str(value))
-  except (FileNotFoundError, PermissionError) as e:
+    os.setxattr(_getfilename(filename), 'user.' + key, str(value).encode())
+  except (FileNotFoundError, PermissionError, OSError) as e:
+    log.warning('msg="Failed to setxattr" filename="%s" key="%s" exception="%s"' % (filename, key, e))
     raise IOError(e)
 
 def getxattr(_endpoint, filename, _ruid, _rgid, key):
   '''Get the extended attribute <key> on behalf of the given uid, gid. Do not raise exceptions'''
   try:
-    return os.getxattr(_getfilename(filename), key)
-  except (FileNotFoundError, PermissionError) as e:
+    filename = _getfilename(filename)
+    return os.getxattr(filename, 'user.' + key)
+  except (FileNotFoundError, PermissionError, OSError) as e:
     log.warning('msg="Failed to getxattr" filename="%s" key="%s" exception="%s"' % (filename, key, e))
     return None
 
 def rmxattr(_endpoint, filename, _ruid, _rgid, key):
   '''Remove the extended attribute <key> on behalf of the given uid, gid'''
   try:
-    os.removexattr(_getfilename(filename), key)
-  except (FileNotFoundError, PermissionError) as e:
+    os.removexattr(_getfilename(filename), 'user.' + key)
+  except (FileNotFoundError, PermissionError, OSError) as e:
+    log.warning('msg="Failed to rmxattr" filename="%s" key="%s" exception="%s"' % (filename, key, e))
     raise IOError(e)
 
 def readfile(_endpoint, filename, _ruid, _rgid):
@@ -84,8 +89,9 @@ def readfile(_endpoint, filename, _ruid, _rgid):
   log.debug('msg="Invoking readFile" filename="%s"' % filename)
   try:
     tstart = time.clock()
+    filename = _getfilename(filename)
     chunksize = config.getint('io', 'chunksize')
-    f = open(_getfilename(filename), mode='rb', buffering=chunksize)
+    f = open(filename, mode='rb', buffering=chunksize)
     tend = time.clock()
     log.info('msg="File open for read" filename="%s" elapsedTimems="%.1f"' % (filename, (tend-tstart)*1000))
     # the actual read is buffered and managed by the Flask server
@@ -106,10 +112,11 @@ def writefile(_endpoint, filename, ruid, rgid, content, noversion=0):
      and any pre-existing file is deleted (or moved to the previous version if supported).
      If noversion=1, the write explicitly disables versioning: this is useful for lock files.'''
   size = len(content)
+  filename = _getfilename(filename)
   log.debug('msg="Invoking writeFile" filename="%s" size="%d"' % (filename, size))
   try:
     tstart = time.clock()
-    f = open(_getfilename(filename), mode='wb')
+    f = open(filename, mode='wb')
     tend = time.clock()
     log.info('msg="File open for write" filename="%s" elapsedTimems="%.1f"' % (filename, (tend-tstart)*1000))
     # write the file. In a future implementation, we should find a way to only update the required chunks...
@@ -120,12 +127,16 @@ def writefile(_endpoint, filename, ruid, rgid, content, noversion=0):
   except OSError as e:
     log.warning('msg="Error writing to file" filename="%s" error="%s"' % (filename, e))
     raise IOError(e)
+  except Exception:
+    ex_type, ex_value, ex_traceback = sys.exc_info()
+    log.error('msg="Unknown error writing to file" filename="%s" traceback="%s"' % (filename, traceback.format_exception(ex_type, ex_value, ex_traceback)))
+    raise
 
 def renamefile(_endpoint, origfilename, newfilename, ruid, rgid):
   '''Rename a file from origfilename to newfilename on behalf of the given uid, gid.'''
   try:
     os.rename(_getfilename(origfilename), _getfilename(newfilename))
-  except (FileNotFoundError, PermissionError) as e:
+  except (FileNotFoundError, PermissionError, OSError) as e:
     raise IOError(e)
 
 def removefile(_endpoint, filename, _ruid, _rgid, _force=0):
@@ -133,5 +144,5 @@ def removefile(_endpoint, filename, _ruid, _rgid, _force=0):
      The force argument is irrelevant and ignored for local storage.'''
   try:
     os.remove(_getfilename(filename))
-  except (FileNotFoundError, PermissionError, IsADirectoryError) as e:
+  except (FileNotFoundError, PermissionError, IsADirectoryError, OSError) as e:
     raise IOError(e)

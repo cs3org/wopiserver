@@ -76,7 +76,7 @@ class Wopi:
       cls.config.read_file(open('/etc/wopi/wopiserver.defaults.conf'))
       cls.config.read('/etc/wopi/wopiserver.conf')
       # load the requested storage layer
-      storage_layer_import(cls.config.get('storagetype'))
+      storage_layer_import(cls.config.get('general', 'storagetype'))
 
       # prepare the Flask web app
       cls.log.setLevel(cls.loglevels[cls.config.get('general', 'loglevel')])
@@ -851,13 +851,15 @@ def wopiPutFile(fileid):
     try:
       # check now the destination file against conflicts
       savetime = int(storage.getxattr(acctok['endpoint'], acctok['filename'], acctok['ruid'], acctok['rgid'], LASTSAVETIMEKEY))
-      # we got our xattr: if mtime is greater, someone may have updated the file from a FUSE or SMB mount
+      # we got our xattr: if mtime is greater, someone may have updated the file from a different source (e.g. FUSE or SMB mount)
       mtime = storage.stat(acctok['endpoint'], acctok['filename'], acctok['ruid'], acctok['rgid'])['mtime']
+      if int(mtime) > int(savetime):
+        # this is the case, force conflict. Note we can't force a resolution greater than one second!
+        Wopi.log.info('msg="Forcing conflict based on lastWopiSaveTime" user="%s:%s" filename="%s" token="%s" savetime="%ld" lastmtime="%ld"' % \
+                      (acctok['ruid'], acctok['rgid'], acctok['filename'], flask.request.args['access_token'][-20:], savetime, mtime))
+        raise IOError
       Wopi.log.info('msg="Got lastWopiSaveTime" user="%s:%s" filename="%s" token="%s" savetime="%ld" lastmtime="%ld"' % \
                     (acctok['ruid'], acctok['rgid'], acctok['filename'], flask.request.args['access_token'][-20:], savetime, mtime))
-      if mtime > savetime:
-        # this is the case, force conflict
-        raise IOError
     except IOError:
       # either the file was deleted or it was updated/overwritten by others: force conflict
       newname, ext = os.path.splitext(acctok['filename'])
