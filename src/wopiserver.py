@@ -501,8 +501,6 @@ def wopiCheckFileInfo(fileid):
     wopiSrc = 'WOPISrc=%s&access_token=%s' % \
               (urllib.parse.quote_plus('%s:%d/wopi/files/%s' % (_ourHostName(), Wopi.port, fileid)), flask.request.args['access_token'])
     fExt = os.path.splitext(acctok['filename'])[1]
-    if fExt[-1] != 'x':          # new Office extensions scheme
-      fExt += 'x'
     # populate metadata for this file
     filemd = {}
     filemd['BaseFileName'] = filemd['BreadcrumbDocName'] = os.path.basename(acctok['filename'])
