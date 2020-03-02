@@ -34,9 +34,6 @@ WOPISERVERVERSION = 'git'
 # this is the xattr key used for conflicts resolution on the remote storage
 LASTSAVETIMEKEY = 'oc.wopi.lastwritetime'
 
-# port where this server is listening
-PORT = 8443
-
 # alias of the storage layer module, see function below
 storage = None
 
@@ -57,6 +54,7 @@ def storage_layer_import(storagetype):
 class Wopi:
   '''A singleton container for all state information of the WOPI server'''
   app = flask.Flask("WOPIServer")
+  port = 0
   lastConfigReadTime = time.time()
   loglevels = {"Critical": logging.CRITICAL,  # 50
                "Error":    logging.ERROR,     # 40
@@ -79,6 +77,7 @@ class Wopi:
       storage_layer_import(cls.config.get('general', 'storagetype'))
 
       # prepare the Flask web app
+      cls.port = int(cls.config.get('general', 'port'))
       cls.log.setLevel(cls.loglevels[cls.config.get('general', 'loglevel')])
       loghandler = logging.FileHandler('/var/log/wopi/wopiserver.log')
       loghandler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)s[%(process)d] %(levelname)-8s %(message)s',
@@ -124,6 +123,9 @@ class Wopi:
       cls.ENDPOINTS['.one']['new']   = cls.oos + '/o/onenoteframe.aspx?edit=1&new=1'                       # pylint: disable=bad-whitespace
 
       # The supported Collabora end-points
+      # TODO GET ('%/hosting/discovery' % cls.code)
+      # TODO parse XML and extract urlsrc from first <app> node inside <wopi-discovery>/<net-zone>
+      # cls.code = urlsrc
       cls.ENDPOINTS['.odt'] = {}
       cls.ENDPOINTS['.odt']['view'] = cls.code + ''
       cls.ENDPOINTS['.odt']['edit'] = cls.code + ''
@@ -164,12 +166,12 @@ class Wopi:
   def run(cls):
     '''Runs the Flask app in either standalone (https) or embedded (http) mode'''
     if cls.useHttps:
-      cls.log.info('msg="WOPI Server starting in standalone secure mode"')
-      cls.app.run(host='0.0.0.0', port=PORT, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'),
+      cls.log.info('msg="WOPI Server starting in standalone secure mode" port="%d"' % cls.port)
+      cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'),
                   ssl_context=(cls.config.get('security', 'wopicert'), cls.config.get('security', 'wopikey')))
     else:
-      cls.log.info('msg="WOPI Server starting in unsecure/embedded mode"')
-      cls.app.run(host='0.0.0.0', port=8880, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'))
+      cls.log.info('msg="WOPI Server starting in unsecure/embedded mode" port="%d"' % cls.port)
+      cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'))
 
 
 #
@@ -391,7 +393,7 @@ def cboxOpen():
                           (req.remote_addr, ruid, rgid, username, canedit, endpoint))
             inode, acctok = _generateAccessToken(str(ruid), str(rgid), filename, canedit, username, folderurl, endpoint)
             # return an URL-encoded WOPISrc URL for the Office Online server
-            return urllib.parse.quote_plus('%s:%d/wopi/files/%s' % (_ourHostName(), PORT, inode)) + \
+            return urllib.parse.quote_plus('%s:%d/wopi/files/%s' % (_ourHostName(), Wopi.port, inode)) + \
                    '&access_token=%s' % acctok      # no need to URL-encode the JWT token
           except IOError:
             return 'Remote error or file not found', http.client.NOT_FOUND
@@ -477,7 +479,7 @@ def wopiCheckFileInfo(fileid):
     statInfo = storage.statx(acctok['endpoint'], acctok['filename'], acctok['ruid'], acctok['rgid'])
     # compute some entities for the response
     wopiSrc = 'WOPISrc=%s&access_token=%s' % \
-              (urllib.parse.quote_plus('%s:%d/wopi/files/%s' % (_ourHostName(), PORT, fileid)), flask.request.args['access_token'])
+              (urllib.parse.quote_plus('%s:%d/wopi/files/%s' % (_ourHostName(), Wopi.port, fileid)), flask.request.args['access_token'])
     fExt = os.path.splitext(acctok['filename'])[1]
     if fExt[-1] != 'x':          # new Office extensions scheme
       fExt += 'x'
