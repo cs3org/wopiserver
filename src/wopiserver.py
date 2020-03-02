@@ -91,64 +91,83 @@ class Wopi:
       cls.useHttps = cls.config.get('security', 'usehttps').lower() == 'yes'
       cls.repeatedLockRequests = {}               # cf. the wopiLock() function below
       cls.wopiurl = cls.config.get('general', 'wopiurl')
-      cls.oos = cls.config.get('general', 'oosurl')
-      cls.code = cls.config.get('general', 'codeurl')
       cls.lockruid = cls.config.get('general', 'lockruid')
       cls.lockrgid = cls.config.get('general', 'lockrgid')
       if cls.config.has_option('general', 'lockpath'):
         cls.lockpath = cls.config.get('general', 'lockpath')
       else:
         cls.lockpath = ''
-
-      # TODO all the following declarations are supposed to go to
-      # the CERNBox Apps Registry microservice at some stage in the future
-      cls.ENDPOINTS = {}
-
-      # The supported Microsoft Office Online end-points
-      cls.ENDPOINTS['.docx'] = {}
-      cls.ENDPOINTS['.docx']['view'] = cls.oos + '/wv/wordviewerframe.aspx?edit=0'
-      cls.ENDPOINTS['.docx']['edit'] = cls.oos + '/we/wordeditorframe.aspx?edit=1'
-      cls.ENDPOINTS['.docx']['new']  = cls.oos + '/we/wordeditorframe.aspx?new=1'                          # pylint: disable=bad-whitespace
-      cls.ENDPOINTS['.xlsx'] = {}
-      cls.ENDPOINTS['.xlsx']['view'] = cls.oos + '/x/_layouts/xlviewerinternal.aspx?edit=0'
-      cls.ENDPOINTS['.xlsx']['edit'] = cls.oos + '/x/_layouts/xlviewerinternal.aspx?edit=1'
-      cls.ENDPOINTS['.xlsx']['new']  = cls.oos + '/x/_layouts/xlviewerinternal.aspx?edit=1&new=1'          # pylint: disable=bad-whitespace
-      cls.ENDPOINTS['.pptx'] = {}
-      cls.ENDPOINTS['.pptx']['view'] = cls.oos + '/p/PowerPointFrame.aspx?PowerPointView=ReadingView'
-      cls.ENDPOINTS['.pptx']['edit'] = cls.oos + '/p/PowerPointFrame.aspx?PowerPointView=EditView'
-      cls.ENDPOINTS['.pptx']['new']  = cls.oos + '/p/PowerPointFrame.aspx?PowerPointView=EditView&New=1'   # pylint: disable=bad-whitespace
-      cls.ENDPOINTS['.one'] = {}
-      cls.ENDPOINTS['.one']['view']  = cls.oos + '/o/onenoteframe.aspx?edit=0'                             # pylint: disable=bad-whitespace
-      cls.ENDPOINTS['.one']['edit']  = cls.oos + '/o/onenoteframe.aspx?edit=1'                             # pylint: disable=bad-whitespace
-      cls.ENDPOINTS['.one']['new']   = cls.oos + '/o/onenoteframe.aspx?edit=1&new=1'                       # pylint: disable=bad-whitespace
-
-      # The supported Collabora end-points
-      # TODO GET ('%/hosting/discovery' % cls.code)
-      # TODO parse XML and extract urlsrc from first <app> node inside <wopi-discovery>/<net-zone>
-      # cls.code = urlsrc
-      cls.ENDPOINTS['.odt'] = {}
-      cls.ENDPOINTS['.odt']['view'] = cls.code + ''
-      cls.ENDPOINTS['.odt']['edit'] = cls.code + ''
-      cls.ENDPOINTS['.odt']['new']  = cls.code + ''                  # pylint: disable=bad-whitespace
-      cls.ENDPOINTS['.ods'] = {}
-      cls.ENDPOINTS['.ods']['view'] = cls.code + ''
-      cls.ENDPOINTS['.ods']['edit'] = cls.code + ''
-      cls.ENDPOINTS['.ods']['new']  = cls.code + ''                  # pylint: disable=bad-whitespace
-      cls.ENDPOINTS['.odp'] = {}
-      cls.ENDPOINTS['.odp']['view'] = cls.code + ''
-      cls.ENDPOINTS['.odp']['edit'] = cls.code + ''
-      cls.ENDPOINTS['.odp']['new']  = cls.code + ''                  # pylint: disable=bad-whitespace
-
-      # The future-supported Slides end-point
-      #cls.ENDPOINTS['.slide'] = {}
-      #cls.ENDPOINTS['.slide']['view'] =
-      #cls.ENDPOINTS['.slide']['edit'] =
-      #cls.ENDPOINTS['.slide']['new'] =
-
     except Exception as e:
       # any error we get here with the configuration is fatal
-      print(("Failed to initialize the service, bailing out."))
+      print("Failed to initialize the service, bailing out. Error:\n%s" % e)
       raise
+
+  @classmethod
+  def initAppsRegistry(cls):
+    '''Initializes the CERNBoxOffice-like Apps Registry'''
+    # TODO all this is supposed to be moved to the CERNBox Apps Registry microservice at some stage in the future
+    cls.ENDPOINTS = {}
+
+    oos = cls.config.get('general', 'oosurl', fallback=None)
+    if oos is not None:
+      # The supported Microsoft Office Online end-points
+      cls.ENDPOINTS['.docx'] = {}
+      cls.ENDPOINTS['.docx']['view'] = oos + '/wv/wordviewerframe.aspx?edit=0'
+      cls.ENDPOINTS['.docx']['edit'] = oos + '/we/wordeditorframe.aspx?edit=1'
+      cls.ENDPOINTS['.docx']['new']  = oos + '/we/wordeditorframe.aspx?new=1'                          # pylint: disable=bad-whitespace
+      cls.ENDPOINTS['.xlsx'] = {}
+      cls.ENDPOINTS['.xlsx']['view'] = oos + '/x/_layouts/xlviewerinternal.aspx?edit=0'
+      cls.ENDPOINTS['.xlsx']['edit'] = oos + '/x/_layouts/xlviewerinternal.aspx?edit=1'
+      cls.ENDPOINTS['.xlsx']['new']  = oos + '/x/_layouts/xlviewerinternal.aspx?edit=1&new=1'          # pylint: disable=bad-whitespace
+      cls.ENDPOINTS['.pptx'] = {}
+      cls.ENDPOINTS['.pptx']['view'] = oos + '/p/PowerPointFrame.aspx?PowerPointView=ReadingView'
+      cls.ENDPOINTS['.pptx']['edit'] = oos + '/p/PowerPointFrame.aspx?PowerPointView=EditView'
+      cls.ENDPOINTS['.pptx']['new']  = oos + '/p/PowerPointFrame.aspx?PowerPointView=EditView&New=1'   # pylint: disable=bad-whitespace
+      cls.ENDPOINTS['.one'] = {}
+      cls.ENDPOINTS['.one']['view']  = oos + '/o/onenoteframe.aspx?edit=0'                             # pylint: disable=bad-whitespace
+      cls.ENDPOINTS['.one']['edit']  = oos + '/o/onenoteframe.aspx?edit=1'                             # pylint: disable=bad-whitespace
+      cls.ENDPOINTS['.one']['new']   = oos + '/o/onenoteframe.aspx?edit=1&new=1'                       # pylint: disable=bad-whitespace
+      cls.log.info('msg="Microsoft Office Online endpoints successfully configured"')
+
+    code = cls.config.get('general', 'codeurl', fallback=None)
+    if code is not None:
+      try:
+        import requests
+        from xml.etree import ElementTree as ET
+        discData = requests.get(url=(code + '/hosting/discovery')).content
+        discXml = ET.fromstring(discData)
+        if discXml is None:
+          raise Exception('Failed to parse XML: %s' % discData)
+        # extract urlsrc from first <app> node inside <net-zone>
+        urlsrc = discXml.find('net-zone/app')[0].attrib['urlsrc']
+      except Exception as e:
+        ex_type, ex_value, ex_traceback = sys.exc_info()
+        cls.log.warning('msg="Failed to initialize Collabora Online endpoints" error="%s" traceback="%s"' % \
+                        (ex_value, traceback.format_exception(ex_type, ex_value, ex_traceback)))
+
+    # The supported Collabora end-points
+    cls.ENDPOINTS['.odt'] = {}
+    cls.ENDPOINTS['.odt']['view'] = urlsrc + 'permission=readonly'
+    cls.ENDPOINTS['.odt']['edit'] = urlsrc + 'permission=edit'
+    cls.ENDPOINTS['.odt']['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace  # TODO check if a 'new' flag exists
+    cls.ENDPOINTS['.ods'] = {}
+    cls.ENDPOINTS['.ods']['view'] = urlsrc + 'permission=readonly'
+    cls.ENDPOINTS['.ods']['edit'] = urlsrc + 'permission=edit'
+    cls.ENDPOINTS['.ods']['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace
+    cls.ENDPOINTS['.odp'] = {}
+    cls.ENDPOINTS['.odp']['view'] = urlsrc + 'permission=readonly'
+    cls.ENDPOINTS['.odp']['edit'] = urlsrc + 'permission=edit'
+    cls.ENDPOINTS['.odp']['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace
+    cls.log.info('msg="Collabora Online endpoints successfully configured" CODEURL="%s"' % cls.ENDPOINTS['.odt']['edit'])
+
+    # The future-supported Slides end-point
+    # slides = cls.config.get('general', 'slidesurl', fallback=None)
+    # ...
+    #cls.ENDPOINTS['.slide'] = {}
+    #cls.ENDPOINTS['.slide']['view'] =
+    #cls.ENDPOINTS['.slide']['edit'] =
+    #cls.ENDPOINTS['.slide']['new'] =
+
 
   @classmethod
   def refreshconfig(cls):
@@ -161,6 +180,7 @@ class Wopi:
       cls.log.setLevel(cls.loglevels[cls.config.get('general', 'loglevel')])
       cls.lockruid = cls.config.get('general', 'lockruid')
       cls.lockrgid = cls.config.get('general', 'lockrgid')
+
 
   @classmethod
   def run(cls):
@@ -906,4 +926,5 @@ def wopiPutFile(fileid):
 #
 if __name__ == '__main__':
   Wopi.init()
+  Wopi.initAppsRegistry()
   Wopi.run()
