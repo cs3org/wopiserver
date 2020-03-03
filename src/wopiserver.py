@@ -148,15 +148,15 @@ class Wopi:
     # The supported Collabora end-points
     cls.ENDPOINTS['.odt'] = {}
     cls.ENDPOINTS['.odt']['view'] = urlsrc + 'permission=readonly'
-    cls.ENDPOINTS['.odt']['edit'] = urlsrc + 'permission=edit'
+    cls.ENDPOINTS['.odt']['edit'] = urlsrc + 'permission=view'
     cls.ENDPOINTS['.odt']['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace  # TODO check if a 'new' flag exists
     cls.ENDPOINTS['.ods'] = {}
     cls.ENDPOINTS['.ods']['view'] = urlsrc + 'permission=readonly'
-    cls.ENDPOINTS['.ods']['edit'] = urlsrc + 'permission=edit'
+    cls.ENDPOINTS['.ods']['edit'] = urlsrc + 'permission=view'
     cls.ENDPOINTS['.ods']['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace
     cls.ENDPOINTS['.odp'] = {}
     cls.ENDPOINTS['.odp']['view'] = urlsrc + 'permission=readonly'
-    cls.ENDPOINTS['.odp']['edit'] = urlsrc + 'permission=edit'
+    cls.ENDPOINTS['.odp']['edit'] = urlsrc + 'permission=view'
     cls.ENDPOINTS['.odp']['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace
     cls.log.info('msg="Collabora Online endpoints successfully configured" CODEURL="%s"' % cls.ENDPOINTS['.odt']['edit'])
 
