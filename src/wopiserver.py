@@ -140,25 +140,26 @@ class Wopi:
           raise Exception('Failed to parse XML: %s' % discData)
         # extract urlsrc from first <app> node inside <net-zone>
         urlsrc = discXml.find('net-zone/app')[0].attrib['urlsrc']
+
+        # The supported Collabora end-points
+        cls.ENDPOINTS['.odt'] = {}
+        cls.ENDPOINTS['.odt']['view'] = urlsrc + 'permission=readonly'
+        cls.ENDPOINTS['.odt']['edit'] = urlsrc + 'permission=view'
+        cls.ENDPOINTS['.odt']['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace  # TODO check if a 'new' flag exists
+        cls.ENDPOINTS['.ods'] = {}
+        cls.ENDPOINTS['.ods']['view'] = urlsrc + 'permission=readonly'
+        cls.ENDPOINTS['.ods']['edit'] = urlsrc + 'permission=view'
+        cls.ENDPOINTS['.ods']['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace
+        cls.ENDPOINTS['.odp'] = {}
+        cls.ENDPOINTS['.odp']['view'] = urlsrc + 'permission=readonly'
+        cls.ENDPOINTS['.odp']['edit'] = urlsrc + 'permission=view'
+        cls.ENDPOINTS['.odp']['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace
+        cls.log.info('msg="Collabora Online endpoints successfully configured" CODEURL="%s"' % cls.ENDPOINTS['.odt']['edit'])
+
       except Exception as e:
         ex_type, ex_value, ex_traceback = sys.exc_info()
         cls.log.warning('msg="Failed to initialize Collabora Online endpoints" error="%s" traceback="%s"' % \
                         (ex_value, traceback.format_exception(ex_type, ex_value, ex_traceback)))
-
-    # The supported Collabora end-points
-    cls.ENDPOINTS['.odt'] = {}
-    cls.ENDPOINTS['.odt']['view'] = urlsrc + 'permission=readonly'
-    cls.ENDPOINTS['.odt']['edit'] = urlsrc + 'permission=view'
-    cls.ENDPOINTS['.odt']['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace  # TODO check if a 'new' flag exists
-    cls.ENDPOINTS['.ods'] = {}
-    cls.ENDPOINTS['.ods']['view'] = urlsrc + 'permission=readonly'
-    cls.ENDPOINTS['.ods']['edit'] = urlsrc + 'permission=view'
-    cls.ENDPOINTS['.ods']['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace
-    cls.ENDPOINTS['.odp'] = {}
-    cls.ENDPOINTS['.odp']['view'] = urlsrc + 'permission=readonly'
-    cls.ENDPOINTS['.odp']['edit'] = urlsrc + 'permission=view'
-    cls.ENDPOINTS['.odp']['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace
-    cls.log.info('msg="Collabora Online endpoints successfully configured" CODEURL="%s"' % cls.ENDPOINTS['.odt']['edit'])
 
     # The future-supported Slides end-point
     # slides = cls.config.get('general', 'slidesurl', fallback=None)
