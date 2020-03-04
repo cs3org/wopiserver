@@ -145,7 +145,7 @@ class Wopi:
         cls.ENDPOINTS['.odt'] = {}
         cls.ENDPOINTS['.odt']['view'] = urlsrc + 'permission=readonly'
         cls.ENDPOINTS['.odt']['edit'] = urlsrc + 'permission=view'
-        cls.ENDPOINTS['.odt']['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace  # TODO check if a 'new' flag exists
+        cls.ENDPOINTS['.odt']['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace
         cls.ENDPOINTS['.ods'] = {}
         cls.ENDPOINTS['.ods']['view'] = urlsrc + 'permission=readonly'
         cls.ENDPOINTS['.ods']['edit'] = urlsrc + 'permission=view'
@@ -157,9 +157,7 @@ class Wopi:
         cls.log.info('msg="Collabora Online endpoints successfully configured" CODEURL="%s"' % cls.ENDPOINTS['.odt']['edit'])
 
       except Exception as e:
-        ex_type, ex_value, ex_traceback = sys.exc_info()
-        cls.log.warning('msg="Failed to initialize Collabora Online endpoints" error="%s" traceback="%s"' % \
-                        (ex_value, traceback.format_exception(ex_type, ex_value, ex_traceback)))
+        cls.log.warning('msg="Failed to initialize Collabora Online endpoints" error="%s"' % e)
 
     # The future-supported Slides end-point
     # slides = cls.config.get('general', 'slidesurl', fallback=None)
