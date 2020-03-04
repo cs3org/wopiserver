@@ -14,7 +14,7 @@ Source: %{name}-%{version}.tar.gz
 # The required Python version makes this package depend on Fedora 29 or similar recent distros to compile and run.
 BuildRequires: python(abi) >= 3.6
 Requires: python(abi) >= 3.6, python36-pip
-# pip3-installed "Requires": python3-flask, python3-jwt, python3-pyOpenSSL
+# pip3-installed "Requires": python3-flask, python3-jwt, python3-pyOpenSSL, requests
 # Note that python3-xrootd and python3-cs3api are not explicit dependencies given that they are dynamically loaded.
 # The following to avoid to pick up /bin/python as an automatic dependency
 AutoReq: no
@@ -72,12 +72,13 @@ touch /etc/wopi/ocsecret
 %_python_lib/*
 
 %changelog
-* Wed Feb 26 2020 Giuseppe Lo Presti <lopresti@cern.ch> 4.0
+* Wed Mar 04 2020 Giuseppe Lo Presti <lopresti@cern.ch> 4.0
 - Major refactoring to introduce support of multiple storage access plugins:
   currently supported xrootd (default) and local storage, a CS3APIs-compliant
   access plugin is foreseen in an upcoming release.
-- Added support for multiple Office-like applications
-- Included minor fixes in the core WOPI code
+- Added support for multiple office-like applications: currently supported
+  office apps are Microsoft Office Online and Collabora Online
+- Added minor fixes in the core WOPI code
 * Mon Jul  1 2019 Giuseppe Lo Presti <lopresti@cern.ch> 3.1
 - Fixed handling of strings/byte-arrays
 - Packaging adapted to CentOS7 and pip3
