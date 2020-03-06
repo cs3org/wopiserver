@@ -2,7 +2,7 @@
 # cernbox-wopi-server spec file
 #
 Name:      cernbox-wopi-server
-Summary:   A WOPI server to support Microsoft Office online on CERNBox
+Summary:   A WOPI server to support Office online suites on CERNBox
 Version:   4.0
 Release:   0%{?dist}
 License:   GPLv3
@@ -20,7 +20,7 @@ Requires: python(abi) >= 3.6, python36-pip
 AutoReq: no
 
 %description
-This RPM provides a Flask-based web server to implement the Microsoft WOPI protocol for CERNBox
+This RPM provides a Flask-based web server to implement the WOPI protocol for CERNBox
 
 # Don't do any post-install weirdness, especially compiling .py files
 %define __os_install_post %{nil}
@@ -72,13 +72,13 @@ touch /etc/wopi/ocsecret
 %_python_lib/*
 
 %changelog
-* Wed Mar 04 2020 Giuseppe Lo Presti <lopresti@cern.ch> 4.0
+* Fri Mar 06 2020 Giuseppe Lo Presti <lopresti@cern.ch> 4.0
 - Major refactoring to introduce support of multiple storage access plugins:
   currently supported xrootd (default) and local storage, a CS3APIs-compliant
   access plugin is foreseen in an upcoming release.
 - Added support for multiple office-like applications: currently supported
   office apps are Microsoft Office Online and Collabora Online
-- Added minor fixes in the core WOPI code
+- Included minor fixes in the core WOPI code
 * Mon Jul  1 2019 Giuseppe Lo Presti <lopresti@cern.ch> 3.1
 - Fixed handling of strings/byte-arrays
 - Packaging adapted to CentOS7 and pip3

@@ -69,20 +69,20 @@ class Wopi:
   def init(cls):
     '''Initialises the application, bails out in case of failures. Note this is not a __init__ method'''
     try:
+      # configure the logging
+      loghandler = logging.FileHandler('/var/log/wopi/wopiserver.log')
+      loghandler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)s[%(process)d] %(levelname)-8s %(message)s',
+                                                datefmt='%Y-%m-%dT%H:%M:%S'))
+      cls.log.addHandler(loghandler)
       # read the configuration
       cls.config = configparser.ConfigParser()
       cls.config.read_file(open('/etc/wopi/wopiserver.defaults.conf'))
       cls.config.read('/etc/wopi/wopiserver.conf')
       # load the requested storage layer
       storage_layer_import(cls.config.get('general', 'storagetype'))
-
       # prepare the Flask web app
       cls.port = int(cls.config.get('general', 'port'))
       cls.log.setLevel(cls.loglevels[cls.config.get('general', 'loglevel')])
-      loghandler = logging.FileHandler('/var/log/wopi/wopiserver.log')
-      loghandler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)s[%(process)d] %(levelname)-8s %(message)s',
-                                                datefmt='%Y-%m-%dT%H:%M:%S'))
-      cls.log.addHandler(loghandler)
       cls.wopisecret = open(cls.config.get('security', 'wopisecretfile')).read().strip('\n')
       cls.ocsecret = open(cls.config.get('security', 'ocsecretfile')).read().strip('\n')
       cls.tokenvalidity = cls.config.getint('general', 'tokenvalidity')
@@ -99,8 +99,8 @@ class Wopi:
         cls.lockpath = ''
     except Exception as e:
       # any error we get here with the configuration is fatal
-      print("Failed to initialize the service, bailing out. Error:\n%s" % e)
-      raise
+      cls.log.fatal('msg="Failed to initialize the service, aborting" error="%s"' % e)
+      sys.exit(-22)
 
   @classmethod
   def initAppsRegistry(cls):
@@ -166,6 +166,11 @@ class Wopi:
     #cls.ENDPOINTS['.slide']['view'] =
     #cls.ENDPOINTS['.slide']['edit'] =
     #cls.ENDPOINTS['.slide']['new'] =
+
+    # backstop if no app got registered
+    if len(cls.ENDPOINTS) == 0:
+      cls.log.fatal('msg="No office app got registered, aborting"')
+      sys.exit(-22)
 
 
   @classmethod
@@ -455,11 +460,12 @@ def cboxDownload():
 
 @Wopi.app.route("/wopi/cbox/endpoints", methods=['GET'])
 def cboxEndPoints():
-  '''Returns the supported end-points for Office Online. This is used by the OwnCloud
-  client to discover which Office Online frontends have to be used with this WOPI server.
+  '''Returns the office apps end-points registered with this WOPI server. This is used by the OwnCloud
+  client to discover which Apps frontends can be used with this WOPI server.
   Note that if the end-points are relocated and the corresponding configuration entry updated,
   the WOPI server must be restarted.'''
-  Wopi.log.info('msg="cboxEndPoints: returning Office Online end-points" client="%s"' % flask.request.remote_addr)
+  Wopi.log.info('msg="cboxEndPoints: returning all registered office apps end-points" client="%s" mimetypesCount="%d"' % \
+                (flask.request.remote_addr, len(Wopi.ENDPOINTS)))
   return flask.Response(json.dumps(Wopi.ENDPOINTS), mimetype='application/json')
 
 
