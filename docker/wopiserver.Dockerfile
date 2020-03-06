@@ -20,7 +20,7 @@ RUN yum -y install \
 	python3-xrootd \
 	/tmp/cernbox-wopi*rpm
 
-RUN pip3 install flask pyOpenSSL PyJWT
+RUN pip3 install flask pyOpenSSL PyJWT requests
 
 ADD ./etc/*secret /etc/wopi/
 ADD ./etc/wopiserver.conf /etc/wopi
