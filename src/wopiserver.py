@@ -134,7 +134,7 @@ class Wopi:
       try:
         import requests
         from xml.etree import ElementTree as ET
-        discData = requests.get(url=(code + '/hosting/discovery')).content
+        discData = requests.get(url=(code + '/hosting/discovery'), verify=False).content
         discXml = ET.fromstring(discData)
         if discXml is None:
           raise Exception('Failed to parse XML: %s' % discData)
