@@ -744,7 +744,8 @@ def wopiPutRelative(fileid, reqheaders, acctok):
   # generate an access token for the new file
   Wopi.log.info('msg="PutRelative: generating new access token" user="%s:%s" filename="%s" canedit="True" friendlyname="%s"' % \
            (acctok['ruid'], acctok['rgid'], targetName, acctok['username']))
-  inode, newacctok = _generateAccessToken(acctok['ruid'], acctok['rgid'], targetName, True, acctok['username'], acctok['folderurl'])
+  inode, newacctok = _generateAccessToken(acctok['ruid'], acctok['rgid'], targetName, True, acctok['username'], \
+                                          acctok['folderurl'], acctok['endpoint'])
   # prepare and send the response as JSON
   putrelmd = {}
   putrelmd['Name'] = os.path.basename(targetName)
