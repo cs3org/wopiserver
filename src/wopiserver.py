@@ -91,6 +91,8 @@ class Wopi:
       cls.useHttps = cls.config.get('security', 'usehttps').lower() == 'yes'
       cls.repeatedLockRequests = {}               # cf. the wopiLock() function below
       cls.wopiurl = cls.config.get('general', 'wopiurl')
+      if urllib.parse.urlparse(cls.wopiurl).port is None:
+        cls.wopiurl += ':%d' % cls.port
       cls.lockruid = cls.config.get('general', 'lockruid')
       cls.lockrgid = cls.config.get('general', 'lockrgid')
       if cls.config.has_option('general', 'lockpath'):
@@ -190,20 +192,20 @@ class Wopi:
   def run(cls):
     '''Runs the Flask app in either standalone (https) or embedded (http) mode'''
     if cls.useHttps:
-      cls.log.info('msg="WOPI Server starting in standalone secure mode" port="%d"' % cls.port)
+      cls.log.info('msg="WOPI Server starting in standalone secure mode" port="%d" wopiurl="%s"' % (cls.port, cls.wopiurl))
       cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'),
                   ssl_context=(cls.config.get('security', 'wopicert'), cls.config.get('security', 'wopikey')))
     else:
-      cls.log.info('msg="WOPI Server starting in unsecure/embedded mode" port="%d"' % cls.port)
+      cls.log.info('msg="WOPI Server starting in unsecure/embedded mode" port="%d" wopiurl="%s"' % (cls.port, cls.wopiurl))
       cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'))
 
 
 #
 # General utilities
 #
-def _ourHostName():
-  '''Returns the WOPI server web address. XXX to be removed once the nginx setup is proven to work'''
-  return Wopi.wopiurl
+def _generateWopiSrc(fileid):
+  '''Returns a valid WOPISrc for the given fileid'''
+  return urllib.parse.quote_plus('%s/wopi/files/%s' % (Wopi.wopiurl, fileid))
 
 
 def _logGeneralExceptionAndReturn(ex, req):
@@ -417,8 +419,7 @@ def cboxOpen():
                           (req.remote_addr, ruid, rgid, username, canedit, endpoint))
             inode, acctok = _generateAccessToken(str(ruid), str(rgid), filename, canedit, username, folderurl, endpoint)
             # return an URL-encoded WOPISrc URL for the Office Online server
-            return urllib.parse.quote_plus('%s:%d/wopi/files/%s' % (_ourHostName(), Wopi.port, inode)) + \
-                   '&access_token=%s' % acctok      # no need to URL-encode the JWT token
+            return '%s&access_token=%s' % (_generateWopiSrc(inode), acctok)      # no need to URL-encode the JWT token
           except IOError:
             return 'Remote error or file not found', http.client.NOT_FOUND
     except socket.gaierror:
@@ -503,8 +504,7 @@ def wopiCheckFileInfo(fileid):
                   (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
     statInfo = storage.statx(acctok['endpoint'], acctok['filename'], acctok['ruid'], acctok['rgid'])
     # compute some entities for the response
-    wopiSrc = 'WOPISrc=%s&access_token=%s' % \
-              (urllib.parse.quote_plus('%s:%d/wopi/files/%s' % (_ourHostName(), Wopi.port, fileid)), flask.request.args['access_token'])
+    wopiSrc = 'WOPISrc=%s&access_token=%s' % (_generateWopiSrc(fileid), flask.request.args['access_token'])
     fExt = os.path.splitext(acctok['filename'])[1]
     # populate metadata for this file
     filemd = {}
@@ -748,11 +748,10 @@ def wopiPutRelative(fileid, reqheaders, acctok):
   # prepare and send the response as JSON
   putrelmd = {}
   putrelmd['Name'] = os.path.basename(targetName)
-  putrelmd['Url'] = '%s/wopi/files/%s?access_token=%s' % (_ourHostName(), inode, newacctok)
+  putrelmd['Url'] = '%s?access_token=%s' % (_generateWopiSrc(inode), newacctok)
   putrelmd['HostEditUrl'] = '%s&WOPISrc=%s&access_token=%s' % \
                             (Wopi.ENDPOINTS[os.path.splitext(targetName)[1]]['edit'], \
-                             urllib.parse.quote_plus('%s/wopi/files/%s' % (_ourHostName(), inode)), \
-                             newacctok)
+                             _generateWopiSrc(inode), newacctok)
   Wopi.log.debug('msg="PutRelative response" token="%s" metadata="%s"' % (newacctok[-20:], putrelmd))
   return flask.Response(json.dumps(putrelmd), mimetype='application/json')
 
