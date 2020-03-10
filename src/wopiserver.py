@@ -258,8 +258,8 @@ def _retrieveWopiLock(fileid, operation, lock, acctok):
   for line in storage.readfile(acctok['endpoint'], _getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid):
     if 'No such file or directory' in str(line):
       return None     # no pre-existing lock found
-    # otherwise one iteration is largely sufficient to hit EOF
-    l += line
+    # the following check is necessary as it happens to get a str instead of bytes
+    l += line if type(line) == type(l) else line.encode()
   try:
     # check validity
     retrievedLock = jwt.decode(l, Wopi.wopisecret, algorithms=['HS256'])
