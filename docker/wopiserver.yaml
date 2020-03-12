@@ -16,11 +16,13 @@ services:
     network_mode: "bridge"
     restart: always
     ports:
-      - 8443:8443
+      - 8880:8880
     volumes:
+      - wopi_config:/etc/wopi
       - wopi_logs:/var/log/wopi
+      - wopi_storage:/var/wopi_local_storage
     healthcheck:
-      test: ["CMD", "curl", "--insecure", "https://localhost:8443"]
+      test: ["CMD", "curl", "--insecure", "http://localhost:8880"]
       interval: 60s
       timeout: 5s
       retries: 3
@@ -28,3 +30,5 @@ services:
 
 volumes:
   wopi_logs:
+  wopi_config:
+  wopi_storage:

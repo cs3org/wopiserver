@@ -2,6 +2,8 @@
 WOPISERVER
 
 Build with:
+  `make rpm`
+  `cd docker; mv ../cernbox-wopi-server* .`
   `docker-compose -f wopiserver.yaml build`
 
 Run with:
@@ -11,6 +13,6 @@ Inspect the logs
   `docker-compose -f wopiserver.yaml logs -f`
 
 Specs:
-  - listening on ports 8443 for HTTPS (internal port is 8443)
-  - volume for path `/var/log/wopi`
+  - listening on port 8880/HTTP (internal port is also 8880)
+  - volumes for paths `/var/log/wopi`, `/etc/wopi`, and `/var/wopi_local_storage`
 

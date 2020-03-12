@@ -15,7 +15,7 @@ RUN yum -y install \
 	python36 \
 	python36-pip \
 	python36-devel \
-        openssl-devel \
+    openssl-devel \
 	xrootd-client \
 	python3-xrootd \
 	/tmp/cernbox-wopi*rpm
@@ -24,11 +24,9 @@ RUN pip3 install flask pyOpenSSL PyJWT requests
 
 ADD ./etc/*secret /etc/wopi/
 ADD ./etc/wopiserver.conf /etc/wopi
-#COPY scripts/* /scripts/
 RUN mkdir /etc/certs
-ADD ./etc/*.pem /etc/certs/
+#ADD ./etc/*.pem /etc/certs/   if certificates shall be added
 RUN chmod 777 /var/log/wopi
 
 #CMD /scripts/entrypoint
 CMD ["python3", "/usr/bin/wopiserver.py"]
-
