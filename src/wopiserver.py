@@ -163,12 +163,13 @@ class Wopi:
         cls.log.warning('msg="Failed to initialize Collabora Online endpoints" error="%s"' % e)
 
     # The future-supported Slides end-point
-    # slides = cls.config.get('general', 'slidesurl', fallback=None)
-    # ...
-    #cls.ENDPOINTS['.slide'] = {}
-    #cls.ENDPOINTS['.slide']['view'] =
-    #cls.ENDPOINTS['.slide']['edit'] =
-    #cls.ENDPOINTS['.slide']['new'] =
+    slides = cls.config.get('general', 'slidesurl', fallback=None)
+    if slides is not None:
+      cls.ENDPOINTS['.slide'] = {}
+      cls.ENDPOINTS['.slide']['view'] = slides + '?edit=0'
+      cls.ENDPOINTS['.slide']['edit'] = slides + '?edit=1'
+      cls.ENDPOINTS['.slide']['new'] = slides + '?edit=1'
+      cls.log.info('msg="Slides endpoints successfully configured"')
 
     # backstop if no app got registered
     if len(cls.ENDPOINTS) == 0:
@@ -260,7 +261,7 @@ def _retrieveWopiLock(fileid, operation, lock, acctok):
     if 'No such file or directory' in str(line):
       return None     # no pre-existing lock found
     # the following check is necessary as it happens to get a str instead of bytes
-    l += line if type(line) == type(l) else line.encode()
+    l += line if isinstance(line, type(l)) else line.encode()
   try:
     # check validity
     retrievedLock = jwt.decode(l, Wopi.wopisecret, algorithms=['HS256'])
@@ -599,8 +600,8 @@ def wopiLock(fileid, reqheaders, acctok):
   oldLock = reqheaders['X-WOPI-OldLock'] if 'X-WOPI-OldLock' in reqheaders else None
   retrievedLock = _retrieveWopiLock(fileid, op, lock, acctok)
   # perform the required checks for the validity of the new lock
-  if (oldLock is None and retrievedLock != None and not _compareWopiLocks(retrievedLock, lock)) or \
-     (oldLock != None and not _compareWopiLocks(retrievedLock, oldLock)):
+  if (oldLock is None and retrievedLock is not None and not _compareWopiLocks(retrievedLock, lock)) or \
+     (oldLock is not None and not _compareWopiLocks(retrievedLock, oldLock)):
     # XXX we got a locking conflict: as we've seen cases of looping clients attempting to restate the same
     # XXX lock over and over again, we keep track of this request and we forcefully clean up the lock
     # XXX once 'too many' requests come for the same lock
@@ -663,7 +664,7 @@ def wopiUnlock(fileid, reqheaders, acctok):
   return 'OK', http.client.OK
 
 
-def wopiGetLock(fileid, reqheaders_unused, acctok):
+def wopiGetLock(fileid, _reqheaders_unused, acctok):
   '''Implements the GetLock WOPI call'''
   resp = flask.Response()
   # throws exception if no lock
@@ -758,10 +759,10 @@ def wopiPutRelative(fileid, reqheaders, acctok):
   return flask.Response(json.dumps(putrelmd), mimetype='application/json')
 
 
-def wopiDeleteFile(fileid, reqheaders_unused, acctok):
+def wopiDeleteFile(fileid, _reqheaders_unused, acctok):
   '''Implements the DeleteFile WOPI call'''
   retrievedLock = _retrieveWopiLock(fileid, 'DELETE', '', acctok)
-  if retrievedLock != None:
+  if retrievedLock is not None:
     # file is locked and cannot be deleted
     return _makeConflictResponse('DELETE', retrievedLock, '', '', acctok['filename'])
   try:
@@ -777,7 +778,7 @@ def wopiRenameFile(fileid, reqheaders, acctok):
   targetName = reqheaders['X-WOPI-RequestedName']
   lock = reqheaders['X-WOPI-Lock']
   retrievedLock = _retrieveWopiLock(fileid, 'RENAMEFILE', lock, acctok)
-  if retrievedLock != None and not _compareWopiLocks(retrievedLock, lock):
+  if retrievedLock is not None and not _compareWopiLocks(retrievedLock, lock):
     return _makeConflictResponse('RENAMEFILE', retrievedLock, lock, '', acctok['filename'])
   try:
     # the destination name comes without base path and without extension
@@ -870,7 +871,7 @@ def wopiPutFile(fileid):
     # otherwise, check that the caller holds the current lock on the file
     lock = flask.request.headers['X-WOPI-Lock']
     retrievedLock = _retrieveWopiLock(fileid, 'PUTFILE', lock, acctok)
-    if retrievedLock != None and not _compareWopiLocks(retrievedLock, lock):
+    if retrievedLock is not None and not _compareWopiLocks(retrievedLock, lock):
       return _makeConflictResponse('PUTFILE', retrievedLock, lock, '', acctok['filename'])
     # OK, we can save the file now
     Wopi.log.info('msg="PutFile" user="%s:%s" filename="%s" fileid="%s" action="edit" token="%s"' % \
