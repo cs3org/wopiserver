@@ -379,8 +379,17 @@ def index():
 
 @Wopi.app.route("/wopi/cbox/open", methods=['GET'])
 def cboxOpen():
-  '''Returns a WOPISrc target and an access token to be passed to Microsoft Office online for
-  accessing a given file for a given user. This is the most sensitive call as it provides direct
+  '''Generates a WOPISrc target and an access token to be passed to a WOPI-compatible Office-like app
+  for accessing a given file for a given user.
+  Request arguments:
+  - int ruid, rgid: user's real Unix identity (id:group)
+  - bool canedit: True if full access should be given to the user, otherwise read-only access is granted
+  - string username (optional): user's full name, typically shown by the Office app
+  - string filename: the full path of the filename to be opened
+  - string folderurl: the URL to come back to the containing folder for this file, typically shown by the Office app
+  - string endpoint (optional): the storage endpoint to be used to look up the file, in case of
+    multi-instance underlying storage; defaults to 'default'
+  Note: this is the most sensitive call of this WOPI server as it provides direct
   access to any user's file, therefore it is protected both by IP and a shared secret. The shared
   secret protection is disabled when running in plain http mode for testing purposes.'''
   Wopi.refreshconfig()
@@ -399,7 +408,7 @@ def cboxOpen():
     Wopi.log.warning('msg="cboxOpen: invalid user/group in request" client="%s" user="%s:%s"' % \
                   (req.remote_addr, req.args['ruid'], req.args['rgid']))
     return 'Client not authorized', http.client.UNAUTHORIZED
-  # then resolve the client: only our OwnCloud servers shall use this API
+  # then resolve the client: only our CERNBox/ownCloud servers shall use this API
   allowedclients = Wopi.config.get('general', 'allowedclients').split()
   for c in allowedclients:
     try:
