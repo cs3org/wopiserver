@@ -106,7 +106,7 @@ class Wopi:
       sys.exit(-22)
 
   @classmethod
-  def initAppsRegistry(cls):
+  def initappsregistry(cls):
     '''Initializes the CERNBoxOffice-like Apps Registry'''
     # TODO all this is supposed to be moved to the CERNBox Apps Registry microservice at some stage in the future
     cls.ENDPOINTS = {}
@@ -172,7 +172,7 @@ class Wopi:
       cls.log.info('msg="Slides endpoints successfully configured"')
 
     # backstop if no app got registered
-    if len(cls.ENDPOINTS) == 0:
+    if not cls.ENDPOINTS:
       cls.log.fatal('msg="No office app got registered, aborting"')
       sys.exit(-22)
 
@@ -941,5 +941,5 @@ def wopiPutFile(fileid):
 #
 if __name__ == '__main__':
   Wopi.init()
-  Wopi.initAppsRegistry()
+  Wopi.initappsregistry()
   Wopi.run()
