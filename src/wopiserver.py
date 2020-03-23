@@ -840,6 +840,9 @@ def wopiFilesPost(fileid):
     acctok = jwt.decode(flask.request.args['access_token'], Wopi.wopisecret, algorithms=['HS256'])
     if acctok['exp'] < time.time():
       raise jwt.exceptions.ExpiredSignatureError
+    if not acctok['canedit']:
+      # protect this call if the WOPI client does not have privileges
+      return 'Attempting to perform a write operation using a read-only token', http.client.UNAUTHORIZED
     headers = flask.request.headers
     op = headers['X-WOPI-Override']       # must be one of the following strings, throws KeyError if missing
     if op in ('LOCK', 'REFRESH_LOCK'):
