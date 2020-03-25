@@ -686,10 +686,11 @@ def wopiGetLock(fileid, _reqheaders_unused, acctok):
   '''Implements the GetLock WOPI call'''
   resp = flask.Response()
   # throws exception if no lock
-  resp.headers['X-WOPI-Lock'] = _retrieveWopiLock(fileid, 'GETLOCK', '', acctok)
+  lock = _retrieveWopiLock(fileid, 'GETLOCK', '', acctok)
   resp.status_code = http.client.OK
-  # for statistical purposes, check whether a lock exists and update internal bookkeeping
-  if resp.headers['X-WOPI-Lock']:
+  if lock:
+    resp.headers['X-WOPI-Lock'] = lock
+    # for statistical purposes, check whether a lock exists and update internal bookkeeping
     try:
       # the file was already opened for write, check whether this is a new user
       if not acctok['username'] in Wopi.openfiles[acctok['filename']][1]:
