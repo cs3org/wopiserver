@@ -112,7 +112,7 @@ class Wopi:
     cls.ENDPOINTS = {}
 
     oos = cls.config.get('general', 'oosurl', fallback=None)
-    if oos is not None:
+    if oos:
       # The supported Microsoft Office Online end-points
       cls.ENDPOINTS['.docx'] = {}
       cls.ENDPOINTS['.docx']['view'] = oos + '/wv/wordviewerframe.aspx?edit=0'
@@ -133,7 +133,7 @@ class Wopi:
       cls.log.info('msg="Microsoft Office Online endpoints successfully configured"')
 
     code = cls.config.get('general', 'codeurl', fallback=None)
-    if code is not None:
+    if code:
       try:
         import requests
         from xml.etree import ElementTree as ET
@@ -164,12 +164,21 @@ class Wopi:
 
     # The future-supported Slides end-point
     slides = cls.config.get('general', 'slidesurl', fallback=None)
-    if slides is not None:
+    if slides:
       cls.ENDPOINTS['.slide'] = {}
       cls.ENDPOINTS['.slide']['view'] = slides + '?edit=0'
       cls.ENDPOINTS['.slide']['edit'] = slides + '?edit=1'
       cls.ENDPOINTS['.slide']['new'] = slides + '?edit=1'
       cls.log.info('msg="Slides endpoints successfully configured"')
+
+    # The future-supported CodiMD end-point
+    codimd = cls.config.get('general', 'codimdurl', fallback=None)
+    if codimd:
+      cls.ENDPOINTS['.md'] = {}
+      cls.ENDPOINTS['.md']['view'] = codimd + '?mode=readonly'
+      cls.ENDPOINTS['.md']['edit'] = codimd + '?mode=edit'
+      cls.ENDPOINTS['.md']['new'] = codimd + '?mode=new'
+      cls.log.info('msg="CodiMD endpoints successfully configured"')
 
     # backstop if no app got registered
     if not cls.ENDPOINTS:
