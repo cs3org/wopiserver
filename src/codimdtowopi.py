@@ -38,11 +38,14 @@ class MDW:
                "Debug":    logging.DEBUG      # 10
               }
   log = app.logger
-  openDocs = {}
+  openDocs = {}   # a map active access tokens -> (codimd doc url, WOPISrc url)
+  locks = {}      # an "inverse" map codimd docs urls -> set of active access tokens for this file
+
+  # the following is a template with five (!) parameters. TODO need to find a better solution for this
   frame_page_templated_html = """
     <html>
     <head>
-    <title>WOPI-integrated CodiMD PoC</title>
+    <title>%s | WOPI-enabled CodiMD PoC | %s</title>
     <style type="text/css">
       body, html
       {
@@ -52,7 +55,7 @@ class MDW:
     <script src="http://code.jquery.com/jquery-latest.min.js"></script>
     <script>
       window.onbeforeunload = function() {
-        $.get("http://%s:%d/close",     // TODO handle https
+        $.get("%s/close",
           {access_token: '%s'},
           function(data) {
             alert(data)
@@ -88,7 +91,7 @@ class MDW:
       cls.port = int(cls.config.get('general', 'port'))
       cls.log.setLevel(cls.loglevels[cls.config.get('general', 'loglevel')])
       cls.codimdurl = cls.config.get('general', 'codimdurl')
-      cls.useHttps = False
+      cls.useHttps = False     # cls.config.get('security', 'usehttps').lower() == 'yes'
     except Exception as e:
       # any error we get here with the configuration is fatal
       cls.log.fatal('msg="Failed to initialize the service, aborting" error="%s"' % e)
@@ -99,11 +102,13 @@ class MDW:
   def run(cls):
     '''Runs the Flask app in either secure (https) or test (http) mode'''
     if cls.useHttps:
-      cls.log.info('msg="CodiMD to WOPI Server starting in secure mode" port="%d"' % cls.port)
+      cls.codiwopiurl = 'https://%s:%d' % (socket.getfqdn(), cls.port)
+      cls.log.info('msg="CodiMD to WOPI Server starting in secure mode" url="%s"' % cls.codiwopiurl)
       cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'),
                   ssl_context=(cls.config.get('security', 'wopicert'), cls.config.get('security', 'wopikey')))
     else:
-      cls.log.info('msg="CodiMD to WOPI Server starting in test/unsecure mode" port="%d"' % cls.port)
+      cls.codiwopiurl = 'http://%s:%d' % (socket.getfqdn(), cls.port)
+      cls.log.info('msg="CodiMD to WOPI Server starting in test/unsecure mode" url="%s"' % cls.codiwopiurl)
       cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'))
 
 
@@ -134,37 +139,71 @@ def mdOpen():
   '''Open a md doc by contacting the provided WOPISrc with the given access_token'''
   wopiSrc = urllib.parse.unquote(flask.request.args['WOPISrc'])
   acctok = flask.request.args['access_token']
-  MDW.log.info('msg="open called" client="%s" token="%s"' % (flask.request.remote_addr, acctok[-20:]))
+  MDW.log.info('msg="Open called" client="%s" token="%s"' % (flask.request.remote_addr, acctok[-20:]))
 
-  # TODO WOPI GetFileInfo
-  #openDocs[acctok] = requests.get(wopiSrc)
+  # WOPI GetFileInfo
+  url = '%s?access_token=%s' % (wopiSrc, acctok)
+  MDW.log.debug('msg="Calling WOPI" url="%s"' % wopiSrc)
+  try:
+    filemd = requests.get(url).json()
+  except ValueError as e:
+    # TODO handle failures
+    raise
 
-  # WOPI GetFile
-  url = '%s/contents?access_token=%s' % (wopiSrc, acctok)
-  MDW.log.debug('msg="Calling WOPI" url="%s"' % url)
-  res = requests.get(url)
+  # WOPI GetLock: if present, trigger the collaborative editing
+  MDW.log.debug('msg="Calling WOPI GetLock" url="%s"' % wopiSrc)
+  res = requests.post(url, headers={'X-Wopi-Override': 'GET_LOCK'})
   if res.status_code != http.client.OK:
     raise ValueError(res.status_code)
-  mddoc = res.content
+  lockurl = res.headers.pop('X-WOPI-Lock', None)   # if present, the lock is the URL of the document in CodiMD
 
+  if lockurl:
+    # file is already locked, check that it's this instance
+    MDW.log.info('msg="Lock already held" lock="%s"' % lockurl)
+    lockurl = urllib.parse.urlparse(lockurl)
+    if ('%s://%s:%d' % (lockurl.scheme, lockurl.hostname, lockurl.port)) != MDW.codimdurl:
+      # file was locked by another CodiMD instance or with a different lock scheme, cannot use it
+      return 'File already locked', http.client.CONFLICT
+    # OK, store some context in memory - TODO store more context in the lock to become stateless
+    MDW.openDocs[acctok] = {'codimd': lockurl.geturl(), 'wopiSrc': wopiSrc}
+    try:
+      MDW.locks[lockurl.geturl()] = MDW.locks[lockurl.geturl()] | set(acctok)
+    except KeyError:
+      # this may happen if this bridge service is restarted...
+      MDW.locks[lockurl.geturl()] = set(acctok)
+
+  else:
+    # file is not locked, fetch it from storage
+    # WOPI GetFile
+    url = '%s/contents?access_token=%s' % (wopiSrc, acctok)
+    MDW.log.debug('msg="Calling WOPI GetFile" url="%s"' % wopiSrc)
+    res = requests.get(url)
+    if res.status_code != http.client.OK:
+      raise ValueError(res.status_code)
+    mddoc = res.content
+
+    # then push the document to CodiMD
+    res = requests.post(MDW.codimdurl + '/new', data=mddoc, allow_redirects=False, \
+                        headers={'Content-Type': 'text/markdown'})
+    if res.status_code != http.client.FOUND:
+      raise ValueError(res.status_code)
+    MDW.openDocs[acctok] = {'codimd': res.next.url, 'wopiSrc': wopiSrc}   # this is the redirect with the hash of the document just created
+    MDW.locks[res.next.url] = set(acctok)
+    MDW.log.info('msg="Pushed document to CodiMD" url="%s" token="%s"' % (MDW.openDocs[acctok]['codimd'], acctok[-20:]))
+
+  # in all cases, (re)lock the file
   # WOPI Lock
   url = '%s?access_token=%s' % (wopiSrc, acctok)
-  MDW.log.debug('msg="Calling WOPI" url="%s"' % url)
-  res = requests.post(url, headers={'X-WOPI-Lock': 'TODO hash', 'X-Wopi-Override': 'LOCK'})
+  MDW.log.debug('msg="Calling WOPI Lock" url="%s"' % wopiSrc)
+  res = requests.post(url, headers={'X-WOPI-Lock': MDW.openDocs[acctok]['codimd'], 'X-Wopi-Override': 'LOCK'})
   if res.status_code != http.client.OK:
     # TODO handle conflicts
     raise ValueError(res.status_code)
 
-  # now push the document to CodiMD
-  res = requests.post(MDW.codimdurl + '/new', data=mddoc, allow_redirects=False, \
-                      headers={'Content-Type': 'text/markdown'})
-  if res.status_code != http.client.FOUND:
-    raise ValueError(res.status_code)
-  MDW.openDocs[acctok] = { 'codimd': res.next.url, 'wopiSrc': wopiSrc }   # this is the redirect with the hash of the document just created
-  MDW.log.info('msg="Pushed document to CodiMD" url="%s" token="%s"' % (MDW.openDocs[acctok]['codimd'], acctok[-20:]))
-  
+  MDW.log.debug('msg="Redirecting client to CodiMD"')
   # generate a hook for close and return an iframe to the client
-  return MDW.frame_page_templated_html % (socket.getfqdn(), MDW.port, acctok, MDW.openDocs[acctok]['codimd'])
+  return MDW.frame_page_templated_html % (filemd['BaseFileName'], filemd['UserFriendlyName'], \
+                                          MDW.codiwopiurl, acctok, MDW.openDocs[acctok]['codimd'])
 
 
 @MDW.app.route("/close", methods=['GET'])
@@ -179,27 +218,37 @@ def mdClose():
   mddoc = res.content
 
   # WOPI PutFile
+  lockurl = MDW.openDocs[acctok]['codimd']
   url = '%s/contents?access_token=%s' % (wopiSrc, acctok)
-  MDW.log.debug('msg="Calling WOPI" url="%s"' % url)
-  res = requests.post(url, headers={'X-WOPI-Lock': 'TODO hash'}, data=mddoc)
+  MDW.log.debug('msg="Calling WOPI PutFile" url="%s"' % wopiSrc)
+  res = requests.post(url, headers={'X-WOPI-Lock': lockurl}, data=mddoc)
   if res.status_code != http.client.OK:
     # TODO handle conflicts
     raise ValueError(res.status_code)
 
-  # WOPI Unlock
-  url = '%s?access_token=%s' % (wopiSrc, acctok)
-  MDW.log.debug('msg="Calling WOPI" url="%s"' % url)
-  res = requests.post(url, headers={'X-WOPI-Lock': 'TODO hash', 'X-Wopi-Override': 'UNLOCK'})
-  if res.status_code != http.client.OK:
-    # TODO handle conflicts
-    raise ValueError(res.status_code)
+  # remove this acctok from the set of active ones
+  MDW.locks[lockurl] -= set(acctok)
+  if len(MDW.locks[lockurl]) == 0:
+    del MDW.locks[lockurl]
+    # we're the last editor for this file, call WOPI Unlock
+    url = '%s?access_token=%s' % (wopiSrc, acctok)
+    MDW.log.debug('msg="Calling WOPI Unlock" url="%s"' % wopiSrc)
+    res = requests.post(url, headers={'X-WOPI-Lock': lockurl, 'X-Wopi-Override': 'UNLOCK'})
+    if res.status_code != http.client.OK:
+      # TODO handle conflicts
+      raise ValueError(res.status_code)
 
-  # TODO delete on codimd
-  MDW.log.info('msg="close called" client="%s" token="%s"' % (flask.request.remote_addr, acctok[-20:]))
+  # TODO delete on codimd: it seems this API is still missing
+
+  # clean up internal state
+  del MDW.openDocs[acctok]
+
+  MDW.log.info('msg="Close called" client="%s" token="%s"' % (flask.request.remote_addr, acctok[-20:]))
   return 'OK', http.client.OK
 
+
 #
-# Start the Flask endless listening loop if started in standalone mode
+# Start the Flask endless listening loop
 #
 if __name__ == '__main__':
   MDW.init()
