@@ -91,6 +91,10 @@ class MDW:
       cls.log.setLevel(cls.loglevels[cls.config.get('general', 'loglevel')])
       cls.codimdurl = cls.config.get('general', 'codimdurl')
       cls.useHttps = False     # cls.config.get('security', 'usehttps').lower() == 'yes'
+      cls.codiwopiurl = cls.config.get('general', 'wopicodimdurl', \
+                                       fallback='%s://%s:%d' % (('https' if cls.useHttps else 'http'), \
+                                                                socket.getfqdn(), cls.port))
+
     except Exception as e:
       # any error we get here with the configuration is fatal
       cls.log.fatal('msg="Failed to initialize the service, aborting" error="%s"' % e)
@@ -101,12 +105,10 @@ class MDW:
   def run(cls):
     '''Runs the Flask app in either secure (https) or test (http) mode'''
     if cls.useHttps:
-      cls.codiwopiurl = 'https://%s:%d' % (socket.getfqdn(), cls.port)
       cls.log.info('msg="CodiMD to WOPI Server starting in secure mode" url="%s"' % cls.codiwopiurl)
       cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'),
                   ssl_context=(cls.config.get('security', 'wopicert'), cls.config.get('security', 'wopikey')))
     else:
-      cls.codiwopiurl = 'http://%s:%d' % (socket.getfqdn(), cls.port)
       cls.log.info('msg="CodiMD to WOPI Server starting in test/unsecure mode" url="%s"' % cls.codiwopiurl)
       cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'))
 
