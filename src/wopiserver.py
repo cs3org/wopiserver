@@ -175,9 +175,11 @@ class Wopi:
     codimd = cls.config.get('general', 'codimdurl', fallback=None)
     if codimd:
       cls.ENDPOINTS['.md'] = {}
-      cls.ENDPOINTS['.md']['view'] = codimd + '?mode=readonly'
-      cls.ENDPOINTS['.md']['edit'] = codimd + '?mode=edit'
+      cls.ENDPOINTS['.md']['view'] = cls.ENDPOINTS['.md']['edit'] = codimd
       cls.ENDPOINTS['.md']['new'] = codimd + '?mode=new'
+      cls.ENDPOINTS['.txt'] = {}
+      cls.ENDPOINTS['.txt']['view'] = cls.ENDPOINTS['.txt']['edit'] = codimd
+      cls.ENDPOINTS['.txt']['new'] = codimd + '?mode=new'
       cls.log.info('msg="CodiMD endpoints successfully configured"')
 
     # backstop if no app got registered
