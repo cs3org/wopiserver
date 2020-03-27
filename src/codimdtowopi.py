@@ -41,7 +41,7 @@ class MDW:
   openDocs = {}   # a map active access tokens -> (codimd doc url, WOPISrc url)
   locks = {}      # an "inverse" map codimd docs urls -> set of active access tokens for this file
 
-  # the following is a template with five (!) parameters. TODO need to find a better solution for this
+  # the following is a template with six (!) parameters. TODO need to find a better solution for this
   frame_page_templated_html = """
     <html>
     <head>
@@ -56,10 +56,9 @@ class MDW:
     <script>
       window.onbeforeunload = function() {
         $.get("%s/close",
-          {access_token: '%s'},
-          function(data) {
-            alert(data)
-          }
+          {access_token: '%s',
+           save: '%s'},
+          function(data) {}
         );
       };
       $(document).ready(function() {
@@ -158,19 +157,14 @@ def mdOpen():
   lockurl = res.headers.pop('X-WOPI-Lock', None)   # if present, the lock is the URL of the document in CodiMD
 
   if lockurl:
-    # file is already locked, check that it's this instance
+    # file is already locked, check that it's held in this instance
     MDW.log.info('msg="Lock already held" lock="%s"' % lockurl)
     lockurl = urllib.parse.urlparse(lockurl)
     if ('%s://%s:%d' % (lockurl.scheme, lockurl.hostname, lockurl.port)) != MDW.codimdurl:
       # file was locked by another CodiMD instance or with a different lock scheme, cannot use it
       return 'File already locked', http.client.CONFLICT
-    # OK, store some context in memory - TODO store more context in the lock to become stateless
+    # yes, store some context in memory
     MDW.openDocs[acctok] = {'codimd': lockurl.geturl(), 'wopiSrc': wopiSrc}
-    try:
-      MDW.locks[lockurl.geturl()] = MDW.locks[lockurl.geturl()] | set(acctok)
-    except KeyError:
-      # this may happen if this bridge service is restarted...
-      MDW.locks[lockurl.geturl()] = set(acctok)
 
   else:
     # file is not locked, fetch it from storage
@@ -188,28 +182,50 @@ def mdOpen():
     if res.status_code != http.client.FOUND:
       raise ValueError(res.status_code)
     MDW.openDocs[acctok] = {'codimd': res.next.url, 'wopiSrc': wopiSrc}   # this is the redirect with the hash of the document just created
-    MDW.locks[res.next.url] = set(acctok)
     MDW.log.info('msg="Pushed document to CodiMD" url="%s" token="%s"' % (MDW.openDocs[acctok]['codimd'], acctok[-20:]))
 
-  # in all cases, (re)lock the file
-  # WOPI Lock
-  url = '%s?access_token=%s' % (wopiSrc, acctok)
-  MDW.log.debug('msg="Calling WOPI Lock" url="%s"' % wopiSrc)
-  res = requests.post(url, headers={'X-WOPI-Lock': MDW.openDocs[acctok]['codimd'], 'X-Wopi-Override': 'LOCK'})
-  if res.status_code != http.client.OK:
-    # TODO handle conflicts
-    raise ValueError(res.status_code)
+  # use the 'UserCanWrite' attribute to decide whether the file is to be opened in read-only mode
+  if filemd['UserCanWrite']:
+    # WOPI Lock
+    url = '%s?access_token=%s' % (wopiSrc, acctok)
+    MDW.log.debug('msg="Calling WOPI Lock" url="%s"' % wopiSrc)
+    res = requests.post(url, headers={'X-WOPI-Lock': MDW.openDocs[acctok]['codimd'], 'X-Wopi-Override': 'LOCK'})
+    if res.status_code != http.client.OK:
+      # TODO handle conflicts
+      raise ValueError(res.status_code)
+    try:
+      # keep track of this lock
+      MDW.locks[MDW.openDocs[acctok]['codimd']] = MDW.locks[MDW.openDocs[acctok]['codimd']] | set(acctok)
+    except KeyError:
+      # this may happen if this bridge service is restarted... TODO need to store more context in the lock to be stateless
+      MDW.locks[MDW.openDocs[acctok]['codimd']] = set(acctok)
+
+  else:
+    # read-only mode, amend the redirection url to show the file in publish mode
+    # TODO tell CodiMD to disable editing!
+    MDW.openDocs[acctok]['codimd'] += '/publish'
 
   MDW.log.debug('msg="Redirecting client to CodiMD"')
   # generate a hook for close and return an iframe to the client
   return MDW.frame_page_templated_html % (filemd['BaseFileName'], filemd['UserFriendlyName'], \
-                                          MDW.codiwopiurl, acctok, MDW.openDocs[acctok]['codimd'])
+                                          MDW.codiwopiurl, acctok, filemd['UserCanWrite'], \
+                                          MDW.openDocs[acctok]['codimd'])
 
 
 @MDW.app.route("/close", methods=['GET'])
 def mdClose():
   acctok = flask.request.args['access_token']
-  wopiSrc = MDW.openDocs[acctok]['wopiSrc']   # TODO handle missing key
+  if flask.request.args['save'] == 'False':
+    MDW.log.info('msg="Close called" save="False" client="%s" token="%s"' % \
+                 (flask.request.remote_addr, acctok[-20:]))
+    return 'OK', http.client.OK
+
+  try:
+    wopiSrc = MDW.openDocs[acctok]['wopiSrc']
+  except KeyError:
+    # this may happen if this bridge service is restarted... TODO need to store more context to be stateless
+    MDW.log.error('msg="Close called" token="%s" error="Unable to store the file, missing WOPI context"' % acctok[-20:])
+    return 'WOPI source not found', http.client.NOT_FOUND
 
   # Get document from CodiMD
   res = requests.get(MDW.openDocs[acctok]['codimd'] + '/download')
@@ -238,12 +254,13 @@ def mdClose():
       # TODO handle conflicts
       raise ValueError(res.status_code)
 
-  # TODO delete on codimd: it seems this API is still missing
+    # TODO as we're the last, delete on codimd: it seems this API is still missing
 
   # clean up internal state
   del MDW.openDocs[acctok]
 
-  MDW.log.info('msg="Close called" client="%s" token="%s"' % (flask.request.remote_addr, acctok[-20:]))
+  MDW.log.info('msg="Close called" save="True" client="%s" token="%s"' % \
+               (flask.request.remote_addr, acctok[-20:]))
   return 'OK', http.client.OK
 
 
