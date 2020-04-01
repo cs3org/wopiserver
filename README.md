@@ -25,6 +25,8 @@ This is a proof-of-concept WOPI client for CodiMD, to allow bridging a CodiMD in
 
 ## TODO
 * permissions management: e.g. from readonly mode one can switch to edit mode (but modifications are silently dropped)
-* blobs management
+  - need API for permission changes, missing in CodiMD
+* blobs management: uploaded files end up in the designated uploads folder in CodiMD, need to fetch them back and associate them to the md file "forever" in the storage. Could do the association via xattrs, but API required to fetch blobs from CodiMD
 * detect changes in CodiMD and push them to WOPI every N minutes
 * delete files/entries from CodiMD DB
+
