@@ -3,8 +3,8 @@
 #
 Name:      cernbox-wopi-server
 Summary:   A WOPI server to support Office online suites on CERNBox
-Version:   4.0
-Release:   4%{?dist}
+Version:   4.1
+Release:   0%{?dist}
 License:   GPLv3
 Buildroot: %{_tmppath}/%{name}-buildroot
 Group:     CERN-IT/ST
@@ -72,6 +72,10 @@ touch /etc/wopi/ocsecret
 %_python_lib/*
 
 %changelog
+* Wed Apr 01 2020 Giuseppe Lo Presti <lopresti@cern.ch> 4.1
+- Improved WOPI lock handling
+- Added detection of lock files created by Desktop apps
+  (Microsoft Office and LibreOffice) to prevent data losses
 * Fri Mar 06 2020 Giuseppe Lo Presti <lopresti@cern.ch> 4.0
 - Major refactoring to introduce support of multiple storage access plugins:
   currently supported xrootd (default) and local storage, a CS3APIs-compliant

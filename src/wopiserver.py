@@ -241,6 +241,26 @@ def _generateAccessToken(ruid, rgid, filename, canedit, username, folderurl, end
   except IOError as e:
     Wopi.log.info('msg="Requested file not found" filename="%s" error="%s"' % (filename, e))
     raise
+  # if write access is requested, probe whether there's already a lock file coming from Desktop applications
+  if canedit:
+    try:
+      # probe LibreOffice
+      for line in storage.readfile(endpoint, _getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid):
+        if 'No such file or directory' in str(line) or 'WOPIServer' in str(line):
+          # if a lock file is found but it is held by a WOPI Server, let it go: it will be sorted out
+          #  by the collaborative editor via WOPI Lock calls
+          raise IOError
+      canedit = False
+      Wopi.log.info('msg="Access downgraded to read-only because of an existing LibreOffice lock file" filename="%s"' % filename)
+    except IOError as e:
+      pass
+    try:
+      # same for MS Office
+      lockInfo = storage.statx(endpoint, _getMicrosoftOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)
+      canedit = False
+      Wopi.log.info('msg="Access downgraded to read-only because of an existing Microsoft Office lock file" filename="%s"' % filename)
+    except IOError as e:
+      pass
   exptime = int(time.time()) + Wopi.tokenvalidity
   acctok = jwt.encode({'ruid': ruid, 'rgid': rgid, 'filename': filename, 'username': username,
                        'canedit': canedit, 'folderurl': folderurl, 'exp': exptime, 'endpoint': endpoint},
@@ -264,6 +284,14 @@ def _getLockName(filename):
     lockfile = os.path.dirname(filename) + os.path.sep + '.sys.wopilock.' + os.path.basename(filename) + '.'
   return lockfile
 
+def _getLibreOfficeLockName(filename):
+  '''Returns the filename of a LibreOffice-compatible lock file.
+  This enables interoperability between Online and Desktop applications'''
+  return os.path.dirname(filename) + os.path.sep + '.~lock.' + os.path.basename(filename) + '#'
+
+def _getMicrosoftOfficeLockName(filename):
+  '''Returns the filename of a lock file as created by Microsoft Office'''
+  return os.path.dirname(filename) + os.path.sep + '~$' + os.path.basename(filename)[2:]
 
 def _retrieveWopiLock(fileid, operation, lock, acctok):
   '''Retrieves and logs an existing lock for a given file'''
@@ -290,6 +318,11 @@ def _retrieveWopiLock(fileid, operation, lock, acctok):
     except IOError:
       # ignore, it's not worth to report anything here
       pass
+    # also remove the LibreOffice-compatible lock file
+    try:
+      storage.removefile(acctok['endpoint'], _getLibreOfficeLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid, 1)
+    except IOError as e:
+      Wopi.log.warning('msg="Unable to delete the LibreOffice-compatible lock file" error="%s"' % e)
     return None
   Wopi.log.info('msg="%s" user="%s:%s" filename="%s" fileid="%s" lock="%s" retrievedLock="%s" expTime="%s" token="%s"' % \
                 (operation.title(), acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, lock, retrievedLock['wopilock'], \
@@ -308,7 +341,10 @@ def _storeWopiLock(operation, lock, acctok):
     storage.writefile(acctok['endpoint'], _getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid, s, 1)
     Wopi.log.info('msg="%s" filename="%s" token="%s" lock="%s" result="success"' % \
                   (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
-    Wopi.log.debug('msg="%s" encodedlock="%s" length="%d"' % (operation.title(), s, len(s)))
+    # also create a LibreOffice-compatible lock file for interoperability purposes
+    locontent = ',Collaborative Online Editor,%s,%s,WOPIServer;' % \
+            (Wopi.wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())))
+    storage.writefile(acctok['endpoint'], _getLibreOfficeLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid, locontent, 1)
   except IOError as e:
     Wopi.log.warning('msg="%s" filename="%s" token="%s" lock="%s" result="unable to store lock" reason="%s"' % \
                      (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
@@ -672,6 +708,12 @@ def wopiUnlock(fileid, reqheaders, acctok):
     pass
   try:
     storage.rmxattr(acctok['endpoint'], acctok['filename'], acctok['ruid'], acctok['rgid'], LASTSAVETIMEKEY)
+  except IOError:
+    # same as above
+    pass
+  try:
+    # also remove the LibreOffice-compatible lock file
+    storage.removefile(acctok['endpoint'], _getLibreOfficeLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid, 1)
   except IOError:
     # same as above
     pass
