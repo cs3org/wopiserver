@@ -18,6 +18,7 @@ import logging.handlers
 import urllib.parse
 import http.client
 import requests
+import json
 try:
   import flask                   # Flask app server
 except ImportError:
@@ -94,7 +95,6 @@ class MDW:
       cls.codiwopiurl = cls.config.get('general', 'wopicodimdurl', \
                                        fallback='%s://%s:%d' % (('https' if cls.useHttps else 'http'), \
                                                                 socket.getfqdn(), cls.port))
-
     except Exception as e:
       # any error we get here with the configuration is fatal
       cls.log.fatal('msg="Failed to initialize the service, aborting" error="%s"' % e)
@@ -137,7 +137,7 @@ def index():
 
 @MDW.app.route("/open", methods=['GET'])
 def mdOpen():
-  '''Open a md doc by contacting the provided WOPISrc with the given access_token'''
+  '''Open a MD doc by contacting the provided WOPISrc with the given access_token'''
   wopiSrc = urllib.parse.unquote(flask.request.args['WOPISrc'])
   acctok = flask.request.args['access_token']
   MDW.log.info('msg="Open called" client="%s" token="%s"' % (flask.request.remote_addr, acctok[-20:]))
@@ -216,10 +216,18 @@ def mdOpen():
 
 @MDW.app.route("/close", methods=['GET'])
 def mdClose():
+  '''Close a MD doc by saving it back to the previously given WOPI Src and using the provided access token'''
   acctok = flask.request.args['access_token']
   if flask.request.args['save'] == 'False':
     MDW.log.info('msg="Close called" save="False" client="%s" token="%s"' % \
                  (flask.request.remote_addr, acctok[-20:]))
+    # TODO delete content from CodiMD - API is missing
+
+    # clean up internal state
+    try:
+      del MDW.openDocs[acctok]
+    except KeyError:
+      pass
     return 'OK', http.client.OK
 
   try:
@@ -256,7 +264,7 @@ def mdClose():
       # TODO handle conflicts
       raise ValueError(res.status_code)
 
-    # TODO as we're the last, delete on codimd: it seems this API is still missing
+    # TODO as we're the last, delete on CodiMD: it seems this API is still missing
 
   # clean up internal state
   del MDW.openDocs[acctok]
@@ -264,6 +272,13 @@ def mdClose():
   MDW.log.info('msg="Close called" save="True" client="%s" token="%s"' % \
                (flask.request.remote_addr, acctok[-20:]))
   return 'OK', http.client.OK
+
+
+@MDW.app.route("/list", methods=['GET'])
+def mdList():
+  '''Return a list of all currently opened files'''
+  # TODO this API should be protected
+  return flask.Response(json.dumps(MDW.openDocs), mimetype='application/json')
 
 
 #
