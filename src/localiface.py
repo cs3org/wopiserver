@@ -99,12 +99,14 @@ def readfile(_endpoint, filename, _ruid, _rgid):
       yield chunk
   except FileNotFoundError as e:
     # log this case as info to keep the logs cleaner
-    log.info('msg="Error opening the file for read" filename="%s" error="No such file or directory"' % filename)
+    log.info('msg="File not found on read" filename="%s"' % filename)
     # as this is a generator, we yield the error string instead of the file's contents
+    yield 'ERROR on read'
     yield 'No such file or directory'
   except OSError as e:
     # general case, issue a warning
     log.warning('msg="Error opening the file for read" filename="%s" error="%s"' % (filename, e))
+    yield 'ERROR on read'
     yield str(e)
 
 def writefile(_endpoint, filename, ruid, rgid, content, noversion=0):

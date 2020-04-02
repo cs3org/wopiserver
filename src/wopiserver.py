@@ -257,8 +257,10 @@ def _generateAccessToken(ruid, rgid, filename, canedit, username, folderurl, end
     try:
       # probe LibreOffice
       for line in storage.readfile(endpoint, _getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid):
-        if 'No such file or directory' in str(line) or 'WOPIServer' in str(line):
-          # if a lock file is found but it is held by a WOPI Server, let it go: it will be sorted out
+        if 'ERROR on read' in str(line) or 'WOPIServer' in str(line):
+          # in case of read error, be optimistic and let it go (ENOENT would be fine, other cases have been
+          # observed in production and likely are false positives)
+          # also if a lock file is found but it is held by a WOPI Server, let it go: it will be sorted out
           # by the collaborative editor via WOPI Lock calls
           raise IOError
       canedit = False
@@ -302,8 +304,8 @@ def _retrieveWopiLock(fileid, operation, lock, acctok):
   '''Retrieves and logs an existing lock for a given file'''
   l = b''
   for line in storage.readfile(acctok['endpoint'], _getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid):
-    if 'No such file or directory' in str(line):
-      return None     # no pre-existing lock found
+    if 'ERROR on read' in str(line):
+      return None     # no pre-existing lock found, or error attempting to read it: assume it does not exist
     # the following check is necessary as it happens to get a str instead of bytes
     l += line if isinstance(line, type(l)) else line.encode()
   try:

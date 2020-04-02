@@ -147,10 +147,12 @@ def readfile(endpoint, filename, ruid, rgid):
     if not rc.ok:
       # the file could not be opened: check the case of ENOENT and log it as info to keep the logs cleaner
       if 'No such file or directory' in rc.message:
-        log.info('msg="Error opening the file for read" filename="%s" error="No such file or directory"' % filename)
+        log.info('msg="File not found on read" filename="%s"' % filename)
       else:
-        log.warning('msg="Error opening the file for read" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
+        log.warning('msg="Error opening the file for read" filename="%s" code="%d" error="%s"' % \
+                    (filename, rc.shellcode, rc.message.strip('\n')))
       # as this is a generator, we yield the error string instead of the file's contents
+      yield 'ERROR on read'
       yield rc.message
     else:
       chunksize = config.getint('io', 'chunksize')
