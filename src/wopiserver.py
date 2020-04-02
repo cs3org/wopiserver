@@ -221,6 +221,17 @@ def _generateWopiSrc(fileid):
   return urllib.parse.quote_plus('%s/wopi/files/%s' % (Wopi.wopiurl, fileid))
 
 
+def _getLibreOfficeLockName(filename):
+  '''Returns the filename of a LibreOffice-compatible lock file.
+  This enables interoperability between Online and Desktop applications'''
+  return os.path.dirname(filename) + os.path.sep + '.~lock.' + os.path.basename(filename) + '#'
+
+
+def _getMicrosoftOfficeLockName(filename):
+  '''Returns the filename of a lock file as created by Microsoft Office'''
+  return os.path.dirname(filename) + os.path.sep + '~$' + os.path.basename(filename)[2:]
+
+
 def _logGeneralExceptionAndReturn(ex, req):
   '''Convenience function to log a stack trace and return HTTP 500'''
   ex_type, ex_value, ex_traceback = sys.exc_info()
@@ -248,17 +259,19 @@ def _generateAccessToken(ruid, rgid, filename, canedit, username, folderurl, end
       for line in storage.readfile(endpoint, _getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid):
         if 'No such file or directory' in str(line) or 'WOPIServer' in str(line):
           # if a lock file is found but it is held by a WOPI Server, let it go: it will be sorted out
-          #  by the collaborative editor via WOPI Lock calls
+          # by the collaborative editor via WOPI Lock calls
           raise IOError
       canedit = False
-      Wopi.log.info('msg="Access downgraded to read-only because of an existing LibreOffice lock file" filename="%s"' % filename)
+      Wopi.log.warning('msg="Access downgraded to read-only because of an existing LibreOffice lock" filename="%s" holder="%s"' % \
+                       (filename, line.split(',')[1]))
     except IOError as e:
       pass
     try:
-      # same for MS Office
-      lockInfo = storage.statx(endpoint, _getMicrosoftOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)
+      # same for MS Office, but don't try to go beyond stat
+      lockInfo = storage.stat(endpoint, _getMicrosoftOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)
       canedit = False
-      Wopi.log.info('msg="Access downgraded to read-only because of an existing Microsoft Office lock file" filename="%s"' % filename)
+      Wopi.log.warning('msg="Access downgraded to read-only because of an existing Microsoft Office lock" filename="%s" mtime="%ld"' % \
+                       (filename, lockInfo['mtime']))
     except IOError as e:
       pass
   exptime = int(time.time()) + Wopi.tokenvalidity
@@ -284,14 +297,6 @@ def _getLockName(filename):
     lockfile = os.path.dirname(filename) + os.path.sep + '.sys.wopilock.' + os.path.basename(filename) + '.'
   return lockfile
 
-def _getLibreOfficeLockName(filename):
-  '''Returns the filename of a LibreOffice-compatible lock file.
-  This enables interoperability between Online and Desktop applications'''
-  return os.path.dirname(filename) + os.path.sep + '.~lock.' + os.path.basename(filename) + '#'
-
-def _getMicrosoftOfficeLockName(filename):
-  '''Returns the filename of a lock file as created by Microsoft Office'''
-  return os.path.dirname(filename) + os.path.sep + '~$' + os.path.basename(filename)[2:]
 
 def _retrieveWopiLock(fileid, operation, lock, acctok):
   '''Retrieves and logs an existing lock for a given file'''
