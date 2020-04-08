@@ -256,13 +256,13 @@ def _generateAccessToken(ruid, rgid, filename, canedit, username, folderurl, end
   if canedit:
     try:
       # probe LibreOffice
-      for line in storage.readfile(endpoint, _getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid):
-        if 'ERROR on read' in str(line) or 'WOPIServer' in str(line):
-          # in case of read error, be optimistic and let it go (ENOENT would be fine, other cases have been
-          # observed in production and likely are false positives)
-          # also if a lock file is found but it is held by a WOPI Server, let it go: it will be sorted out
-          # by the collaborative editor via WOPI Lock calls
-          raise IOError
+      line = str(next(storage.readfile(endpoint, _getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)))
+      if 'ERROR on read' in line or 'WOPIServer' in line:
+        # in case of read error, be optimistic and let it go (ENOENT would be fine, other cases have been
+        # observed in production and likely are false positives)
+        # also if a lock file is found but it is held by a WOPI Server, let it go: it will be sorted out
+        # by the collaborative editor via WOPI Lock calls
+        raise IOError
       canedit = False
       Wopi.log.warning('msg="Access downgraded to read-only because of an existing LibreOffice lock" filename="%s" holder="%s"' % \
                        (filename, line.split(',')[1]))
@@ -551,6 +551,87 @@ def cboxGetOpenFiles():
   # dump the current list of opened files in JSON format
   Wopi.log.info('msg="cboxGetOpenFiles: returning list of open files" client="%s"' % req.remote_addr)
   return flask.Response(json.dumps(jl), mimetype='application/json')
+
+
+@Wopi.app.route("/wopi/cbox/lock", methods=['GET'])
+def cboxLock():
+  '''Lock a given filename so that a WOPI lock call would fail. Used for OnlyOffice
+  as they do not use WOPI: this way better interoperability is ensured. It creates
+  a LibreOffice-compatible lock, which is checked by the WOPI lock call as well as LibreOffice.
+  Request arguments:
+  - string filename: the full path of the filename to be opened
+  - string endpoint (optional): the storage endpoint to be used to look up the file, in case of
+    multi-instance underlying storage; defaults to 'default'
+  The call returns:
+  - HTTP UNAUTHORIZED (401) if the 'Authorization: Bearer' secret is not provided in the header (cf. /wopi/cbox/open)
+  - HTTP CONFLICT (409) if a previous lock already exists
+  - HTTP OK (200) if not and the operation succeeded
+  '''
+  req = flask.request
+  # first check if the shared secret matches ours
+  if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.ocsecret:
+    Wopi.log.warning('msg="cboxLock: unauthorized access attempt, missing authorization token" client="%s"' % req.remote_addr)
+    return 'Client not authorized', http.client.UNAUTHORIZED
+  filename = req.args['filename']
+  endpoint = req.args['endpoint'] if 'endpoint' in req.args else 'default'
+  try:
+    # probe if a LibreOffice lock already exists
+    line = str(next(storage.readfile(endpoint, _getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)))
+    if 'ERROR on read' in line or 'OnlyOffice Online Editor' in line:
+      # in case of any read error (not only ENOENT), be optimistic and let it go: cf. _generateAccessToken()
+      # also if the lock was created for OnlyOffice, let it go: OnlyOffice will handle the collaborative session
+      raise IOError
+    Wopi.log.warning('msg="cboxLock: found LibreOffice lock" filename="%s" holder="%s"' % \
+                     (filename, line.split(',')[1]))
+    return 'Previous lock exists', http.client.CONFLICT
+  except IOError as e:
+    pass
+  try:
+    # same for MS Office, but don't go beyond stat
+    lockInfo = storage.stat(endpoint, _getMicrosoftOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)
+    Wopi.log.warning('msg="cboxLock: found Microsoft Office lock" filename="%s" mtime="%ld"' % \
+                      (filename, lockInfo['mtime']))
+    return 'Previous lock exists', http.client.CONFLICT
+  except IOError as e:
+    pass
+  # OK, no lock found: create a LibreOffice-compatible lock
+  # TODO once OnlyOffice also supports locking, we should really create an OnlyOffice-compatible lock here
+  try:
+    locontent = ',OnlyOffice Online Editor,%s,%s,OnlyOfficeWeb;' % \
+            (Wopi.wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())))
+    storage.writefile(endpoint, _getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid, locontent, 1)
+    Wopi.log.info('msg="cboxLock: created LibreOffice-compatible lock file" filename="%s"' % filename)
+  except IOError as e:
+    Wopi.log.warning('msg="cboxLock: unable to store LibreOffice-compatible lock" filename="%s" reason="%s"' % \
+                     (filename, e))
+    # still, return OK and let OnlyOffice go
+  return 'OK', http.client.OK
+
+
+@Wopi.app.route("/wopi/cbox/unlock", methods=['GET'])
+def cboxUnlock():
+  '''Unlock a given filename. Used for OnlyOffice as they do not use WOPI (see cboxLock).
+  Request arguments:
+  - string filename: the full path of the filename to be opened
+  - string endpoint (optional): the storage endpoint to be used to look up the file, in case of
+    multi-instance underlying storage; defaults to 'default'
+  The call returns:
+  - HTTP UNAUTHORIZED (401) if the 'Authorization: Bearer' secret is not provided in the header (cf. /wopi/cbox/open)
+  - HTTP OK (200) in all other cases (a call for a missing lock does not fail)
+  '''
+  req = flask.request
+  # first check if the shared secret matches ours
+  if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.ocsecret:
+    Wopi.log.warning('msg="cboxUnlock: unauthorized access attempt, missing authorization token" client="%s"' % req.remote_addr)
+    return 'Client not authorized', http.client.UNAUTHORIZED
+  try:
+    # remove the LibreOffice-compatible lock file
+    storage.removefile((req.args['endpoint'] if 'endpoint' in req.args else 'default'), \
+                       _getLibreOfficeLockName(req.args['filename']), Wopi.lockruid, Wopi.lockrgid, 1)
+  except IOError:
+    # ignore, it's not worth to report anything here
+    pass
+  return 'OK', http.client.OK
 
 
 #
