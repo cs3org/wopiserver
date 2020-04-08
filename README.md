@@ -30,8 +30,8 @@ This is a proof-of-concept WOPI client for CodiMD, to allow bridging a CodiMD in
 * delete files/entries from CodiMD DB
 
 ### Required CodiMD APIs to implement the above features
-* change permissions of a note, e.g. make it readonly
-* upload a file to be used as "attachment"
-* download all attached files of a given note
-* delete a note from DB as well as its attached files
-* given a note, return the last modification time
+* given a note id, change permissions of a note, e.g. make it read only.
+* upload a file to be used as "attachment": a proposal could be an HTTP POST to `/<nodeid>/attach` with the attachment in the payload. The payload could be a zip file for multiple attachments.
+* download all attached files of a given note. E.g. GET `/<nodeid>/attach` to return a zip of all files.
+* given a note id, delete a note from DB as well as its attached files.
+* given a note id, return the note's last modification time.
