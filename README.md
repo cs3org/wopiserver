@@ -1,4 +1,4 @@
-# WOPIForCodiMD
+# WOPI For CodiMD
 
 This is a proof-of-concept WOPI client for CodiMD, to allow bridging a CodiMD instance to a WOPI-enabled EFSS service like ownCloud or CERNBox. It uses the private REST API of CodiMD, which will be hopefully made public and complete in the future.
 
@@ -25,8 +25,13 @@ This is a proof-of-concept WOPI client for CodiMD, to allow bridging a CodiMD in
 
 ## TODO
 * permissions management: e.g. from readonly mode one can switch to edit mode (but modifications are silently dropped)
-  - need API for permission changes, missing in CodiMD
 * blobs management: uploaded files end up in the designated uploads folder in CodiMD, need to fetch them back and associate them to the md file "forever" in the storage. Could do the association via xattrs, but API required to fetch blobs from CodiMD
 * detect changes in CodiMD and push them to WOPI every N minutes
 * delete files/entries from CodiMD DB
 
+### Required CodiMD APIs to implement the above features
+* change permissions of a note, e.g. make it readonly
+* upload a file to be used as "attachment"
+* download all attached files of a given note
+* delete a note from DB as well as its attached files
+* given a note, return the last modification time
