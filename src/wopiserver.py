@@ -575,7 +575,7 @@ def cboxLock():
   filename = req.args['filename']
   endpoint = req.args['endpoint'] if 'endpoint' in req.args else 'default'
   try:
-    # probe if a LibreOffice lock already exists
+    # probe if a WOPI/LibreOffice lock already exists (a WOPI session always create a LibreOffice lock as well)
     line = str(next(storage.readfile(endpoint, _getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)))
     if 'ERROR on read' in line or 'OnlyOffice Online Editor' in line:
       # in case of any read error (not only ENOENT), be optimistic and let it go: cf. _generateAccessToken()
