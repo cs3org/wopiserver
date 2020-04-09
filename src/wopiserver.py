@@ -257,6 +257,7 @@ def _generateAccessToken(ruid, rgid, filename, canedit, username, folderurl, end
     raise
   # if write access is requested, probe whether there's already a lock file coming from Desktop applications
   if canedit:
+    locked = False
     try:
       # probe LibreOffice
       line = str(next(storage.readfile(endpoint, _getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)))
@@ -267,21 +268,22 @@ def _generateAccessToken(ruid, rgid, filename, canedit, username, folderurl, end
         # by the collaborative editor via WOPI Lock calls
         raise IOError
       canedit = False
+      locked = True
       Wopi.log.warning('msg="Access downgraded to read-only because of an existing LibreOffice lock" filename="%s" holder="%s"' % \
                        (filename, line.split(',')[1]))
     except IOError as e:
-      pass
-    try:
-      # same for MS Office, but don't try to go beyond stat
-      lockInfo = storage.stat(endpoint, _getMicrosoftOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)
-      canedit = False
-      Wopi.log.warning('msg="Access downgraded to read-only because of an existing Microsoft Office lock" filename="%s" mtime="%ld"' % \
-                       (filename, lockInfo['mtime']))
-    except IOError as e:
-      pass
+      try:
+        # same for MS Office, but don't try to go beyond stat
+        lockInfo = storage.stat(endpoint, _getMicrosoftOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)
+        canedit = False
+        locked = True
+        Wopi.log.warning('msg="Access downgraded to read-only because of an existing Microsoft Office lock" filename="%s" mtime="%ld"' % \
+                         (filename, lockInfo['mtime']))
+      except IOError as e:
+        pass
   exptime = int(time.time()) + Wopi.tokenvalidity
   acctok = jwt.encode({'ruid': ruid, 'rgid': rgid, 'filename': filename, 'username': username,
-                       'canedit': canedit, 'folderurl': folderurl, 'exp': exptime, 'endpoint': endpoint},
+                       'canedit': canedit, 'extlock': locked, 'folderurl': folderurl, 'exp': exptime, 'endpoint': endpoint},
                       Wopi.wopisecret, algorithm='HS256').decode('UTF-8')
   Wopi.log.info('msg="Access token generated" ruid="%s" rgid="%s" canedit="%r" filename="%s" inode="%s" ' \
                 'mtime="%s" folderurl="%s" expiration="%d" token="%s"' % \
@@ -328,9 +330,11 @@ def _retrieveWopiLock(fileid, operation, lock, acctok):
     except IOError:
       # ignore, it's not worth to report anything here
       pass
-    # also remove the LibreOffice-compatible lock file
+    # also remove the LibreOffice-compatible lock file, if it has the expected signature - cf. _storeWopiLock()
     try:
-      storage.removefile(acctok['endpoint'], _getLibreOfficeLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid, 1)
+      lock = str(next(storage.readfile(acctok['endpoint'], _getLibreOfficeLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid)))
+      if 'WOPIServer' in lock:
+        storage.removefile(acctok['endpoint'], _getLibreOfficeLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid, 1)
     except IOError as e:
       Wopi.log.warning('msg="Unable to delete the LibreOffice-compatible lock file" error="%s"' % e)
     return None
@@ -579,13 +583,13 @@ def cboxLock():
   endpoint = req.args['endpoint'] if 'endpoint' in req.args else 'default'
   try:
     # probe if a WOPI/LibreOffice lock already exists (a WOPI session always create a LibreOffice lock as well)
-    line = str(next(storage.readfile(endpoint, _getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)))
-    if 'ERROR on read' in line or 'OnlyOffice Online Editor' in line:
+    lock = str(next(storage.readfile(endpoint, _getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)))
+    if 'ERROR on read' in lock or 'OnlyOffice Online Editor' in lock:
       # in case of any read error (not only ENOENT), be optimistic and let it go: cf. _generateAccessToken()
       # also if the lock was created for OnlyOffice, let it go: OnlyOffice will handle the collaborative session
       raise IOError
     Wopi.log.warning('msg="cboxLock: found LibreOffice lock" filename="%s" holder="%s"' % \
-                     (filename, line.split(',')[1]))
+                     (filename, lock.split(',')[1]))
     return 'Previous lock exists', http.client.CONFLICT
   except IOError as e:
     pass
@@ -600,7 +604,7 @@ def cboxLock():
   # OK, no lock found: create a LibreOffice-compatible lock
   # TODO once OnlyOffice also supports locking, we should really create an OnlyOffice-compatible lock here
   try:
-    locontent = ',OnlyOffice Online Editor,%s,%s,OnlyOfficeWeb;' % \
+    locontent = ',OnlyOffice Online Editor,%s,%s,ExtWebApp;' % \
             (Wopi.wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())))
     storage.writefile(endpoint, _getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid, locontent, 1)
     Wopi.log.info('msg="cboxLock: created LibreOffice-compatible lock file" filename="%s"' % filename)
@@ -620,17 +624,28 @@ def cboxUnlock():
     multi-instance underlying storage; defaults to 'default'
   The call returns:
   - HTTP UNAUTHORIZED (401) if the 'Authorization: Bearer' secret is not provided in the header (cf. /wopi/cbox/open)
-  - HTTP OK (200) in all other cases (a call for a missing lock does not fail)
+  - HTTP CONFLICT (409) if a lock exists, but held by another application
+  - HTTP NOT_FOUND (404) if no lock was found for the given file
+  - HTTP OK (200) if an OnlyOffice lock existed. In this case it is removed.
   '''
   req = flask.request
   # first check if the shared secret matches ours
   if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.ocsecret:
     Wopi.log.warning('msg="cboxUnlock: unauthorized access attempt, missing authorization token" client="%s"' % req.remote_addr)
     return 'Client not authorized', http.client.UNAUTHORIZED
+  filename = req.args['filename']
+  endpoint = req.args['endpoint'] if 'endpoint' in req.args else 'default'
   try:
-    # remove the LibreOffice-compatible lock file
-    storage.removefile((req.args['endpoint'] if 'endpoint' in req.args else 'default'), \
-                       _getLibreOfficeLockName(req.args['filename']), Wopi.lockruid, Wopi.lockrgid, 1)
+    # probe if a WOPI/LibreOffice lock exists with the expected signature
+    lock = str(next(storage.readfile(endpoint, _getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)))
+    if 'OnlyOffice Online Editor' in lock:
+      # remove the LibreOffice-compatible lock file
+      storage.removefile(endpoint, _getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid, 1)
+    elif 'ERROR on read' in lock:
+      # typically ENOENT, any other error is grouped here
+      return 'Lock not found', http.client.NOT_FOUND
+    else:
+      return 'Lock held by another application', http.client.CONFLICT
   except IOError:
     # ignore, it's not worth to report anything here
     pass
@@ -658,6 +673,10 @@ def wopiCheckFileInfo(fileid):
     # populate metadata for this file
     filemd = {}
     filemd['BaseFileName'] = filemd['BreadcrumbDocName'] = os.path.basename(acctok['filename'])
+    if acctok['extlock']:
+      # an external lock was found: let's somehow tell the user that the file is forced readonly
+      # note that we strip the extension, otherwise Office would strip it (along with our comment!)
+      filemd['BreadcrumbDocName'] = os.path.splitext(filemd['BaseFileName'])[0] + ' (locked by another app)'
     furl = acctok['folderurl']
     # encode the path part as it is going to be an URL GET argument
     filemd['BreadcrumbFolderUrl'] = furl[:furl.find('=')+1] + urllib.parse.quote_plus(furl[furl.find('=')+1:])
