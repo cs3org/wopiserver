@@ -562,9 +562,10 @@ def cboxGetOpenFiles():
 
 @Wopi.app.route("/wopi/cbox/lock", methods=['GET'])
 def cboxLock():
-  '''Lock a given filename so that a WOPI lock call would fail. Used for OnlyOffice
-  as they do not use WOPI: this way better interoperability is ensured. It creates
-  a LibreOffice-compatible lock, which is checked by the WOPI lock call as well as LibreOffice.
+  '''Lock a given filename so that a later WOPI lock call would detect a conflict.
+  Used for OnlyOffice as they do not use WOPI: this way better interoperability is ensured.
+  It creates a LibreOffice-compatible lock, which is checked by the WOPI lock call
+  as well as by LibreOffice.
   Request arguments:
   - string filename: the full path of the filename to be opened
   - string endpoint (optional): the storage endpoint to be used to look up the file, in case of
@@ -572,7 +573,9 @@ def cboxLock():
   The call returns:
   - HTTP UNAUTHORIZED (401) if the 'Authorization: Bearer' secret is not provided in the header (cf. /wopi/cbox/open)
   - HTTP CONFLICT (409) if a previous lock already exists
-  - HTTP OK (200) if not and the operation succeeded
+  - HTTP NOT_FOUND (404) if the file to be locked does not exist
+  - HTTP INTERNAL_ERROR (500) if writing the lock file failed, though no lock existed
+  - HTTP OK (200) if the operation succeeded
   '''
   req = flask.request
   # first check if the shared secret matches ours
@@ -601,18 +604,27 @@ def cboxLock():
     return 'Previous lock exists', http.client.CONFLICT
   except IOError as e:
     pass
-  # OK, no lock found: create a LibreOffice-compatible lock
-  # TODO once OnlyOffice also supports locking, we should really create an OnlyOffice-compatible lock here
+  # OK, no lock found: just make sure the file itself exists
+  try:
+    storage.stat(endpoint, filename, Wopi.lockruid, Wopi.lockrgid)
+  except IOError as e:
+    Wopi.log.warning('msg="cboxLock: file to be locked not found" filename="%s"' % filename)
+    return 'File not found', http.client.NOT_FOUND
+  # Now create a LibreOffice-compatible lock
+  # TODO once OnlyOffice supports locking, we should create an OnlyOffice-compatible lock here (cf. CERNBOX-1051)
   try:
     locontent = ',OnlyOffice Online Editor,%s,%s,ExtWebApp;' % \
             (Wopi.wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())))
     storage.writefile(endpoint, _getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid, locontent, 1)
     Wopi.log.info('msg="cboxLock: created LibreOffice-compatible lock file" filename="%s"' % filename)
+    # TODO store in a protected folder a symbolic link to this lock file, in order to allow
+    # a scan of all outstanding locks and expire them after a given time.
+    return 'OK', http.client.OK
   except IOError as e:
     Wopi.log.warning('msg="cboxLock: unable to store LibreOffice-compatible lock" filename="%s" reason="%s"' % \
                      (filename, e))
-    # still, return OK and let OnlyOffice go
-  return 'OK', http.client.OK
+    # return failure, though the caller should just try and go ahead
+    return 'Error locking file', http.client.INTERNAL_SERVER_ERROR
 
 
 @Wopi.app.route("/wopi/cbox/unlock", methods=['GET'])
