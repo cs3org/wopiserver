@@ -143,7 +143,6 @@ def readfile(endpoint, filename, ruid, rgid):
     tstart = time.clock()
     rc, statInfo_unused = f.open(fileurl, OpenFlags.READ)
     tend = time.clock()
-    log.info('msg="File open for read" filename="%s" elapsedTimems="%.1f"' % (filename, (tend-tstart)*1000))
     if not rc.ok:
       # the file could not be opened: check the case of ENOENT and log it as info to keep the logs cleaner
       if 'No such file or directory' in rc.message:
@@ -155,6 +154,7 @@ def readfile(endpoint, filename, ruid, rgid):
       yield 'ERROR on read'
       yield rc.message
     else:
+      log.info('msg="File open for read" filename="%s" elapsedTimems="%.1f"' % (filename, (tend-tstart)*1000))
       chunksize = config.getint('io', 'chunksize')
       rc, statInfo = f.stat()
       chunksize = min(chunksize, statInfo.size-1)
