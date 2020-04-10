@@ -229,7 +229,10 @@ def _getLibreOfficeLockName(filename):
 
 def _getMicrosoftOfficeLockName(filename):
   '''Returns the filename of a lock file as created by Microsoft Office'''
-  return os.path.dirname(filename) + os.path.sep + '~$' + os.path.basename(filename)[2:]
+  if os.path.splitext(filename)[1] == '.docx':
+    return os.path.dirname(filename) + os.path.sep + '~$' + os.path.basename(filename)[2:]
+  else:
+    return os.path.dirname(filename) + os.path.sep + '~$' + os.path.basename(filename)
 
 
 def _logGeneralExceptionAndReturn(ex, req):
