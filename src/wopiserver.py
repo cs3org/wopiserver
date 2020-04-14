@@ -591,16 +591,16 @@ def cboxLock():
       # in case of any read error (not only ENOENT), be optimistic and let it go: cf. _generateAccessToken()
       # also if the lock was created for OnlyOffice, let it go: OnlyOffice will handle the collaborative session
       raise IOError
-    Wopi.log.warning('msg="cboxLock: found LibreOffice lock" filename="%s" holder="%s"' % \
-                     (filename, lock.split(',')[1]))
+    Wopi.log.info('msg="cboxLock: found existing LibreOffice lock" filename="%s" holder="%s"' % \
+                  (filename, lock.split(',')[1]))
     return 'Previous lock exists', http.client.CONFLICT
   except IOError as e:
     pass
   try:
     # same for MS Office, but don't go beyond stat
     lockInfo = storage.stat(endpoint, _getMicrosoftOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)
-    Wopi.log.warning('msg="cboxLock: found Microsoft Office lock" filename="%s" mtime="%ld"' % \
-                      (filename, lockInfo['mtime']))
+    Wopi.log.info('msg="cboxLock: found existing Microsoft Office lock" filename="%s" mtime="%ld"' % \
+                  (filename, lockInfo['mtime']))
     return 'Previous lock exists', http.client.CONFLICT
   except IOError as e:
     pass
@@ -621,8 +621,8 @@ def cboxLock():
     # a scan of all outstanding locks and expire them after a given time.
     return 'OK', http.client.OK
   except IOError as e:
-    Wopi.log.warning('msg="cboxLock: unable to store LibreOffice-compatible lock" filename="%s" reason="%s"' % \
-                     (filename, e))
+    Wopi.log.error('msg="cboxLock: unable to store a LibreOffice-compatible lock" filename="%s" reason="%s"' % \
+                   (filename, e))
     # return failure, though the caller should just try and go ahead
     return 'Error locking file', http.client.INTERNAL_SERVER_ERROR
 
@@ -639,6 +639,7 @@ def cboxUnlock():
   - HTTP CONFLICT (409) if a lock exists, but held by another application
   - HTTP NOT_FOUND (404) if no lock was found for the given file
   - HTTP OK (200) if an OnlyOffice lock existed. In this case it is removed.
+  - HTTP INTERNAL_ERROR (500) if some other I/O error occurred with the given lock file
   '''
   req = flask.request
   # first check if the shared secret matches ours
@@ -653,15 +654,20 @@ def cboxUnlock():
     if 'OnlyOffice Online Editor' in lock:
       # remove the LibreOffice-compatible lock file
       storage.removefile(endpoint, _getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid, 1)
+      Wopi.log.info('msg="cboxUnlock: successfully removed LibreOffice-compatible lock file" filename="%s"' % filename)
+      return 'OK', http.client.OK
     elif 'ERROR on read' in lock:
       # typically ENOENT, any other error is grouped here
+      Wopi.log.warning('msg="cboxUnlock: lock file not found" filename="%s"' % filename)
       return 'Lock not found', http.client.NOT_FOUND
     else:
+      Wopi.log.info('msg="cboxUnlock: lock file held by another application" filename="%s"' % filename)
       return 'Lock held by another application', http.client.CONFLICT
-  except IOError:
-    # ignore, it's not worth to report anything here
-    pass
-  return 'OK', http.client.OK
+  except IOError as e:
+    Wopi.log.error('msg="cboxUnlock: I/O error with the requested LibreOffice-compatible lock" filename="%s" reason="%s"' % \
+                   (filename, e))
+    # return failure
+    return 'Error unlocking file', http.client.INTERNAL_SERVER_ERROR
 
 
 #
