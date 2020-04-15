@@ -162,11 +162,12 @@ def mdOpen():
     # file is already locked, check that it's held in this instance
     MDW.log.info('msg="Lock already held" lock="%s"' % lockurl)
     lockurl = urllib.parse.urlparse(lockurl)
-    if ('%s://%s:%d' % (lockurl.scheme, lockurl.hostname, lockurl.port)) != MDW.codimdurl:
-      # file was locked by another CodiMD instance or with a different lock scheme, cannot use it
-      return 'File already locked', http.client.CONFLICT
-    # yes, store some context in memory
-    MDW.openDocs[acctok] = {'codimd': lockurl.geturl(), 'wopiSrc': wopiSrc}
+    if ('%s://%s:%d' % (lockurl.scheme, lockurl.hostname, lockurl.port)) == MDW.codimdurl:
+      # yes, store some context in memory
+      MDW.openDocs[acctok] = {'codimd': lockurl.geturl(), 'wopiSrc': wopiSrc}
+    else:
+      # file was locked by another CodiMD instance or with a different lock scheme, force read-only mode
+      filemd['UserCanWrite'] = False
 
   else:
     # file is not locked, fetch it from storage
