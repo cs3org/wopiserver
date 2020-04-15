@@ -12,7 +12,7 @@ services:
       dockerfile: wopicodimd.Dockerfile
     image: wopicodimd:cern
     container_name: wopicodimd
-    hostname: cbox-wopicodi-docker-01
+    hostname: cbox-codimd-wopi
     network_mode: "bridge"
     restart: always
     ports:
