@@ -9,7 +9,6 @@ Author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 
 import sys
 import time
-import traceback
 import socket
 import configparser
 from platform import python_version
@@ -17,8 +16,8 @@ import logging
 import logging.handlers
 import urllib.parse
 import http.client
-import requests
 import json
+import requests
 try:
   import flask                   # Flask app server
 except ImportError:
@@ -148,7 +147,7 @@ def mdOpen():
   try:
     filemd = requests.get(url).json()
   except ValueError as e:
-    # TODO handle failures
+    MDW.log.warning('msg="Malformed JSON from WOPI" error="%s"' % e)
     raise
 
   # WOPI GetLock: if present, trigger the collaborative editing
@@ -255,7 +254,7 @@ def mdClose():
 
   # remove this acctok from the set of active ones
   MDW.locks[lockurl] -= set(acctok)
-  if len(MDW.locks[lockurl]) == 0:
+  if not MDW.locks[lockurl]:
     del MDW.locks[lockurl]
     # we're the last editor for this file, call WOPI Unlock
     url = '%s?access_token=%s' % (wopiSrc, acctok)
