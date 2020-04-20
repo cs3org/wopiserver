@@ -560,22 +560,23 @@ def cboxGetOpenFiles():
   return flask.Response(json.dumps(jl), mimetype='application/json')
 
 
-@Wopi.app.route("/wopi/cbox/lock", methods=['GET'])
+@Wopi.app.route("/wopi/cbox/lock", methods=['GET', 'POST'])
 def cboxLock():
   '''Lock a given filename so that a later WOPI lock call would detect a conflict.
   Used for OnlyOffice as they do not use WOPI: this way better interoperability is ensured.
   It creates a LibreOffice-compatible lock, which is checked by the WOPI lock call
   as well as by LibreOffice.
+  Method: POST to create a lock, GET to query for it
   Request arguments:
   - string filename: the full path of the filename to be opened
   - string endpoint (optional): the storage endpoint to be used to look up the file, in case of
     multi-instance underlying storage; defaults to 'default'
   The call returns:
   - HTTP UNAUTHORIZED (401) if the 'Authorization: Bearer' secret is not provided in the header (cf. /wopi/cbox/open)
-  - HTTP CONFLICT (409) if a previous lock already exists
-  - HTTP NOT_FOUND (404) if the file to be locked does not exist
+  - HTTP CONFLICT (409) if a previous lock already exists, or on query, if the file got modified since the lock was created
+  - HTTP NOT_FOUND (404) if the file to be locked does not exist, or on query, if no lock exists
   - HTTP INTERNAL_ERROR (500) if writing the lock file failed, though no lock existed
-  - HTTP OK (200) if the operation succeeded
+  - HTTP OK (200) if the operation succeeded (on query, if no file modification took place since the lock was created)
   '''
   req = flask.request
   # first check if the shared secret matches ours
@@ -584,12 +585,21 @@ def cboxLock():
     return 'Client not authorized', http.client.UNAUTHORIZED
   filename = req.args['filename']
   endpoint = req.args['endpoint'] if 'endpoint' in req.args else 'default'
+  query = req.method == 'GET'
+  lockstat = None
   try:
     # probe if a WOPI/LibreOffice lock already exists (a WOPI session always create a LibreOffice lock as well)
     lock = str(next(storage.readfile(endpoint, _getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)))
-    if 'ERROR on read' in lock or 'OnlyOffice Online Editor' in lock:
+    if 'ERROR on read' in lock:
+      if query:
+        Wopi.log.info('msg="cboxLock: lock to be queried not found" filename="%s"' % filename)
+        return 'Previous lock not found', http.client.NOT_FOUND
       # in case of any read error (not only ENOENT), be optimistic and let it go: cf. _generateAccessToken()
-      # also if the lock was created for OnlyOffice, let it go: OnlyOffice will handle the collaborative session
+      raise IOError
+    if 'OnlyOffice Online Editor' in lock:
+      # if the lock was created for OnlyOffice, let it go as well: OnlyOffice will handle the collaborative session
+      # but keep lock stat for later comparison
+      lockstat = storage.stat(endpoint, _getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)
       raise IOError
     Wopi.log.info('msg="cboxLock: found existing LibreOffice lock" filename="%s" holder="%s"' % \
                   (filename, lock.split(',')[1]))
@@ -598,27 +608,32 @@ def cboxLock():
     pass
   try:
     # same for MS Office, but don't go beyond stat
-    lockInfo = storage.stat(endpoint, _getMicrosoftOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)
+    mslockstat = storage.stat(endpoint, _getMicrosoftOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)
     Wopi.log.info('msg="cboxLock: found existing Microsoft Office lock" filename="%s" mtime="%ld"' % \
-                  (filename, lockInfo['mtime']))
+                  (filename, mslockstat['mtime']))
     return 'Previous lock exists', http.client.CONFLICT
   except IOError as e:
     pass
-  # OK, no lock found: just make sure the file itself exists
+  # OK, no lock found or compatible lock exists: just make sure the file itself exists
   try:
-    storage.stat(endpoint, filename, Wopi.lockruid, Wopi.lockrgid)
+    filestat = storage.stat(endpoint, filename, Wopi.lockruid, Wopi.lockrgid)
   except IOError as e:
     Wopi.log.warning('msg="cboxLock: file to be locked not found" filename="%s"' % filename)
     return 'File not found', http.client.NOT_FOUND
+
   # Now create a LibreOffice-compatible lock
   # TODO once OnlyOffice supports locking, we should create an OnlyOffice-compatible lock here (cf. CERNBOX-1051)
   try:
-    locontent = ',OnlyOffice Online Editor,%s,%s,ExtWebApp;' % \
-            (Wopi.wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())))
-    storage.writefile(endpoint, _getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid, locontent, 1)
-    Wopi.log.info('msg="cboxLock: created LibreOffice-compatible lock file" filename="%s"' % filename)
-    # TODO store in a protected folder a symbolic link to this lock file, in order to allow
-    # a scan of all outstanding locks and expire them after a given time.
+    if not query:
+      locontent = ',OnlyOffice Online Editor,%s,%s,ExtWebApp;' % \
+           (Wopi.wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())))
+      storage.writefile(endpoint, _getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid, locontent, 1)
+      Wopi.log.info('msg="cboxLock: created LibreOffice-compatible lock file" filename="%s"' % filename)
+    if query and filestat['mtime'] > lockstat['mtime']:
+      # we were asked to query an existing lock, but the file was modified in between (e.g. by a sync client):
+      # notify potential conflict
+      Wopi.log.info('msg="cboxLock: file got modified after LibreOffice-compatible lock file was created" filename="%s"' % filename)
+      return 'File modified since open time', http.client.CONFLICT
     return 'OK', http.client.OK
   except IOError as e:
     Wopi.log.error('msg="cboxLock: unable to store a LibreOffice-compatible lock" filename="%s" reason="%s"' % \
@@ -627,7 +642,7 @@ def cboxLock():
     return 'Error locking file', http.client.INTERNAL_SERVER_ERROR
 
 
-@Wopi.app.route("/wopi/cbox/unlock", methods=['GET'])
+@Wopi.app.route("/wopi/cbox/unlock", methods=['POST'])
 def cboxUnlock():
   '''Unlock a given filename. Used for OnlyOffice as they do not use WOPI (see cboxLock).
   Request arguments:
@@ -638,8 +653,8 @@ def cboxUnlock():
   - HTTP UNAUTHORIZED (401) if the 'Authorization: Bearer' secret is not provided in the header (cf. /wopi/cbox/open)
   - HTTP CONFLICT (409) if a lock exists, but held by another application
   - HTTP NOT_FOUND (404) if no lock was found for the given file
-  - HTTP OK (200) if an OnlyOffice lock existed. In this case it is removed.
   - HTTP INTERNAL_ERROR (500) if some other I/O error occurred with the given lock file
+  - HTTP OK (200) if a lock for OnlyOffice existed. In this case it is removed.
   '''
   req = flask.request
   # first check if the shared secret matches ours
