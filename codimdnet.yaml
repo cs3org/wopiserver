@@ -24,7 +24,8 @@ services:
     hostname: cbox-codimd-web
     environment:
       - CMD_DB_URL=postgres://codimd:setpwdforcodimd@codimd-postgres/codimd
-      - CMD_USECDN=false
+      - CMD_AUTO_VERSION_CHECK=false
+      - CMD_DOMAIN=cbox-wopi-01:3000
     depends_on:
       - database
     ports:

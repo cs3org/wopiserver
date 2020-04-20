@@ -93,10 +93,10 @@ class MDW:
       cls.codimdurl = os.environ.get('CODIMD_URL')
       cls.codimdstore = os.environ.get('CODIMD_STORAGE_PATH')
       cls.useHttps = False     # cls.config.get('security', 'usehttps').lower() == 'yes'
-      cls.codiwopiurl = cls.config.get('general', 'wopicodimdurl', \
-                                       fallback='%s://%s:%d' % (('https' if cls.useHttps else 'http'), \
-                                                                socket.getfqdn(), cls.port))
-      cls.codimdurl_external = cls.config.get('general', 'codimdexturl', fallback=None)
+      _autodetected_server = '%s://%s:%d' % (('https' if cls.useHttps else 'http'), socket.getfqdn(), cls.port)
+      cls.wopicodiurl = cls.config.get('general', 'wopicodimdurl', \
+                                       fallback=_autodetected_server)
+      cls.proxied = _autodetected_server != cls.wopicodiurl
     except Exception as e:
       # any error we get here with the configuration is fatal
       cls.log.fatal('msg="Failed to initialize the service, aborting" error="%s"' % e)
@@ -107,11 +107,11 @@ class MDW:
   def run(cls):
     '''Runs the Flask app in either secure (https) or test (http) mode'''
     if cls.useHttps:
-      cls.log.info('msg="CodiMD to WOPI Server starting in secure mode" url="%s"' % cls.codiwopiurl)
+      cls.log.info('msg="CodiMD to WOPI Server starting in secure mode" url="%s" proxied="%s"' % (cls.wopicodiurl, cls.proxied))
       cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'),
                   ssl_context=(cls.config.get('security', 'wopicert'), cls.config.get('security', 'wopikey')))
     else:
-      cls.log.info('msg="CodiMD to WOPI Server starting in test/unsecure mode" url="%s"' % cls.codiwopiurl)
+      cls.log.info('msg="CodiMD to WOPI Server starting in test/unsecure mode" url="%s" proxied="%s"' % (cls.wopicodiurl, cls.proxied))
       cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'))
 
 
@@ -186,14 +186,23 @@ def mdOpen():
                         headers={'Content-Type': 'text/markdown'})
     if res.status_code != http.client.FOUND:
       raise ValueError(res.status_code)
-    MDW.openDocs[acctok] = {'codimd': res.next.url, 'wopiSrc': wopiSrc}   # this is the redirect with the hash of the document just created
+    redirecturl = res.next.url
+    # this is required for a dockerized/proxied deployment
+    if MDW.proxied:
+      lockurl = list(urllib.parse.urlsplit(redirecturl))
+      lockurl[0] = ''
+      lockurl[1] = MDW.codimdurl
+      lockurl = ''.join(lockurl)
+    else:
+      lockurl = redirecturl
+    MDW.openDocs[acctok] = {'codimd': lockurl, 'wopiSrc': wopiSrc}   # this is the redirect with the hash of the document just created
     MDW.log.info('msg="Pushed document to CodiMD" url="%s" token="%s"' % (MDW.openDocs[acctok]['codimd'], acctok[-20:]))
 
   # use the 'UserCanWrite' attribute to decide whether the file is to be opened in read-only mode
   if filemd['UserCanWrite']:
     # WOPI Lock
     url = '%s?access_token=%s' % (wopiSrc, acctok)
-    MDW.log.debug('msg="Calling WOPI Lock" url="%s"' % wopiSrc)
+    MDW.log.debug('msg="Calling WOPI Lock" url="%s" lock="%s"' % (wopiSrc, MDW.openDocs[acctok]['codimd']))
     res = requests.post(url, headers={'X-WOPI-Lock': MDW.openDocs[acctok]['codimd'], 'X-Wopi-Override': 'LOCK'})
     if res.status_code != http.client.OK:
       # TODO handle conflicts
@@ -208,21 +217,12 @@ def mdOpen():
   else:
     # read-only mode, amend the redirection url to show the file in publish mode
     # TODO tell CodiMD to disable editing!
-    MDW.openDocs[acctok]['codimd'] += '/publish'
-
-  # this is required for a dockerized deployment
-  if MDW.codimdurl_external:
-    redirecturl = list(urllib.parse.urlsplit(MDW.openDocs[acctok]['codimd']))
-    redirecturl[0] = ''
-    redirecturl[1] = MDW.codimdurl_external
-    redirecturl = ''.join(redirecturl)
-  else:
-    redirecturl = MDW.openDocs[acctok]['codimd']
+    redirecturl += '/publish'
 
   MDW.log.debug('msg="Redirecting client to CodiMD" redirecturl="%s"' % redirecturl)
   # generate a hook for close and return an iframe to the client
   return MDW.frame_page_templated_html % (filemd['BaseFileName'], filemd['UserFriendlyName'], \
-                                          MDW.codiwopiurl, acctok, filemd['UserCanWrite'], \
+                                          MDW.wopicodiurl, acctok, filemd['UserCanWrite'], \
                                           redirecturl)
 
 
@@ -250,6 +250,8 @@ def mdClose():
     return 'WOPI source not found', http.client.NOT_FOUND
 
   # Get document from CodiMD
+  MDW.log.info('msg="Close called, fetching file" save="True" client="%s" codimdurl="%s" token="%s"' % \
+               (flask.request.remote_addr, MDW.openDocs[acctok]['codimd'], acctok[-20:]))
   res = requests.get(MDW.openDocs[acctok]['codimd'] + '/download')
   if res.status_code != http.client.OK:
     raise ValueError(res.status_code)
@@ -281,7 +283,7 @@ def mdClose():
   # clean up internal state
   del MDW.openDocs[acctok]
 
-  MDW.log.info('msg="Close called" save="True" client="%s" token="%s"' % \
+  MDW.log.info('msg="Close completed" save="True" client="%s" token="%s"' % \
                (flask.request.remote_addr, acctok[-20:]))
   return 'OK', http.client.OK
 
