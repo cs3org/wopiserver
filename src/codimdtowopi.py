@@ -7,6 +7,7 @@ The CodiMD to WOPI gateway for CERNBox
 Author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 '''
 
+import os
 import sys
 import time
 import socket
@@ -89,7 +90,8 @@ class MDW:
       # prepare the Flask web app
       cls.port = int(cls.config.get('general', 'port'))
       cls.log.setLevel(cls.loglevels[cls.config.get('general', 'loglevel')])
-      cls.codimdurl = cls.config.get('general', 'codimdurl')
+      cls.codimdurl = os.environ.get('CODIMD_URL')
+      cls.codimdstore = os.environ.get('CODIMD_STORAGE_PATH')
       cls.useHttps = False     # cls.config.get('security', 'usehttps').lower() == 'yes'
       cls.codiwopiurl = cls.config.get('general', 'wopicodimdurl', \
                                        fallback='%s://%s:%d' % (('https' if cls.useHttps else 'http'), \

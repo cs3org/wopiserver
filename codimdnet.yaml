@@ -1,0 +1,67 @@
+# docker-compose configuration file for CodiMD + Postgres + WOPI extension
+#
+# Build with:   docker-compose -f codimd.yaml build
+# Run with:     docker-compose --project-name codimd -f codimd.yaml up -d
+#
+
+version: "3"
+services:
+  database:
+    image: postgres:11.6-alpine
+    container_name: codimd-postgres
+    hostname: cbox-codimd-postgres
+    environment:
+      - POSTGRES_USER=codimd
+      - POSTGRES_PASSWORD=setpwdforcodimd
+      - POSTGRES_DB=codimd
+    network_mode: codinet
+    volumes:
+      - "database-data:/var/lib/postgresql/data"
+    restart: always
+  frontend:
+    image: linuxserver/codimd:latest   # nabo.codimd.dev/hackmdio/hackmd:2.0.0 requires authentication
+    container_name: codimd-web
+    hostname: cbox-codimd-web
+    environment:
+      - CMD_DB_URL=postgres://codimd:setpwdforcodimd@codimd-postgres/codimd
+      - CMD_USECDN=false
+    depends_on:
+      - database
+    ports:
+      - 3000:3000
+    network_mode: codinet
+    volumes:
+      - upload-data:/home/hackmd/app/public/uploads
+    restart: always
+  wopicodimd:
+    build:
+      context: .
+      dockerfile: wopicodimd.Dockerfile
+    image: wopicodimd:cern
+    container_name: codimd-wopi
+    hostname: cbox-codimd-wopi
+    environment:
+      - CODIMD_URL=http://codimd-web.codinet:3000
+      - CODIMD_STORAGE_PATH=/mnt/codimd_storage
+    depends_on:
+      - frontend
+    network_mode: codinet
+    restart: always
+    ports:
+      - 8000:8000
+    volumes:
+      - wopi-config:/etc/wopi
+      - upload-data:/mnt/codimd_storage
+    healthcheck:
+      test: ["CMD", "curl", "--insecure", "http://localhost:8000"]
+      interval: 600s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  database-data: {}
+  upload-data: {}
+  wopi-config: {}
+
+networks:
+  codinet:
