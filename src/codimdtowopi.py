@@ -96,6 +96,7 @@ class MDW:
       cls.codiwopiurl = cls.config.get('general', 'wopicodimdurl', \
                                        fallback='%s://%s:%d' % (('https' if cls.useHttps else 'http'), \
                                                                 socket.getfqdn(), cls.port))
+      cls.codimdurl_external = cls.config.get('general', 'codimdexturl', fallback=None)
     except Exception as e:
       # any error we get here with the configuration is fatal
       cls.log.fatal('msg="Failed to initialize the service, aborting" error="%s"' % e)
@@ -209,11 +210,20 @@ def mdOpen():
     # TODO tell CodiMD to disable editing!
     MDW.openDocs[acctok]['codimd'] += '/publish'
 
-  MDW.log.debug('msg="Redirecting client to CodiMD"')
+  # this is required for a dockerized deployment
+  if MDW.codimdurl_external:
+    redirecturl = list(urllib.parse.urlsplit(MDW.openDocs[acctok]['codimd']))
+    redirecturl[0] = ''
+    redirecturl[1] = MDW.codimdurl_external
+    redirecturl = ''.join(redirecturl)
+  else:
+    redirecturl = MDW.openDocs[acctok]['codimd']
+
+  MDW.log.debug('msg="Redirecting client to CodiMD" redirecturl="%s"' % redirecturl)
   # generate a hook for close and return an iframe to the client
   return MDW.frame_page_templated_html % (filemd['BaseFileName'], filemd['UserFriendlyName'], \
                                           MDW.codiwopiurl, acctok, filemd['UserCanWrite'], \
-                                          MDW.openDocs[acctok]['codimd'])
+                                          redirecturl)
 
 
 @MDW.app.route("/close", methods=['GET'])
