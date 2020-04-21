@@ -4,7 +4,7 @@
 #
 # This script can be used to generate a docker image of the WOPI server.
 # Prior to run it, you need to collect here a valid wopiserver.conf and
-# an ocsecret file that contains the shared secret used by your OwnCloud
+# an iopsecret file that contains the shared secret used by your EFSS
 # servers to authenticate to the WOPI server.
 #
 # If you want the WOPI server to run in secure mode, you need to generate

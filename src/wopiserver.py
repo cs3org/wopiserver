@@ -84,7 +84,7 @@ class Wopi:
       cls.port = int(cls.config.get('general', 'port'))
       cls.log.setLevel(cls.loglevels[cls.config.get('general', 'loglevel')])
       cls.wopisecret = open(cls.config.get('security', 'wopisecretfile')).read().strip('\n')
-      cls.ocsecret = open(cls.config.get('security', 'ocsecretfile')).read().strip('\n')
+      cls.iopsecret = open(cls.config.get('security', 'iopsecretfile')).read().strip('\n')
       cls.tokenvalidity = cls.config.getint('general', 'tokenvalidity')
       storage.init(cls.config, cls.log)                          # initialize the xroot client module
       cls.config.get('general', 'allowedclients')          # read this to make sure it is configured
@@ -456,7 +456,7 @@ def cboxOpen():
   Wopi.refreshconfig()
   req = flask.request
   # if running in https mode, first check if the shared secret matches ours
-  if Wopi.useHttps and ('Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.ocsecret):
+  if Wopi.useHttps and ('Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.iopsecret):
     Wopi.log.warning('msg="cboxOpen: unauthorized access attempt, missing authorization token" client="%s"' % req.remote_addr)
     return 'Client not authorized', http.client.UNAUTHORIZED
   # now validate the user identity and deny root access
@@ -469,7 +469,7 @@ def cboxOpen():
     Wopi.log.warning('msg="cboxOpen: invalid user/group in request" client="%s" user="%s:%s"' % \
                   (req.remote_addr, req.args['ruid'], req.args['rgid']))
     return 'Client not authorized', http.client.UNAUTHORIZED
-  # then resolve the client: only our CERNBox/ownCloud servers shall use this API
+  # then resolve the client and reject unauthorized ones
   allowedclients = Wopi.config.get('general', 'allowedclients').split()
   for c in allowedclients:
     try:
@@ -533,7 +533,7 @@ def cboxDownload():
 
 @Wopi.app.route("/wopi/cbox/endpoints", methods=['GET'])
 def cboxEndPoints():
-  '''Returns the office apps end-points registered with this WOPI server. This is used by the OwnCloud
+  '''Returns the office apps end-points registered with this WOPI server. This is used by the EFSS
   client to discover which Apps frontends can be used with this WOPI server.
   Note that if the end-points are relocated and the corresponding configuration entry updated,
   the WOPI server must be restarted.'''
@@ -548,7 +548,7 @@ def cboxGetOpenFiles():
   This call is protected by the same shared secret as the /wopi/cbox/open call.'''
   req = flask.request
   # first check if the shared secret matches ours
-  if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.ocsecret:
+  if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.iopsecret:
     Wopi.log.warning('msg="cboxGetOpenFiles: unauthorized access attempt, missing authorization token" client="%s"' % req.remote_addr)
     return 'Client not authorized', http.client.UNAUTHORIZED
   # first convert the sets into lists, otherwise sets cannot be serialized in JSON format
@@ -580,7 +580,7 @@ def cboxLock():
   '''
   req = flask.request
   # first check if the shared secret matches ours
-  if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.ocsecret:
+  if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.iopsecret:
     Wopi.log.warning('msg="cboxLock: unauthorized access attempt, missing authorization token" client="%s"' % req.remote_addr)
     return 'Client not authorized', http.client.UNAUTHORIZED
   filename = req.args['filename']
@@ -658,7 +658,7 @@ def cboxUnlock():
   '''
   req = flask.request
   # first check if the shared secret matches ours
-  if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.ocsecret:
+  if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.iopsecret:
     Wopi.log.warning('msg="cboxUnlock: unauthorized access attempt, missing authorization token" client="%s"' % req.remote_addr)
     return 'Client not authorized', http.client.UNAUTHORIZED
   filename = req.args['filename']
@@ -728,12 +728,9 @@ def wopiCheckFileInfo(fileid):
                             (Wopi.config.get('general', 'downloadurl'), flask.request.args['access_token'])
     filemd['HostViewUrl'] = '%s&%s' % (Wopi.ENDPOINTS[fExt]['view'], wopiSrc)
     filemd['HostEditUrl'] = '%s&%s' % (Wopi.ENDPOINTS[fExt]['edit'], wopiSrc)
-    # the following is to enable the 'Edit in Word/Excel/PowerPoint' (desktop) action
+    # the following is to enable the 'Edit in Word/Excel/PowerPoint' (desktop) action (probably broken)
     try:
-      # a path 'a-la owncloud' includes '/files/', which has to be stripped off.
-      # XXX This is temporary code for the AARNet config. Note this is not robust as a user path including '/files/' will be broken.
-      filemd['ClientUrl'] = Wopi.config.get('general', 'webdavurl') + '/' + \
-                            (acctok['filename'].split("/files/", 1)[1] if '/files/' in acctok['filename'] else acctok['filename'])
+      filemd['ClientUrl'] = Wopi.config.get('general', 'webdavurl') + '/' + acctok['filename']
     except configparser.NoOptionError:
       # if no WebDAV URL is provided, ignore this setting
       pass
@@ -1100,7 +1097,7 @@ def wopiPutFile(fileid):
     except IOError:
       # either the file was deleted or it was updated/overwritten by others: force conflict
       newname, ext = os.path.splitext(acctok['filename'])
-      # !!! note the OwnCloud format is '<filename>_conflict-<date>-<time>', but it is not synchronized back !!!
+      # !!! typical EFSS formats are like '<filename>_conflict-<date>-<time>', but they're not synchronized back !!!
       newname = '%s-conflict-%s%s' % (newname, time.strftime('%Y%m%d-%H%M%S'), ext.strip())
       _storeWopiFile(flask.request, acctok, newname)
       # keep track of this action in the original file's xattr, to avoid looping (see below)
@@ -1117,9 +1114,8 @@ def wopiPutFile(fileid):
                     (acctok['ruid'], acctok['rgid'], flask.request.args['access_token'], acctok['filename']))
       return 'Conflicting copy already created', http.client.INTERNAL_SERVER_ERROR
     # Go for overwriting the file. Note that the entire check+write operation should be atomic,
-    # but the previous check still gives the opportunity of a race condition. We just live with it
-    # as OwnCloud does not seem to provide anything better...
-    # Anyhow, previous versions are all stored and recoverable by the user.
+    # but the previous check still gives the opportunity of a race condition. We just live with it.
+    # Anyhow, the EFSS should support versioning for such cases.
     _storeWopiFile(flask.request, acctok)
     Wopi.log.info('msg="File successfully written" action="edit" user="%s:%s" filename="%s" token="%s"' % \
                   (acctok['ruid'], acctok['rgid'], acctok['filename'], flask.request.args['access_token'][-20:]))

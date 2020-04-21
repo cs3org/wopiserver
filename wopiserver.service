@@ -1,5 +1,5 @@
 [Unit]
-Description=WOPI Server for CERNBox
+Description=WOPI Server for Reva IOP
 After=syslog.target
 
 [Service]

@@ -3,7 +3,7 @@
 echo "${WOPISECRET:-$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 12 | head -n 1)}" > /etc/wopi/wopisecret
 #cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 12 | head -n 1 > /etc/wopi/wopisecret
 
-echo "${OCSECRET:-password}" > /etc/wopi/ocsecret
+echo "${IOPSECRET:-password}" > /etc/wopi/iopsecret
 
 /usr/bin/curl -o /etc/wopi/wopiserver.conf ${CONFIGURATION}/wopi/wopiserver.conf
 

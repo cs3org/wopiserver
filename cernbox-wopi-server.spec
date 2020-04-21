@@ -2,16 +2,15 @@
 # cernbox-wopi-server spec file
 #
 Name:      cernbox-wopi-server
-Summary:   A WOPI server to support Office online suites on CERNBox
-Version:   4.2
-Release:   4%{?dist}
+Summary:   A WOPI server to support Office online suites for the ScienceMesh IOP
+Version:   5.0
+Release:   0%{?dist}
 License:   GPLv3
 Buildroot: %{_tmppath}/%{name}-buildroot
 Group:     CERN-IT/ST
 BuildArch: noarch
 Source: %{name}-%{version}.tar.gz
 
-# The required Python version makes this package depend on Fedora 29 or similar recent distros to compile and run.
 BuildRequires: python(abi) >= 3.6
 Requires: python(abi) >= 3.6, python36-pip
 # pip3-installed "Requires": python3-flask, python3-jwt, python3-pyOpenSSL, requests
@@ -20,7 +19,10 @@ Requires: python(abi) >= 3.6, python36-pip
 AutoReq: no
 
 %description
-This RPM provides a Flask-based web server to implement the WOPI protocol for CERNBox
+This RPM provides a Flask-based reference implementation of the WOPI protocol for the CS3 ScienceMesh IOP.
+
+Support for the IOP via CS3 APIs is being developed. The server supports local storage for testing purposes,
+as well as legacy xrootd-based storages currently used in production at CERN for CERNBox.
 
 # Don't do any post-install weirdness, especially compiling .py files
 %define __os_install_post %{nil}
@@ -60,7 +62,7 @@ rm -rf %buildroot/
 
 %post
 touch /etc/wopi/wopisecret
-touch /etc/wopi/ocsecret
+touch /etc/wopi/iopsecret
 
 %files
 %defattr(-,root,root,-)
@@ -72,6 +74,10 @@ touch /etc/wopi/ocsecret
 %_python_lib/*
 
 %changelog
+* Wed Apr 22 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.0
+- General refactoring of the code base and evolution to
+  become fully vendor-neutral
+- Moved to the CS3 Organisation
 * Wed Apr 08 2020 Giuseppe Lo Presti <lopresti@cern.ch> 4.2
 - Introduced two new lock-related endpoints to cover interoperability
   with OnlyOffice
