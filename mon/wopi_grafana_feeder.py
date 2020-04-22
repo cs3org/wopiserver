@@ -56,12 +56,16 @@ def get_wopi_metrics(data):
       openfiles['docx'] = {}
       openfiles['xlsx'] = {}
       openfiles['pptx'] = {}
-      openfiles['one'] = {}
+      openfiles['odt'] = {}
+      openfiles['ods'] = {}
+      openfiles['odp'] = {}
       wrfiles = {}
       wrfiles['docx'] = {}
       wrfiles['xlsx'] = {}
       wrfiles['pptx'] = {}
-      wrfiles['one'] = {}
+      wrfiles['odt'] = {}
+      wrfiles['ods'] = {}
+      wrfiles['odp'] = {}
       collab = 0
     try:
       if ' ERROR ' in line:
