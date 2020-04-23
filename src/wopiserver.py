@@ -2,7 +2,7 @@
 '''
 wopiserver.py
 
-The Web-application Open Platform Interface (WOPI) gateway for CERNBox
+The Web-application Open Platform Interface (WOPI) gateway for the ScienceMesh IOP
 
 Author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 Contributions: Michael.DSilva@aarnet.edu.au
@@ -11,16 +11,17 @@ Contributions: Michael.DSilva@aarnet.edu.au
 import sys
 import os
 import time
-import traceback
 import socket
 import configparser
 from platform import python_version
 import logging
 import logging.handlers
-import urllib.request, urllib.parse, urllib.error
+import urllib.request
+import urllib.parse
 import http.client
 import json
 import hashlib
+import utils
 try:
   import flask                   # Flask app server, python3-flask-0.12.2 + python3-pyOpenSSL-17.3.0
   import jwt                     # PyJWT JSON Web Token, python3-jwt-1.6.1 or above
@@ -100,6 +101,8 @@ class Wopi:
       else:
         cls.lockpath = ''
       _ = cls.config.get('general', 'downloadurl')   # make sure this is defined
+      # initialize the utils module
+      utils.init(storage, cls)
     except Exception as e:
       # any error we get here with the configuration is fatal
       cls.log.fatal('msg="Failed to initialize the service, aborting" error="%s"' % e)
@@ -107,7 +110,7 @@ class Wopi:
 
   @classmethod
   def initappsregistry(cls):
-    '''Initializes the CERNBoxOffice-like Apps Registry'''
+    '''Initializes the CERNBox Office-like Apps Registry'''
     # TODO all this is supposed to be moved to the CERNBox Apps Registry microservice at some stage in the future
     cls.ENDPOINTS = {}
 
@@ -213,84 +216,6 @@ class Wopi:
       cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'))
 
 
-#
-# General utilities
-#
-def _generateWopiSrc(fileid):
-  '''Returns a valid WOPISrc for the given fileid'''
-  return urllib.parse.quote_plus('%s/wopi/files/%s' % (Wopi.wopiurl, fileid))
-
-
-def _getLibreOfficeLockName(filename):
-  '''Returns the filename of a LibreOffice-compatible lock file.
-  This enables interoperability between Online and Desktop applications'''
-  return os.path.dirname(filename) + os.path.sep + '.~lock.' + os.path.basename(filename) + '#'
-
-
-def _getMicrosoftOfficeLockName(filename):
-  '''Returns the filename of a lock file as created by Microsoft Office'''
-  if os.path.splitext(filename)[1] == '.docx':
-    return os.path.dirname(filename) + os.path.sep + '~$' + os.path.basename(filename)[2:]
-  else:
-    return os.path.dirname(filename) + os.path.sep + '~$' + os.path.basename(filename)
-
-
-def _logGeneralExceptionAndReturn(ex, req):
-  '''Convenience function to log a stack trace and return HTTP 500'''
-  ex_type, ex_value, ex_traceback = sys.exc_info()
-  Wopi.log.error('msg="Unexpected exception caught" exception="%s" type="%s" traceback="%s" client="%s" requestedUrl="%s" token="%s"' % \
-                 (ex, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback), req.remote_addr, req.url, \
-                  req.args['access_token'][-20:] if 'access_token' in req.args else 'N/A'))
-  return 'Internal error', http.client.INTERNAL_SERVER_ERROR
-
-
-def _generateAccessToken(ruid, rgid, filename, canedit, username, folderurl, endpoint):
-  '''Generate an access token for a given file of a given user, and returns a tuple with
-  the file's inode and the URL-encoded access token.
-  Access to this function is protected by source IP address.'''
-  try:
-    # stat now the file to check for existence and get inode and modification time
-    # the inode serves as fileid, the mtime can be used for version information
-    statInfo = storage.statx(endpoint, filename, ruid, rgid)
-  except IOError as e:
-    Wopi.log.info('msg="Requested file not found" filename="%s" error="%s"' % (filename, e))
-    raise
-  # if write access is requested, probe whether there's already a lock file coming from Desktop applications
-  if canedit:
-    locked = False
-    try:
-      # probe LibreOffice
-      line = str(next(storage.readfile(endpoint, _getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)))
-      if 'ERROR on read' in line or 'WOPIServer' in line:
-        # in case of read error, be optimistic and let it go (ENOENT would be fine, other cases have been
-        # observed in production and likely are false positives)
-        # also if a lock file is found but it is held by a WOPI Server, let it go: it will be sorted out
-        # by the collaborative editor via WOPI Lock calls
-        raise IOError
-      canedit = False
-      locked = True
-      Wopi.log.warning('msg="Access downgraded to read-only because of an existing LibreOffice lock" filename="%s" holder="%s"' % \
-                       (filename, line.split(',')[1]))
-    except IOError as e:
-      try:
-        # same for MS Office, but don't try to go beyond stat
-        lockInfo = storage.stat(endpoint, _getMicrosoftOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)
-        canedit = False
-        locked = True
-        Wopi.log.warning('msg="Access downgraded to read-only because of an existing Microsoft Office lock" filename="%s" mtime="%ld"' % \
-                         (filename, lockInfo['mtime']))
-      except IOError as e:
-        pass
-  exptime = int(time.time()) + Wopi.tokenvalidity
-  acctok = jwt.encode({'ruid': ruid, 'rgid': rgid, 'filename': filename, 'username': username,
-                       'canedit': canedit, 'extlock': locked, 'folderurl': folderurl, 'exp': exptime, 'endpoint': endpoint},
-                      Wopi.wopisecret, algorithm='HS256').decode('UTF-8')
-  Wopi.log.info('msg="Access token generated" ruid="%s" rgid="%s" canedit="%r" filename="%s" inode="%s" ' \
-                'mtime="%s" folderurl="%s" expiration="%d" token="%s"' % \
-                (ruid, rgid, canedit, filename, statInfo['inode'], statInfo['mtime'], folderurl, exptime, acctok[-20:]))
-  # return the inode == fileid and the access token
-  return statInfo['inode'], acctok
-
 
 #
 # Utilities for the POST-related file actions
@@ -332,9 +257,9 @@ def _retrieveWopiLock(fileid, operation, lock, acctok):
       pass
     # also remove the LibreOffice-compatible lock file, if it has the expected signature - cf. _storeWopiLock()
     try:
-      lock = str(next(storage.readfile(acctok['endpoint'], _getLibreOfficeLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid)))
+      lock = str(next(storage.readfile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid)))
       if 'WOPIServer' in lock:
-        storage.removefile(acctok['endpoint'], _getLibreOfficeLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid, 1)
+        storage.removefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid, 1)
     except IOError as e:
       Wopi.log.warning('msg="Unable to delete the LibreOffice-compatible lock file" error="%s"' % e)
     return None
@@ -358,7 +283,7 @@ def _storeWopiLock(operation, lock, acctok):
     # also create a LibreOffice-compatible lock file for interoperability purposes
     locontent = ',Collaborative Online Editor,%s,%s,WOPIServer;' % \
             (Wopi.wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())))
-    storage.writefile(acctok['endpoint'], _getLibreOfficeLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid, locontent, 1)
+    storage.writefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid, locontent, 1)
   except IOError as e:
     Wopi.log.warning('msg="%s" filename="%s" token="%s" lock="%s" result="unable to store lock" reason="%s"' % \
                      (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
@@ -489,9 +414,9 @@ def cboxOpen():
           try:
             Wopi.log.info('msg="cboxOpen: access granted, generating token" client="%s" user="%d:%d" friendlyname="%s" canedit="%s" endpoint="%s"' % \
                           (req.remote_addr, ruid, rgid, username, canedit, endpoint))
-            inode, acctok = _generateAccessToken(str(ruid), str(rgid), filename, canedit, username, folderurl, endpoint)
+            inode, acctok = utils.generateAccessToken(str(ruid), str(rgid), filename, canedit, username, folderurl, endpoint)
             # return an URL-encoded WOPISrc URL for the Office Online server
-            return '%s&access_token=%s' % (_generateWopiSrc(inode), acctok)      # no need to URL-encode the JWT token
+            return '%s&access_token=%s' % (utils.generateWopiSrc(inode), acctok)      # no need to URL-encode the JWT token
           except IOError:
             return 'Remote error or file not found', http.client.NOT_FOUND
     except socket.gaierror:
@@ -528,7 +453,7 @@ def cboxDownload():
     Wopi.log.error('msg="Invalid access token or request argument" error="%s"' % e)
     return 'Invalid access token', http.client.UNAUTHORIZED
   except Exception as e:
-    return _logGeneralExceptionAndReturn(e, flask.request)
+    return utils.logGeneralExceptionAndReturn(e, flask.request)
 
 
 @Wopi.app.route("/wopi/cbox/endpoints", methods=['GET'])
@@ -589,7 +514,7 @@ def cboxLock():
   lockstat = None
   try:
     # probe if a WOPI/LibreOffice lock already exists (a WOPI session always create a LibreOffice lock as well)
-    lock = str(next(storage.readfile(endpoint, _getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)))
+    lock = str(next(storage.readfile(endpoint, utils.getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)))
     if 'ERROR on read' in lock:
       if query:
         Wopi.log.info('msg="cboxLock: lock to be queried not found" filename="%s"' % filename)
@@ -599,7 +524,7 @@ def cboxLock():
     if 'OnlyOffice Online Editor' in lock:
       # if the lock was created for OnlyOffice, let it go as well: OnlyOffice will handle the collaborative session
       # but keep lock stat for later comparison
-      lockstat = storage.stat(endpoint, _getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)
+      lockstat = storage.stat(endpoint, utils.getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)
       raise IOError
     Wopi.log.info('msg="cboxLock: found existing LibreOffice lock" filename="%s" holder="%s"' % \
                   (filename, lock.split(',')[1]))
@@ -608,7 +533,7 @@ def cboxLock():
     pass
   try:
     # same for MS Office, but don't go beyond stat
-    mslockstat = storage.stat(endpoint, _getMicrosoftOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)
+    mslockstat = storage.stat(endpoint, utils.getMicrosoftOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)
     Wopi.log.info('msg="cboxLock: found existing Microsoft Office lock" filename="%s" mtime="%ld"' % \
                   (filename, mslockstat['mtime']))
     return 'Previous lock exists', http.client.CONFLICT
@@ -627,7 +552,7 @@ def cboxLock():
     if not query:
       locontent = ',OnlyOffice Online Editor,%s,%s,ExtWebApp;' % \
            (Wopi.wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())))
-      storage.writefile(endpoint, _getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid, locontent, 1)
+      storage.writefile(endpoint, utils.getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid, locontent, 1)
       Wopi.log.info('msg="cboxLock: created LibreOffice-compatible lock file" filename="%s"' % filename)
     if query and filestat['mtime'] > lockstat['mtime']:
       # we were asked to query an existing lock, but the file was modified in between (e.g. by a sync client):
@@ -665,10 +590,10 @@ def cboxUnlock():
   endpoint = req.args['endpoint'] if 'endpoint' in req.args else 'default'
   try:
     # probe if a WOPI/LibreOffice lock exists with the expected signature
-    lock = str(next(storage.readfile(endpoint, _getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)))
+    lock = str(next(storage.readfile(endpoint, utils.getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)))
     if 'OnlyOffice Online Editor' in lock:
       # remove the LibreOffice-compatible lock file
-      storage.removefile(endpoint, _getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid, 1)
+      storage.removefile(endpoint, utils.getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid, 1)
       Wopi.log.info('msg="cboxUnlock: successfully removed LibreOffice-compatible lock file" filename="%s"' % filename)
       return 'OK', http.client.OK
     elif 'ERROR on read' in lock:
@@ -701,7 +626,7 @@ def wopiCheckFileInfo(fileid):
                   (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
     statInfo = storage.statx(acctok['endpoint'], acctok['filename'], acctok['ruid'], acctok['rgid'])
     # compute some entities for the response
-    wopiSrc = 'WOPISrc=%s&access_token=%s' % (_generateWopiSrc(fileid), flask.request.args['access_token'])
+    wopiSrc = 'WOPISrc=%s&access_token=%s' % (utils.generateWopiSrc(fileid), flask.request.args['access_token'])
     fExt = os.path.splitext(acctok['filename'])[1]
     # populate metadata for this file
     filemd = {}
@@ -759,7 +684,7 @@ def wopiCheckFileInfo(fileid):
     Wopi.log.error('msg="Invalid access token or request argument" error="%s"' % e)
     return 'Invalid access token', http.client.UNAUTHORIZED
   except Exception as e:
-    return _logGeneralExceptionAndReturn(e, flask.request)
+    return utils.logGeneralExceptionAndReturn(e, flask.request)
 
 
 @Wopi.app.route("/wopi/files/<fileid>/contents", methods=['GET'])
@@ -782,7 +707,7 @@ def wopiGetFile(fileid):
                      (flask.request.remote_addr, flask.request.base_url, flask.request.args['access_token']))
     return 'Invalid access token', http.client.UNAUTHORIZED
   except Exception as e:
-    return _logGeneralExceptionAndReturn(e, flask.request)
+    return utils.logGeneralExceptionAndReturn(e, flask.request)
 
 
 #
@@ -853,7 +778,7 @@ def wopiUnlock(fileid, reqheaders, acctok):
     pass
   try:
     # also remove the LibreOffice-compatible lock file
-    storage.removefile(acctok['endpoint'], _getLibreOfficeLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid, 1)
+    storage.removefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid, 1)
   except IOError:
     # same as above
     pass
@@ -949,15 +874,15 @@ def wopiPutRelative(fileid, reqheaders, acctok):
   # generate an access token for the new file
   Wopi.log.info('msg="PutRelative: generating new access token" user="%s:%s" filename="%s" canedit="True" friendlyname="%s"' % \
            (acctok['ruid'], acctok['rgid'], targetName, acctok['username']))
-  inode, newacctok = _generateAccessToken(acctok['ruid'], acctok['rgid'], targetName, True, acctok['username'], \
+  inode, newacctok = utils.generateAccessToken(acctok['ruid'], acctok['rgid'], targetName, True, acctok['username'], \
                                           acctok['folderurl'], acctok['endpoint'])
   # prepare and send the response as JSON
   putrelmd = {}
   putrelmd['Name'] = os.path.basename(targetName)
-  putrelmd['Url'] = '%s?access_token=%s' % (_generateWopiSrc(inode), newacctok)
+  putrelmd['Url'] = '%s?access_token=%s' % (utils.generateWopiSrc(inode), newacctok)
   putrelmd['HostEditUrl'] = '%s&WOPISrc=%s&access_token=%s' % \
                             (Wopi.ENDPOINTS[os.path.splitext(targetName)[1]]['edit'], \
-                             _generateWopiSrc(inode), newacctok)
+                             utils.generateWopiSrc(inode), newacctok)
   Wopi.log.debug('msg="PutRelative response" token="%s" metadata="%s"' % (newacctok[-20:], putrelmd))
   return flask.Response(json.dumps(putrelmd), mimetype='application/json')
 
@@ -1060,7 +985,7 @@ def wopiFilesPost(fileid):
                      (flask.request.remote_addr, flask.request.base_url, flask.request.args['access_token']))
     return 'Invalid access token', http.client.NOT_FOUND
   except Exception as e:
-    return _logGeneralExceptionAndReturn(e, flask.request)
+    return utils.logGeneralExceptionAndReturn(e, flask.request)
 
 
 @Wopi.app.route("/wopi/files/<fileid>/contents", methods=['POST'])
@@ -1129,7 +1054,7 @@ def wopiPutFile(fileid):
                   (acctok['filename'], flask.request.args['access_token'], e))
     return 'I/O Error', http.client.INTERNAL_SERVER_ERROR
   except Exception as e:
-    return _logGeneralExceptionAndReturn(e, flask.request)
+    return utils.logGeneralExceptionAndReturn(e, flask.request)
 
 
 #
