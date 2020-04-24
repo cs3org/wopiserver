@@ -819,7 +819,7 @@ def wopiCreateNewFile(fileid, acctok):
     return 'File exists', http.client.CONFLICT
   except IOError:
     # indeed the file did not exist, so we write it for the first time
-    utils.storeWopiFile(flask.request, LASTSAVETIMEKEY, acctok)
+    utils.storeWopiFile(flask.request, acctok, LASTSAVETIMEKEY)
     Wopi.log.info('msg="File successfully written" action="editnew" user="%s:%s" filename="%s" token="%s"' % \
                   (acctok['ruid'], acctok['rgid'], acctok['filename'], flask.request.args['access_token']))
     # and we keep track of it as an open file with timestamp = Epoch, despite not having any lock yet.
@@ -919,7 +919,7 @@ def wopiPutFile(fileid):
     # Go for overwriting the file. Note that the entire check+write operation should be atomic,
     # but the previous check still gives the opportunity of a race condition. We just live with it.
     # Anyhow, the EFSS should support versioning for such cases.
-    utils.storeWopiFile(flask.request, LASTSAVETIMEKEY, acctok)
+    utils.storeWopiFile(flask.request, acctok, LASTSAVETIMEKEY)
     Wopi.log.info('msg="File successfully written" action="edit" user="%s:%s" filename="%s" token="%s"' % \
                   (acctok['ruid'], acctok['rgid'], acctok['filename'], flask.request.args['access_token'][-20:]))
     return 'OK', http.client.OK
