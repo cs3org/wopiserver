@@ -20,7 +20,7 @@ import urllib.request
 import urllib.parse
 import http.client
 import json
-import utils
+import wopiutils as utils
 try:
   import flask                   # Flask app server, python3-flask-0.12.2 + python3-pyOpenSSL-17.3.0
   import jwt                     # PyJWT JSON Web Token, python3-jwt-1.6.1 or above

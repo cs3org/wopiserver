@@ -21,7 +21,7 @@ AutoReq: no
 %description
 This RPM provides a Flask-based reference implementation of the WOPI protocol for the CS3 ScienceMesh IOP.
 
-Support for the IOP via CS3 APIs is being developed. The server supports local storage for testing purposes,
+The server supports storage via the CS3 APIs to the IOP, local storage for testing purposes,
 as well as legacy xrootd-based storages currently used in production at CERN for CERNBox.
 
 # Don't do any post-install weirdness, especially compiling .py files
@@ -47,6 +47,7 @@ mkdir -p %buildroot/var/log/wopi
 install -m 755 src/wopiserver.py     %buildroot/usr/bin/wopiserver.py
 install -m 755 src/wopicheckfile.py  %buildroot/usr/bin/wopicheckfile.py
 install -m 755 src/wopilistopenfiles.sh %buildroot/usr/bin/wopilistopenfiles.sh
+install -m 644 src/wopiutils.py      %buildroot/%_python_lib/wopiutils.py
 install -m 644 src/xrootiface.py     %buildroot/%_python_lib/xrootiface.py
 install -m 644 src/localiface.py     %buildroot/%_python_lib/localiface.py
 install -m 644 src/cs3iface.py       %buildroot/%_python_lib/cs3iface.py
@@ -74,7 +75,7 @@ touch /etc/wopi/iopsecret
 %_python_lib/*
 
 %changelog
-* Wed Apr 22 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.0
+* Fri Apr 24 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.0
 - General refactoring of the code base and evolution to
   become fully vendor-neutral
 - Moved to the CS3 Organisation

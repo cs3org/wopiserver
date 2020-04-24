@@ -1,5 +1,5 @@
 '''
-utils.py
+wopiutils.py
 
 General Low-level functions to support the WOPI server
 '''
@@ -16,7 +16,9 @@ import flask
 import jwt
 
 
+'''Convenience dictionary to store some context and avoid globals'''
 _ctx = {}
+
 
 def init(storage, wopi):
   '''Convenience method to iniialise this module'''
@@ -54,7 +56,7 @@ def getMicrosoftOfficeLockName(filename):
 
 
 def generateAccessToken(ruid, rgid, filename, canedit, username, folderurl, endpoint):
-  '''Generate an access token for a given file of a given user, and returns a tuple with
+  '''Generates an access token for a given file of a given user, and returns a tuple with
   the file's inode and the URL-encoded access token.
   Access to this function is protected by source IP address.'''
   try:
