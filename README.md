@@ -1,6 +1,6 @@
 # WOPI Server
 
-A Vendor-neutral Web-application Open Platform Interface (WOPI) gateway for EFSS,
+A Vendor-neutral Web-application Open Platform Interface (WOPI) gateway for EFSS systems,
 to integrate several Office Online platforms including Microsoft Office Online and Collabora Online.
 
 Author: Giuseppe.LoPresti@cern.ch <br/>
