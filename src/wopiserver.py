@@ -593,57 +593,11 @@ def wopiGetFile(fileid):
 #
 # The following operations are all called on POST /wopi/files/<fileid>
 #
-def wopiLock(fileid, reqheaders, acctok):
-  '''Implements the Lock, RefreshLock, and UnlockAndRelock WOPI calls'''
-  # cf. http://wopi.readthedocs.io/projects/wopirest/en/latest/files/Lock.html
-  op = reqheaders['X-WOPI-Override']
-  lock = reqheaders['X-WOPI-Lock']
-  oldLock = reqheaders['X-WOPI-OldLock'] if 'X-WOPI-OldLock' in reqheaders else None
-  retrievedLock = utils.retrieveWopiLock(fileid, op, lock, acctok)
-  # perform the required checks for the validity of the new lock
-  if (oldLock is None and retrievedLock is not None and not utils.compareWopiLocks(retrievedLock, lock)) or \
-     (oldLock is not None and not utils.compareWopiLocks(retrievedLock, oldLock)):
-    # XXX we got a locking conflict: as we've seen cases of looping clients attempting to restate the same
-    # XXX lock over and over again, we keep track of this request and we forcefully clean up the lock
-    # XXX once 'too many' requests come for the same lock
-    if retrievedLock not in Wopi.repeatedLockRequests:
-      Wopi.repeatedLockRequests[retrievedLock] = 1
-    else:
-      Wopi.repeatedLockRequests[retrievedLock] += 1
-      if Wopi.repeatedLockRequests[retrievedLock] == 5:
-        try:
-          storage.removefile(acctok['endpoint'], utils.getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid, 1)
-        except IOError:
-          pass
-        Wopi.log.warning('msg="Lock: BLINDLY removed the existing lock to unblock client" user="%s:%s" filename="%s" token="%s"' % \
-                         (acctok['ruid'], acctok['rgid'], acctok['filename'], flask.request.args['access_token'][-20:]))
-    return utils.makeConflictResponse(op, retrievedLock, lock, oldLock, acctok['filename'])
-  # LOCK or REFRESH_LOCK: set the lock to the given one, including the expiration time
-  utils.storeWopiLock(op, lock, acctok)
-  if not retrievedLock:
-    # on first lock, set an xattr with the current time for later conflicts checking
-    try:
-      storage.setxattr(acctok['endpoint'], acctok['filename'], acctok['ruid'], acctok['rgid'], LASTSAVETIMEKEY, int(time.time()))
-    except IOError as e:
-      # not fatal, but will generate a conflict file later on, so log a warning
-      Wopi.log.warning('msg="Unable to set lastwritetime xattr" user="%s:%s" filename="%s" token="%s" reason="%s"' % \
-                       (acctok['ruid'], acctok['rgid'], acctok['filename'], flask.request.args['access_token'][-20:], e))
-    # also, keep track of files that have been opened for write: this is for statistical purposes only
-    # (cf. the GetLock WOPI call and the /wopi/cbox/open/list action)
-    if acctok['filename'] not in Wopi.openfiles:
-      Wopi.openfiles[acctok['filename']] = (time.asctime(), set([acctok['username']]))
-    else:
-      # the file was already opened but without lock: this happens on new files (cf. editnew action), just log
-      Wopi.log.info('msg="First lock for new file" user="%s:%s" filename="%s" token="%s"' % \
-                    (acctok['ruid'], acctok['rgid'], acctok['filename'], flask.request.args['access_token'][-20:]))
-  return 'OK', http.client.OK
-
-
-def wopiUnlock(fileid, reqheaders, acctok):
+def wopiUnlock(fileid, reqheaders, acctok, force=False):
   '''Implements the Unlock WOPI call'''
   lock = reqheaders['X-WOPI-Lock']
   retrievedLock = utils.retrieveWopiLock(fileid, 'UNLOCK', lock, acctok)
-  if not utils.compareWopiLocks(retrievedLock, lock):
+  if not force and not utils.compareWopiLocks(retrievedLock, lock):
     return utils.makeConflictResponse('UNLOCK', retrievedLock, lock, '', acctok['filename'])
   # OK, the lock matches. Remove any extended attribute related to locks and conflicts handling
   try:
@@ -663,11 +617,57 @@ def wopiUnlock(fileid, reqheaders, acctok):
     # same as above
     pass
   # and update our internal list of opened files
-  try:
-    del Wopi.openfiles[acctok['filename']]
-  except KeyError:
-    # already removed?
-    pass
+  if not force:
+    try:
+      del Wopi.openfiles[acctok['filename']]
+    except KeyError:
+      # already removed?
+      pass
+  return 'OK', http.client.OK
+
+
+def wopiLock(fileid, reqheaders, acctok):
+  '''Implements the Lock, RefreshLock, and UnlockAndRelock WOPI calls'''
+  # cf. http://wopi.readthedocs.io/projects/wopirest/en/latest/files/Lock.html
+  op = reqheaders['X-WOPI-Override']
+  lock = reqheaders['X-WOPI-Lock']
+  oldLock = reqheaders['X-WOPI-OldLock'] if 'X-WOPI-OldLock' in reqheaders else None
+  retrievedLock = utils.retrieveWopiLock(fileid, op, lock, acctok)
+  # perform the required checks for the validity of the new lock
+  if (oldLock is None and retrievedLock is not None and not utils.compareWopiLocks(retrievedLock, lock)) or \
+     (oldLock is not None and not utils.compareWopiLocks(retrievedLock, oldLock)):
+    # XXX we got a locking conflict: as we've seen cases of looping clients attempting to restate the same
+    # XXX lock over and over again, we keep track of this request and we forcefully clean up the lock
+    # XXX and let the request succeed once 'too many' (> 5) requests come for the same lock
+    if retrievedLock not in Wopi.repeatedLockRequests:
+      Wopi.repeatedLockRequests[retrievedLock] = 1
+    else:
+      Wopi.repeatedLockRequests[retrievedLock] += 1
+    if Wopi.repeatedLockRequests[retrievedLock] < 5:
+      return utils.makeConflictResponse(op, retrievedLock, lock, oldLock, acctok['filename'])
+    wopiUnlock(fileid, reqheaders, acctok, force=True)
+    Wopi.log.warning('msg="Lock: BLINDLY removed the existing lock to unblock client" op="%s" user="%s:%s" '\
+                     'filename="%s" token="%s"' % \
+                     (op, acctok['ruid'], acctok['rgid'], acctok['filename'], \
+                      flask.request.args['access_token'][-20:]))
+  # LOCK or REFRESH_LOCK: set the lock to the given one, including the expiration time
+  utils.storeWopiLock(op, lock, acctok)
+  if not retrievedLock:
+    # on first lock, set an xattr with the current time for later conflicts checking
+    try:
+      storage.setxattr(acctok['endpoint'], acctok['filename'], acctok['ruid'], acctok['rgid'], LASTSAVETIMEKEY, int(time.time()))
+    except IOError as e:
+      # not fatal, but will generate a conflict file later on, so log a warning
+      Wopi.log.warning('msg="Unable to set lastwritetime xattr" user="%s:%s" filename="%s" token="%s" reason="%s"' % \
+                       (acctok['ruid'], acctok['rgid'], acctok['filename'], flask.request.args['access_token'][-20:], e))
+    # also, keep track of files that have been opened for write: this is for statistical purposes only
+    # (cf. the GetLock WOPI call and the /wopi/cbox/open/list action)
+    if acctok['filename'] not in Wopi.openfiles:
+      Wopi.openfiles[acctok['filename']] = (time.asctime(), set([acctok['username']]))
+    else:
+      # the file was already opened but without lock: this happens on new files (cf. editnew action), just log
+      Wopi.log.info('msg="First lock for new file" user="%s:%s" filename="%s" token="%s"' % \
+                    (acctok['ruid'], acctok['rgid'], acctok['filename'], flask.request.args['access_token'][-20:]))
   return 'OK', http.client.OK
 
 
