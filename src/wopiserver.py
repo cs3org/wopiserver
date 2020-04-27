@@ -89,6 +89,7 @@ class Wopi:
       storage.init(cls.config, cls.log)                          # initialize the xroot client module
       cls.config.get('general', 'allowedclients')          # read this to make sure it is configured
       cls.useHttps = cls.config.get('security', 'usehttps').lower() == 'yes'
+      cls.repeatedLockRequests = {}               # cf. the wopiLock() function below
       cls.wopiurl = cls.config.get('general', 'wopiurl')
       if urllib.parse.urlparse(cls.wopiurl).port is None:
         cls.wopiurl += ':%d' % cls.port
@@ -602,7 +603,20 @@ def wopiLock(fileid, reqheaders, acctok):
   # perform the required checks for the validity of the new lock
   if (oldLock is None and retrievedLock is not None and not utils.compareWopiLocks(retrievedLock, lock)) or \
      (oldLock is not None and not utils.compareWopiLocks(retrievedLock, oldLock)):
-    # we got a locking conflict: return a conflict response
+    # XXX we got a locking conflict: as we've seen cases of looping clients attempting to restate the same
+    # XXX lock over and over again, we keep track of this request and we forcefully clean up the lock
+    # XXX once 'too many' requests come for the same lock
+    if retrievedLock not in Wopi.repeatedLockRequests:
+      Wopi.repeatedLockRequests[retrievedLock] = 1
+    else:
+      Wopi.repeatedLockRequests[retrievedLock] += 1
+      if Wopi.repeatedLockRequests[retrievedLock] == 5:
+        try:
+          storage.removefile(acctok['endpoint'], utils.getLockName(acctok['filename']), Wopi.lockruid, Wopi.lockrgid, 1)
+        except IOError:
+          pass
+        Wopi.log.warning('msg="Lock: BLINDLY removed the existing lock to unblock client" user="%s:%s" filename="%s" token="%s"' % \
+                         (acctok['ruid'], acctok['rgid'], acctok['filename'], flask.request.args['access_token'][-20:]))
     return utils.makeConflictResponse(op, retrievedLock, lock, oldLock, acctok['filename'])
   # LOCK or REFRESH_LOCK: set the lock to the given one, including the expiration time
   utils.storeWopiLock(op, lock, acctok)
