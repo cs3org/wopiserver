@@ -254,7 +254,8 @@ def cboxOpen():
   req = flask.request
   # if running in https mode, first check if the shared secret matches ours
   if Wopi.useHttps and ('Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.iopsecret):
-    Wopi.log.warning('msg="cboxOpen: unauthorized access attempt, missing authorization token" client="%s"' % req.remote_addr)
+    Wopi.log.warning('msg="cboxOpen: unauthorized access attempt, missing authorization token" ' \
+                     'client="%s"' % req.remote_addr)
     return 'Client not authorized', http.client.UNAUTHORIZED
   # now validate the user identity and deny root access
   try:
@@ -280,14 +281,15 @@ def cboxOpen():
           endpoint = req.args['endpoint'] if 'endpoint' in req.args else 'default'
           # XXX workaround for new files that cannot be opened in collaborative edit mode until they're closed for the first time
           if canedit and filename in Wopi.openfiles and Wopi.openfiles[filename][0] == '0':
-            Wopi.log.warning('msg="cboxOpen: forcing read-only mode on collaborative editing of a new file" client="%s" user="%d:%d"' % \
-                             (req.remote_addr, ruid, rgid))
+            Wopi.log.warning('msg="cboxOpen: forcing read-only mode on collaborative editing of a new file" ' \
+                             'client="%s" user="%d:%d"' % (req.remote_addr, ruid, rgid))
             canedit = False
           try:
             Wopi.log.info('msg="cboxOpen: access granted, generating token" client="%s" user="%d:%d" ' \
                           'friendlyname="%s" canedit="%s" endpoint="%s"' % \
                           (req.remote_addr, ruid, rgid, username, canedit, endpoint))
-            inode, acctok = utils.generateAccessToken(str(ruid), str(rgid), filename, canedit, username, folderurl, endpoint)
+            inode, acctok = utils.generateAccessToken(str(ruid), str(rgid), filename, canedit, \
+                                                      username, folderurl, endpoint)
             # return an URL-encoded WOPISrc URL for the Office Online server
             return '%s&access_token=%s' % (utils.generateWopiSrc(inode), acctok)      # no need to URL-encode the JWT token
           except IOError:
@@ -295,7 +297,8 @@ def cboxOpen():
     except socket.gaierror:
       Wopi.log.warning('msg="cboxOpen: %s found in configured allowed clients but unknown by DNS resolution, ignoring"' % c)
   # no match found, fail
-  Wopi.log.warning('msg="cboxOpen: unauthorized access attempt, client IP not whitelisted" client="%s"' % req.remote_addr)
+  Wopi.log.warning('msg="cboxOpen: unauthorized access attempt, client IP not whitelisted" ' \
+                   'client="%s"' % req.remote_addr)
   return 'Client not authorized', http.client.UNAUTHORIZED
 
 
@@ -347,7 +350,8 @@ def cboxGetOpenFiles():
   req = flask.request
   # first check if the shared secret matches ours
   if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.iopsecret:
-    Wopi.log.warning('msg="cboxGetOpenFiles: unauthorized access attempt, missing authorization token" client="%s"' % req.remote_addr)
+    Wopi.log.warning('msg="cboxGetOpenFiles: unauthorized access attempt, missing authorization token" ' \
+                     'client="%s"' % req.remote_addr)
     return 'Client not authorized', http.client.UNAUTHORIZED
   # first convert the sets into lists, otherwise sets cannot be serialized in JSON format
   jl = {}
@@ -379,7 +383,8 @@ def cboxLock():
   req = flask.request
   # first check if the shared secret matches ours
   if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.iopsecret:
-    Wopi.log.warning('msg="cboxLock: unauthorized access attempt, missing authorization token" client="%s"' % req.remote_addr)
+    Wopi.log.warning('msg="cboxLock: unauthorized access attempt, missing authorization token" '
+                     'client="%s"' % req.remote_addr)
     return 'Client not authorized', http.client.UNAUTHORIZED
   filename = req.args['filename']
   endpoint = req.args['endpoint'] if 'endpoint' in req.args else 'default'
@@ -430,7 +435,8 @@ def cboxLock():
     if query and filestat['mtime'] > lockstat['mtime']:
       # we were asked to query an existing lock, but the file was modified in between (e.g. by a sync client):
       # notify potential conflict
-      Wopi.log.info('msg="cboxLock: file got modified after LibreOffice-compatible lock file was created" filename="%s"' % filename)
+      Wopi.log.info('msg="cboxLock: file got modified after LibreOffice-compatible lock file was created" ' \
+                    'filename="%s"' % filename)
       return 'File modified since open time', http.client.CONFLICT
     return 'OK', http.client.OK
   except IOError as e:
@@ -457,7 +463,8 @@ def cboxUnlock():
   req = flask.request
   # first check if the shared secret matches ours
   if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.iopsecret:
-    Wopi.log.warning('msg="cboxUnlock: unauthorized access attempt, missing authorization token" client="%s"' % req.remote_addr)
+    Wopi.log.warning('msg="cboxUnlock: unauthorized access attempt, missing authorization token" ' \
+                     'client="%s"' % req.remote_addr)
     return 'Client not authorized', http.client.UNAUTHORIZED
   filename = req.args['filename']
   endpoint = req.args['endpoint'] if 'endpoint' in req.args else 'default'
@@ -681,7 +688,8 @@ def wopiGetLock(fileid, _reqheaders_unused, acctok):
         if len(Wopi.openfiles[acctok['filename']][1]) > 1:
           # for later monitoring, explicitly log that this file is being edited by at least two users
           Wopi.log.info('msg="Collaborative editing detected" filename="%s" token="%s" users="%s"' % \
-                         (acctok['filename'], flask.request.args['access_token'][-20:], list(Wopi.openfiles[acctok['filename']][1])))
+                         (acctok['filename'], flask.request.args['access_token'][-20:],
+                          list(Wopi.openfiles[acctok['filename']][1])))
     except KeyError:
       # existing lock but missing Wopi.openfiles[acctok['filename']] ?
       Wopi.log.warning('msg="Repopulating missing metadata" filename="%s" token="%s" user="%s"' % \
@@ -696,7 +704,8 @@ def wopiPutRelative(fileid, reqheaders, acctok):
   suggTarget = reqheaders['X-WOPI-SuggestedTarget'] if 'X-WOPI-SuggestedTarget' in reqheaders else ''
   relTarget = reqheaders['X-WOPI-RelativeTarget'] if 'X-WOPI-RelativeTarget' in reqheaders else ''
   overwriteTarget = 'X-WOPI-OverwriteRelativeTarget' in reqheaders and bool(reqheaders['X-WOPI-OverwriteRelativeTarget'])
-  Wopi.log.info('msg="PutRelative" user="%s:%s" filename="%s" fileid="%s" suggTarget="%s" relTarget="%s" overwrite="%r" token="%s"' % \
+  Wopi.log.info('msg="PutRelative" user="%s:%s" filename="%s" fileid="%s" suggTarget="%s" relTarget="%s" '
+                'overwrite="%r" token="%s"' % \
                 (acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, \
                  suggTarget, relTarget, overwriteTarget, flask.request.args['access_token'][-20:]))
   # either one xor the other must be present
@@ -721,7 +730,8 @@ def wopiPutRelative(fileid, reqheaders, acctok):
           break
         # we got another error with this file, fail
         Wopi.log.info('msg="PutRelative" user="%s:%s" filename="%s" token="%s" suggTarget="%s" error="%s"' % \
-                      (acctok['ruid'], acctok['rgid'], targetName, flask.request.args['access_token'][-20:], suggTarget, str(e)))
+                      (acctok['ruid'], acctok['rgid'], targetName, flask.request.args['access_token'][-20:], \
+                       suggTarget, str(e)))
         return 'Illegal filename %s: %s' % (targetName, e), http.client.BAD_REQUEST
   else:
     # the relative target is a filename to be respected, and that may overwrite an existing file
@@ -746,9 +756,9 @@ def wopiPutRelative(fileid, reqheaders, acctok):
     return 'I/O Error', http.client.INTERNAL_SERVER_ERROR
   # generate an access token for the new file
   Wopi.log.info('msg="PutRelative: generating new access token" user="%s:%s" filename="%s" canedit="True" friendlyname="%s"' % \
-           (acctok['ruid'], acctok['rgid'], targetName, acctok['username']))
+                (acctok['ruid'], acctok['rgid'], targetName, acctok['username']))
   inode, newacctok = utils.generateAccessToken(acctok['ruid'], acctok['rgid'], targetName, True, acctok['username'], \
-                                          acctok['folderurl'], acctok['endpoint'])
+                                               acctok['folderurl'], acctok['endpoint'])
   # prepare and send the response as JSON
   putrelmd = {}
   putrelmd['Name'] = os.path.basename(targetName)
@@ -790,8 +800,8 @@ def wopiRenameFile(fileid, reqheaders, acctok):
     # also rename the locks
     storage.renamefile(acctok['endpoint'], utils.getLockName(acctok['filename']), utils.getLockName(targetName), \
                        Wopi.lockruid, Wopi.lockrgid)
-    storage.renamefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), utils.getLibreOfficeLockName(targetName), \
-                       Wopi.lockruid, Wopi.lockrgid)
+    storage.renamefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), \
+                       utils.getLibreOfficeLockName(targetName), Wopi.lockruid, Wopi.lockrgid)
     # prepare and send the response as JSON
     renamemd = {}
     renamemd['Name'] = reqheaders['X-WOPI-RequestedName']
@@ -893,10 +903,12 @@ def wopiPutFile(fileid):
         # this is the case, force conflict. Note we can't get a time resolution better than one second!
         Wopi.log.info('msg="Forcing conflict based on lastWopiSaveTime" user="%s:%s" filename="%s" token="%s" ' \
                       'savetime="%ld" lastmtime="%ld"' % \
-                      (acctok['ruid'], acctok['rgid'], acctok['filename'], flask.request.args['access_token'][-20:], savetime, mtime))
+                      (acctok['ruid'], acctok['rgid'], acctok['filename'], \
+                       flask.request.args['access_token'][-20:], savetime, mtime))
         raise IOError
       Wopi.log.info('msg="Got lastWopiSaveTime" user="%s:%s" filename="%s" token="%s" savetime="%ld" lastmtime="%ld"' % \
-                    (acctok['ruid'], acctok['rgid'], acctok['filename'], flask.request.args['access_token'][-20:], savetime, mtime))
+                    (acctok['ruid'], acctok['rgid'], acctok['filename'], \
+                     flask.request.args['access_token'][-20:], savetime, mtime))
     except IOError:
       # either the file was deleted or it was updated/overwritten by others: force conflict
       newname, ext = os.path.splitext(acctok['filename'])
