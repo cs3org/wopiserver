@@ -19,6 +19,8 @@ import jwt
 # Convenience dictionary to store some context and avoid globals
 _ctx = {}
 
+credentials = {}
+
 
 def init(storage, wopi):
   '''Convenience method to iniialise this module'''
@@ -236,4 +238,4 @@ def storeWopiFile(request, acctok, xakey, targetname=''):
     targetname = acctok['filename']
   _ctx['st'].writefile(acctok['endpoint'], targetname, acctok['ruid'], acctok['rgid'], request.get_data())
   # save the current time for later conflict checking: this is never older than the mtime of the file
-  _ctx['st'].setxattr(acctok['endpoint'], targetname, acctok['ruid'], acctok['rgid'], xakey, int(time.time()))
+  _ctx['st'].setxattr(acctok['endpoint'], targetname, acctok['ruid'], acctok['rgid'], xakey, int(time.time()))  
