@@ -24,10 +24,15 @@ import cs3.gateway.v1beta1.gateway_api_pb2_grpc as cs3gw_grpc
 import cs3.storage.provider.v1beta1.provider_api_pb2 as sp
 import cs3.storage.provider.v1beta1.resources_pb2 as spr
 
+from google import auth as google_auth
+from google.auth import jwt as google_auth_jwt
+from google.auth.transport import grpc as google_auth_transport_grpc
+
 # module-wide state
 config = None
 log = None
 tok = None
+credentials = {}
 
 def printAdd(n):
   print(a.fib(n))
@@ -52,61 +57,69 @@ def init(inconfig):
     cs3stub = cs3gw_grpc.GatewayAPIStub(ch)
     authReq = cs3gw.AuthenticateRequest(
         type='basic', client_id='einstein', client_secret='relativity')
-    tok = cs3stub.Authenticate(authReq)
+    authRes = cs3stub.Authenticate(authReq)
+    credentials['ch'] = ch
+    credentials['cs3stub'] = cs3stub
+    credentials['authReq'] = authReq
+    credentials['token'] = authRes.token
 
 
 def stat(_endpoint, filename, _ruid, _rgid):
     '''Stat a file and returns (size, mtime) as well as other extended info. Assume the given uid, gid has access.'''
     filename = _getfilename(filename)
     try:
-        revaurl = 'localhost:19000'
-        ch = grpc.insecure_channel(revaurl)
-        cs3stub = cs3gw_grpc.GatewayAPIStub(ch)
         tstart = time.clock()
-        reference = spr.Reference(path = 'test.txt', id = spr.ResourceId(storage_id = '1234', opaque_id = '2345'))
+        reference = spr.Reference(path = 'example.txt', id = spr.ResourceId(storage_id = '123e4567-e89b-12d3-a456-426655440000', opaque_id = 'fileid-home/example.txt'))
         statReq = sp.StatRequest(ref = reference)
-        statInfo = cs3stub.Stat(statReq)
+        statInfo = credentials['cs3stub'].Stat(request = statReq, metadata = [('x-access-token', credentials['token'])])
         tend = time.clock()
         print('msg="Invoked stat" filename="%s" elapsedTimems="%.1f"' %
                  (filename, (tend-tstart)*1000))
         return {
-            'inode': statInfo.st_ino,
-            'ouid': statInfo.st_uid,
-            'ogid': statInfo.st_gid,
-            'size': statInfo.st_size,
-            'mtime': statInfo.st_mtime
+            'inode': statInfo.info.id,
+            'ouid': statInfo.info.owner.opaque_id,
+            'size': statInfo.info.size,
+            # TODO group id?
+            'mtime': statInfo.info.mtime
         }
     except (FileNotFoundError, PermissionError) as e:
         raise IOError(e)
 
-
-def statx(_endpoint, filename, _ruid, _rgid):
-    '''Get extended stat info (inode, ouid, ogid, size, mtime). Equivalent to stat in the case of local storage.'''
-    return stat(_endpoint, filename, _ruid, _rgid)
+# TODO
+# def statx(_endpoint, filename, _ruid, _rgid):
+#     '''Get extended stat info (inode, ouid, ogid, size, mtime). Equivalent to stat in the case of local storage.'''
+#     return stat(_endpoint, filename, _ruid, _rgid)
 
 
 def setxattr(_endpoint, filename, _ruid, _rgid, key, value):
-    '''Set the extended attribute <key> to <value> on behalf of the given uid, gid'''
+    '''Set the extended attribute <key> to <value> on behalf of the given reference'''
+    reference = spr.Reference(path = 'example.txt', id = spr.ResourceId(storage_id = '123e4567-e89b-12d3-a456-426655440000', opaque_id = 'fileid-home/example.txt'))
+    metadata = spr.ArbitraryMetadata.MetadataEntry(key=key, value=value)
+    arbitrary_metadata = spr.ArbitraryMetadata(metadata = metadata)
+    req = sp.SetArbitraryMetadataRequest(ref = reference, arbitrary_metadata = arbitrary_metadata)
     try:
-        os.setxattr(_getfilename(filename), key, str(value))
+        credentials['cs3stub'].setarbitrarymetadata(request = req, metadata = [('x-access-token', credentials['token'])])
     except (FileNotFoundError, PermissionError) as e:
         raise IOError(e)
 
 
-def getxattr(_endpoint, filename, _ruid, _rgid, key):
-    '''Get the extended attribute <key> on behalf of the given uid, gid. Do not raise exceptions'''
-    try:
-        return os.getxattr(_getfilename(filename), key)
-    except (FileNotFoundError, PermissionError) as e:
-        log.warning('msg="Failed to getxattr" filename="%s" key="%s" exception="%s"' % (
-            filename, key, e))
-        return None
+# not in cs3 API
+# def getxattr(_endpoint, filename, _ruid, _rgid, key):
+#     '''Get the extended attribute <key> on behalf of the given uid, gid. Do not raise exceptions'''
+#     try:
+#         return credentials['cs3stub'].getarbritarymetadata(_getfilename(filename), key)
+#     except (FileNotFoundError, PermissionError) as e:
+#         log.warning('msg="Failed to getxattr" filename="%s" key="%s" exception="%s"' % (
+#             filename, key, e))
+#         return None
 
 
 def rmxattr(_endpoint, filename, _ruid, _rgid, key):
     '''Remove the extended attribute <key> on behalf of the given uid, gid'''
+    reference = spr.Reference(path = 'example.txt', id = spr.ResourceId(storage_id = '123e4567-e89b-12d3-a456-426655440000', opaque_id = 'fileid-home/example.txt'))
+    req = spr.UnsetArbitraryMetadataRequest(ref = reference, arbitrary_metadata_keys = [key])
     try:
-        os.removexattr(_getfilename(filename), key)
+        credentials['cs3stub'].unsetarbritarymetadata(request = req, metadata = [('x-access-token', credentials['token'])])
     except (FileNotFoundError, PermissionError) as e:
         raise IOError(e)
 
@@ -117,6 +130,9 @@ def readfile(_endpoint, filename, _ruid, _rgid):
     try:
         tstart = time.clock()
         chunksize = config.getint('io', 'chunksize')
+        reference = spr.Reference(path = 'example.txt', id = spr.ResourceId(storage_id = '123e4567-e89b-12d3-a456-426655440000', opaque_id = 'fileid-home/example.txt'))
+        req = sp.InitiateFileDownloadRequest(ref = reference)
+        sp.initiatefiledownload(request = req, metadata = [('x-access-token', credentials['token'])])
         f = open(_getfilename(filename), mode='rb', buffering=chunksize)
         tend = time.clock()
         log.info('msg="File open for read" filename="%s" elapsedTimems="%.1f"' % (
@@ -147,16 +163,14 @@ def writefile(_endpoint, filename, ruid, rgid, content, noversion=0):
               (filename, size))
     try:
         tstart = time.clock()
-        f = open(_getfilename(filename), mode='wb')
+        reference = spr.Reference(path = 'example.txt', id = spr.ResourceId(storage_id = '123e4567-e89b-12d3-a456-426655440000', opaque_id = 'fileid-home/example.txt'))
+        req = sp.InitiateFileUploadRequest(ref = reference)
+        res = credentials['cs3stub'].initiatefileupload(request = req, metadata = [('x-access-token', credentials['token'])])
         tend = time.clock()
         log.info('msg="File open for write" filename="%s" elapsedTimems="%.1f"' % (
             filename, (tend-tstart)*1000))
-        # write the file. In a future implementation, we should find a way to only update the required chunks...
-        written = f.write(content)
-        f.close()
-        if written != size:
-            raise IOError('Written %d bytes but content is %d bytes' %
-                          (written, size))
+        if res.status.code != 1:
+            raise IOError('Something went wrong, message: ' + res.status.message)
     except OSError as e:
         log.warning(
             'msg="Error writing to file" filename="%s" error="%s"' % (filename, e))
@@ -165,8 +179,11 @@ def writefile(_endpoint, filename, ruid, rgid, content, noversion=0):
 
 def renamefile(_endpoint, origfilename, newfilename, ruid, rgid):
     '''Rename a file from origfilename to newfilename on behalf of the given uid, gid.'''
+    source = spr.Reference(path = 'example.txt', id = spr.ResourceId(storage_id = '123e4567-e89b-12d3-a456-426655440000', opaque_id = 'fileid-home/example.txt'))
+    destination = spr.Reference(path = newfilename, id = spr.ResourceId(storage_id = '123e4567-e89b-12d3-a456-426655440000', opaque_id = 'fileid-home/' +  newfilename))
+    req = sp.MoveRequest(source = source, destination = destination)
     try:
-        os.rename(_getfilename(origfilename), _getfilename(newfilename))
+        credentials['cs3stub'].move(request = req, metadata = [('x-access-token', credentials['token'])])
     except (FileNotFoundError, PermissionError) as e:
         raise IOError(e)
 
@@ -174,7 +191,9 @@ def renamefile(_endpoint, origfilename, newfilename, ruid, rgid):
 def removefile(_endpoint, filename, _ruid, _rgid, _force=0):
     '''Remove a file on behalf of the given uid, gid.
        The force argument is irrelevant and ignored for local storage.'''
+    reference = spr.Reference(path = 'example.txt', id = spr.ResourceId(storage_id = '123e4567-e89b-12d3-a456-426655440000', opaque_id = 'fileid-home/example.txt'))
+    req = sp.DeleteRequest(ref = reference)
     try:
-        os.remove(_getfilename(filename))
+        credentials['cs3stub'].delete(request = req, metadata = [('x-access-token', credentials['token'])])
     except (FileNotFoundError, PermissionError, IsADirectoryError) as e:
         raise IOError(e)
