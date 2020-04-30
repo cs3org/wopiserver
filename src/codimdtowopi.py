@@ -2,7 +2,7 @@
 '''
 codimdtowopi.py
 
-The CodiMD to WOPI gateway for CERNBox
+The CodiMD to WOPI gateway for IOP
 
 Author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 '''
@@ -12,20 +12,23 @@ import sys
 import time
 import socket
 import configparser
+import re
 from platform import python_version
 import logging
 import logging.handlers
 import urllib.parse
 import http.client
 import json
-import requests
+import io
+import zipfile
 try:
+  import requests
   import flask                   # Flask app server
 except ImportError:
-  print("Missing modules, please install Flask with `pip3 install flask`")
+  print("Missing modules, please install with `pip3 install flask requests`")
   raise
 
-MDWSERVERVERSION = '0.1'
+MDWSERVERVERSION = '0.2'
 
 class MDW:
   '''A singleton container for all state information of the server'''
@@ -39,10 +42,9 @@ class MDW:
                "Debug":    logging.DEBUG      # 10
               }
   log = app.logger
-  openDocs = {}   # a map active access tokens -> (codimd doc url, WOPISrc url)
-  locks = {}      # an "inverse" map codimd docs urls -> set of active access tokens for this file
+  openfiles = {}      # a map of all open codimd docs hashes -> list of active access tokens for each of them
 
-  # the following is a template with six (!) parameters. TODO need to find a better solution for this
+  # the following is a template with seven (!) parameters. TODO need to convert to a Jinjia template
   frame_page_templated_html = """
     <html>
     <head>
@@ -57,7 +59,8 @@ class MDW:
     <script>
       window.onbeforeunload = function() {
         $.get("%s/close",
-          {access_token: '%s',
+          {WOPISrc: '%s',
+           access_token: '%s',
            save: '%s'},
           function(data) {}
         );
@@ -90,13 +93,17 @@ class MDW:
       # prepare the Flask web app
       cls.port = int(cls.config.get('general', 'port'))
       cls.log.setLevel(cls.loglevels[cls.config.get('general', 'loglevel')])
-      cls.codimdurl = os.environ.get('CODIMD_URL')
+      cls.codimdexturl = os.environ.get('CODIMD_EXT_URL')    # this is the external-facing URL
+      cls.codimdurl = os.environ.get('CODIMD_INT_URL')       # this is the internal URL (e.g. as visible in a docker network)
       cls.codimdstore = os.environ.get('CODIMD_STORAGE_PATH')
       cls.useHttps = False     # cls.config.get('security', 'usehttps').lower() == 'yes'
       _autodetected_server = '%s://%s:%d' % (('https' if cls.useHttps else 'http'), socket.getfqdn(), cls.port)
       cls.wopicodiurl = cls.config.get('general', 'wopicodimdurl', \
                                        fallback=_autodetected_server)
       cls.proxied = _autodetected_server != cls.wopicodiurl
+      # a regexp for uploads, that have links like '/uploads/upload_542a360ddefe1e21ad1b8c85207d9365.*'
+      cls.upload_re = re.compile('(' + cls.codimdexturl.replace('/', '\\/').replace('.', '\\.') + \
+                                 r'\/uploads\/upload_\w{32}\.\w+)', re.IGNORECASE)
     except Exception as e:
       # any error we get here with the configuration is fatal
       cls.log.fatal('msg="Failed to initialize the service, aborting" error="%s"' % e)
@@ -115,10 +122,7 @@ class MDW:
       cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'))
 
 
-#############################################################################################################
-#
 # The Web Application starts here
-#
 #############################################################################################################
 
 @MDW.app.route("/", methods=['GET'])
@@ -129,12 +133,18 @@ def index():
     <html><head><title>CodiMD to WOPI</title></head>
     <body>
     <div align="center" style="color:#000080; padding-top:50px; font-family:Verdana; size:11">
-    This is the CodiMD to WOPI bridge, to be used in conjunction with a WOPI-enabled EFSS.</div>
+    This is the CodiMD to WOPI HTTP proxy, to be used in conjunction with a WOPI-enabled EFSS.</div>
     <br><br><br><br><br><br><br><hr>
-    <i>CERNBox CodiMD to WOPI Server %s at %s. Powered by Flask %s for Python %s</i>.
+    <i>CodiMD to WOPI Proxy %s at %s. Powered by Flask %s for Python %s</i>.
     </body>
     </html>
     """ % (MDWSERVERVERSION, socket.getfqdn(), flask.__version__, python_version())
+
+
+@MDW.app.route('/new', methods=['GET'])
+def mdNew():
+  '''Create a new MD doc to the given WOPISrc and allow user to start working on it'''
+  pass
 
 
 @MDW.app.route("/open", methods=['GET'])
@@ -158,20 +168,29 @@ def mdOpen():
   res = requests.post(url, headers={'X-Wopi-Override': 'GET_LOCK'})
   if res.status_code != http.client.OK:
     raise ValueError(res.status_code)
-  lockurl = res.headers.pop('X-WOPI-Lock', None)   # if present, the lock is the URL of the document in CodiMD
+  wopilock = res.headers.pop('X-WOPI-Lock', None)   # if present, the lock is a dict { mdhash, filename, tokens }
 
-  if lockurl:
-    # file is already locked, check that it's held in this instance
-    MDW.log.info('msg="Lock already held" lock="%s"' % lockurl)
-    lockurl = urllib.parse.urlparse(lockurl)
-    if ('%s://%s:%d' % (lockurl.scheme, lockurl.hostname, lockurl.port)) == MDW.codimdurl:
-      # yes, store some context in memory
-      MDW.openDocs[acctok] = {'codimd': lockurl.geturl(), 'wopiSrc': wopiSrc}
-    else:
-      # file was locked by another CodiMD instance or with a different lock scheme, force read-only mode
+  if wopilock:
+    try:
+      wopilock = json.loads(wopilock)
+      # file is already locked and it's a JSON: assume we hold it, and append this access token to it
+      wopilock['tokens'].append(acctok[-20:])
+      # remove duplicates
+      wopilock['tokens'] = list(set(wopilock['tokens']))
+      MDW.log.info('msg="Lock already held" lock="%s"' % wopilock)
+    except json.decoder.JSONDecodeError:
+      # this lock cannot be parsed, it likely follows a different lock scheme: force read-only mode
+      MDW.log.error('msg="Lock already held by another app" lock="%s"' % wopilock)
       filemd['UserCanWrite'] = False
+      if '(locked by another app)' not in filemd['BreadcrumbDocName']:
+        filemd['BreadcrumbDocName'] += ' (locked by another app)'
+      wopilock = None
+    except KeyError:
+      MDW.log.error('msg="Lock already held, but missing tokens?" lock="%s"' % wopilock)
+      wopilock['tokens'] = list()
+      wopilock['tokens'].append(acctok[-20:])
 
-  else:
+  if not wopilock:
     # file is not locked, fetch it from storage
     # WOPI GetFile
     url = '%s/contents?access_token=%s' % (wopiSrc, acctok)
@@ -181,107 +200,143 @@ def mdOpen():
       raise ValueError(res.status_code)
     mddoc = res.content
 
-    # then push the document to CodiMD
+    # then push the document to CodiMD:
+    # if it's a bundled file, unzip it and push the attachments in the appropriate folder
+    # NOTE: this assumes we have direct filesystem access to the CodiMD storage!
+
     res = requests.post(MDW.codimdurl + '/new', data=mddoc, allow_redirects=False, \
                         headers={'Content-Type': 'text/markdown'})
     if res.status_code != http.client.FOUND:
       raise ValueError(res.status_code)
-    redirecturl = res.next.url
-    # this is required for a dockerized/proxied deployment
-    if MDW.proxied:
-      lockurl = list(urllib.parse.urlsplit(redirecturl))
-      lockurl[0] = ''
-      lockurl[1] = MDW.codimdurl
-      lockurl = ''.join(lockurl)
-    else:
-      lockurl = redirecturl
-    MDW.openDocs[acctok] = {'codimd': lockurl, 'wopiSrc': wopiSrc}   # this is the redirect with the hash of the document just created
-    MDW.log.info('msg="Pushed document to CodiMD" url="%s" token="%s"' % (MDW.openDocs[acctok]['codimd'], acctok[-20:]))
+    # we got the hash of the document just created as a redirected URL, store it in our WOPI lock structure
+    wopilock = {'mdhash': urllib.parse.urlsplit(res.next.url).path, \
+                'filename': filemd['BaseFileName'], \
+                'tokens': [acctok[-20:]]
+               }
+    MDW.log.info('msg="Pushed document to CodiMD" url="%s" token="%s"' % (wopilock['mdhash'], acctok[-20:]))
 
   # use the 'UserCanWrite' attribute to decide whether the file is to be opened in read-only mode
   if filemd['UserCanWrite']:
     # WOPI Lock
     url = '%s?access_token=%s' % (wopiSrc, acctok)
-    MDW.log.debug('msg="Calling WOPI Lock" url="%s" lock="%s"' % (wopiSrc, MDW.openDocs[acctok]['codimd']))
-    res = requests.post(url, headers={'X-WOPI-Lock': MDW.openDocs[acctok]['codimd'], 'X-Wopi-Override': 'LOCK'})
+    MDW.log.debug('msg="Calling WOPI Lock" url="%s" lock="%s"' % (wopiSrc, wopilock))
+    lockheaders = {'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'LOCK'}
+    if len(wopilock['tokens']) > 1:
+      # in this case we need to refresh an existing lock
+      lockheaders['X-WOPI-OldLock'] = wopilock.remove(acctok[-20:])
+    res = requests.post(url, headers=lockheaders)
     if res.status_code != http.client.OK:
       # TODO handle conflicts
       raise ValueError(res.status_code)
-    try:
-      # keep track of this lock
-      MDW.locks[MDW.openDocs[acctok]['codimd']] = MDW.locks[MDW.openDocs[acctok]['codimd']] | set(acctok)
-    except KeyError:
-      # this may happen if this bridge service is restarted... TODO need to store more context in the lock to be stateless
-      MDW.locks[MDW.openDocs[acctok]['codimd']] = set(acctok)
+
+    # keep track of this open document for statistical purposes
+    MDW.openfiles[wopilock['mdhash']] = wopilock['tokens']
+    redirecturl = MDW.codimdexturl + wopilock['mdhash'] + '?both'
 
   else:
     # read-only mode, amend the redirection url to show the file in publish mode
     # TODO tell CodiMD to disable editing!
-    redirecturl += '/publish'
+    redirecturl = MDW.codimdexturl + wopilock['mdhash'] + '/publish'
 
   MDW.log.debug('msg="Redirecting client to CodiMD" redirecturl="%s"' % redirecturl)
   # generate a hook for close and return an iframe to the client
-  return MDW.frame_page_templated_html % (filemd['BaseFileName'], filemd['UserFriendlyName'], \
-                                          MDW.wopicodiurl, acctok, filemd['UserCanWrite'], \
+  return MDW.frame_page_templated_html % (filemd['BreadcrumbDocName'], filemd['UserFriendlyName'], \
+                                          MDW.wopicodiurl, wopiSrc, acctok, filemd['UserCanWrite'], \
                                           redirecturl)
+
+
+def _getattachments(mddoc, filename):
+  '''Parse a markdown file and generate a zip file containing all included files'''
+  return None
+  zip_buffer = io.BytesIO()
+  for attachment in MDW.upload_re.findall(mddoc):
+    MDW.log.debug('msg="Fetching attachment" url="%s"' % attachment)
+    res = requests.get(attachment)
+    if res.status_code != http.client.OK:
+      # TODO handle error
+      continue
+    with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
+      zip_file.writestr(attachment.split('/')[-1], res.content)
+  # also include the markdown file
+  with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
+    zip_file.writestr(filename, mddoc)
+  return zip_buffer.getvalue()
 
 
 @MDW.app.route("/close", methods=['GET'])
 def mdClose():
   '''Close a MD doc by saving it back to the previously given WOPI Src and using the provided access token'''
-  acctok = flask.request.args['access_token']
-  if flask.request.args['save'] == 'False':
-    MDW.log.info('msg="Close called" save="False" client="%s" token="%s"' % \
-                 (flask.request.remote_addr, acctok[-20:]))
-    # TODO delete content from CodiMD - API is missing
-
-    # clean up internal state
-    try:
-      del MDW.openDocs[acctok]
-    except KeyError:
-      pass
-    return 'OK', http.client.OK
-
   try:
-    wopiSrc = MDW.openDocs[acctok]['wopiSrc']
-  except KeyError:
-    # this may happen if this bridge service is restarted... TODO need to store more context to be stateless
-    MDW.log.error('msg="Close called" token="%s" error="Unable to store the file, missing WOPI context"' % acctok[-20:])
-    return 'WOPI source not found', http.client.NOT_FOUND
+    acctok = flask.request.args['access_token']
+    wopiSrc = flask.request.args['WOPISrc']
+    if flask.request.args['save'] == 'False':
+      MDW.log.info('msg="Close called" save="False" client="%s" token="%s"' % \
+                  (flask.request.remote_addr, acctok[-20:]))
+      # TODO delete content from CodiMD - API is missing
+      return 'OK', http.client.OK
+  except KeyError as e:
+    MDW.log.error('msg="Close called" error="Unable to store the file, missing WOPI context: %s"' % e)
+    return 'Missing arguments', http.client.BAD_REQUEST
 
-  # Get document from CodiMD
+  # get current lock to have extra context
+  MDW.log.debug('msg="Calling WOPI GetLock" url="%s"' % wopiSrc)
+  url = '%s?access_token=%s' % (wopiSrc, acctok)
+  res = requests.post(url, headers={'X-Wopi-Override': 'GET_LOCK'})
+  if res.status_code != http.client.OK:
+    raise ValueError(res.status_code)
+  try:
+    wopilock = json.loads(res.headers.pop('X-WOPI-Lock'))   # the lock is a dict { mdhash, filename, tokens }
+  except KeyError:
+    MDW.log.error('msg="Close called" error="Unable to store the file, missing WOPI lock"')
+    return 'Missing lock', http.client.BAD_REQUEST
+  except json.decoder.JSONDecodeError:
+    MDW.log.error('msg="Close called" error="Unable to store the file, malformed WOPI lock"')
+    return 'Malformed lock', http.client.BAD_REQUEST
+
+  # We must save and have all required context. Get document from CodiMD
   MDW.log.info('msg="Close called, fetching file" save="True" client="%s" codimdurl="%s" token="%s"' % \
-               (flask.request.remote_addr, MDW.openDocs[acctok]['codimd'], acctok[-20:]))
-  res = requests.get(MDW.openDocs[acctok]['codimd'] + '/download')
+               (flask.request.remote_addr, MDW.codimdurl + wopilock['mdhash'], acctok[-20:]))
+  res = requests.get(MDW.codimdurl + wopilock['mdhash'] + '/download')
   if res.status_code != http.client.OK:
     raise ValueError(res.status_code)
   mddoc = res.content
 
   # WOPI PutFile
-  lockurl = MDW.openDocs[acctok]['codimd']
   url = '%s/contents?access_token=%s' % (wopiSrc, acctok)
   MDW.log.debug('msg="Calling WOPI PutFile" url="%s"' % wopiSrc)
-  res = requests.post(url, headers={'X-WOPI-Lock': lockurl}, data=mddoc)
+  res = requests.post(url, headers={'X-WOPI-Lock': json.dumps(wopilock)}, data=mddoc)
   if res.status_code != http.client.OK:
-    # TODO handle conflicts
-    raise ValueError(res.status_code)
+    MDW.log.warning('msg="Calling WOPI PutFile failed" url="%s" response="%s"' % (wopiSrc, res.status_code))
+    return 'Error saving the file', res.status_code
 
-  # remove this acctok from the set of active ones
-  MDW.locks[lockurl] -= set(acctok)
-  if not MDW.locks[lockurl]:
-    del MDW.locks[lockurl]
-    # we're the last editor for this file, call WOPI Unlock
+  # WOPI PutRelative for the attachments
+  bundlefile = _getattachments(mddoc, wopilock['filename'])
+  if bundlefile:
+    url = '%s?access_token=%s' % (wopiSrc, acctok)
+    MDW.log.debug('msg="Calling WOPI PutFile" url="%s"' % wopiSrc)
+    res = requests.post(url, headers={
+        'X-WOPI-Lock': json.dumps(wopilock),
+        'X-WOPI-Override': 'PUT_RELATIVE',
+        'X-WOPI-RelativeTarget': wopilock['filename'] + 'x',
+        'X-WOPI-OverwriteRelativeTarget': 'true'
+        }, data=bundlefile)
+    if res.status_code != http.client.OK:
+      MDW.log.warning('msg="Calling WOPI PutFile failed" url="%s" response="%s"' % (wopiSrc, res.status_code))
+      return 'Error saving attachments', res.status_code
+
+  # refresh list of active tokens
+  MDW.openfiles[wopilock['mdhash']] = wopilock['tokens']
+  # is this the last editor for this file?
+  if len(wopilock['tokens']) == 1 and wopilock['tokens'][0] == acctok[-20:]:
+    del MDW.openfiles[wopilock['mdhash']]
+    # yes, call WOPI Unlock
     url = '%s?access_token=%s' % (wopiSrc, acctok)
     MDW.log.debug('msg="Calling WOPI Unlock" url="%s"' % wopiSrc)
-    res = requests.post(url, headers={'X-WOPI-Lock': lockurl, 'X-Wopi-Override': 'UNLOCK'})
+    res = requests.post(url, headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
     if res.status_code != http.client.OK:
-      # TODO handle conflicts
-      raise ValueError(res.status_code)
+      MDW.log.warning('msg="Calling WOPI Unlock failed" url="%s" response="%s"' % (wopiSrc, res.status_code))
 
     # TODO as we're the last, delete on CodiMD: it seems this API is still missing
-
-  # clean up internal state
-  del MDW.openDocs[acctok]
 
   MDW.log.info('msg="Close completed" save="True" client="%s" token="%s"' % \
                (flask.request.remote_addr, acctok[-20:]))
@@ -292,7 +347,7 @@ def mdClose():
 def mdList():
   '''Return a list of all currently opened files'''
   # TODO this API should be protected
-  return flask.Response(json.dumps(MDW.openDocs), mimetype='application/json')
+  return flask.Response(json.dumps(MDW.openfiles), mimetype='application/json')
 
 
 #
