@@ -1,9 +1,11 @@
 '''
 cs3iface.py
 
-CS3 API interface for the WOPI server for CERNBox
+CS3 API based interface for the IOP WOPI server
 
-Author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
+Authors:
+Giuseppe.LoPresti@cern.ch, CERN/IT-ST
+Lovisa.Lugnegaard@cern.ch, CERN/IT-ST
 '''
 
 import time

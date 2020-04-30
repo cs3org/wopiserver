@@ -1,7 +1,7 @@
 '''
 xrootiface.py
 
-XRootD interface for the WOPI server for CERNBox
+eos-xrootd interface for the IOP WOPI server
 
 Author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 Contributions: Michael.DSilva@aarnet.edu.au

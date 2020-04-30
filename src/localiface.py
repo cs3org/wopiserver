@@ -1,7 +1,7 @@
 '''
 localiface.py
 
-Local storage interface for the WOPI server for CERNBox
+Local storage interface for the IOP WOPI server
 
 Author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 '''
