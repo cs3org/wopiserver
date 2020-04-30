@@ -11,6 +11,7 @@ Contributions: Michael.DSilva@aarnet.edu.au
 import sys
 import os
 import time
+from datetime import datetime
 import socket
 import configparser
 from platform import python_version
@@ -543,6 +544,7 @@ def wopiCheckFileInfo(fileid):
     filemd['UserId'] = acctok['ruid'] + ':' + acctok['rgid']    # typically same as OwnerId
     filemd['Size'] = statInfo['size']
     filemd['Version'] = statInfo['mtime']   # mtime is used as version here
+    filemd['LastModifiedTime'] = datetime.fromtimestamp(int(statInfo['mtime'])).isoformat()   # this is used by Collabora
     filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = \
         filemd['SupportsGetLock'] = filemd['SupportsDeleteFile'] = acctok['canedit']
         #filemd['SupportsRename'] = filemd['UserCanRename'] = acctok['canedit']      # XXX broken in Office Online
@@ -695,6 +697,8 @@ def wopiGetLock(fileid, _reqheaders_unused, acctok):
       Wopi.log.warning('msg="Repopulating missing metadata" filename="%s" token="%s" user="%s"' % \
                        (acctok['filename'], flask.request.args['access_token'][-20:], acctok['username']))
       Wopi.openfiles[acctok['filename']] = (time.asctime(), set([acctok['username']]))
+  # else:
+  # TODO check if a non-WOPI lock exists for this file
   return resp
 
 
