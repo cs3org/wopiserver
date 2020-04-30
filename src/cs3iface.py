@@ -84,7 +84,6 @@ def statx(_endpoint, filename, _ruid, _rgid):
     '''Get extended stat info (inode, ouid, ogid, size, mtime). Equivalent to stat in this case.'''
     return stat(_endpoint, filename, _ruid, _rgid)
 
-
 def setxattr(_endpoint, filename, key, value):
     '''Set the extended attribute <key> to <value> on behalf of the given reference'''
     # TODO implement this on the reva side (now reva returns operation not supported)
