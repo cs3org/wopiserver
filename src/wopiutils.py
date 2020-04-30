@@ -50,10 +50,14 @@ def getLibreOfficeLockName(filename):
 
 def getMicrosoftOfficeLockName(filename):
   '''Returns the filename of a lock file as created by Microsoft Office'''
-  if os.path.splitext(filename)[1] == '.docx':
-    return os.path.dirname(filename) + os.path.sep + '~$' + os.path.basename(filename)[2:]
-  else:
+  if os.path.splitext(filename)[1] != '.docx' or len(os.path.basename(filename)) <= 6+1+4:
     return os.path.dirname(filename) + os.path.sep + '~$' + os.path.basename(filename)
+  # MS Word has a really weird algorithm for the lock file name...
+  if len(os.path.basename(filename)) >= 8+1+4:
+    return os.path.dirname(filename) + os.path.sep + '~$' + os.path.basename(filename)[2:]
+  #elif len(os.path.basename(filename)) == 7+1+4:
+  return os.path.dirname(filename) + os.path.sep + '~$' + os.path.basename(filename)[1:]
+
 
 
 def generateAccessToken(ruid, rgid, filename, canedit, username, folderurl, endpoint):
@@ -138,7 +142,8 @@ def retrieveWopiLock(fileid, operation, lock, acctok):
                                             flask.request.args['access_token'][-20:], type(e)))
     # the retrieved lock is not valid any longer, discard and remove it from the backend
     try:
-      _ctx['st'].removefile(acctok['endpoint'], getLockName(acctok['filename']), _ctx['wopi'].lockruid, _ctx['wopi'].lockrgid, 1)
+      _ctx['st'].removefile(acctok['endpoint'], getLockName(acctok['filename']), \
+                            _ctx['wopi'].lockruid, _ctx['wopi'].lockrgid, 1)
     except IOError:
       # ignore, it's not worth to report anything here
       pass
