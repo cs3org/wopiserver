@@ -27,7 +27,7 @@ services:
       - CMD_AUTO_VERSION_CHECK=false
       - CMD_ALLOW_ANONYMOUS=true
       - CMD_ALLOW_ANONYMOUS_EDITS=true
-      - CMD_DOMAIN=${HOST}:3000
+#     - CMD_DOMAIN=${HOST}:3000
     depends_on:
       - database
     ports:
@@ -46,6 +46,7 @@ services:
     environment:
       - CODIMD_INT_URL=http://codimd-web.codinet:3000
       - CODIMD_EXT_URL=${HOST}:3000
+      - WOPIBRIDGE_URL=${HOST}:8000
       - CODIMD_STORAGE_PATH=/mnt/codimd_storage
     depends_on:
       - frontend
@@ -54,7 +55,6 @@ services:
     ports:
       - 8000:8000
     volumes:
-      - wopi-config:/etc/wopi
       - upload-data:/mnt/codimd_storage
     healthcheck:
       test: ["CMD", "curl", "--insecure", "http://localhost:8000"]
@@ -65,7 +65,6 @@ services:
 volumes:
   database-data: {}
   upload-data: {}
-  wopi-config: {}
 
 networks:
   codinet:

@@ -11,7 +11,6 @@ import os
 import sys
 import time
 import socket
-import configparser
 import re
 from platform import python_version
 import logging
@@ -86,20 +85,21 @@ class WB:
       loghandler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)s[%(process)d] %(levelname)-8s %(message)s',
                                                 datefmt='%Y-%m-%dT%H:%M:%S'))
       cls.log.addHandler(loghandler)
-      # read the configuration
-      cls.config = configparser.ConfigParser()
-      cls.config.read_file(open('/etc/wopi/codimdtowopi.defaults.conf'))
-      cls.config.read('/etc/wopi/codimdtowopi.conf')
+      # read the configuration - not needed for now
+      #cls.config = configparser.ConfigParser()
+      #cls.config.read_file(open('/etc/wopi/codimdtowopi.defaults.conf'))
+      #cls.config.read('/etc/wopi/codimdtowopi.conf')
       # prepare the Flask web app
-      cls.port = int(cls.config.get('general', 'port'))
-      cls.log.setLevel(cls.loglevels[cls.config.get('general', 'loglevel')])
+      cls.port = 8000
+      cls.log.setLevel(cls.loglevels['Debug'])
       cls.codimdexturl = os.environ.get('CODIMD_EXT_URL')    # this is the external-facing URL
       cls.codimdurl = os.environ.get('CODIMD_INT_URL')       # this is the internal URL (e.g. as visible in a docker network)
       cls.codimdstore = os.environ.get('CODIMD_STORAGE_PATH')
-      cls.useHttps = False     # cls.config.get('security', 'usehttps').lower() == 'yes'
+      cls.useHttps = False
       _autodetected_server = '%s://%s:%d' % (('https' if cls.useHttps else 'http'), socket.getfqdn(), cls.port)
-      cls.wopibridgeurl = cls.config.get('general', 'wopibridgeurl', \
-                                       fallback=_autodetected_server)
+      cls.wopibridgeurl = os.environ.get('WOPIBRIDGE_URL')
+      if not cls.wopibridgeurl:
+        cls.wopibridgeurl = _autodetected_server
       cls.proxied = _autodetected_server != cls.wopibridgeurl
       # a regexp for uploads, that have links like '/uploads/upload_542a360ddefe1e21ad1b8c85207d9365.*'
       cls.upload_re = re.compile('(' + cls.codimdexturl.replace('/', '\\/').replace('.', '\\.') + \
@@ -115,11 +115,11 @@ class WB:
     '''Runs the Flask app in either secure (https) or test (http) mode'''
     if cls.useHttps:
       cls.log.info('msg="CodiMD to WOPI Server starting in secure mode" url="%s" proxied="%s"' % (cls.wopibridgeurl, cls.proxied))
-      cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'),
-                  ssl_context=(cls.config.get('security', 'wopicert'), cls.config.get('security', 'wopikey')))
+      cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=True)
+                  #ssl_context=(cls.config.get('security', 'wopicert'), cls.config.get('security', 'wopikey')))
     else:
       cls.log.info('msg="CodiMD to WOPI Server starting in test/unsecure mode" url="%s" proxied="%s"' % (cls.wopibridgeurl, cls.proxied))
-      cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'))
+      cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=True)
 
 
 # The Web Application starts here
