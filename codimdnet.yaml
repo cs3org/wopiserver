@@ -39,8 +39,8 @@ services:
   wopicodimd:
     build:
       context: .
-      dockerfile: wopicodimd.Dockerfile
-    image: wopicodimd:cern
+      dockerfile: wopibridge.Dockerfile
+    image: wopibridge:cern
     container_name: codimd-wopi
     hostname: cbox-codimd-wopi
     environment:
