@@ -12,15 +12,15 @@ services:
       dockerfile: wopiserver.Dockerfile
     image: wopiserver:cern
     container_name: wopiserver
-    hostname: cbox-wopi-docker-01
+    hostname: cbox-iop-wopi
     network_mode: "bridge"
     restart: always
     ports:
       - 8880:8880
     volumes:
-      - wopi_config:/etc/wopi
-      - wopi_logs:/var/log/wopi
-      - wopi_storage:/var/wopi_local_storage
+      - config:/etc/wopi
+      - logs:/var/log/wopi
+      - storage:/var/wopi_local_storage
     healthcheck:
       test: ["CMD", "curl", "--insecure", "http://localhost:8880"]
       interval: 60s
@@ -29,6 +29,6 @@ services:
       #start_period: 60s
 
 volumes:
-  wopi_logs:
-  wopi_config:
-  wopi_storage:
+  logs:
+  config:
+  storage:
