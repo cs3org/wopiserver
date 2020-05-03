@@ -12,7 +12,7 @@ services:
       dockerfile: wopiserver.Dockerfile
     image: wopiserver:cern
     container_name: wopiserver
-    hostname: cbox-wopi-docker-01
+    hostname: cbox-iop-wopi
     network_mode: "bridge"
     restart: always
     ports:
