@@ -114,11 +114,11 @@ class WB:
   def run(cls):
     '''Runs the Flask app in either secure (https) or test (http) mode'''
     if cls.useHttps:
-      cls.log.info('msg="CodiMD to WOPI Server starting in secure mode" url="%s" proxied="%s"' % (cls.wopibridgeurl, cls.proxied))
+      cls.log.info('msg="WOPI Bridge starting in secure mode" url="%s" proxied="%s"' % (cls.wopibridgeurl, cls.proxied))
       cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=True)
                   #ssl_context=(cls.config.get('security', 'wopicert'), cls.config.get('security', 'wopikey')))
     else:
-      cls.log.info('msg="CodiMD to WOPI Server starting in test/unsecure mode" url="%s" proxied="%s"' % (cls.wopibridgeurl, cls.proxied))
+      cls.log.info('msg="WOPI Bridge starting in test/unsecure mode" url="%s" proxied="%s"' % (cls.wopibridgeurl, cls.proxied))
       cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=True)
 
 
@@ -223,7 +223,9 @@ def mdOpen():
     lockheaders = {'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'LOCK'}
     if len(wopilock['tokens']) > 1:
       # in this case we need to refresh an existing lock
-      lockheaders['X-WOPI-OldLock'] = wopilock.remove(acctok[-20:])
+      oldlock = json.loads(json.dumps(wopilock))    # this is a hack for a deep copy, to be redone in Go
+      oldlock['tokens'].remove(acctok[-20:])
+      lockheaders['X-WOPI-OldLock'] = json.dumps(oldlock)
     res = requests.post(url, headers=lockheaders)
     if res.status_code != http.client.OK:
       # TODO handle conflicts
@@ -286,12 +288,9 @@ def mdClose():
     raise ValueError(res.status_code)
   try:
     wopilock = json.loads(res.headers.pop('X-WOPI-Lock'))   # the lock is a dict { docid, filename, tokens }
-  except KeyError:
-    WB.log.error('msg="Close called" error="Unable to store the file, missing WOPI lock"')
+  except (KeyError, json.decoder.JSONDecodeError) as e:
+    WB.log.error('msg="Close called" error="Unable to store the file, malformed or missing WOPI lock"')
     return 'Missing lock', http.client.BAD_REQUEST
-  except json.decoder.JSONDecodeError:
-    WB.log.error('msg="Close called" error="Unable to store the file, malformed WOPI lock"')
-    return 'Malformed lock', http.client.BAD_REQUEST
 
   # We must save and have all required context. Get document from CodiMD
   WB.log.info('msg="Close called, fetching file" save="True" client="%s" codimdurl="%s" token="%s"' % \
@@ -324,17 +323,33 @@ def mdClose():
       WB.log.warning('msg="Calling WOPI PutFile failed" url="%s" response="%s"' % (wopiSrc, res.status_code))
       return 'Error saving attachments', res.status_code
 
-  # refresh list of active tokens
-  WB.openfiles[wopilock['docid']] = wopilock['tokens']
   # is this the last editor for this file?
   if len(wopilock['tokens']) == 1 and wopilock['tokens'][0] == acctok[-20:]:
-    del WB.openfiles[wopilock['docid']]
     # yes, call WOPI Unlock
     url = '%s?access_token=%s' % (wopiSrc, acctok)
     WB.log.debug('msg="Calling WOPI Unlock" url="%s"' % wopiSrc)
     res = requests.post(url, headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
     if res.status_code != http.client.OK:
       WB.log.warning('msg="Calling WOPI Unlock failed" url="%s" response="%s"' % (wopiSrc, res.status_code))
+    # clean list of active documents
+    del WB.openfiles[wopilock['docid']]
+  else:
+    # we're not the last: still need to update the lock and take this session out
+    # WOPI Lock
+    url = '%s?access_token=%s' % (wopiSrc, acctok)
+    WB.log.debug('msg="Calling WOPI Lock" url="%s" lock="%s"' % (wopiSrc, wopilock))
+    newlock = json.loads(json.dumps(wopilock))    # this is a hack for a deep copy, to be redone in Go
+    newlock['tokens'].remove(acctok[-20:])
+    lockheaders = {'X-Wopi-Override': 'REFRESH_LOCK',
+                   'X-WOPI-OldLock': json.dumps(wopilock),
+                   'X-WOPI-Lock': json.dumps(newlock)
+                  }
+    res = requests.post(url, headers=lockheaders)
+    if res.status_code != http.client.OK:
+      # TODO handle conflicts
+      raise ValueError(res.status_code)
+    # refresh list of active documents for statistical purposes
+    WB.openfiles[wopilock['docid']] = wopilock['tokens']
 
     # TODO as we're the last, delete on CodiMD: it seems this API is still missing
 
