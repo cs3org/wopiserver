@@ -102,8 +102,7 @@ class WB:
         cls.wopibridgeurl = _autodetected_server
       cls.proxied = _autodetected_server != cls.wopibridgeurl
       # a regexp for uploads, that have links like '/uploads/upload_542a360ddefe1e21ad1b8c85207d9365.*'
-      cls.upload_re = re.compile('(' + cls.codimdexturl.replace('/', '\\/').replace('.', '\\.') + \
-                                 r'\/uploads\/upload_\w{32}\.\w+)', re.IGNORECASE)
+      cls.upload_re = re.compile(r'\/uploads\/upload_\w{32}\.\w+')
     except Exception as e:
       # any error we get here with the configuration is fatal
       cls.log.fatal('msg="Failed to initialize the service, aborting" error="%s"' % e)
@@ -130,12 +129,12 @@ def index():
   '''Return a default index page with some user-friendly information about this service'''
   WB.log.info('msg="Accessed index page" client="%s"' % flask.request.remote_addr)
   return """
-    <html><head><title>CodiMD to WOPI</title></head>
+    <html><head><title>ScienceMesh WOPIBridge</title></head>
     <body>
     <div align="center" style="color:#000080; padding-top:50px; font-family:Verdana; size:11">
-    This is a WOPI HTTP bridge, to be used in conjunction with a WOPI-enabled EFSS. This proof-of-concept supports CodiMD only.</div>
+    This is a WOPI HTTP bridge, to be used in conjunction with a WOPI-enabled EFSS.<br>This proof-of-concept supports CodiMD only.</div>
     <br><br><br><br><br><br><br><hr>
-    <i>WOPI Bridge %s at %s. Powered by Flask %s for Python %s</i>.
+    <i>ScienceMesh WOPI Bridge %s at %s. Powered by Flask %s for Python %s</i>.
     </body>
     </html>
     """ % (WBSERVERVERSION, socket.getfqdn(), flask.__version__, python_version())
@@ -144,7 +143,40 @@ def index():
 @WB.app.route('/new', methods=['GET'])
 def mdNew():
   '''Create a new MD doc to the given WOPISrc and allow user to start working on it'''
-  pass
+  # TODO
+
+
+def _getattachments(mddoc, filename):
+  '''Parse a markdown file and generate a zip file containing all included files'''
+  if WB.upload_re.search(mddoc) is None:
+    # no attachments
+    return None
+  zip_buffer = io.BytesIO()
+  for attachment in WB.upload_re.findall(mddoc):
+    WB.log.debug('msg="Fetching attachment" url="%s"' % attachment)
+    res = requests.get(WB.codimdurl + attachment)
+    if res.status_code != http.client.OK:
+      # TODO handle error
+      continue
+    with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_STORED, allowZip64=False) as zip_file:
+      zip_file.writestr(attachment.split('/')[-1], res.content)
+  # also include the markdown file itself
+  with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_STORED, allowZip64=False) as zip_file:
+    zip_file.writestr(filename, mddoc)
+  return zip_buffer.getvalue()
+
+
+def _unzipattachments(inputbuf, targetpath):
+  '''Unzip the given input buffer to targetpath and return the contained .md file'''
+  inputzip = zipfile.ZipFile(io.BytesIO(inputbuf), compression=zipfile.ZIP_STORED)
+  mddoc = None
+  for fname in inputzip.namelist():
+    WB.log.debug('msg="Extracting attachment" name="%s"' % fname)
+    if os.path.splitext(fname)[1] == '.md':
+      mddoc = inputzip.read(fname)
+    else:
+      inputzip.extract(fname, path=targetpath)
+  return mddoc
 
 
 @WB.app.route("/open", methods=['GET'])
@@ -163,7 +195,7 @@ def mdOpen():
     WB.log.warning('msg="Malformed JSON from WOPI" error="%s"' % e)
     raise
 
-  # WOPI GetLock: if present, trigger the collaborative editing
+  # WOPI GetLock
   WB.log.debug('msg="Calling WOPI GetLock" url="%s"' % wopiSrc)
   res = requests.post(url, headers={'X-Wopi-Override': 'GET_LOCK'})
   if res.status_code != http.client.OK:
@@ -191,19 +223,24 @@ def mdOpen():
       wopilock['tokens'].append(acctok[-20:])
 
   if not wopilock:
-    # file is not locked, fetch it from storage
+    # file is not locked or lock is unreadable, fetch the file from storage
     # WOPI GetFile
     url = '%s/contents?access_token=%s' % (wopiSrc, acctok)
     WB.log.debug('msg="Calling WOPI GetFile" url="%s"' % wopiSrc)
     res = requests.get(url)
     if res.status_code != http.client.OK:
       raise ValueError(res.status_code)
-    mddoc = res.content
+    mdfile = res.content
+    wasbundle = os.path.splitext(filemd['BaseFileName'])[1] == '.mdx'
 
     # then push the document to CodiMD:
     # if it's a bundled file, unzip it and push the attachments in the appropriate folder
-    # NOTE: this assumes we have direct filesystem access to the CodiMD storage!
-
+    # NOTE: this assumes we have direct filesystem access to the CodiMD storage! in alternative,
+    # we could upload using the upload functionality, but the filename would get changed each time.
+    if wasbundle:
+      mddoc = _unzipattachments(mdfile, WB.codimdstore)
+    else:
+      mddoc = mdfile
     res = requests.post(WB.codimdurl + '/new', data=mddoc, allow_redirects=False, \
                         headers={'Content-Type': 'text/markdown'})
     if res.status_code != http.client.FOUND:
@@ -233,36 +270,19 @@ def mdOpen():
 
     # keep track of this open document for statistical purposes
     WB.openfiles[wopilock['docid']] = wopilock['tokens']
+    # create the external redirect URL to be returned to the client
     redirecturl = WB.codimdexturl + wopilock['docid'] + '?both'
 
   else:
-    # read-only mode, amend the redirection url to show the file in publish mode
-    # TODO tell CodiMD to disable editing!
+    # read-only mode, in this case the redirection url is created in publish mode
     redirecturl = WB.codimdexturl + wopilock['docid'] + '/publish'
+    # TODO tell CodiMD to disable editing!
 
   WB.log.debug('msg="Redirecting client to CodiMD" redirecturl="%s"' % redirecturl)
   # generate a hook for close and return an iframe to the client
   return WB.frame_page_templated_html % (filemd['BreadcrumbDocName'], filemd['UserFriendlyName'], \
                                           WB.wopibridgeurl, wopiSrc, acctok, filemd['UserCanWrite'], \
                                           redirecturl)
-
-
-def _getattachments(mddoc, filename):
-  '''Parse a markdown file and generate a zip file containing all included files'''
-  return None
-  zip_buffer = io.BytesIO()
-  for attachment in WB.upload_re.findall(mddoc):
-    WB.log.debug('msg="Fetching attachment" url="%s"' % attachment)
-    res = requests.get(attachment)
-    if res.status_code != http.client.OK:
-      # TODO handle error
-      continue
-    with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
-      zip_file.writestr(attachment.split('/')[-1], res.content)
-  # also include the markdown file
-  with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
-    zip_file.writestr(filename, mddoc)
-  return zip_buffer.getvalue()
 
 
 @WB.app.route("/close", methods=['GET'])
@@ -299,18 +319,19 @@ def mdClose():
   if res.status_code != http.client.OK:
     raise ValueError(res.status_code)
   mddoc = res.content
+  bundlefile = _getattachments(mddoc.decode(), wopilock['filename'].replace('.mdx', '.md'))
+  wasbundle = os.path.splitext(wopilock['filename'])[1] == '.mdx'
 
   # WOPI PutFile
   url = '%s/contents?access_token=%s' % (wopiSrc, acctok)
   WB.log.debug('msg="Calling WOPI PutFile" url="%s"' % wopiSrc)
-  res = requests.post(url, headers={'X-WOPI-Lock': json.dumps(wopilock)}, data=mddoc)
+  res = requests.post(url, headers={'X-WOPI-Lock': json.dumps(wopilock)}, data=bundlefile if wasbundle else mddoc)
   if res.status_code != http.client.OK:
     WB.log.warning('msg="Calling WOPI PutFile failed" url="%s" response="%s"' % (wopiSrc, res.status_code))
     return 'Error saving the file', res.status_code
 
-  # WOPI PutRelative for the attachments
-  bundlefile = _getattachments(mddoc, wopilock['filename'])
-  if bundlefile:
+  # WOPI PutRelative for the attachments, if this is the first time we have attachments
+  if not wasbundle and bundlefile:
     url = '%s?access_token=%s' % (wopiSrc, acctok)
     WB.log.debug('msg="Calling WOPI PutFile" url="%s"' % wopiSrc)
     res = requests.post(url, headers={
@@ -319,9 +340,10 @@ def mdClose():
         'X-WOPI-RelativeTarget': wopilock['filename'] + 'x',
         'X-WOPI-OverwriteRelativeTarget': 'true'
         }, data=bundlefile)
-    if res.status_code != http.client.OK:
-      WB.log.warning('msg="Calling WOPI PutFile failed" url="%s" response="%s"' % (wopiSrc, res.status_code))
-      return 'Error saving attachments', res.status_code
+    if res.status_code == http.client.OK:
+      WB.log.info('msg="PutRelative completed" result="%s"' % res.content)
+    else:
+      WB.log.warning('msg="Calling WOPI PutRelative failed" url="%s" response="%s"' % (wopiSrc, res.status_code))
 
   # is this the last editor for this file?
   if len(wopilock['tokens']) == 1 and wopilock['tokens'][0] == acctok[-20:]:

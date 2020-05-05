@@ -9,13 +9,17 @@ This is a proof-of-concept WOPI bridge server targeting CodiMD, to allow bridgin
 * Stateless server, all context stored in the WOPI lock or passed through arguments
 * Readonly (publish) mode vs. read/write mode
 * Collaborative editing and locking of the file
+* Transparent handling of uploads (i.e. pictures):
+  * If a note has no pictures, it is handled as a text file.
+  * Once a picture is included, the save to WOPI is executed as a zipped bundle, with a `.mtx` extension.
+  * Files ending as `.mtx` are equally treated as zipped bundles and expanded to CodiMD: this currently requires direct access to the underlying storage used by CodiMD when pushing the pictures from the EFSS storage.
 
 ## CodiMD APIs used 
 * `/new`                        push a file from WOPI to CodiMD
 * `/<noteid>`                   display a file
 * `/<noteid>/publish`           display a file in readonly mode
 * `/<noteid>/download`          get a raw file to push it back to WOPI
-* `/uploads/upload_<filename>`  get an uploaded attachment
+* `/uploads/upload_<filename>`  get an uploaded picture/attachment
 
 ## WOPI APIs used
 * `GetFileInfo`: get all file metadata
@@ -23,11 +27,11 @@ This is a proof-of-concept WOPI bridge server targeting CodiMD, to allow bridgin
 * `GetLock`: check if the file is locked
 * `Lock`: lock a file on open for write
 * `PutFile`: store a file's content
+* `PutRelative`: store a file under a different name
 * `Unlock`: unlock a file on close
 
 ## TODO
 * permissions management: e.g. from readonly mode one can switch to edit mode (but modifications are silently dropped)
-* blobs management: uploaded files end up in the designated uploads folder in CodiMD, need to fetch them back and associate them to the md file "forever" in the storage.
 * detect changes in CodiMD and push them to WOPI every N minutes
 * delete files/entries from CodiMD DB
 
