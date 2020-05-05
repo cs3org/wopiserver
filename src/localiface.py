@@ -122,6 +122,8 @@ def writefile(_endpoint, filename, ruid, rgid, content, noversion=0):
     tend = time.clock()
     log.info('msg="File open for write" filename="%s" elapsedTimems="%.1f"' % (filename, (tend-tstart)*1000))
     # write the file. In a future implementation, we should find a way to only update the required chunks...
+    if type(content) is str:
+      content = bytes(content, 'UTF-8')
     written = f.write(content)
     f.close()
     if written != size:
