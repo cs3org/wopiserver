@@ -178,11 +178,14 @@ class Wopi:
     codimd = cls.config.get('general', 'codimdurl', fallback=None)
     if codimd:
       cls.ENDPOINTS['.md'] = {}
-      cls.ENDPOINTS['.md']['view'] = cls.ENDPOINTS['.md']['edit'] = codimd
-      cls.ENDPOINTS['.md']['new'] = codimd + '?mode=new'
+      cls.ENDPOINTS['.md']['view'] = cls.ENDPOINTS['.md']['edit'] = codimd + '/open'
+      cls.ENDPOINTS['.md']['new'] = codimd + '/new'
+      cls.ENDPOINTS['.mdx'] = {}
+      cls.ENDPOINTS['.mdx']['view'] = cls.ENDPOINTS['.mdx']['edit'] = codimd + '/open'
+      cls.ENDPOINTS['.mdx']['new'] = codimd + '/new'
       cls.ENDPOINTS['.txt'] = {}
-      cls.ENDPOINTS['.txt']['view'] = cls.ENDPOINTS['.txt']['edit'] = codimd
-      cls.ENDPOINTS['.txt']['new'] = codimd + '?mode=new'
+      cls.ENDPOINTS['.txt']['view'] = cls.ENDPOINTS['.txt']['edit'] = codimd + '/open'
+      cls.ENDPOINTS['.txt']['new'] = codimd + '/new'
       cls.log.info('msg="CodiMD endpoints successfully configured"')
 
     # backstop if no app got registered
@@ -224,13 +227,13 @@ def index():
   '''Return a default index page with some user-friendly information about this service'''
   Wopi.log.info('msg="Accessed index page" client="%s"' % flask.request.remote_addr)
   return """
-    <html><head><title>CERNBox WOPI</title></head>
+    <html><head><title>ScienceMesh WOPI</title></head>
     <body>
     <div align="center" style="color:#000080; padding-top:50px; font-family:Verdana; size:11">
-    This is the CERNBox <a href=http://wopi.readthedocs.io>WOPI</a> server to support online office platforms.<br>
-    To use this service, please log in to your CERNBox account and click on your office documents.</div>
+    This is the ScienceMesh IOP <a href=http://wopi.readthedocs.io>WOPI</a> server to support online office platforms.<br>
+    To use this service, please log in to your EFSS Storage and click on your office documents.</div>
     <br><br><br><br><br><br><br><br><br><br><hr>
-    <i>CERNBox WOPI Server %s at %s. Powered by Flask %s for Python %s</i>.
+    <i>ScienceMesh WOPI Server %s at %s. Powered by Flask %s for Python %s</i>.
     </body>
     </html>
     """ % (WOPISERVERVERSION, socket.getfqdn(), flask.__version__, python_version())
@@ -307,6 +310,7 @@ def cboxOpen():
 def cboxDownload():
   '''Returns the file's content for a given valid access token. Used as a download URL,
      so that the file's path is never explicitly visible.'''
+  # TODO this endpoint should be removed altogether: the download should be directly served by Reva
   try:
     acctok = jwt.decode(flask.request.args['access_token'], Wopi.wopisecret, algorithms=['HS256'])
     if acctok['exp'] < time.time():
