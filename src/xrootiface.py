@@ -118,7 +118,8 @@ def statx(endpoint, filename, ruid, rgid):
 
 def setxattr(endpoint, filename, ruid, rgid, key, value):
   '''Set the extended attribute <key> to <value> via a special open on behalf of the given uid, gid'''
-  _xrootcmd(endpoint, 'attr', 'set', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.attr.value=' + str(value) + '&mgm.path=' + _getfilename(filename))
+  _xrootcmd(endpoint, 'attr', 'set', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.attr.value=' + str(value) + \
+            '&mgm.path=' + _getfilename(filename))
 
 def getxattr(endpoint, filename, ruid, rgid, key):
   '''Get the extended attribute <key> via a special open on behalf of the given uid, gid'''
@@ -151,8 +152,7 @@ def readfile(endpoint, filename, ruid, rgid):
         log.warning('msg="Error opening the file for read" filename="%s" code="%d" error="%s"' % \
                     (filename, rc.shellcode, rc.message.strip('\n')))
       # as this is a generator, we yield the error string instead of the file's contents
-      yield 'ERROR on read'
-      yield rc.message
+      yield IOError(rc.message)
     else:
       log.info('msg="File open for read" filename="%s" elapsedTimems="%.1f"' % (filename, (tend-tstart)*1000))
       chunksize = config.getint('io', 'chunksize')

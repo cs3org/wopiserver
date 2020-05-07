@@ -398,7 +398,7 @@ def cboxLock():
   try:
     # probe if a WOPI/LibreOffice lock already exists (a WOPI session always create a LibreOffice lock as well)
     lock = str(next(storage.readfile(endpoint, utils.getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)))
-    if 'ERROR on read' in lock:
+    if isinstance(lock, IOError):
       if query:
         Wopi.log.info('msg="cboxLock: lock to be queried not found" filename="%s"' % filename)
         return 'Previous lock not found', http.client.NOT_FOUND
@@ -476,15 +476,15 @@ def cboxUnlock():
   try:
     # probe if a WOPI/LibreOffice lock exists with the expected signature
     lock = str(next(storage.readfile(endpoint, utils.getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid)))
+    if isinstance(lock, IOError):
+      # typically ENOENT, any other error is grouped here
+      Wopi.log.warning('msg="cboxUnlock: lock file not found" filename="%s"' % filename)
+      return 'Lock not found', http.client.NOT_FOUND
     if 'OnlyOffice Online Editor' in lock:
       # remove the LibreOffice-compatible lock file
       storage.removefile(endpoint, utils.getLibreOfficeLockName(filename), Wopi.lockruid, Wopi.lockrgid, 1)
       Wopi.log.info('msg="cboxUnlock: successfully removed LibreOffice-compatible lock file" filename="%s"' % filename)
       return 'OK', http.client.OK
-    if 'ERROR on read' in lock:
-      # typically ENOENT, any other error is grouped here
-      Wopi.log.warning('msg="cboxUnlock: lock file not found" filename="%s"' % filename)
-      return 'Lock not found', http.client.NOT_FOUND
     # else another lock exists
     Wopi.log.info('msg="cboxUnlock: lock file held by another application" filename="%s"' % filename)
     return 'Lock held by another application', http.client.CONFLICT

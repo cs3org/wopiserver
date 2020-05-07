@@ -101,13 +101,11 @@ def readfile(_endpoint, filename, _ruid, _rgid):
     # log this case as info to keep the logs cleaner
     log.info('msg="File not found on read" filename="%s"' % filename)
     # as this is a generator, we yield the error string instead of the file's contents
-    yield 'ERROR on read'
-    yield 'No such file or directory'
+    yield IOError('No such file or directory')
   except OSError as e:
     # general case, issue a warning
     log.warning('msg="Error opening the file for read" filename="%s" error="%s"' % (filename, e))
-    yield 'ERROR on read'
-    yield str(e)
+    yield IOError(e)
 
 def writefile(_endpoint, filename, ruid, rgid, content, noversion=0):
   '''Write a file via xroot on behalf of the given uid, gid. The entire content is written
@@ -122,7 +120,7 @@ def writefile(_endpoint, filename, ruid, rgid, content, noversion=0):
     tend = time.clock()
     log.info('msg="File open for write" filename="%s" elapsedTimems="%.1f"' % (filename, (tend-tstart)*1000))
     # write the file. In a future implementation, we should find a way to only update the required chunks...
-    if type(content) is str:
+    if isinstance(content, str):
       content = bytes(content, 'UTF-8')
     written = f.write(content)
     f.close()
@@ -133,7 +131,8 @@ def writefile(_endpoint, filename, ruid, rgid, content, noversion=0):
     raise IOError(e)
   except Exception:
     ex_type, ex_value, ex_traceback = sys.exc_info()
-    log.error('msg="Unknown error writing to file" filename="%s" traceback="%s"' % (filename, traceback.format_exception(ex_type, ex_value, ex_traceback)))
+    log.error('msg="Unknown error writing to file" filename="%s" traceback="%s"' % \
+              (filename, traceback.format_exception(ex_type, ex_value, ex_traceback)))
     raise
 
 def renamefile(_endpoint, origfilename, newfilename, ruid, rgid):
