@@ -81,7 +81,7 @@ class WB:
     '''Initialises the application, bails out in case of failures. Note this is not a __init__ method'''
     try:
       # configure the logging
-      loghandler = logging.FileHandler('/var/log/wopi/codimdtowopi.log')
+      loghandler = logging.FileHandler('/var/log/wopi/wopibridge.log')
       loghandler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)s[%(process)d] %(levelname)-8s %(message)s',
                                                 datefmt='%Y-%m-%dT%H:%M:%S'))
       cls.log.addHandler(loghandler)
@@ -117,7 +117,7 @@ class WB:
       cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=True)
                   #ssl_context=(cls.config.get('security', 'wopicert'), cls.config.get('security', 'wopikey')))
     else:
-      cls.log.info('msg="WOPI Bridge starting in test/unsecure mode" url="%s" proxied="%s"' % (cls.wopibridgeurl, cls.proxied))
+      cls.log.info('msg="WOPI Bridge starting in unsecure mode" url="%s" proxied="%s"' % (cls.wopibridgeurl, cls.proxied))
       cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=True)
 
 
@@ -146,7 +146,7 @@ def mdNew():
   # TODO
 
 
-def _getattachments(mddoc, filename):
+def _getattachments(mddoc, docfilename):
   '''Parse a markdown file and generate a zip file containing all included files'''
   if WB.upload_re.search(mddoc) is None:
     # no attachments
@@ -156,13 +156,13 @@ def _getattachments(mddoc, filename):
     WB.log.debug('msg="Fetching attachment" url="%s"' % attachment)
     res = requests.get(WB.codimdurl + attachment)
     if res.status_code != http.client.OK:
-      # TODO handle error
+      WB.log.error('msg="Failed to fetch included file" path="%s" returncode="%d"' % (attachment, res.status_code))
       continue
     with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_STORED, allowZip64=False) as zip_file:
       zip_file.writestr(attachment.split('/')[-1], res.content)
   # also include the markdown file itself
   with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_STORED, allowZip64=False) as zip_file:
-    zip_file.writestr(filename, mddoc)
+    zip_file.writestr(docfilename, mddoc)
   return zip_buffer.getvalue()
 
 
@@ -179,6 +179,16 @@ def _unzipattachments(inputbuf, targetpath):
   return mddoc
 
 
+def _deleteattachments(mddoc, targetpath):
+  '''Delete all files included in the given markdown doc'''
+  for attachment in WB.upload_re.findall(mddoc):
+    WB.log.debug('msg="Deleting attachment" path="%s"' % attachment)
+    try:
+      os.remove(targetpath + attachment.replace('/uploads/', '/'))
+    except OSError as e:
+      WB.log.warning('msg="Failed to delete attachment" path="%s" error="%s"' % (attachment, e))
+
+
 @WB.app.route("/open", methods=['GET'])
 def mdOpen():
   '''Open a MD doc by contacting the provided WOPISrc with the given access_token'''
@@ -191,9 +201,9 @@ def mdOpen():
   WB.log.debug('msg="Calling WOPI" url="%s"' % wopiSrc)
   try:
     filemd = requests.get(url).json()
-  except ValueError as e:
+  except (ValueError, json.decoder.JSONDecodeError) as e:
     WB.log.warning('msg="Malformed JSON from WOPI" error="%s"' % e)
-    raise
+    return 'Invalid or non existing access_token', http.client.NOT_FOUND
 
   # WOPI GetLock
   WB.log.debug('msg="Calling WOPI GetLock" url="%s"' % wopiSrc)
@@ -265,9 +275,11 @@ def mdOpen():
       lockheaders['X-WOPI-OldLock'] = json.dumps(oldlock)
     res = requests.post(url, headers=lockheaders)
     if res.status_code != http.client.OK:
-      # TODO handle conflicts
-      raise ValueError(res.status_code)
+      # Failed to lock the file: open in read-only mode
+      WB.log.warning('msg="Failed to lock the file" token="%s" returncode="%d"' % (acctok[-20:], res.status_code))
+      wopilock = None
 
+  if wopilock:
     # keep track of this open document for statistical purposes
     WB.openfiles[wopilock['docid']] = wopilock['tokens']
     # create the external redirect URL to be returned to the client
@@ -295,6 +307,7 @@ def mdClose():
       WB.log.info('msg="Close called" save="False" client="%s" token="%s"' % \
                   (flask.request.remote_addr, acctok[-20:]))
       # TODO delete content from CodiMD - API is missing
+      #_deleteattachments(mddoc.decode(), WB.codimdstore)
       return 'OK', http.client.OK
   except KeyError as e:
     WB.log.error('msg="Close called" error="Unable to store the file, missing WOPI context: %s"' % e)
@@ -337,8 +350,7 @@ def mdClose():
     res = requests.post(url, headers={
         'X-WOPI-Lock': json.dumps(wopilock),
         'X-WOPI-Override': 'PUT_RELATIVE',
-        'X-WOPI-RelativeTarget': wopilock['filename'] + 'x',
-        'X-WOPI-OverwriteRelativeTarget': 'true'
+        'X-WOPI-SuggestedTarget': wopilock['filename'] + 'x'      # do not overwrite an existing file
         }, data=bundlefile)
     if res.status_code == http.client.OK:
       WB.log.info('msg="PutRelative completed" result="%s"' % res.content)
@@ -355,6 +367,13 @@ def mdClose():
       WB.log.warning('msg="Calling WOPI Unlock failed" url="%s" response="%s"' % (wopiSrc, res.status_code))
     # clean list of active documents
     del WB.openfiles[wopilock['docid']]
+
+    # as we're the last, delete on CodiMD:
+    # TODO the API is still missing for the note
+    # delete all attachments if bundle
+    if bundlefile:
+      _deleteattachments(mddoc.decode(), WB.codimdstore)
+
   else:
     # we're not the last: still need to update the lock and take this session out
     # WOPI Lock
@@ -368,12 +387,11 @@ def mdClose():
                   }
     res = requests.post(url, headers=lockheaders)
     if res.status_code != http.client.OK:
-      # TODO handle conflicts
-      raise ValueError(res.status_code)
-    # refresh list of active documents for statistical purposes
-    WB.openfiles[wopilock['docid']] = wopilock['tokens']
+      WB.log.warning('msg="Calling WOPI RefreshLock failed" url="%s" response="%s"' % (wopiSrc, res.status_code))
+      return 'Error unlocking the file', res.status_code
 
-    # TODO as we're the last, delete on CodiMD: it seems this API is still missing
+    # refresh list of active documents for statistical purposes
+    WB.openfiles[wopilock['docid']] = newlock['tokens']
 
   WB.log.info('msg="Close completed" save="True" client="%s" token="%s"' % \
                (flask.request.remote_addr, acctok[-20:]))
