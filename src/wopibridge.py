@@ -205,6 +205,10 @@ def mdOpen():
     WB.log.warning('msg="Malformed JSON from WOPI" error="%s"' % e)
     return 'Invalid or non existing access_token', http.client.NOT_FOUND
 
+  # Login to CodiMD
+  #loginreq = requests.post(WB.codimdurl + '/login', {'login': '...', 'password': '...'})
+  #WB.log.debug('msg="Logged in to CodiMD" cookies="%s"' % loginreq.cookies)
+
   # WOPI GetLock
   WB.log.debug('msg="Calling WOPI GetLock" url="%s"' % wopiSrc)
   res = requests.post(url, headers={'X-Wopi-Override': 'GET_LOCK'})
@@ -252,7 +256,7 @@ def mdOpen():
     else:
       mddoc = mdfile
     res = requests.post(WB.codimdurl + '/new', data=mddoc, allow_redirects=False, \
-                        headers={'Content-Type': 'text/markdown'})
+                        headers={'Content-Type': 'text/markdown'})   # cookies=loginreq.cookies)
     if res.status_code != http.client.FOUND:
       raise ValueError(res.status_code)
     # we got the hash of the document just created as a redirected URL, store it in our WOPI lock structure
@@ -277,24 +281,29 @@ def mdOpen():
     if res.status_code != http.client.OK:
       # Failed to lock the file: open in read-only mode
       WB.log.warning('msg="Failed to lock the file" token="%s" returncode="%d"' % (acctok[-20:], res.status_code))
-      wopilock = None
+      filemd['UserCanWrite'] = False
 
-  if wopilock:
+  if filemd['UserCanWrite']:
     # keep track of this open document for statistical purposes
     WB.openfiles[wopilock['docid']] = wopilock['tokens']
     # create the external redirect URL to be returned to the client
     redirecturl = WB.codimdexturl + wopilock['docid'] + '?both'
-
   else:
     # read-only mode, in this case the redirection url is created in publish mode
+    # TODO switch CodiMD to readonly mode for real
+    #loginreq = requests.post(WB.codimdurl + '/login', {'login': ..., 'password': ...})
     redirecturl = WB.codimdexturl + wopilock['docid'] + '/publish'
-    # TODO tell CodiMD to disable editing!
 
   WB.log.debug('msg="Redirecting client to CodiMD" redirecturl="%s"' % redirecturl)
   # generate a hook for close and return an iframe to the client
-  return WB.frame_page_templated_html % (filemd['BreadcrumbDocName'], filemd['UserFriendlyName'], \
-                                          WB.wopibridgeurl, wopiSrc, acctok, filemd['UserCanWrite'], \
-                                          redirecturl)
+  resp = flask.Response(WB.frame_page_templated_html % (filemd['BreadcrumbDocName'], filemd['UserFriendlyName'], \
+                        WB.wopibridgeurl, wopiSrc, acctok, filemd['UserCanWrite'], redirecturl))
+  # set login cookies: this cannot work this way, we'd need to set the cookie at the iframe level,
+  # but then we have several security issues: an iframe cookie is like a tracking cookie, and the domain is different.
+  # To be seen if we could actually keep using CodiMD in fully anonymous mode.
+  #for c in loginreq.cookies:
+  #  resp.set_cookie(c.name, c.value)
+  return resp
 
 
 @WB.app.route("/close", methods=['GET'])

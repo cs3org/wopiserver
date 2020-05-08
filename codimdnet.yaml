@@ -25,8 +25,9 @@ services:
     environment:
       - CMD_DB_URL=postgres://codimd:${DBPWD}@codimd-postgres/codimd
       - CMD_AUTO_VERSION_CHECK=false
-      - CMD_ALLOW_ANONYMOUS=true
+      - CMD_ALLOW_ANONYMOUS=true         # switch to false to use logins and enforce protections. Can it be avoided?
       - CMD_ALLOW_ANONYMOUS_EDITS=true
+      - CMD_ALLOW_ANONYMOUS_VIEWS=true
 #     - CMD_DOMAIN=${HOST}:3000
     depends_on:
       - database

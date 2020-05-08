@@ -14,14 +14,14 @@ This is a proof-of-concept WOPI bridge server targeting CodiMD, to allow bridgin
   * Once a picture is included, the save to WOPI is executed as a zipped bundle, with a `.mtx` extension.
   * Files ending as `.mtx` are equally treated as zipped bundles and expanded to CodiMD: this currently requires direct access to the underlying storage used by CodiMD when pushing the pictures from the EFSS storage.
 
-## CodiMD APIs used 
-* `/new`                        push a file from WOPI to CodiMD
+## Required CodiMD APIs
+* `/new`                        push a file to CodiMD
 * `/<noteid>`                   display a file
 * `/<noteid>/publish`           display a file in readonly mode
-* `/<noteid>/download`          get a raw file to push it back to WOPI
+* `/<noteid>/download`          get a raw file to push it back
 * `/uploads/upload_<filename>`  get an uploaded picture/attachment
 
-## WOPI APIs used
+## Required WOPI APIs
 * `GetFileInfo`: get all file metadata
 * `GetFile`: get the file content
 * `GetLock`: check if the file is locked
@@ -36,7 +36,6 @@ This is a proof-of-concept WOPI bridge server targeting CodiMD, to allow bridgin
 * delete files/entries from CodiMD DB
 
 ### Required CodiMD APIs to implement the above features
-* given a note id and a user id, change permissions of a note for that user. In particular make it read only.
+* given a note id (and a username), change permissions of a note (for a given user / for anonymous users). In particular make it read only.
 * given a note id, delete a note from DB as well as its attached files.
 * given a note id, return the note's last modification time.
-
