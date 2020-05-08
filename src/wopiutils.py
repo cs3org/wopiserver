@@ -72,8 +72,8 @@ def generateAccessToken(ruid, rgid, filename, canedit, username, folderurl, endp
     _ctx['log'].info('msg="Requested file not found" filename="%s" error="%s"' % (filename, e))
     raise
   # if write access is requested, probe whether there's already a lock file coming from Desktop applications
+  locked = False
   if canedit:
-    locked = False
     try:
       # probe LibreOffice
       line = str(next(_ctx['st'].readfile(endpoint, getLibreOfficeLockName(filename),
