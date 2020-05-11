@@ -66,9 +66,9 @@ def _xrootcmd(endpoint, cmd, subcmd, ruid, rgid, args):
   # all right, return everything that came in stdout
   return res[0][res[0].find('stdout=')+7:]
 
-def _getfilename(filename):
-  '''map the given filename into the target namespace by prepending the homepath (see storagehomepath in wopiserver.conf)'''
-  return homepath + filename
+def _getfilepath(filepath):
+  '''map the given filepath into the target namespace by prepending the homepath (see storagehomepath in wopiserver.conf)'''
+  return homepath + filepath
 
 def init(inconfig, inlog):
   '''Init module-level variables'''
@@ -86,24 +86,24 @@ def init(inconfig, inlog):
   else:
     homepath = ''
 
-def stat(endpoint, filename, ruid, rgid):
+def stat(endpoint, filepath, ruid, rgid):
   '''Stat a file via xroot on behalf of the given uid,gid, and returns (size, mtime). Uses the default xroot API.'''
-  filename = _getfilename(filename)
+  filepath = _getfilepath(filepath)
   tstart = time.clock()
-  rc, statInfo = _getxrdfor(endpoint).stat(filename + _eosargs(ruid, rgid))
+  rc, statInfo = _getxrdfor(endpoint).stat(filepath + _eosargs(ruid, rgid))
   tend = time.clock()
-  log.info('msg="Invoked stat" filename="%s" elapsedTimems="%.1f"' % (filename, (tend-tstart)*1000))
+  log.info('msg="Invoked stat" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
   if statInfo is None:
     raise IOError(rc.message.strip('\n'))
   return {'size': statInfo.size, 'mtime': statInfo.modtime}
 
-def statx(endpoint, filename, ruid, rgid):
+def statx(endpoint, filepath, ruid, rgid):
   '''Get extended stat info (inode, ouid, ogid, size, mtime) via an xroot opaque query on behalf of the given uid,gid'''
-  filename = _getfilename(filename)
+  filepath = _getfilepath(filepath)
   tstart = time.clock()
-  rc, rawinfo = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, filename + _eosargs(ruid, rgid) + '&mgm.pcmd=stat')
+  rc, rawinfo = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, filepath + _eosargs(ruid, rgid) + '&mgm.pcmd=stat')
   tend = time.clock()
-  log.info('msg="Invoked stat" filename="%s" elapsedTimems="%.1f"' % (filename, (tend-tstart)*1000))
+  log.info('msg="Invoked stat" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
   if '[SUCCESS]' not in str(rc):
     raise IOError(str(rc).strip('\n'))
   rawinfo = str(rawinfo)
@@ -116,45 +116,45 @@ def statx(endpoint, filename, ruid, rgid):
           'size': int(statxdata[8]),
           'mtime': statxdata[12]}
 
-def setxattr(endpoint, filename, ruid, rgid, key, value):
+def setxattr(endpoint, filepath, ruid, rgid, key, value):
   '''Set the extended attribute <key> to <value> via a special open on behalf of the given uid, gid'''
   _xrootcmd(endpoint, 'attr', 'set', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.attr.value=' + str(value) + \
-            '&mgm.path=' + _getfilename(filename))
+            '&mgm.path=' + _getfilepath(filepath))
 
-def getxattr(endpoint, filename, ruid, rgid, key):
+def getxattr(endpoint, filepath, ruid, rgid, key):
   '''Get the extended attribute <key> via a special open on behalf of the given uid, gid'''
-  res = _xrootcmd(endpoint, 'attr', 'get', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.path=' + _getfilename(filename))
+  res = _xrootcmd(endpoint, 'attr', 'get', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.path=' + _getfilepath(filepath))
   # if no error, the response comes in the format <key>="<value>"
   try:
     return res.split('"')[1]
   except IndexError:
-    log.warning('msg="Failed to getxattr" filename="%s" key="%s" res="%s"' % (filename, key, res))
+    log.warning('msg="Failed to getxattr" filepath="%s" key="%s" res="%s"' % (filepath, key, res))
     return None
 
-def rmxattr(endpoint, filename, ruid, rgid, key):
+def rmxattr(endpoint, filepath, ruid, rgid, key):
   '''Remove the extended attribute <key> via a special open on behalf of the given uid, gid'''
-  filename = _getfilename(filename)
-  _xrootcmd(endpoint, 'attr', 'rm', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.path=' + filename)
+  filepath = _getfilepath(filepath)
+  _xrootcmd(endpoint, 'attr', 'rm', ruid, rgid, 'mgm.attr.key=' + key + '&mgm.path=' + filepath)
 
-def readfile(endpoint, filename, ruid, rgid):
+def readfile(endpoint, filepath, ruid, rgid):
   '''Read a file via xroot on behalf of the given uid, gid. Note that the function is a generator, managed by Flask.'''
-  log.debug('msg="Invoking readFile" filename="%s"' % filename)
+  log.debug('msg="Invoking readFile" filepath="%s"' % filepath)
   with XrdClient.File() as f:
-    fileurl = _geturlfor(endpoint) + '/' + homepath + filename + _eosargs(ruid, rgid)
+    fileurl = _geturlfor(endpoint) + '/' + homepath + filepath + _eosargs(ruid, rgid)
     tstart = time.clock()
     rc, statInfo_unused = f.open(fileurl, OpenFlags.READ)
     tend = time.clock()
     if not rc.ok:
       # the file could not be opened: check the case of ENOENT and log it as info to keep the logs cleaner
       if 'No such file or directory' in rc.message:
-        log.info('msg="File not found on read" filename="%s"' % filename)
+        log.info('msg="File not found on read" filepath="%s"' % filepath)
       else:
-        log.warning('msg="Error opening the file for read" filename="%s" code="%d" error="%s"' % \
-                    (filename, rc.shellcode, rc.message.strip('\n')))
+        log.warning('msg="Error opening the file for read" filepath="%s" code="%d" error="%s"' % \
+                    (filepath, rc.shellcode, rc.message.strip('\n')))
       # as this is a generator, we yield the error string instead of the file's contents
       yield IOError(rc.message)
     else:
-      log.info('msg="File open for read" filename="%s" elapsedTimems="%.1f"' % (filename, (tend-tstart)*1000))
+      log.info('msg="File open for read" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
       chunksize = config.getint('io', 'chunksize')
       rc, statInfo = f.stat()
       chunksize = min(chunksize, statInfo.size-1)
@@ -162,43 +162,43 @@ def readfile(endpoint, filename, ruid, rgid):
       for chunk in f.readchunks(offset=0, chunksize=chunksize):
         yield chunk
 
-def writefile(endpoint, filename, ruid, rgid, content, noversion=0):
+def writefile(endpoint, filepath, ruid, rgid, content, noversion=0):
   '''Write a file via xroot on behalf of the given uid, gid. The entire content is written
      and any pre-existing file is deleted (or moved to the previous version if supported).
      If noversion=1, the write explicitly disables versioning: this is useful for lock files.'''
   size = len(content)
-  log.debug('msg="Invoking writeFile" filename="%s" size="%d"' % (filename, size))
+  log.debug('msg="Invoking writeFile" filepath="%s" size="%d"' % (filepath, size))
   f = XrdClient.File()
   tstart = time.clock()
-  rc, statInfo_unused = f.open(_geturlfor(endpoint) + '/' + homepath + filename + _eosargs(ruid, rgid, 1, size) + \
+  rc, statInfo_unused = f.open(_geturlfor(endpoint) + '/' + homepath + filepath + _eosargs(ruid, rgid, 1, size) + \
                                ('&sys.versioning=0' if noversion else ''), OpenFlags.DELETE)
   tend = time.clock()
-  log.info('msg="File open for write" filename="%s" elapsedTimems="%.1f"' % (filename, (tend-tstart)*1000))
+  log.info('msg="File open for write" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
   if not rc.ok:
-    log.warning('msg="Error opening the file for write" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
+    log.warning('msg="Error opening the file for write" filepath="%s" error="%s"' % (filepath, rc.message.strip('\n')))
     raise IOError(rc.message.strip('\n'))
   # write the file. In a future implementation, we should find a way to only update the required chunks...
   rc, statInfo_unused = f.write(content, offset=0, size=size)
   if not rc.ok:
-    log.warning('msg="Error writing the file" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
+    log.warning('msg="Error writing the file" filepath="%s" error="%s"' % (filepath, rc.message.strip('\n')))
     raise IOError(rc.message.strip('\n'))
   rc, statInfo_unused = f.truncate(size)
   if not rc.ok:
-    log.warning('msg="Error truncating the file" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
+    log.warning('msg="Error truncating the file" filepath="%s" error="%s"' % (filepath, rc.message.strip('\n')))
     raise IOError(rc.message.strip('\n'))
   rc, statInfo_unused = f.close()
   if not rc.ok:
-    log.warning('msg="Error closing the file" filename="%s" error="%s"' % (filename, rc.message.strip('\n')))
+    log.warning('msg="Error closing the file" filepath="%s" error="%s"' % (filepath, rc.message.strip('\n')))
     raise IOError(rc.message.strip('\n'))
 
-def renamefile(endpoint, origfilename, newfilename, ruid, rgid):
-  '''Rename a file via a special open from origfilename to newfilename on behalf of the given uid, gid.'''
-  _xrootcmd(endpoint, 'file', 'rename', ruid, rgid, 'mgm.path=' + _getfilename(origfilename) + \
-            '&mgm.file.source=' + _getfilename(origfilename) + '&mgm.file.target=' + _getfilename(newfilename))
+def renamefile(endpoint, origfilepath, newfilepath, ruid, rgid):
+  '''Rename a file via a special open from origfilepath to newfilepath on behalf of the given uid, gid.'''
+  _xrootcmd(endpoint, 'file', 'rename', ruid, rgid, 'mgm.path=' + _getfilepath(origfilepath) + \
+            '&mgm.file.source=' + _getfilepath(origfilepath) + '&mgm.file.target=' + _getfilepath(newfilepath))
 
-def removefile(endpoint, filename, ruid, rgid, force=0):
+def removefile(endpoint, filepath, ruid, rgid, force=0):
   '''Remove a file via a special open on behalf of the given uid, gid.
      If force=1 or True, then pass the f option, that is skip the recycle bin.
      This is useful for lock files, but it requires uid,gid to be root.'''
-  _xrootcmd(endpoint, 'rm', None, ruid, rgid, 'mgm.path=' + _getfilename(filename) + \
+  _xrootcmd(endpoint, 'rm', None, ruid, rgid, 'mgm.path=' + _getfilepath(filepath) + \
                                      ('&mgm.option=f' if force and int(ruid) == 0 and int(rgid) == 0 else ''))
