@@ -78,9 +78,9 @@ def generateAccessToken(ruid, rgid, filename, canedit, username, folderurl, endp
   if canedit:
     try:
       # probe LibreOffice
-      line = str(next(_ctx['st'].readfile(endpoint, getLibreOfficeLockName(filename),
-                                          _ctx['wopi'].lockruid, _ctx['wopi'].lockrgid)))
-      if 'ERROR on read' in line or 'WOPIServer' in line:
+      line = next(_ctx['st'].readfile(endpoint, getLibreOfficeLockName(filename),
+                                      _ctx['wopi'].lockruid, _ctx['wopi'].lockrgid))
+      if isinstance(line, IOError) or 'WOPIServer' in str(line):
         # in case of read error, be optimistic and let it go (ENOENT would be fine, other cases have been
         # observed in production and likely are false positives)
         # also if a lock file is found but it is held by a WOPI Server, let it go: it will be sorted out
@@ -89,7 +89,7 @@ def generateAccessToken(ruid, rgid, filename, canedit, username, folderurl, endp
       canedit = False
       locked = True
       _ctx['log'].warning('msg="Access downgraded to read-only because of an existing LibreOffice lock" ' \
-                          'filename="%s" holder="%s"' % (filename, line.split(',')[1]))
+                          'filename="%s" holder="%s"' % (filename, str(line).split(',')[1]))
     except IOError:
       try:
         # same for MS Office, but don't try to go beyond stat
@@ -127,7 +127,7 @@ def retrieveWopiLock(fileid, operation, lock, acctok):
   l = b''
   for line in _ctx['st'].readfile(acctok['endpoint'], getLockName(acctok['filename']),
                                   _ctx['wopi'].lockruid, _ctx['wopi'].lockrgid):
-    if 'ERROR on read' in str(line):
+    if isinstance(line, IOError):
       return None     # no pre-existing lock found, or error attempting to read it: assume it does not exist
     # the following check is necessary as it happens to get a str instead of bytes
     l += line if isinstance(line, type(l)) else line.encode()
@@ -238,4 +238,4 @@ def storeWopiFile(request, acctok, xakey, targetname=''):
     targetname = acctok['filename']
   _ctx['st'].writefile(acctok['endpoint'], targetname, acctok['ruid'], acctok['rgid'], request.get_data())
   # save the current time for later conflict checking: this is never older than the mtime of the file
-  _ctx['st'].setxattr(acctok['endpoint'], targetname, acctok['ruid'], acctok['rgid'], xakey, int(time.time()))  
+  _ctx['st'].setxattr(acctok['endpoint'], targetname, acctok['ruid'], acctok['rgid'], xakey, int(time.time()))
