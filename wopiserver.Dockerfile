@@ -21,13 +21,11 @@ RUN pip3 install flask pyOpenSSL PyJWT requests
 
 # install software
 RUN mkdir -p /app /etc/wopi /var/log/wopi /var/wopi_local_storage
-ADD ./src/* /app/
+ADD ./src/* ./docker/entrypoint /app/
 ADD wopiserver.conf /etc/wopi/wopiserver.defaults.conf
-ADD ./docker/entrypoint /app/
 
 # add basic custom configuration; need to contextualize
-ADD ./docker/etc/*secret /etc/wopi/
-ADD ./docker/etc/wopiserver.conf /etc/wopi/
+ADD ./docker/etc/*secret  ./docker/etc/wopiserver.conf /etc/wopi/
 #RUN mkdir /etc/certs
 #ADD ./etc/*.pem /etc/certs/   if certificates shall be added
 
