@@ -1,8 +1,9 @@
 grpcio
 grpcio-tools
+cygrpc
 flask
 pyOpenSSL
 PyJWT
 requests
-cs3apis
 tuspy
+cs3apis
