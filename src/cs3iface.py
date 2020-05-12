@@ -7,9 +7,12 @@ Authors:
 Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 Lovisa.Lugnegaard@cern.ch, CERN/IT-ST
 '''
-import sys
-sys.path.insert(1, '../python-cs3apis')
 
+import time
+import requests
+import grpc
+
+import cs3apis
 from google.auth.transport import grpc as google_auth_transport_grpc
 from google.auth import jwt as google_auth_jwt
 from google import auth as google_auth
@@ -18,15 +21,7 @@ import cs3.storage.provider.v1beta1.provider_api_pb2 as sp
 import cs3.gateway.v1beta1.gateway_api_pb2_grpc as cs3gw_grpc
 import cs3.gateway.v1beta1.gateway_api_pb2 as cs3gw
 
-import time
-import os
-import grpc
-import requests
 from tusclient import client as tusclient
-
-# TODO package python-cs3apis bindings. For now, we include them like this
-# insert at 1, 0 is the script path (or '' in REPL)
-
 
 
 # module-wide state
