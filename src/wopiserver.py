@@ -544,7 +544,7 @@ def wopiCheckFileInfo(fileid):
     except configparser.NoOptionError:
       # if no WebDAV URL is provided, ignore this setting
       pass
-    filemd['OwnerId'] = statInfo['ouid'] + ':' + statInfo['ogid']
+    filemd['OwnerId'] = statInfo['userid']
     filemd['UserId'] = acctok['ruid'] + ':' + acctok['rgid']    # typically same as OwnerId
     filemd['Size'] = statInfo['size']
     filemd['Version'] = statInfo['mtime']   # mtime is used as version here

@@ -111,8 +111,7 @@ def statx(endpoint, filepath, ruid, rgid):
     raise IOError(rawinfo.strip('\n'))
   statxdata = rawinfo.split()
   return {'inode': statxdata[2],
-          'ouid': statxdata[5],
-          'ogid': statxdata[6],
+          'userid': str(statxdata[5]) + ':' + str(statxdata[6]),
           'size': int(statxdata[8]),
           'mtime': statxdata[12]}
 

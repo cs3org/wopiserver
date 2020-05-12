@@ -47,8 +47,7 @@ def stat(_endpoint, filepath, _ruid, _rgid):
     log.info('msg="Invoked stat" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
     return {
         'inode': statInfo.st_ino,
-        'ouid': str(statInfo.st_uid),
-        'ogid': str(statInfo.st_gid),
+        'userid': str(statInfo.st_uid) + ':' + str(statInfo.st_gid),
         'size': statInfo.st_size,
         'mtime': statInfo.st_mtime
         }
