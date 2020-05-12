@@ -7,6 +7,8 @@ Authors:
 Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 Lovisa.Lugnegaard@cern.ch, CERN/IT-ST
 '''
+import sys
+sys.path.insert(1, '../python-cs3apis')
 
 from google.auth.transport import grpc as google_auth_transport_grpc
 from google.auth import jwt as google_auth_jwt
@@ -15,7 +17,7 @@ import cs3.storage.provider.v1beta1.resources_pb2 as spr
 import cs3.storage.provider.v1beta1.provider_api_pb2 as sp
 import cs3.gateway.v1beta1.gateway_api_pb2_grpc as cs3gw_grpc
 import cs3.gateway.v1beta1.gateway_api_pb2 as cs3gw
-import sys
+
 import time
 import os
 import grpc
@@ -24,7 +26,7 @@ from tusclient import client as tusclient
 
 # TODO package python-cs3apis bindings. For now, we include them like this
 # insert at 1, 0 is the script path (or '' in REPL)
-sys.path.insert(1, '../python-cs3apis')
+
 
 
 # module-wide state
@@ -169,38 +171,40 @@ def writefile(_endpoint, filepath, content, noversion=0):
     # fileinformation = requests.get(url=url, headers=headers)
     #f = open(filepath, mode='wb')
     tend = time.clock()
-    print('msg="File open for write" filename="%s" elapsedTimems="%.1f"' %
-        (filepath, (tend-tstart)*1000))
+    print('msg="File open for write" filename="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
     # write the file. In a future implementation, we should find a way to only update the required chunks...
     # written = f.write(content)
     # f.close()
     tstart = time.clock()
-    reference = spr.Reference(path=filepath)
-    req = sp.InitiateFileUploadRequest(ref=reference)
-    res1 = credentials['cs3stub'].InitiateFileUpload(
-      request=req, metadata=[('x-access-token', credentials['token'])])
-    headers = {'X-Reva-Transfer': res1.token,
-                'Authorization': 'Basic ZWluc3RlaW46cmVsYXRpdml0eQ=='}
+    reference = spr.Reference(path = filepath)
+    req = sp.InitiateFileUploadRequest(ref = reference)
+    res1 = credentials['cs3stub'].InitiateFileUpload(request = req, metadata = [('x-access-token', credentials['token'])])
+    print("--------------")
+    print("upload ep" + res1.upload_endpoint)
+    print("token" + res1.token)
+    headers = {'Upload-Offset': '0',
+      'Content-Type':'application/offset+octet-stream',
+      'X-Access-Token': "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJyZXZhIiwiZXhwIjoxNTg5Mjg3MjE0LCJpYXQiOjE1ODkyODM2MTQsImlzcyI6Imh0dHA6Ly9jZXJuYm94LmNlcm4uY2giLCJ1c2VyIjp7ImlkIjp7ImlkcCI6Imh0dHA6Ly9jZXJuYm94LmNlcm4uY2giLCJvcGFxdWVfaWQiOiI0YzUxMGFkYS1jODZiLTQ4MTUtODgyMC00MmNkZjgyYzNkNTEifSwidXNlcm5hbWUiOiJlaW5zdGVpbiIsIm1haWwiOiJlaW5zdGVpbkBjZXJuLmNoIiwiZGlzcGxheV9uYW1lIjoiQWxiZXJ0IEVpbnN0ZWluIiwiZ3JvdXBzIjpbInNhaWxpbmctbG92ZXJzIiwidmlvbGluLWhhdGVycyIsInBoeXNpY3MtbG92ZXJzIl19fQ.eAVk6OZML-3pOpSVP5wqZ5f1a9R5K7bvQ3IdiVln70Q",
+        'Authorization': 'Basic ZWluc3RlaW46cmVsYXRpdml0eQ=='}
     my_client = tusclient.TusClient(res1.upload_endpoint, headers=headers)
 
     metadata = {
       "filename": filepath,
-      "dir":      "home"
+      "dir":      "/home"
     }
 
-    uploader = my_client.uploader(
-      file_path='src/example.txt', chunk_size=200, metadata=metadata)
+    uploader = my_client.uploader(file_path='src/example.txt', chunk_size=200, metadata=metadata, client=my_client, url=res1.upload_endpoint)
     print("res1.text" + res1.upload_endpoint)
-    uploader.upload_chunk()
+    # uploader.upload_chunk()
+    uploader.upload(stop_at=100)
     tend = time.clock()
     print('msg="File open for write" filename="%s" elapsedTimems="%.1f"' % (
-      filepath, (tend-tstart)*1000))
+        filepath, (tend-tstart)*1000))
     # if res.status.code != 1:
     #     raise IOError('Something went wrong, message: ' + res.status.message)
   except OSError as e:
     print('msg="Error writing to file" filename="%s" error="%s"' % (filepath, e))
     raise IOError(e)
-
 
 def renamefile(_endpoint, filepath, newfilepath, ruid, rgid):
   '''Rename a file from origfilename to newfilename on behalf of the given uid, gid.'''
