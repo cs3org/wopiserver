@@ -1,16 +1,19 @@
 # Dockerfile for WOPI Server
 #
 # Please, build and run via docker-compose file: wopiserver.yaml
-
 FROM python:3
 
-LABEL maintainer="cernbox-admins@cern.ch" name="The ScienceMesh IOP WOPI server" version="1.0"
+LABEL maintainer="cernbox-admins@cern.ch" \
+  org.opencontainers.image.title="The ScienceMesh IOP WOPI server" \
+  org.opencontainers.image.version="1.0"
 
 # prerequisites
-RUN pip3 install flask pyOpenSSL PyJWT requests cs3apis  # tusclient not available for pip3
+WORKDIR /app
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir --upgrade -r requirements.txt
 
 # install software
-RUN mkdir -p /app /etc/wopi /var/log/wopi /var/wopi_local_storage
+RUN mkdir -p /var/log/wopi /var/wopi_local_storage
 ADD ./src/* ./docker/entrypoint /app/
 ADD wopiserver.conf /etc/wopi/wopiserver.defaults.conf
 
@@ -20,4 +23,4 @@ ADD ./docker/etc/*secret  ./docker/etc/wopiserver.conf /etc/wopi/
 #ADD ./etc/*.pem /etc/certs/   if certificates shall be added
 
 #CMD /app/entrypoint
-CMD ["python3", "/app/wopiserver.py"]
+ENTRYPOINT ["/app/wopiserver.py"]

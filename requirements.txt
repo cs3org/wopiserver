@@ -1,2 +1,8 @@
 grpcio
 grpcio-tools
+flask
+pyOpenSSL
+PyJWT
+requests
+cs3apis
+tuspy
