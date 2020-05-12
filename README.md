@@ -11,15 +11,15 @@ This is a proof-of-concept WOPI bridge server targeting CodiMD, to allow bridgin
 * Collaborative editing and locking of the file
 * Transparent handling of uploads (i.e. pictures):
   * If a note has no pictures, it is handled as a text file.
-  * Once a picture is included, the save to WOPI is executed as a zipped bundle, with a `.mtx` extension.
-  * Files ending as `.mtx` are equally treated as zipped bundles and expanded to CodiMD: this currently requires direct access to the underlying storage used by CodiMD when pushing the pictures from the EFSS storage.
+  * Once a picture is included, the save to WOPI is executed as a zipped bundle, with a `.mdx` extension.
+  * Files ending as `.mdx` are equally treated as zipped bundles and expanded to CodiMD: this currently requires direct access to the underlying storage used by CodiMD when pushing the pictures from the EFSS storage.
 
 ## Required CodiMD APIs
-* `/new`                        push a file to CodiMD
-* `/<noteid>`                   display a file
-* `/<noteid>/publish`           display a file in readonly mode
-* `/<noteid>/download`          get a raw file to push it back
-* `/uploads/upload_<filename>`  get an uploaded picture/attachment
+* `/new`                    push a file to CodiMD
+* `/<noteid>`               display a file
+* `/<noteid>/publish`       display a file in readonly mode
+* `/<noteid>/download`      get a raw file to push it back
+* `/uploads/upload_<hash>`  get an uploaded picture/attachment
 
 ## Required WOPI APIs
 * `GetFileInfo`: get all file metadata
@@ -36,6 +36,8 @@ This is a proof-of-concept WOPI bridge server targeting CodiMD, to allow bridgin
 * delete files/entries from CodiMD DB
 
 ### Required CodiMD APIs to implement the above features
-* given a note id (and a username), change permissions of a note (for a given user / for anonymous users). In particular make it read only.
+* given a note id, change permissions of a note. In particular switch from `Freely` to `Locked`.
 * given a note id, delete a note from DB as well as its attached files.
 * given a note id, return the note's last modification time.
+* given a picture/attachment and a hashed filename, store it in the store (or fail if the filename was already used).
+
