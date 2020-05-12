@@ -74,9 +74,9 @@ def stat(_endpoint, filename, _ruid, _rgid):
                  (filename, (tend-tstart)*1000))
         return {
             'inode': statInfo.info.id,
-            'ouid': statInfo.info.owner.opaque_id,
+            # TODO to be seen whether we want to expose the identity provider or only the user id
+            'userid': statInfo.info.owner.idp + ':' + statInfo.info.owner.opaque_id,
             'size': statInfo.info.size,
-            # TODO group id?
             'mtime': statInfo.info.mtime
         }
     except (FileNotFoundError, PermissionError) as e:
