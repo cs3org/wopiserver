@@ -55,7 +55,7 @@ steps:
   image: plugins/docker
   settings:
     repo: cs3org/wopiserver
-    tags: latest
+    tags: unstable
     dockerfile: wopiserver.Dockerfile
     username:
       from_secret: dockerhub_username
