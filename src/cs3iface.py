@@ -67,12 +67,12 @@ def stat(_endpoint, filename, _ruid, _rgid):
     tend = time.clock()
     print('msg="Invoked stat" filename="%s" elapsedTimems="%.1f"' % (filename, (tend-tstart)*1000))
     return {
-      'inode': statInfo.info.id,
-      # TODO to be seen whether we want to expose the identity provider or only the user id
-      'userid': statInfo.info.owner.idp + ':' + statInfo.info.owner.opaque_id,
-      'size': statInfo.info.size,
-      'mtime': statInfo.info.mtime
-    }
+        'inode': statInfo.info.id,
+        # TODO to be seen whether we want to expose the identity provider or only the user id
+        'userid': statInfo.info.owner.idp + ':' + statInfo.info.owner.opaque_id,
+        'size': statInfo.info.size,
+        'mtime': statInfo.info.mtime
+        }
   except (FileNotFoundError, PermissionError) as e:
     raise IOError(e)
 
@@ -94,19 +94,29 @@ def setxattr(_endpoint, filename, key, value):
     credentials['cs3stub'].SetArbitraryMetadata(
         request=req, metadata=[('x-access-token', credentials['token'])])
     # TODO check for error
-  except (FileNotFoundError, PermissionError) as e:
+  except Exception as e:
     raise IOError(e)
 
 
-# not in cs3 API
-# def getxattr(_endpoint, filename, _ruid, _rgid, key):
-#     '''Get the extended attribute <key> on behalf of the given uid, gid. Do not raise exceptions'''
-#     try:
-#         return credentials['cs3stub'].getarbritarymetadata(_getfilename(filename), key)
-#     except (FileNotFoundError, PermissionError) as e:
-#         log.warning('msg="Failed to getxattr" filename="%s" key="%s" exception="%s"' % (
-#             filename, key, e))
-#         return None
+def getxattr(_endpoint, filepath, _ruid, _rgid, key):
+  '''Get the extended attribute <key> on behalf of the given uid, gid. Do not raise exceptions'''
+  try:
+    tstart = time.clock()
+    reference = spr.Reference(path='example.txt', id=spr.ResourceId(
+        storage_id='123e4567-e89b-12d3-a456-426655440000', opaque_id='fileid-home/example.txt'))
+    statReq = sp.StatRequest(ref = reference)
+    statInfo = credentials['cs3stub'].Stat(request=statReq, metadata=[('x-access-token', credentials['token'])])
+    tend = time.clock()
+    print('msg="Invoked stat for getxattr" filename="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
+    try:
+      return statInfo.info.arbitrary_metadata[key]
+    except KeyError:
+       log.warning('msg="Key not found in getxattr" filepath="%s" key="%s"' % (
+                   filepath, key))
+  except Exception as e:
+    log.warning('msg="Failed to getxattr" filepath="%s" key="%s" exception="%s"' % (
+                filepath, key, e))
+  return None
 
 
 def rmxattr(_endpoint, filename, key):
@@ -120,7 +130,7 @@ def rmxattr(_endpoint, filename, key):
     credentials['cs3stub'].UnsetArbitraryMetadata(
         request=req, metadata=[('x-access-token', credentials['token'])])
     # TODO check for error
-  except (FileNotFoundError, PermissionError) as e:
+  except Exception as e:
     raise IOError(e)
 
 
