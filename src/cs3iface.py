@@ -103,18 +103,16 @@ def getxattr(_endpoint, filepath, _ruid, _rgid, key):
     tstart = time.clock()
     reference = spr.Reference(path='example.txt', id=spr.ResourceId(
         storage_id='123e4567-e89b-12d3-a456-426655440000', opaque_id='fileid-home/example.txt'))
-    statReq = sp.StatRequest(ref = reference)
-    statInfo = credentials['cs3stub'].Stat(request=statReq, metadata=[('x-access-token', credentials['token'])])
+    statInfo = credentials['cs3stub'].Stat(request=sp.StatRequest(ref=reference),
+                                           metadata=[('x-access-token', credentials['token'])])
     tend = time.clock()
     print('msg="Invoked stat for getxattr" filename="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
     try:
       return statInfo.info.arbitrary_metadata[key]
     except KeyError:
-       log.warning('msg="Key not found in getxattr" filepath="%s" key="%s"' % (
-                   filepath, key))
+      log.warning('msg="Key not found in getxattr" filepath="%s" key="%s"' % (filepath, key))
   except Exception as e:
-    log.warning('msg="Failed to getxattr" filepath="%s" key="%s" exception="%s"' % (
-                filepath, key, e))
+    log.warning('msg="Failed to getxattr" filepath="%s" key="%s" exception="%s"' % (filepath, key, e))
   return None
 
 
