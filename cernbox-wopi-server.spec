@@ -3,7 +3,7 @@
 #
 Name:      cernbox-wopi-server
 Summary:   A WOPI server to support Office online suites for the ScienceMesh IOP
-Version:   5.0
+Version:   4.3
 Release:   0%{?dist}
 License:   GPLv3
 Buildroot: %{_tmppath}/%{name}-buildroot
@@ -21,8 +21,8 @@ AutoReq: no
 %description
 This RPM provides a Flask-based reference implementation of the WOPI protocol for the CS3 ScienceMesh IOP.
 
-The server supports storage via the CS3 APIs to the IOP, local storage for testing purposes,
-as well as legacy xrootd-based storages currently used in production at CERN for CERNBox.
+The server supports storage via the CS3 APIs to the IOP (still work in progress), local storage for testing purposes,
+as well as xrootd-based storages currently used in production at CERN for CERNBox.
 
 # Don't do any post-install weirdness, especially compiling .py files
 %define __os_install_post %{nil}
@@ -75,10 +75,9 @@ touch /etc/wopi/iopsecret
 %_python_lib/*
 
 %changelog
-* Fri Apr 24 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.0
-- General refactoring of the code base and evolution to
-  become fully vendor-neutral
-- Moved to the CS3 Organisation
+* Wed May 13 2020 Giuseppe Lo Presti <lopresti@cern.ch> 4.3
+- A few fixes around locking; this is hopefully the last release
+  before the ScienceMesh integration
 * Wed Apr 08 2020 Giuseppe Lo Presti <lopresti@cern.ch> 4.2
 - Introduced two new lock-related endpoints to cover interoperability
   with OnlyOffice
