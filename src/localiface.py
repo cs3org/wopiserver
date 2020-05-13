@@ -12,14 +12,17 @@ from stat import S_ISDIR
 import sys
 import traceback
 
+
 # module-wide state
 config = None
 log = None
 homepath = None
 
+
 def _getfilepath(filepath):
   '''map the given filepath into the target namespace by prepending the homepath (see storagehomepath in wopiserver.conf)'''
   return os.path.normpath(homepath + os.sep + filepath)
+
 
 def init(inconfig, inlog):
   '''Init module-level variables'''
@@ -37,8 +40,9 @@ def init(inconfig, inlog):
   except IOError as e:
     raise IOError('Could not stat storagehomepath folder %s: %s' % (homepath, e))
 
-def stat(_endpoint, filepath, _ruid, _rgid):
-  '''Stat a file and returns (size, mtime) as well as other extended info. Assume the given uid, gid has access.'''
+
+def stat(_endpoint, filepath, _userid):
+  '''Stat a file and returns (size, mtime) as well as other extended info. Assume the given userid has access.'''
   filepath = _getfilepath(filepath)
   try:
     tstart = time.clock()
@@ -54,20 +58,23 @@ def stat(_endpoint, filepath, _ruid, _rgid):
   except (FileNotFoundError, PermissionError) as e:
     raise IOError(e)
 
-def statx(_endpoint, filepath, _ruid, _rgid):
-  '''Get extended stat info (inode, ouid, ogid, size, mtime). Equivalent to stat in the case of local storage.'''
-  return stat(_endpoint, filepath, _ruid, _rgid)
 
-def setxattr(_endpoint, filepath, _ruid, _rgid, key, value):
-  '''Set the extended attribute <key> to <value> on behalf of the given uid, gid'''
+def statx(_endpoint, filepath, _userid):
+  '''Get extended stat info (inode, userid, size, mtime). Equivalent to stat in the case of local storage.'''
+  return stat(_endpoint, filepath, _userid)
+
+
+def setxattr(_endpoint, filepath, _userid, key, value):
+  '''Set the extended attribute <key> to <value> on behalf of the given userid'''
   try:
     os.setxattr(_getfilepath(filepath), 'user.' + key, str(value).encode())
   except (FileNotFoundError, PermissionError, OSError) as e:
     log.warning('msg="Failed to setxattr" filepath="%s" key="%s" exception="%s"' % (filepath, key, e))
     raise IOError(e)
 
-def getxattr(_endpoint, filepath, _ruid, _rgid, key):
-  '''Get the extended attribute <key> on behalf of the given uid, gid. Do not raise exceptions'''
+
+def getxattr(_endpoint, filepath, _userid, key):
+  '''Get the extended attribute <key> on behalf of the given userid. Do not raise exceptions'''
   try:
     filepath = _getfilepath(filepath)
     return os.getxattr(filepath, 'user.' + key)
@@ -75,16 +82,18 @@ def getxattr(_endpoint, filepath, _ruid, _rgid, key):
     log.warning('msg="Failed to getxattr" filepath="%s" key="%s" exception="%s"' % (filepath, key, e))
     return None
 
-def rmxattr(_endpoint, filepath, _ruid, _rgid, key):
-  '''Remove the extended attribute <key> on behalf of the given uid, gid'''
+
+def rmxattr(_endpoint, filepath, _userid, key):
+  '''Remove the extended attribute <key> on behalf of the given userid'''
   try:
     os.removexattr(_getfilepath(filepath), 'user.' + key)
   except (FileNotFoundError, PermissionError, OSError) as e:
     log.warning('msg="Failed to rmxattr" filepath="%s" key="%s" exception="%s"' % (filepath, key, e))
     raise IOError(e)
 
-def readfile(_endpoint, filepath, _ruid, _rgid):
-  '''Read a file on behalf of the given uid, gid. Note that the function is a generator, managed by Flask.'''
+
+def readfile(_endpoint, filepath, _userid):
+  '''Read a file on behalf of the given userid. Note that the function is a generator, managed by Flask.'''
   log.debug('msg="Invoking readFile" filepath="%s"' % filepath)
   try:
     tstart = time.clock()
@@ -106,10 +115,11 @@ def readfile(_endpoint, filepath, _ruid, _rgid):
     log.warning('msg="Error opening the file for read" filepath="%s" error="%s"' % (filepath, e))
     yield IOError(e)
 
-def writefile(_endpoint, filepath, ruid, rgid, content, noversion=0):
-  '''Write a file via xroot on behalf of the given uid, gid. The entire content is written
+
+def writefile(_endpoint, filepath, _userid, content, _noversion=1):
+  '''Write a file via xroot on behalf of the given userid. The entire content is written
      and any pre-existing file is deleted (or moved to the previous version if supported).
-     If noversion=1, the write explicitly disables versioning: this is useful for lock files.'''
+     On local storage, versioning is disabled, therefore the _noversion argument is ignored.'''
   size = len(content)
   filepath = _getfilepath(filepath)
   log.debug('msg="Invoking writeFile" filepath="%s" size="%d"' % (filepath, size))
@@ -134,15 +144,17 @@ def writefile(_endpoint, filepath, ruid, rgid, content, noversion=0):
               (filepath, traceback.format_exception(ex_type, ex_value, ex_traceback)))
     raise
 
-def renamefile(_endpoint, origfilepath, newfilepath, ruid, rgid):
-  '''Rename a file from origfilepath to newfilepath on behalf of the given uid, gid.'''
+
+def renamefile(_endpoint, origfilepath, newfilepath, _userid):
+  '''Rename a file from origfilepath to newfilepath on behalf of the given userid.'''
   try:
     os.rename(_getfilepath(origfilepath), _getfilepath(newfilepath))
   except (FileNotFoundError, PermissionError, OSError) as e:
     raise IOError(e)
 
-def removefile(_endpoint, filepath, _ruid, _rgid, _force=0):
-  '''Remove a file on behalf of the given uid, gid.
+
+def removefile(_endpoint, filepath, _userid, _force=0):
+  '''Remove a file on behalf of the given userid.
      The force argument is irrelevant and ignored for local storage.'''
   try:
     os.remove(_getfilepath(filepath))

@@ -62,14 +62,14 @@ def getMicrosoftOfficeLockName(filename):
 
 
 
-def generateAccessToken(ruid, rgid, filename, canedit, username, folderurl, endpoint):
-  '''Generates an access token for a given file of a given user, and returns a tuple with
+def generateAccessToken(userid, filename, canedit, username, folderurl, endpoint):
+  '''Generates an access token for a given file and a given user, and returns a tuple with
   the file's inode and the URL-encoded access token.
   Access to this function is protected by source IP address.'''
   try:
     # stat now the file to check for existence and get inode and modification time
     # the inode serves as fileid, the mtime can be used for version information
-    statInfo = _ctx['st'].statx(endpoint, filename, ruid, rgid)
+    statInfo = _ctx['st'].statx(endpoint, filename, userid)
   except IOError as e:
     _ctx['log'].info('msg="Requested file not found" filename="%s" error="%s"' % (filename, e))
     raise
@@ -78,8 +78,7 @@ def generateAccessToken(ruid, rgid, filename, canedit, username, folderurl, endp
   if canedit:
     try:
       # probe LibreOffice
-      line = next(_ctx['st'].readfile(endpoint, getLibreOfficeLockName(filename),
-                                      _ctx['wopi'].lockruid, _ctx['wopi'].lockrgid))
+      line = next(_ctx['st'].readfile(endpoint, getLibreOfficeLockName(filename), userid))
       if isinstance(line, IOError) or 'WOPIServer' in str(line):
         # in case of read error, be optimistic and let it go (ENOENT would be fine, other cases have been
         # observed in production and likely are false positives)
@@ -93,8 +92,7 @@ def generateAccessToken(ruid, rgid, filename, canedit, username, folderurl, endp
     except IOError:
       try:
         # same for MS Office, but don't try to go beyond stat
-        lockInfo = _ctx['st'].stat(endpoint, getMicrosoftOfficeLockName(filename),
-                                   _ctx['wopi'].lockruid, _ctx['wopi'].lockrgid)
+        lockInfo = _ctx['st'].stat(endpoint, getMicrosoftOfficeLockName(filename), userid)
         canedit = False
         locked = True
         _ctx['log'].warning('msg="Access downgraded to read-only because of an existing Microsoft Office lock" ' \
@@ -102,12 +100,12 @@ def generateAccessToken(ruid, rgid, filename, canedit, username, folderurl, endp
       except IOError:
         pass
   exptime = int(time.time()) + _ctx['wopi'].tokenvalidity
-  acctok = jwt.encode({'ruid': ruid, 'rgid': rgid, 'filename': filename, 'username': username, 'canedit': canedit,
+  acctok = jwt.encode({'userid': userid, 'filename': filename, 'username': username, 'canedit': canedit,
                        'extlock': locked, 'folderurl': folderurl, 'exp': exptime, 'endpoint': endpoint}, \
                       _ctx['wopi'].wopisecret, algorithm='HS256').decode('UTF-8')
-  _ctx['log'].info('msg="Access token generated" ruid="%s" rgid="%s" canedit="%r" filename="%s" inode="%s" ' \
+  _ctx['log'].info('msg="Access token generated" userid="%s" canedit="%r" filename="%s" inode="%s" ' \
                    'mtime="%s" folderurl="%s" expiration="%d" token="%s"' % \
-                   (ruid, rgid, canedit, filename, statInfo['inode'], statInfo['mtime'], folderurl, exptime, acctok[-20:]))
+                   (userid, canedit, filename, statInfo['inode'], statInfo['mtime'], folderurl, exptime, acctok[-20:]))
   # return the inode == fileid and the access token
   return statInfo['inode'], acctok
 
@@ -125,8 +123,7 @@ def getLockName(filename):
 def retrieveWopiLock(fileid, operation, lock, acctok):
   '''Retrieves and logs an existing lock for a given file'''
   l = b''
-  for line in _ctx['st'].readfile(acctok['endpoint'], getLockName(acctok['filename']),
-                                  _ctx['wopi'].lockruid, _ctx['wopi'].lockrgid):
+  for line in _ctx['st'].readfile(acctok['endpoint'], getLockName(acctok['filename']), acctok['userid']):
     if isinstance(line, IOError):
       return None     # no pre-existing lock found, or error attempting to read it: assume it does not exist
     # the following check is necessary as it happens to get a str instead of bytes
@@ -139,28 +136,25 @@ def retrieveWopiLock(fileid, operation, lock, acctok):
       # by jwt.decode() as we had stored it with a timed signature.
       raise jwt.exceptions.ExpiredSignatureError
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
-    _ctx['log'].warning('msg="%s" user="%s:%s" filename="%s" token="%s" error="WOPI lock expired or invalid, ignoring" ' \
-                        'exception="%s"' % (operation.title(), acctok['ruid'], acctok['rgid'], acctok['filename'],
+    _ctx['log'].warning('msg="%s" user="%s" filename="%s" token="%s" error="WOPI lock expired or invalid, ignoring" ' \
+                        'exception="%s"' % (operation.title(), acctok['userid'], acctok['filename'],
                                             flask.request.args['access_token'][-20:], type(e)))
     # the retrieved lock is not valid any longer, discard and remove it from the backend
     try:
-      _ctx['st'].removefile(acctok['endpoint'], getLockName(acctok['filename']), \
-                            _ctx['wopi'].lockruid, _ctx['wopi'].lockrgid, 1)
+      _ctx['st'].removefile(acctok['endpoint'], getLockName(acctok['filename']), acctok['userid'], 1)
     except IOError:
       # ignore, it's not worth to report anything here
       pass
     # also remove the LibreOffice-compatible lock file, if it has the expected signature - cf. _storeWopiLock()
     try:
-      lock = str(next(_ctx['st'].readfile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']),
-                                          _ctx['wopi'].lockruid, _ctx['wopi'].lockrgid)))
+      lock = str(next(_ctx['st'].readfile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'])))
       if 'WOPIServer' in lock:
-        _ctx['st'].removefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), \
-                              _ctx['wopi'].lockruid, _ctx['wopi'].lockrgid, 1)
+        _ctx['st'].removefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], 1)
     except IOError as e:
       _ctx['log'].warning('msg="Unable to delete the LibreOffice-compatible lock file" error="%s"' % e)
     return None
-  _ctx['log'].info('msg="%s" user="%s:%s" filename="%s" fileid="%s" lock="%s" retrievedLock="%s" expTime="%s" token="%s"' % \
-                   (operation.title(), acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, lock,
+  _ctx['log'].info('msg="%s" user="%s" filename="%s" fileid="%s" lock="%s" retrievedLock="%s" expTime="%s" token="%s"' % \
+                   (operation.title(), acctok['userid'], acctok['filename'], fileid, lock,
                     retrievedLock['wopilock'], time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(retrievedLock['exp'])),
                     flask.request.args['access_token'][-20:]))
   return retrievedLock['wopilock']
@@ -175,15 +169,13 @@ def storeWopiLock(operation, lock, acctok):
   try:
     # store the lock as encoded JWT
     s = jwt.encode(l, _ctx['wopi'].wopisecret, algorithm='HS256')
-    _ctx['st'].writefile(acctok['endpoint'], getLockName(acctok['filename']),
-                         _ctx['wopi'].lockruid, _ctx['wopi'].lockrgid, s, 1)
+    _ctx['st'].writefile(acctok['endpoint'], getLockName(acctok['filename']), acctok['userid'], s, 1)
     _ctx['log'].info('msg="%s" filename="%s" token="%s" lock="%s" result="success"' % \
                      (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
     # also create a LibreOffice-compatible lock file for interoperability purposes
     locontent = ',Collaborative Online Editor,%s,%s,WOPIServer;' % \
             (_ctx['wopi'].wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())))
-    _ctx['st'].writefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']),
-                         _ctx['wopi'].lockruid, _ctx['wopi'].lockrgid, locontent, 1)
+    _ctx['st'].writefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], locontent, 1)
   except IOError as e:
     _ctx['log'].warning('msg="%s" filename="%s" token="%s" lock="%s" result="unable to store lock" reason="%s"' % \
                         (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
@@ -236,6 +228,6 @@ def storeWopiFile(request, acctok, xakey, targetname=''):
      and stores the save time as an xattr. Throws IOError in case of any failure'''
   if not targetname:
     targetname = acctok['filename']
-  _ctx['st'].writefile(acctok['endpoint'], targetname, acctok['ruid'], acctok['rgid'], request.get_data())
+  _ctx['st'].writefile(acctok['endpoint'], targetname, acctok['userid'], request.get_data())
   # save the current time for later conflict checking: this is never older than the mtime of the file
-  _ctx['st'].setxattr(acctok['endpoint'], targetname, acctok['ruid'], acctok['rgid'], xakey, int(time.time()))
+  _ctx['st'].setxattr(acctok['endpoint'], targetname, acctok['userid'], xakey, int(time.time()))

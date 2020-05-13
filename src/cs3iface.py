@@ -12,26 +12,22 @@ import time
 import requests
 import grpc
 
+from tusclient import client as tusclient
+
 from google.auth.transport import grpc as google_auth_transport_grpc
 from google.auth import jwt as google_auth_jwt
 from google import auth as google_auth
+
 import cs3.storage.provider.v1beta1.resources_pb2 as spr
 import cs3.storage.provider.v1beta1.provider_api_pb2 as sp
 import cs3.gateway.v1beta1.gateway_api_pb2_grpc as cs3gw_grpc
 import cs3.gateway.v1beta1.gateway_api_pb2 as cs3gw
-
-from tusclient import client as tusclient
 
 
 # module-wide state
 config = None
 log = None
 credentials = {}
-
-
-def _getfilename(filename):
-  '''map the given filename into the target namespace by prepending the homepath (see storagehomepath in wopiserver.conf)'''
-  return filename   # TODO do we need that??
 
 
 def init(inconfig):
@@ -55,33 +51,32 @@ def init(inconfig):
   credentials['token'] = authRes.token
 
 
-def stat(_endpoint, filename, _ruid, _rgid):
-  '''Stat a file and returns (size, mtime) as well as other extended info. Assume the given uid, gid has access.'''
-  filename = _getfilename(filename)
+def stat(_endpoint, filepath, userid):
+  '''Stat a file and returns (size, mtime) as well as other extended info using the given userid as access token.'''
   try:
     tstart = time.clock()
     reference = spr.Reference(path = 'example.txt', id = spr.ResourceId(storage_id = '123e4567-e89b-12d3-a456-426655440000', opaque_id = 'fileid-home/example.txt'))
     statReq = sp.StatRequest(ref = reference)
     statInfo = credentials['cs3stub'].Stat(request = statReq, metadata = [('x-access-token', credentials['token'])])
     tend = time.clock()
-    print('msg="Invoked stat" filename="%s" elapsedTimems="%.1f"' % (filename, (tend-tstart)*1000))
+    print('msg="Invoked stat" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
     return {
         'inode': statInfo.info.id,
-        # TODO to be seen whether we want to expose the identity provider or only the user id
-        'userid': statInfo.info.owner.idp + ':' + statInfo.info.owner.opaque_id,
+        'userid': statInfo.info.owner.opaque_id,
         'size': statInfo.info.size,
         'mtime': statInfo.info.mtime
         }
   except (FileNotFoundError, PermissionError) as e:
     raise IOError(e)
 
-def statx(_endpoint, filename, _ruid, _rgid):
-  '''Get extended stat info (inode, ouid, ogid, size, mtime). Equivalent to stat in this case.'''
-  return stat(_endpoint, filename, _ruid, _rgid)
+
+def statx(_endpoint, filepath, userid):
+  '''Get extended stat info (inode, userid, size, mtime). Equivalent to stat in this case.'''
+  return stat(_endpoint, filepath, userid)
 
 
-def setxattr(_endpoint, filename, key, value):
-  '''Set the extended attribute <key> to <value> on behalf of the given reference'''
+def setxattr(_endpoint, filepath, userid, key, value):
+  '''Set the extended attribute <key> to <value> using the given userid as access token'''
   # TODO implement this on the reva side (now reva returns operation not supported)
   reference = spr.Reference(path='example.txt', id=spr.ResourceId(
     storage_id='123e4567-e89b-12d3-a456-426655440000', opaque_id='fileid-home/example.txt'))
@@ -97,8 +92,8 @@ def setxattr(_endpoint, filename, key, value):
     raise IOError(e)
 
 
-def getxattr(_endpoint, filepath, _ruid, _rgid, key):
-  '''Get the extended attribute <key> on behalf of the given uid, gid. Do not raise exceptions'''
+def getxattr(_endpoint, filepath, userid, key):
+  '''Get the extended attribute <key> using the given userid as access token. Do not raise exceptions'''
   try:
     tstart = time.clock()
     reference = spr.Reference(path='example.txt', id=spr.ResourceId(
@@ -106,7 +101,7 @@ def getxattr(_endpoint, filepath, _ruid, _rgid, key):
     statInfo = credentials['cs3stub'].Stat(request=sp.StatRequest(ref=reference),
                                            metadata=[('x-access-token', credentials['token'])])
     tend = time.clock()
-    print('msg="Invoked stat for getxattr" filename="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
+    print('msg="Invoked stat for getxattr" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
     try:
       return statInfo.info.arbitrary_metadata[key]
     except KeyError:
@@ -116,8 +111,8 @@ def getxattr(_endpoint, filepath, _ruid, _rgid, key):
   return None
 
 
-def rmxattr(_endpoint, filename, key):
-  '''Remove the extended attribute <key> on behalf of the given uid, gid'''
+def rmxattr(_endpoint, filepath, userid, key):
+  '''Remove the extended attribute <key> using the given userid as access token'''
   # TODO implement this on the reva side (now reva returns operation not supported)
   reference = spr.Reference(path='example.txt', id=spr.ResourceId(
     storage_id='123e4567-e89b-12d3-a456-426655440000', opaque_id='fileid-home/example.txt'))
@@ -131,9 +126,9 @@ def rmxattr(_endpoint, filename, key):
     raise IOError(e)
 
 
-def readfile(_endpoint, filepath, _ruid, _rgid):
-  '''Read a file on behalf of the given filepath. Note that the function is a generator, managed by Flask.'''
-  print('msg="Invoking readFile" filename="%s"' % filepath)
+def readfile(_endpoint, filepath, userid):
+  '''Read a file using the given userid as access token. Note that the function is a generator, managed by Flask.'''
+  print('msg="Invoking readFile" filepath="%s"' % filepath)
   try:
     chunksize = 2  # config.getint('io', 'chunksize')
     reference = spr.Reference(path=filepath)
@@ -155,12 +150,12 @@ def readfile(_endpoint, filepath, _ruid, _rgid):
     raise IOError(e)
 
 
-def writefile(_endpoint, filepath, content, noversion=0):
-  '''Write a file via cs3 apis on behalf of the given uid, gid. The entire content is written
+def writefile(_endpoint, filepath, userid, content, noversion=0):
+  '''Write a file using the given userid as access token. The entire content is written
       and any pre-existing file is deleted (or moved to the previous version if supported).
       If noversion=1, the write explicitly disables versioning: this is useful for lock files.'''
   # size = len(content)
-  # print('msg="Invoking writeFile" filename="%s" size="%d"' %
+  # print('msg="Invoking writeFile" filepath="%s" size="%d"' %
   #           (filepath, size))
   try:
     tstart = time.clock()
@@ -173,7 +168,7 @@ def writefile(_endpoint, filepath, content, noversion=0):
     # fileinformation = requests.get(url=url, headers=headers)
     #f = open(filepath, mode='wb')
     tend = time.clock()
-    print('msg="File open for write" filename="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
+    print('msg="File open for write" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
     # write the file. In a future implementation, we should find a way to only update the required chunks...
     # written = f.write(content)
     # f.close()
@@ -191,7 +186,7 @@ def writefile(_endpoint, filepath, content, noversion=0):
     my_client = tusclient.TusClient(res1.upload_endpoint, headers=headers)
 
     metadata = {
-      "filename": filepath,
+      "filepath": filepath,
       "dir":      "/home"
     }
 
@@ -200,16 +195,17 @@ def writefile(_endpoint, filepath, content, noversion=0):
     # uploader.upload_chunk()
     uploader.upload(stop_at=100)
     tend = time.clock()
-    print('msg="File open for write" filename="%s" elapsedTimems="%.1f"' % (
+    print('msg="File open for write" filepath="%s" elapsedTimems="%.1f"' % (
         filepath, (tend-tstart)*1000))
     # if res.status.code != 1:
     #     raise IOError('Something went wrong, message: ' + res.status.message)
   except OSError as e:
-    print('msg="Error writing to file" filename="%s" error="%s"' % (filepath, e))
+    print('msg="Error writing to file" filepath="%s" error="%s"' % (filepath, e))
     raise IOError(e)
 
-def renamefile(_endpoint, filepath, newfilepath, ruid, rgid):
-  '''Rename a file from origfilename to newfilename on behalf of the given uid, gid.'''
+
+def renamefile(_endpoint, filepath, newfilepath, userid):
+  '''Rename a file from origfilepath to newfilepath using the given userid as access token.'''
   source = spr.Reference(path=filepath)
   destination = spr.Reference(path=newfilepath)
   req = sp.MoveRequest(source=source, destination=destination)
@@ -219,8 +215,8 @@ def renamefile(_endpoint, filepath, newfilepath, ruid, rgid):
     raise IOError(e)
 
 
-def removefile(_endpoint, filepath, _ruid, _rgid, _force=0):
-  '''Remove a file on behalf of the given uid, gid.
+def removefile(_endpoint, filepath, userid, _force=0):
+  '''Remove a file using the given userid as access token.
     The force argument is irrelevant and ignored for local storage.'''
   reference = spr.Reference(path=filepath)
   req = sp.DeleteRequest(ref=reference)
