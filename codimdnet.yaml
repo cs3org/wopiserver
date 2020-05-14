@@ -1,4 +1,4 @@
-# docker-compose configuration file for CodiMD + Postgres + WOPI extension
+# docker-compose configuration file for CodiMD + Postgres + WOPI bridge
 #
 # Build with:   docker-compose -f codimd.yaml build
 # Run with:     DBPWD='yourdbpassword' HOST='http://yourserver' docker-compose -f codimd.yaml up -d
@@ -28,7 +28,6 @@ services:
       - CMD_ALLOW_ANONYMOUS=true         # switch to false to use logins and enforce protections. Can it be avoided?
       - CMD_ALLOW_ANONYMOUS_EDITS=true
       - CMD_ALLOW_ANONYMOUS_VIEWS=true
-#     - CMD_DOMAIN=${HOST}:3000
     depends_on:
       - database
     ports:
@@ -37,11 +36,11 @@ services:
     volumes:
       - upload-data:/home/hackmd/app/public/uploads
     restart: always
-  wopicodimd:
+  wopibridge:
     build:
       context: .
-      dockerfile: wopibridge.Dockerfile
-    image: wopibridge:cern
+      dockerfile: wopibridge-poc.Dockerfile
+    image: wopibridge-poc:cern
     container_name: codimd-wopi
     hostname: cbox-codimd-wopi
     environment:

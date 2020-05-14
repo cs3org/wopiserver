@@ -1,6 +1,6 @@
-# WOPI Bridge for CodiMD
+# WOPI Bridge
 
-This is a proof-of-concept WOPI bridge server targeting CodiMD, to allow bridging a CodiMD instance to a WOPI-enabled EFSS service like ownCloud or CERNBox. It uses the private REST API of CodiMD, which will be hopefully made public and complete in the future. The approach is generic to allow for extending the concept to other Office-like applications exposing a minimal load/save REST API.
+This is a proof-of-concept WOPI bridge server, currently only targeting CodiMD, to allow bridging it to a WOPI-enabled EFSS service like ownCloud or CERNBox. It uses the private REST API of CodiMD, which will be hopefully made public and complete in the future. The approach is generic to allow for extending the concept to other Office-like applications exposing a minimal load/save REST API.
 
 ## What works:
 * REST service with two endpoints:

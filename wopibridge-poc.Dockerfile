@@ -1,11 +1,10 @@
-# Simple dockerfile to "package" the CodiMD to WOPI PoC
+# Simple Dockerfile to "package" the WOPI Bridge PoC
 
 FROM python:3
 MAINTAINER Giuseppe Lo Presti <lopresti@cern.ch>
 
 RUN pip install flask requests
 RUN mkdir -p /var/log/wopi /app
-ADD src/wopibridge.py /app
+ADD poc_src/wopibridge.py /app
 
 CMD ["python3", "/app/wopibridge.py"]
-

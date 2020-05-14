@@ -129,12 +129,12 @@ def index():
   '''Return a default index page with some user-friendly information about this service'''
   WB.log.info('msg="Accessed index page" client="%s"' % flask.request.remote_addr)
   return """
-    <html><head><title>ScienceMesh WOPIBridge</title></head>
+    <html><head><title>ScienceMesh WOPI Bridge</title></head>
     <body>
     <div align="center" style="color:#000080; padding-top:50px; font-family:Verdana; size:11">
     This is a WOPI HTTP bridge, to be used in conjunction with a WOPI-enabled EFSS.<br>This proof-of-concept supports CodiMD only.</div>
-    <br><br><br><br><br><br><br><hr>
-    <i>ScienceMesh WOPI Bridge %s at %s. Powered by Flask %s for Python %s</i>.
+    <div style="position: absolute; bottom: 10px; left: 10px; width: 99%%;"><hr>
+    <i>ScienceMesh WOPI Bridge %s at %s. Powered by Flask %s for Python %s</i>.</div>
     </body>
     </html>
     """ % (WBSERVERVERSION, socket.getfqdn(), flask.__version__, python_version())
