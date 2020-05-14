@@ -4,7 +4,7 @@
 Name:      cernbox-wopi-server
 Summary:   A WOPI server to support Office online suites for the ScienceMesh IOP
 Version:   4.3
-Release:   0%{?dist}
+Release:   1%{?dist}
 License:   GPLv3
 Buildroot: %{_tmppath}/%{name}-buildroot
 Group:     CERN-IT/ST
@@ -75,8 +75,8 @@ touch /etc/wopi/iopsecret
 %_python_lib/*
 
 %changelog
-* Wed May 13 2020 Giuseppe Lo Presti <lopresti@cern.ch> 4.3
-- A few fixes around locking; this is hopefully the last release
+* Wed May 14 2020 Giuseppe Lo Presti <lopresti@cern.ch> 4.3
+- Included some fixes around locking; this is hopefully the last release
   before the ScienceMesh integration
 * Wed Apr 08 2020 Giuseppe Lo Presti <lopresti@cern.ch> 4.2
 - Introduced two new lock-related endpoints to cover interoperability

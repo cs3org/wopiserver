@@ -123,6 +123,7 @@ def getLockName(filename):
 def retrieveWopiLock(fileid, operation, lock, acctok):
   '''Retrieves and logs an existing lock for a given file'''
   l = b''
+  encacctok = flask.request.args['access_token'][-20:] if 'access_token' in flask.request.args else 'N/A'
   for line in _ctx['st'].readfile(acctok['endpoint'], getLockName(acctok['filename']),
                                   _ctx['wopi'].lockruid, _ctx['wopi'].lockrgid):
     if 'ERROR on read' in str(line):
@@ -139,7 +140,7 @@ def retrieveWopiLock(fileid, operation, lock, acctok):
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
     _ctx['log'].warning('msg="%s" user="%s:%s" filename="%s" token="%s" error="WOPI lock expired or invalid, ignoring" ' \
                         'exception="%s"' % (operation.title(), acctok['ruid'], acctok['rgid'], acctok['filename'],
-                                            flask.request.args['access_token'][-20:], type(e)))
+                                            encacctok, type(e)))
     # the retrieved lock is not valid any longer, discard and remove it from the backend
     try:
       _ctx['st'].removefile(acctok['endpoint'], getLockName(acctok['filename']), \
@@ -160,7 +161,7 @@ def retrieveWopiLock(fileid, operation, lock, acctok):
   _ctx['log'].info('msg="%s" user="%s:%s" filename="%s" fileid="%s" lock="%s" retrievedLock="%s" expTime="%s" token="%s"' % \
                    (operation.title(), acctok['ruid'], acctok['rgid'], acctok['filename'], fileid, lock,
                     retrievedLock['wopilock'], time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(retrievedLock['exp'])),
-                    flask.request.args['access_token'][-20:]))
+                    encacctok))
   return retrievedLock['wopilock']
 
 
