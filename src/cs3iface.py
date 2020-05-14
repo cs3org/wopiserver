@@ -146,6 +146,7 @@ def readfile(_endpoint, filepath, userid):
       request=req, metadata=[('x-access-token', credentials['token'])])
 
     # Download
+    print("initiatefiledownloadres.token: " + initiatefiledownloadres.token) 
     url = initiatefiledownloadres.download_endpoint
     headers = {'X-Reva-Transfer': initiatefiledownloadres.token,
                 'Authorization': 'Basic ZWluc3RlaW46cmVsYXRpdml0eQ=='}
@@ -159,50 +160,54 @@ def readfile(_endpoint, filepath, userid):
     raise IOError(e)
 
 
+
 def writefile(_endpoint, filepath, userid, content, noversion=0):
   '''Write a file using the given userid as access token. The entire content is written
-      and any pre-existing file is deleted (or moved to the previous version if supported).
-      If noversion=1, the write explicitly disables versioning: this is useful for lock files.'''
+    and any pre-existing file is deleted (or moved to the previous version if supported).
+    If noversion=1, the write explicitly disables versioning: this is useful for lock files.'''
   # size = len(content)
   # print('msg="Invoking writeFile" filepath="%s" size="%d"' %
   #           (filepath, size))
   try:
     tstart = time.clock()
-    # get file to write to, do we need this?
-    # reference = spr.Reference(path = filepath)
-    # req = sp.InitiateFileDownloadRequest(ref = reference)
-    # res = credentials['cs3stub'].InitiateFileDownload(request = req, metadata = [('x-access-token', credentials['token'])])
-    # url = initiatefiledownloadres.download_endpoint
-    # headers = {'X-Reva-Transfer': initiatefiledownloadres.token, 'Authorization': 'Basic ZWluc3RlaW46cmVsYXRpdml0eQ=='}
-    # fileinformation = requests.get(url=url, headers=headers)
-    #f = open(filepath, mode='wb')
     tend = time.clock()
     print('msg="File open for write" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
     # write the file. In a future implementation, we should find a way to only update the required chunks...
-    # written = f.write(content)
-    # f.close()
+
     tstart = time.clock()
     reference = spr.Reference(path = filepath)
+
     req = sp.InitiateFileUploadRequest(ref = reference)
     res1 = credentials['cs3stub'].InitiateFileUpload(request = req, metadata = [('x-access-token', credentials['token'])])
     print("--------------")
     print("upload ep" + res1.upload_endpoint)
-    print("token" + res1.token)
-    headers = {'Upload-Offset': '0',
-      'Content-Type':'application/offset+octet-stream',
-      'X-Access-Token': "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJyZXZhIiwiZXhwIjoxNTg5Mjg3MjE0LCJpYXQiOjE1ODkyODM2MTQsImlzcyI6Imh0dHA6Ly9jZXJuYm94LmNlcm4uY2giLCJ1c2VyIjp7ImlkIjp7ImlkcCI6Imh0dHA6Ly9jZXJuYm94LmNlcm4uY2giLCJvcGFxdWVfaWQiOiI0YzUxMGFkYS1jODZiLTQ4MTUtODgyMC00MmNkZjgyYzNkNTEifSwidXNlcm5hbWUiOiJlaW5zdGVpbiIsIm1haWwiOiJlaW5zdGVpbkBjZXJuLmNoIiwiZGlzcGxheV9uYW1lIjoiQWxiZXJ0IEVpbnN0ZWluIiwiZ3JvdXBzIjpbInNhaWxpbmctbG92ZXJzIiwidmlvbGluLWhhdGVycyIsInBoeXNpY3MtbG92ZXJzIl19fQ.eAVk6OZML-3pOpSVP5wqZ5f1a9R5K7bvQ3IdiVln70Q",
-        'Authorization': 'Basic ZWluc3RlaW46cmVsYXRpdml0eQ=='}
-    my_client = tusclient.TusClient(res1.upload_endpoint, headers=headers)
-
+    print("token" + res1.token) #This token is generally empty
     metadata = {
       "filepath": filepath,
       "dir":      "/home"
     }
+    headers = {
+      'Upload-Length': '24',
+      'Tus-Resumable': '1.0.0',
+      'Upload-Metadata': 'filename L2hvbWUvZXhhbXBsZUEudHh0,dir L2hvbWU=',
+      'Location': res1.upload_endpoint,
+      #'X-Reva-Transfer': res1.token, #Not used since empty
+      'Content-Type':'application/offset+octet-stream',
+      'x-access-token': credentials['token'],
+      'Authorization': 'Basic ZWluc3RlaW46cmVsYXRpdml0eQ=='}
+    
+    my_client = tusclient.TusClient(res1.upload_endpoint, headers=headers)
+    myfiles = {'file': open('src/example.txt' ,'rb')}
 
-    uploader = my_client.uploader(file_path='src/example.txt', chunk_size=200, metadata=metadata, client=my_client, url=res1.upload_endpoint)
-    print("res1.text" + res1.upload_endpoint)
+    
+    res = requests.post(url=res1.upload_endpoint, files=myfiles, headers=headers, data=metadata)
+    print(res.text)
+    # uploader = my_client.uploader(file_path='src/example.txt', chunk_size=20000000, metadata=metadata, client=my_client)
+    # print("res1.text" + res1.upload_endpoint)
     # uploader.upload_chunk()
-    uploader.upload(stop_at=100)
+    # # url = uploader.create_url()
+    # uploader.upload()
+    # request_tus = tusRequest(uploader)
     tend = time.clock()
     print('msg="File open for write" filepath="%s" elapsedTimems="%.1f"' % (
         filepath, (tend-tstart)*1000))
