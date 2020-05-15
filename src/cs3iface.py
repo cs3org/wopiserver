@@ -62,8 +62,14 @@ def stat(endpoint, fileid, userid):
     raise IOError('A CS3API-compatible storage endpoint must be identified by a storage UUID')
   try:
     tstart = time.clock()
-    ref = spr.Reference(id=spr.ResourceId(storage_id=endpoint, opaque_id=fileid))
-    statInfo = credentials['cs3stub'].Stat(request=sp.StatRequest(ref=ref), metadata=[('x-access-token', _authenticate(userid))])
+    if fileid[0] == '/':
+      # assume this is a filepath
+      ref = spr.Reference(id=spr.ResourceId(storage_id=endpoint), path=fileid)
+    else:
+      # assume we have an opaque fileid
+      ref = spr.Reference(id=spr.ResourceId(storage_id=endpoint, opaque_id=fileid))
+    statInfo = credentials['cs3stub'].Stat(request=sp.StatRequest(ref=ref),
+                                           metadata=[('x-access-token', _authenticate(userid))])
     tend = time.clock()
     print('msg="Invoked stat" fileid="%s" elapsedTimems="%.1f" res="%s"' % (fileid, (tend-tstart)*1000, statInfo))
     if statInfo.status.code == cs3code.CODE_OK:
