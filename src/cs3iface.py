@@ -77,7 +77,7 @@ def stat(endpoint, fileid, userid):
       return {
           'inode': statInfo.info.id.storage_id + ':' + statInfo.info.id.opaque_id,
           'filepath': statInfo.info.path,
-          'userid': '0000',  # TODO not yet available
+          'userid': '0000',  # TODO not yet available, https://github.com/cs3org/reva/issues/749
           'size': statInfo.info.size,
           'mtime': statInfo.info.mtime
           }
@@ -91,31 +91,28 @@ def statx(endpoint, fileid, userid):
   return stat(endpoint, fileid, userid)
 
 
-def setxattr(_endpoint, filepath, userid, key, value):
+def setxattr(endpoint, filepath, userid, key, value):
   '''Set the extended attribute <key> to <value> using the given userid as access token'''
   # TODO implement this on the reva side (now reva returns operation not supported)
-  reference = spr.Reference(path='example.txt', id=spr.ResourceId(
-    storage_id='123e4567-e89b-12d3-a456-426655440000', opaque_id='fileid-home/example.txt'))
+  reference = spr.Reference(path=filepath, id=spr.ResourceId(storage_id=endpoint))
   arbitrary_metadata = spr.ArbitraryMetadata()
   arbitrary_metadata.metadata.update({key: value})
-  req = sp.SetArbitraryMetadataRequest(
-    ref=reference, arbitrary_metadata=arbitrary_metadata)
+  req = sp.SetArbitraryMetadataRequest(ref=reference, arbitrary_metadata=arbitrary_metadata)
   try:
     credentials['cs3stub'].SetArbitraryMetadata(
-        request=req, metadata=[('x-access-token', credentials['token'])])
+        request=req, metadata=[('x-access-token', _authenticate(userid))])
     # TODO check for error
   except Exception as e:
     raise IOError(e)
 
 
-def getxattr(_endpoint, filepath, userid, key):
+def getxattr(endpoint, filepath, userid, key):
   '''Get the extended attribute <key> using the given userid as access token. Do not raise exceptions'''
   try:
     tstart = time.clock()
-    reference = spr.Reference(path='example.txt', id=spr.ResourceId(
-        storage_id='123e4567-e89b-12d3-a456-426655440000', opaque_id='fileid-home/example.txt'))
+    reference = spr.Reference(path=filepath, id=spr.ResourceId(storage_id=endpoint))
     statInfo = credentials['cs3stub'].Stat(request=sp.StatRequest(ref=reference),
-                                           metadata=[('x-access-token', credentials['token'])])
+                                           metadata=[('x-access-token', _authenticate(userid))])
     tend = time.clock()
     print('msg="Invoked stat for getxattr" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
     try:
@@ -127,30 +124,27 @@ def getxattr(_endpoint, filepath, userid, key):
   return None
 
 
-def rmxattr(_endpoint, filepath, userid, key):
+def rmxattr(endpoint, filepath, userid, key):
   '''Remove the extended attribute <key> using the given userid as access token'''
   # TODO implement this on the reva side (now reva returns operation not supported)
-  reference = spr.Reference(path='example.txt', id=spr.ResourceId(
-    storage_id='123e4567-e89b-12d3-a456-426655440000', opaque_id='fileid-home/example.txt'))
-  req = sp.UnsetArbitraryMetadataRequest(
-    ref=reference, arbitrary_metadata_keys=[key])
+  reference = spr.Reference(path=filepath, id=spr.ResourceId(storage_id=endpoint))
+  req = sp.UnsetArbitraryMetadataRequest(ref=reference, arbitrary_metadata_keys=[key])
   try:
-    credentials['cs3stub'].UnsetArbitraryMetadata(
-        request=req, metadata=[('x-access-token', credentials['token'])])
+    credentials['cs3stub'].UnsetArbitraryMetadata(request=req, metadata=[('x-access-token', _authenticate(userid))])
     # TODO check for error
   except Exception as e:
     raise IOError(e)
 
 
-def readfile(_endpoint, filepath, userid):
+def readfile(endpoint, filepath, userid):
   '''Read a file using the given userid as access token. Note that the function is a generator, managed by Flask.'''
   print('msg="Invoking readFile" filepath="%s"' % filepath)
   try:
     chunksize = 2  # config.getint('io', 'chunksize')
-    reference = spr.Reference(path=filepath)
+    reference = spr.Reference(path=filepath, id=spr.ResourceId(storage_id=endpoint))
     req = sp.InitiateFileDownloadRequest(ref=reference)
     initiatefiledownloadres = credentials['cs3stub'].InitiateFileDownload(
-      request=req, metadata=[('x-access-token', credentials['token'])])
+        request=req, metadata=[('x-access-token', _authenticate(userid))])
 
     # Download
     print("initiatefiledownloadres.token: " + initiatefiledownloadres.token) 
@@ -166,11 +160,10 @@ def readfile(_endpoint, filepath, userid):
     print('msg="Error when reading file" filepath="%s" error="%s"' % (filepath))
     raise IOError(e)
 
-def writefile(_endpoint, filepath, userid, content, noversion=0):
+def writefile(endpoint, filepath, userid, content, noversion=0):
   '''Write a file using the given userid as access token. The entire content is written
     and any pre-existing file is deleted (or moved to the previous version if supported).
     If noversion=1, the write explicitly disables versioning: this is useful for lock files.'''
-
   try:
     tstart = time.clock()
     tend = time.clock()
@@ -178,17 +171,14 @@ def writefile(_endpoint, filepath, userid, content, noversion=0):
     # write the file. In a future implementation, we should find a way to only update the required chunks...
 
     tstart = time.clock()
-    reference = spr.Reference(path = filepath)
+    reference = spr.Reference(path=filepath, id=spr.ResourceId(storage_id=endpoint))
 
     opaque = types.Opaque(
-				map = { 'Upload-Length': types.OpaqueEntry(decoder='plain',value='23'.encode('utf-8'))}
-			)
-
-    tstart = time.clock()
-    reference = spr.Reference(path = filepath)
+               map = { 'Upload-Length': types.OpaqueEntry(decoder='plain',value='23'.encode('utf-8'))}
+             )
 
     req = sp.InitiateFileUploadRequest(ref = reference, opaque=opaque)
-    res1 = credentials['cs3stub'].InitiateFileUpload(request = req, metadata = [('x-access-token', credentials['token'])])
+    res1 = credentials['cs3stub'].InitiateFileUpload(request = req, metadata = [('x-access-token', _authenticate(userid))])
     metadata = {
       "filepath": filepath,
       "dir":      "/home"
@@ -199,7 +189,7 @@ def writefile(_endpoint, filepath, userid, content, noversion=0):
       'Upload-Metadata': 'filename L2hvbWUvZXhhbXBsZUEudHh0,dir L2hvbWU=',
       'Location': res1.upload_endpoint,
       'Content-Type':'application/offset+octet-stream',
-      'x-access-token': credentials['token'],
+      'x-access-token': _authenticate(userid),
       'Authorization': 'Basic ZWluc3RlaW46cmVsYXRpdml0eQ=='}
     
     my_client = tusclient.TusClient(res1.upload_endpoint, headers=headers)
@@ -215,23 +205,23 @@ def writefile(_endpoint, filepath, userid, content, noversion=0):
     raise IOError(e)
 
 
-def renamefile(_endpoint, filepath, newfilepath, userid):
+def renamefile(endpoint, filepath, newfilepath, userid):
   '''Rename a file from origfilepath to newfilepath using the given userid as access token.'''
-  source = spr.Reference(path=filepath)
-  destination = spr.Reference(path=newfilepath)
+  source = spr.Reference(path=filepath, id=spr.ResourceId(storage_id=endpoint))
+  destination = spr.Reference(path=newfilepath, id=spr.ResourceId(storage_id=endpoint))
   req = sp.MoveRequest(source=source, destination=destination)
   try:
-    credentials['cs3stub'].Move(request=req, metadata=[('x-access-token', credentials['token'])])
+    credentials['cs3stub'].Move(request=req, metadata=[('x-access-token', _authenticate(userid))])
   except Exception as e:
     raise IOError(e)
 
 
-def removefile(_endpoint, filepath, userid, _force=0):
+def removefile(endpoint, filepath, userid, _force=0):
   '''Remove a file using the given userid as access token.
-    The force argument is irrelevant and ignored for local storage.'''
-  reference = spr.Reference(path=filepath)
+     The force argument is ignored for now for CS3 storage.'''
+  reference = spr.Reference(path=filepath, id=spr.ResourceId(storage_id=endpoint))
   req = sp.DeleteRequest(ref=reference)
   try:
-    credentials['cs3stub'].Delete(request=req, metadata=[('x-access-token', credentials['token'])])
+    credentials['cs3stub'].Delete(request=req, metadata=[('x-access-token', _authenticate(userid))])
   except Exception as e:
     raise IOError(e)
