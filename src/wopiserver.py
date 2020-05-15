@@ -228,7 +228,7 @@ def index():
     <div align="center" style="color:#000080; padding-top:50px; font-family:Verdana; size:11">
     This is the ScienceMesh IOP <a href=http://wopi.readthedocs.io>WOPI</a> server to support online office platforms.<br>
     To use this service, please log in to your EFSS Storage and click on your office documents.</div>
-    <div style="position: absolute; bottom: 10px; left: 10px; width: 98%%;"><hr>
+    <div style="position: absolute; bottom: 10px; left: 10px; width: 99%%;"><hr>
     <i>ScienceMesh WOPI Server %s at %s. Powered by Flask %s for Python %s</i>.
     </body>
     </html>
@@ -244,9 +244,9 @@ def cboxOpen():
     - OR int ruid, rgid: a real Unix user identity (id:group); this is for legacy compatibility
   - bool canedit: True if full access should be given to the user, otherwise read-only access is granted
   - string username (optional): user's full name, typically shown by the Office app
-  - string filename: the full path or the inode of the filename to be opened
+  - string filename OR fileid: the full path of the filename to be opened, or its fileid
   - string folderurl: the URL to come back to the containing folder for this file, typically shown by the Office app
-  - string endpoint (optional): the storage endpoint to be used to look up the file, in case of
+  - string endpoint (optional): the storage endpoint to be used to look up the file or the storage id, in case of
     multi-instance underlying storage; defaults to 'default'
   Note: this is the most sensitive call of this WOPI server as it provides direct
   access to any user's file, therefore it is protected both by IP and a shared secret. The shared
@@ -280,13 +280,14 @@ def cboxOpen():
       for ip in socket.getaddrinfo(c, None):
         if ip[4][0] == req.remote_addr:
           # we got a match, generate the access token
-          filename = urllib.parse.unquote(req.args['filename'])
+          fileid = urllib.parse.unquote(req.args['filename'] if 'filename' in req.args else req.args['fileid'])
           canedit = 'canedit' in req.args and req.args['canedit'].lower() == 'true'
           username = req.args['username'] if 'username' in req.args else ''
           folderurl = urllib.parse.unquote(req.args['folderurl'])
           endpoint = req.args['endpoint'] if 'endpoint' in req.args else 'default'
           # XXX workaround for new files that cannot be opened in collaborative edit mode until they're closed for the first time
-          if canedit and filename in Wopi.openfiles and Wopi.openfiles[filename][0] == '0':
+          # XXX and for now this workaround assumes fileid == filepath! need to check if Collabora is also affected by this.
+          if canedit and fileid in Wopi.openfiles and Wopi.openfiles[fileid][0] == '0':
             Wopi.log.warning('msg="cboxOpen: forcing read-only mode on collaborative editing of a new file" ' \
                              'client="%s" user="%s"' % (req.remote_addr, userid))
             canedit = False
@@ -294,7 +295,7 @@ def cboxOpen():
             Wopi.log.info('msg="cboxOpen: access granted, generating token" client="%s" user="%s" ' \
                           'friendlyname="%s" canedit="%s" endpoint="%s"' % \
                           (req.remote_addr, userid, username, canedit, endpoint))
-            inode, acctok = utils.generateAccessToken(userid, filename, canedit, username, folderurl, endpoint)
+            inode, acctok = utils.generateAccessToken(userid, fileid, canedit, username, folderurl, endpoint)
             # return an URL-encoded WOPISrc URL for the Office Online server
             return '%s&access_token=%s' % (utils.generateWopiSrc(inode), acctok)      # no need to URL-encode the JWT token
           except IOError:
@@ -446,6 +447,7 @@ def cboxLock():
       Wopi.log.info('msg="cboxLock: file got modified after LibreOffice-compatible lock file was created" ' \
                     'filename="%s"' % filename)
       return 'File modified since open time', http.client.CONFLICT
+    Wopi.log.info('msg="cboxLock: lock file still valid" filename="%s"' % filename)
     return 'OK', http.client.OK
   except IOError as e:
     Wopi.log.error('msg="cboxLock: unable to store a LibreOffice-compatible lock" filename="%s" reason="%s"' % \

@@ -45,6 +45,7 @@ def _geturlfor(endpoint):
 def _eosargs(userid, atomicwrite=0, bookingsize=0):
   '''Split userid into uid,gid and generate extra EOS-specific arguments for the xroot URL'''
   try:
+    # try to assert that userid must follow a '%d:%d' format
     userid = userid.split(':')
     if len(userid) != 2:
       raise ValueError
@@ -116,12 +117,11 @@ def stat(endpoint, filepath, userid):
 
 
 def statx(endpoint, filepath, userid):
-  '''Get extended stat info (inode, userid, size, mtime) via an xroot opaque query on behalf of the given userid'''
-  filepath = _getfilepath(filepath)
+  '''Get extended stat info (inode, filepath, userid, size, mtime) via an xroot opaque query on behalf of the given userid'''
   tstart = time.clock()
-  rc, rawinfo = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, filepath + _eosargs(userid) + '&mgm.pcmd=stat')
+  rc, rawinfo = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(filepath) + _eosargs(userid) + '&mgm.pcmd=stat')
   tend = time.clock()
-  log.info('msg="Invoked stat" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
+  log.info('msg="Invoked stat" filepath="%s" elapsedTimems="%.1f"' % (_getfilepath(filepath), (tend-tstart)*1000))
   if '[SUCCESS]' not in str(rc):
     raise IOError(str(rc).strip('\n'))
   rawinfo = str(rawinfo)
@@ -129,6 +129,7 @@ def statx(endpoint, filepath, userid):
     raise IOError(rawinfo.strip('\n'))
   statxdata = rawinfo.split()
   return {'inode': statxdata[2],
+          'filepath': filepath,
           'userid': str(statxdata[5]) + ':' + str(statxdata[6]),
           'size': int(statxdata[8]),
           'mtime': statxdata[12]}

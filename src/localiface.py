@@ -43,14 +43,14 @@ def init(inconfig, inlog):
 
 def stat(_endpoint, filepath, _userid):
   '''Stat a file and returns (size, mtime) as well as other extended info. Assume the given userid has access.'''
-  filepath = _getfilepath(filepath)
   try:
     tstart = time.clock()
-    statInfo = os.stat(filepath)
+    statInfo = os.stat(_getfilepath(filepath))
     tend = time.clock()
-    log.info('msg="Invoked stat" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
+    log.info('msg="Invoked stat" filepath="%s" elapsedTimems="%.1f"' % (_getfilepath(filepath), (tend-tstart)*1000))
     return {
         'inode': statInfo.st_ino,
+        'filepath': filepath,
         'userid': str(statInfo.st_uid) + ':' + str(statInfo.st_gid),
         'size': statInfo.st_size,
         'mtime': statInfo.st_mtime
@@ -60,7 +60,7 @@ def stat(_endpoint, filepath, _userid):
 
 
 def statx(_endpoint, filepath, _userid):
-  '''Get extended stat info (inode, userid, size, mtime). Equivalent to stat in the case of local storage.'''
+  '''Get extended stat info (inode, filepath, userid, size, mtime). Equivalent to stat in the case of local storage.'''
   return stat(_endpoint, filepath, _userid)
 
 

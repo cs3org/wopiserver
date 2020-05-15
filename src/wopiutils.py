@@ -62,19 +62,20 @@ def getMicrosoftOfficeLockName(filename):
 
 
 
-def generateAccessToken(userid, filename, canedit, username, folderurl, endpoint):
+def generateAccessToken(userid, fileid, canedit, username, folderurl, endpoint):
   '''Generates an access token for a given file and a given user, and returns a tuple with
   the file's inode and the URL-encoded access token.
   Access to this function is protected by source IP address.'''
   try:
     # stat now the file to check for existence and get inode and modification time
     # the inode serves as fileid, the mtime can be used for version information
-    statInfo = _ctx['st'].statx(endpoint, filename, userid)
+    statInfo = _ctx['st'].statx(endpoint, fileid, userid)
   except IOError as e:
-    _ctx['log'].info('msg="Requested file not found" filename="%s" error="%s"' % (filename, e))
+    _ctx['log'].info('msg="Requested file not found" fileid="%s" error="%s"' % (fileid, e))
     raise
   # if write access is requested, probe whether there's already a lock file coming from Desktop applications
   locked = False
+  filename = statInfo['filepath']
   if canedit:
     try:
       # probe LibreOffice

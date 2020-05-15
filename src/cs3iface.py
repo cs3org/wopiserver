@@ -22,7 +22,7 @@ import cs3.storage.provider.v1beta1.resources_pb2 as spr
 import cs3.storage.provider.v1beta1.provider_api_pb2 as sp
 import cs3.gateway.v1beta1.gateway_api_pb2_grpc as cs3gw_grpc
 import cs3.gateway.v1beta1.gateway_api_pb2 as cs3gw
-
+import cs3.rpc.code_pb2 as cs3code
 
 # module-wide state
 config = None
@@ -41,38 +41,47 @@ def init(inconfig):
 
   # prepare the gRPC connection
   ch = grpc.insecure_channel(revaurl)
-  cs3stub = cs3gw_grpc.GatewayAPIStub(ch)
-  authReq = cs3gw.AuthenticateRequest(
-      type='basic', client_id='einstein', client_secret='relativity')
-  authRes = cs3stub.Authenticate(authReq)
-  credentials['ch'] = ch
-  credentials['cs3stub'] = cs3stub
-  credentials['authReq'] = authReq
-  credentials['token'] = authRes.token
+  credentials['cs3stub'] = cs3gw_grpc.GatewayAPIStub(ch)
 
 
-def stat(_endpoint, filepath, userid):
+def _authenticate(userid):
+  '''Obtain a token from Reva for the given userid'''
+  # TODO this will become
+  #authReq = cs3gw.AuthenticateRequest(type='bearer', client_secret=userid)
+  authReq = cs3gw.AuthenticateRequest(type='basic', client_id='einstein', client_secret='relativity')
+  if userid not in credentials:
+    # authenticate this user
+    authRes = credentials['cs3stub'].Authenticate(authReq)
+    credentials[userid] = authRes.token
+  return credentials[userid]
+
+
+def stat(endpoint, fileid, userid):
   '''Stat a file and returns (size, mtime) as well as other extended info using the given userid as access token.'''
+  if endpoint == 'default':
+    raise IOError('A CS3API-compatible storage endpoint must be identified by a storage UUID')
   try:
     tstart = time.clock()
-    reference = spr.Reference(path = 'example.txt', id = spr.ResourceId(storage_id = '123e4567-e89b-12d3-a456-426655440000', opaque_id = 'fileid-home/example.txt'))
-    statReq = sp.StatRequest(ref = reference)
-    statInfo = credentials['cs3stub'].Stat(request = statReq, metadata = [('x-access-token', credentials['token'])])
+    ref = spr.Reference(id=spr.ResourceId(storage_id=endpoint, opaque_id=fileid))
+    statInfo = credentials['cs3stub'].Stat(request=sp.StatRequest(ref=ref), metadata=[('x-access-token', _authenticate(userid))])
     tend = time.clock()
-    print('msg="Invoked stat" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
-    return {
-        'inode': statInfo.info.id,
-        'userid': statInfo.info.owner.opaque_id,
-        'size': statInfo.info.size,
-        'mtime': statInfo.info.mtime
-        }
-  except (FileNotFoundError, PermissionError) as e:
+    print('msg="Invoked stat" fileid="%s" elapsedTimems="%.1f" res="%s"' % (fileid, (tend-tstart)*1000, statInfo))
+    if statInfo.status.code == cs3code.CODE_OK:
+      return {
+          'inode': statInfo.info.id.storage_id + ':' + statInfo.info.id.opaque_id,
+          'filepath': statInfo.info.path,
+          'userid': '0000',  # TODO not yet available
+          'size': statInfo.info.size,
+          'mtime': statInfo.info.mtime
+          }
+    raise IOError(statInfo.status.message)
+  except Exception as e:
     raise IOError(e)
 
 
-def statx(_endpoint, filepath, userid):
-  '''Get extended stat info (inode, userid, size, mtime). Equivalent to stat in this case.'''
-  return stat(_endpoint, filepath, userid)
+def statx(endpoint, fileid, userid):
+  '''Get extended stat info (inode, filepath, userid, size, mtime). Equivalent to stat.'''
+  return stat(endpoint, fileid, userid)
 
 
 def setxattr(_endpoint, filepath, userid, key, value):
