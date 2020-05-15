@@ -20,6 +20,7 @@ from google import auth as google_auth
 
 import cs3.storage.provider.v1beta1.resources_pb2 as spr
 import cs3.storage.provider.v1beta1.provider_api_pb2 as sp
+import cs3.types.v1beta1.types_pb2 as types
 import cs3.gateway.v1beta1.gateway_api_pb2_grpc as cs3gw_grpc
 import cs3.gateway.v1beta1.gateway_api_pb2 as cs3gw
 import cs3.rpc.code_pb2 as cs3code
@@ -159,29 +160,29 @@ def readfile(_endpoint, filepath, userid):
     print('msg="Error when reading file" filepath="%s" error="%s"' % (filepath))
     raise IOError(e)
 
-
-
 def writefile(_endpoint, filepath, userid, content, noversion=0):
   '''Write a file using the given userid as access token. The entire content is written
     and any pre-existing file is deleted (or moved to the previous version if supported).
     If noversion=1, the write explicitly disables versioning: this is useful for lock files.'''
-  # size = len(content)
-  # print('msg="Invoking writeFile" filepath="%s" size="%d"' %
-  #           (filepath, size))
+
   try:
     tstart = time.clock()
     tend = time.clock()
-    print('msg="File open for write" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
+    print('msg="File open for write" filename="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
     # write the file. In a future implementation, we should find a way to only update the required chunks...
 
     tstart = time.clock()
     reference = spr.Reference(path = filepath)
 
-    req = sp.InitiateFileUploadRequest(ref = reference)
+    opaque = types.Opaque(
+				map = { 'Upload-Length': types.OpaqueEntry(decoder='plain',value='23'.encode('utf-8'))}
+			)
+
+    tstart = time.clock()
+    reference = spr.Reference(path = filepath)
+
+    req = sp.InitiateFileUploadRequest(ref = reference, opaque=opaque)
     res1 = credentials['cs3stub'].InitiateFileUpload(request = req, metadata = [('x-access-token', credentials['token'])])
-    print("--------------")
-    print("upload ep" + res1.upload_endpoint)
-    print("token" + res1.token) #This token is generally empty
     metadata = {
       "filepath": filepath,
       "dir":      "/home"
@@ -191,28 +192,18 @@ def writefile(_endpoint, filepath, userid, content, noversion=0):
       'Tus-Resumable': '1.0.0',
       'Upload-Metadata': 'filename L2hvbWUvZXhhbXBsZUEudHh0,dir L2hvbWU=',
       'Location': res1.upload_endpoint,
-      #'X-Reva-Transfer': res1.token, #Not used since empty
       'Content-Type':'application/offset+octet-stream',
       'x-access-token': credentials['token'],
       'Authorization': 'Basic ZWluc3RlaW46cmVsYXRpdml0eQ=='}
     
     my_client = tusclient.TusClient(res1.upload_endpoint, headers=headers)
-    myfiles = {'file': open('src/example.txt' ,'rb')}
 
-    
-    res = requests.post(url=res1.upload_endpoint, files=myfiles, headers=headers, data=metadata)
-    print(res.text)
-    # uploader = my_client.uploader(file_path='src/example.txt', chunk_size=20000000, metadata=metadata, client=my_client)
-    # print("res1.text" + res1.upload_endpoint)
-    # uploader.upload_chunk()
-    # # url = uploader.create_url()
-    # uploader.upload()
-    # request_tus = tusRequest(uploader)
+    uploader = my_client.uploader(file_path='home/example.txt', metadata=metadata, client=my_client, url=res1.upload_endpoint)
+    #Not implemented for local fs on reva side
+    uploader.upload()
     tend = time.clock()
     print('msg="File open for write" filepath="%s" elapsedTimems="%.1f"' % (
         filepath, (tend-tstart)*1000))
-    # if res.status.code != 1:
-    #     raise IOError('Something went wrong, message: ' + res.status.message)
   except OSError as e:
     print('msg="Error writing to file" filepath="%s" error="%s"' % (filepath, e))
     raise IOError(e)
