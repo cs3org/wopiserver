@@ -552,7 +552,7 @@ def wopiCheckFileInfo(fileid):
       # if no WebDAV URL is provided, ignore this setting
       pass
     filemd['OwnerId'] = statInfo['userid']
-    filemd['UserId'] = acctok['userid']     # typically same as OwnerId; different when accessing shared documents 
+    filemd['UserId'] = acctok['userid']     # typically same as OwnerId; different when accessing shared documents
     filemd['Size'] = statInfo['size']
     filemd['Version'] = statInfo['mtime']   # mtime is used as version here
     filemd['LastModifiedTime'] = datetime.fromtimestamp(int(statInfo['mtime'])).isoformat()   # this is used by Collabora
@@ -687,7 +687,6 @@ def wopiLock(fileid, reqheaders, acctok):
 def wopiGetLock(fileid, _reqheaders_unused, acctok):
   '''Implements the GetLock WOPI call'''
   resp = flask.Response()
-  # throws exception if no lock
   lock = utils.retrieveWopiLock(fileid, 'GETLOCK', '', acctok)
   resp.status_code = http.client.OK
   if lock:
@@ -708,8 +707,13 @@ def wopiGetLock(fileid, _reqheaders_unused, acctok):
       Wopi.log.warning('msg="Repopulating missing metadata" filename="%s" token="%s" user="%s"' % \
                        (acctok['filename'], flask.request.args['access_token'][-20:], acctok['username']))
       Wopi.openfiles[acctok['filename']] = (time.asctime(), set([acctok['username']]))
-  # else:
-  # TODO check if a non-WOPI lock exists for this file
+  # we might want to check if a non-WOPI lock exists for this file:
+  #try:
+  #  lockstat = storage.stat(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), acctok['userid'])
+  #  return utils.makeConflictResponse('GetLock', 'Locked by Libre Office', '', '', acctok['filename'])
+  #except IOError:
+  #  pass
+  # however implications have to be properly understood as we've seen cases of locks left behind
   return resp
 
 
