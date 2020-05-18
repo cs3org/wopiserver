@@ -99,12 +99,12 @@ def readfile(_endpoint, filepath, _userid):
     tstart = time.clock()
     filepath = _getfilepath(filepath)
     chunksize = config.getint('io', 'chunksize')
-    f = open(filepath, mode='rb', buffering=chunksize)
-    tend = time.clock()
-    log.info('msg="File open for read" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
-    # the actual read is buffered and managed by the Flask server
-    for chunk in iter(lambda: f.read(chunksize), b''):
-      yield chunk
+    with open(filepath, mode='rb', buffering=chunksize) as f:
+      tend = time.clock()
+      log.info('msg="File open for read" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
+      # the actual read is buffered and managed by the Flask server
+      for chunk in iter(lambda: f.read(chunksize), b''):
+        yield chunk
   except FileNotFoundError as e:
     # log this case as info to keep the logs cleaner
     log.info('msg="File not found on read" filepath="%s"' % filepath)
