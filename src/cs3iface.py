@@ -77,7 +77,7 @@ def stat(endpoint, fileid, userid):
       return {
           'inode': statInfo.info.id.storage_id + ':' + statInfo.info.id.opaque_id,
           'filepath': statInfo.info.path,
-          'userid': '0000',  # TODO not yet available, https://github.com/cs3org/reva/issues/749
+          'userid': statInfo.info.owner.opaque_id,
           'size': statInfo.info.size,
           'mtime': statInfo.info.mtime
           }
@@ -181,7 +181,7 @@ def writefile(endpoint, filepath, userid, content, noversion=0):
     res1 = credentials['cs3stub'].InitiateFileUpload(request = req, metadata = [('x-access-token', _authenticate(userid))])
     metadata = {
       "filepath": filepath,
-      "dir":      "/home"
+      "dir":      "/"
     }
     headers = {
       'Upload-Length': '24',
