@@ -25,24 +25,20 @@ import cs3.gateway.v1beta1.gateway_api_pb2_grpc as cs3gw_grpc
 import cs3.gateway.v1beta1.gateway_api_pb2 as cs3gw
 import cs3.rpc.code_pb2 as cs3code
 
+
 # module-wide state
-config = None
-log = None
-credentials = {}
+ctx = {}        # "map" to store some module context: cf. init()
+tokens = {}     # map userid [string] to authentication token
 
 
-def init(inconfig):
+def init(config, log):
   '''Init module-level variables'''
-  global config         # pylint: disable=global-statement
-  global log            # pylint: disable=global-statement
-  config = inconfig
-  # log = inlog
-  #revaurl = config.get('cs3', 'revaurl')
-  revaurl = 'localhost:19000'  # XXX for now
-
+  ctx['log'] = log
+  ctx['chunksize'] = config.getint('io', 'chunksize')
+  revahost = config.get('cs3', 'revahost')
   # prepare the gRPC connection
-  ch = grpc.insecure_channel(revaurl)
-  credentials['cs3stub'] = cs3gw_grpc.GatewayAPIStub(ch)
+  ch = grpc.insecure_channel(revahost)
+  ctx['cs3stub'] = cs3gw_grpc.GatewayAPIStub(ch)
 
 
 def _authenticate(userid):
@@ -50,11 +46,11 @@ def _authenticate(userid):
   # TODO this will become
   #authReq = cs3gw.AuthenticateRequest(type='bearer', client_secret=userid)
   authReq = cs3gw.AuthenticateRequest(type='basic', client_id='einstein', client_secret='relativity')
-  if userid not in credentials:
+  if userid not in tokens:
     # authenticate this user
-    authRes = credentials['cs3stub'].Authenticate(authReq)
-    credentials[userid] = authRes.token
-  return credentials[userid]
+    authRes = ctx['cs3stub'].Authenticate(authReq)
+    tokens[userid] = authRes.token
+  return tokens[userid]
 
 
 def stat(endpoint, fileid, userid):
@@ -69,10 +65,10 @@ def stat(endpoint, fileid, userid):
     else:
       # assume we have an opaque fileid
       ref = spr.Reference(id=spr.ResourceId(storage_id=endpoint, opaque_id=fileid))
-    statInfo = credentials['cs3stub'].Stat(request=sp.StatRequest(ref=ref),
-                                           metadata=[('x-access-token', _authenticate(userid))])
+    statInfo = ctx['cs3stub'].Stat(request=sp.StatRequest(ref=ref),
+                                   metadata=[('x-access-token', _authenticate(userid))])
     tend = time.clock()
-    print('msg="Invoked stat" fileid="%s" elapsedTimems="%.1f" res="%s"' % (fileid, (tend-tstart)*1000, statInfo))
+    ctx['log'].info('msg="Invoked stat" fileid="%s" elapsedTimems="%.1f" res="%s"' % (fileid, (tend-tstart)*1000, statInfo))
     if statInfo.status.code == cs3code.CODE_OK:
       return {
           'inode': statInfo.info.id.storage_id + ':' + statInfo.info.id.opaque_id,
@@ -81,9 +77,9 @@ def stat(endpoint, fileid, userid):
           'size': statInfo.info.size,
           'mtime': statInfo.info.mtime
           }
-    raise IOError(statInfo.status.message)
   except Exception as e:
     raise IOError(e)
+  raise IOError(statInfo.status.message)
 
 
 def statx(endpoint, fileid, userid):
@@ -99,7 +95,7 @@ def setxattr(endpoint, filepath, userid, key, value):
   arbitrary_metadata.metadata.update({key: value})
   req = sp.SetArbitraryMetadataRequest(ref=reference, arbitrary_metadata=arbitrary_metadata)
   try:
-    credentials['cs3stub'].SetArbitraryMetadata(
+    ctx['cs3stub'].SetArbitraryMetadata(
         request=req, metadata=[('x-access-token', _authenticate(userid))])
     # TODO check for error
   except Exception as e:
@@ -111,16 +107,17 @@ def getxattr(endpoint, filepath, userid, key):
   try:
     tstart = time.clock()
     reference = spr.Reference(path=filepath, id=spr.ResourceId(storage_id=endpoint))
-    statInfo = credentials['cs3stub'].Stat(request=sp.StatRequest(ref=reference),
-                                           metadata=[('x-access-token', _authenticate(userid))])
+    statInfo = ctx['cs3stub'].Stat(request=sp.StatRequest(ref=reference),
+                                   metadata=[('x-access-token', _authenticate(userid))])
     tend = time.clock()
-    print('msg="Invoked stat for getxattr" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
+    ctx['log'].info('msg="Invoked stat for getxattr" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
     try:
-      return statInfo.info.arbitrary_metadata[key]
+      return statInfo.info.arbitrary_metadata.metadata[key]
     except KeyError:
-      log.warning('msg="Key not found in getxattr" filepath="%s" key="%s"' % (filepath, key))
+      ctx['log'].warning('msg="Key not found in getxattr" filepath="%s" key="%s"' % (filepath, key))
   except Exception as e:
-    log.warning('msg="Failed to getxattr" filepath="%s" key="%s" exception="%s"' % (filepath, key, e))
+    ctx['log'].warning('msg="Failed to getxattr" filepath="%s" key="%s" exception="%s"' % (filepath, key, e))
+    raise IOError(e)
   return None
 
 
@@ -130,46 +127,45 @@ def rmxattr(endpoint, filepath, userid, key):
   reference = spr.Reference(path=filepath, id=spr.ResourceId(storage_id=endpoint))
   req = sp.UnsetArbitraryMetadataRequest(ref=reference, arbitrary_metadata_keys=[key])
   try:
-    credentials['cs3stub'].UnsetArbitraryMetadata(request=req, metadata=[('x-access-token', _authenticate(userid))])
+    ctx['cs3stub'].UnsetArbitraryMetadata(request=req, metadata=[('x-access-token', _authenticate(userid))])
     # TODO check for error
   except Exception as e:
+    ctx['log'].warning('msg="Failed to rmxattr" filepath="%s" key="%s" exception="%s"' % (filepath, key, e))
     raise IOError(e)
 
 
 def readfile(endpoint, filepath, userid):
   '''Read a file using the given userid as access token. Note that the function is a generator, managed by Flask.'''
-  print('msg="Invoking readFile" filepath="%s"' % filepath)
+  ctx['log'].info('msg="Invoking readFile" filepath="%s"' % filepath)
+  #fileid = stat(endpoint, filepath, userid)['inode'].split(':')[1]
   try:
-    chunksize = 2  # config.getint('io', 'chunksize')
     reference = spr.Reference(path=filepath, id=spr.ResourceId(storage_id=endpoint))
     req = sp.InitiateFileDownloadRequest(ref=reference)
-    initiatefiledownloadres = credentials['cs3stub'].InitiateFileDownload(
+    initiatefiledownloadres = ctx['cs3stub'].InitiateFileDownload(
         request=req, metadata=[('x-access-token', _authenticate(userid))])
 
     # Download
-    print("initiatefiledownloadres.token: " + initiatefiledownloadres.token) 
-    url = initiatefiledownloadres.download_endpoint
-    headers = {'X-Reva-Transfer': initiatefiledownloadres.token,
-                'Authorization': 'Basic ZWluc3RlaW46cmVsYXRpdml0eQ=='}
-    fileinformation = requests.get(url=url, headers=headers)
-
+    ctx['log'].debug('msg="readfile: InitiateFileDownloadRes returned" ' \
+                     'endpoint="%s"' % initiatefiledownloadres.download_endpoint)
+    fileinformation = requests.get(url=initiatefiledownloadres.download_endpoint + filepath,
+                                   headers={'x-access-token': _authenticate(userid)})
     data = fileinformation.content
-    for i in range(0, len(data), chunksize):
-      yield data[i:i+chunksize]
+    if not data:
+      ctx['log'].info('msg="File not found on read" filepath="%s" rc="%s"' % (filepath, fileinformation))
+      yield IOError('No such file or directory')
+    else:
+      for i in range(0, len(data), ctx['chunksize']):
+        yield data[i:i+ctx['chunksize']]
   except Exception as e:
-    print('msg="Error when reading file" filepath="%s" error="%s"' % (filepath))
-    raise IOError(e)
+    ctx['log'].warning('msg="Error when reading file" filepath="%s" error="%s"' % (filepath, e))
+    yield IOError(e)
+
 
 def writefile(endpoint, filepath, userid, content, noversion=0):
   '''Write a file using the given userid as access token. The entire content is written
     and any pre-existing file is deleted (or moved to the previous version if supported).
     If noversion=1, the write explicitly disables versioning: this is useful for lock files.'''
   try:
-    tstart = time.clock()
-    tend = time.clock()
-    print('msg="File open for write" filename="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
-    # write the file. In a future implementation, we should find a way to only update the required chunks...
-
     tstart = time.clock()
     reference = spr.Reference(path=filepath, id=spr.ResourceId(storage_id=endpoint))
 
@@ -178,7 +174,7 @@ def writefile(endpoint, filepath, userid, content, noversion=0):
              )
 
     req = sp.InitiateFileUploadRequest(ref = reference, opaque=opaque)
-    res1 = credentials['cs3stub'].InitiateFileUpload(request = req, metadata = [('x-access-token', _authenticate(userid))])
+    res1 = ctx['cs3stub'].InitiateFileUpload(request = req, metadata = [('x-access-token', _authenticate(userid))])
     metadata = {
       "filepath": filepath,
       "dir":      "/"
@@ -193,15 +189,15 @@ def writefile(endpoint, filepath, userid, content, noversion=0):
       'Authorization': 'Basic ZWluc3RlaW46cmVsYXRpdml0eQ=='}
     
     my_client = tusclient.TusClient(res1.upload_endpoint, headers=headers)
+    ctx['log'].debug('msg="Starting upload" filename="%s" uploadres="%s"' % (filepath, res1))
 
     uploader = my_client.uploader(file_path='home/example.txt', metadata=metadata, client=my_client, url=res1.upload_endpoint)
     #Not implemented for local fs on reva side
     uploader.upload()
     tend = time.clock()
-    print('msg="File open for write" filepath="%s" elapsedTimems="%.1f"' % (
-        filepath, (tend-tstart)*1000))
+    ctx['log'].info('msg="File open for write" filename="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
   except OSError as e:
-    print('msg="Error writing to file" filepath="%s" error="%s"' % (filepath, e))
+    ctx['log'].warning('msg="Error writing to file" filepath="%s" error="%s"' % (filepath, e))
     raise IOError(e)
 
 
@@ -211,8 +207,9 @@ def renamefile(endpoint, filepath, newfilepath, userid):
   destination = spr.Reference(path=newfilepath, id=spr.ResourceId(storage_id=endpoint))
   req = sp.MoveRequest(source=source, destination=destination)
   try:
-    credentials['cs3stub'].Move(request=req, metadata=[('x-access-token', _authenticate(userid))])
+    ctx['cs3stub'].Move(request=req, metadata=[('x-access-token', _authenticate(userid))])
   except Exception as e:
+    ctx['log'].warning('msg="Failed to rename file" filepath="%s" error="%s"' % (filepath, e))
     raise IOError(e)
 
 
@@ -222,6 +219,7 @@ def removefile(endpoint, filepath, userid, _force=0):
   reference = spr.Reference(path=filepath, id=spr.ResourceId(storage_id=endpoint))
   req = sp.DeleteRequest(ref=reference)
   try:
-    credentials['cs3stub'].Delete(request=req, metadata=[('x-access-token', _authenticate(userid))])
+    ctx['cs3stub'].Delete(request=req, metadata=[('x-access-token', _authenticate(userid))])
   except Exception as e:
+    ctx['log'].warning('msg="Failed to remove file" filepath="%s" error="%s"' % (filepath, e))
     raise IOError(e)
