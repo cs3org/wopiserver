@@ -141,7 +141,7 @@ def readfile(endpoint, filepath, userid):
   ctx['log'].info('msg="Invoking readFile" filepath="%s"' % filepath)
   #fileid = stat(endpoint, filepath, userid)['inode'].split(':')[1]
   try:
-    reference = spr.Reference(path=filepath, id=spr.ResourceId(storage_id=endpoint))
+    reference = spr.Reference(path=filepath)
     req = sp.InitiateFileDownloadRequest(ref=reference)
     filedownloadres = ctx['cs3stub'].InitiateFileDownload(
         request=req, metadata=[('x-access-token', _authenticate(userid))])

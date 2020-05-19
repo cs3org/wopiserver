@@ -255,8 +255,12 @@ def cboxOpen():
   req = flask.request
   # if running in https mode, first check if the shared secret matches ours
   if Wopi.useHttps and ('Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.iopsecret):
+<<<<<<< HEAD
     Wopi.log.warning('msg="cboxOpen: unauthorized access attempt, missing authorization token" ' \
                      'client="%s"' % req.remote_addr)
+=======
+    Wopi.log.warning('msg="cboxOpen: unauthorized access attempt, missing authorization token" client="%s"' % req.remote_addr)
+>>>>>>> Updated the whole repo to remove all vendor/storage-specific references.
     return 'Client not authorized', http.client.UNAUTHORIZED
   # now validate the user identity and deny root access
   try:
@@ -357,8 +361,12 @@ def cboxGetOpenFiles():
   req = flask.request
   # first check if the shared secret matches ours
   if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.iopsecret:
+<<<<<<< HEAD
     Wopi.log.warning('msg="cboxGetOpenFiles: unauthorized access attempt, missing authorization token" ' \
                      'client="%s"' % req.remote_addr)
+=======
+    Wopi.log.warning('msg="cboxGetOpenFiles: unauthorized access attempt, missing authorization token" client="%s"' % req.remote_addr)
+>>>>>>> Updated the whole repo to remove all vendor/storage-specific references.
     return 'Client not authorized', http.client.UNAUTHORIZED
   # first convert the sets into lists, otherwise sets cannot be serialized in JSON format
   jl = {}
@@ -391,8 +399,12 @@ def cboxLock():
   req = flask.request
   # first check if the shared secret matches ours
   if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.iopsecret:
+<<<<<<< HEAD
     Wopi.log.warning('msg="cboxLock: unauthorized access attempt, missing authorization token" '
                      'client="%s"' % req.remote_addr)
+=======
+    Wopi.log.warning('msg="cboxLock: unauthorized access attempt, missing authorization token" client="%s"' % req.remote_addr)
+>>>>>>> Updated the whole repo to remove all vendor/storage-specific references.
     return 'Client not authorized', http.client.UNAUTHORIZED
   filename = req.args['filename']
   userid = req.args['userid'] if 'userid' in req.args else '0:0'
@@ -474,8 +486,12 @@ def cboxUnlock():
   req = flask.request
   # first check if the shared secret matches ours
   if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.iopsecret:
+<<<<<<< HEAD
     Wopi.log.warning('msg="cboxUnlock: unauthorized access attempt, missing authorization token" ' \
                      'client="%s"' % req.remote_addr)
+=======
+    Wopi.log.warning('msg="cboxUnlock: unauthorized access attempt, missing authorization token" client="%s"' % req.remote_addr)
+>>>>>>> Updated the whole repo to remove all vendor/storage-specific references.
     return 'Client not authorized', http.client.UNAUTHORIZED
   filename = req.args['filename']
   userid = req.args['userid'] if 'userid' in req.args else '0:0'
@@ -950,9 +966,15 @@ def wopiPutFile(fileid):
     # Go for overwriting the file. Note that the entire check+write operation should be atomic,
     # but the previous check still gives the opportunity of a race condition. We just live with it.
     # Anyhow, the EFSS should support versioning for such cases.
+<<<<<<< HEAD
     utils.storeWopiFile(flask.request, acctok, LASTSAVETIMEKEY)
     Wopi.log.info('msg="File successfully written" action="edit" user="%s" filename="%s" token="%s"' % \
                   (acctok['userid'], acctok['filename'], flask.request.args['access_token'][-20:]))
+=======
+    _storeWopiFile(flask.request, acctok)
+    Wopi.log.info('msg="File successfully written" action="edit" user="%s:%s" filename="%s" token="%s"' % \
+                  (acctok['ruid'], acctok['rgid'], acctok['filename'], flask.request.args['access_token'][-20:]))
+>>>>>>> Updated the whole repo to remove all vendor/storage-specific references.
     return 'OK', http.client.OK
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
     Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" token="%s"' % \
