@@ -141,13 +141,12 @@ def readfile(endpoint, filepath, userid):
   try:
     reference = spr.Reference(path=filepath, id=spr.ResourceId(storage_id=endpoint))
     req = sp.InitiateFileDownloadRequest(ref=reference)
-    initiatefiledownloadres = ctx['cs3stub'].InitiateFileDownload(
+    filedownloadres = ctx['cs3stub'].InitiateFileDownload(
         request=req, metadata=[('x-access-token', _authenticate(userid))])
 
     # Download
-    ctx['log'].debug('msg="readfile: InitiateFileDownloadRes returned" ' \
-                     'endpoint="%s"' % initiatefiledownloadres.download_endpoint)
-    fileinformation = requests.get(url=initiatefiledownloadres.download_endpoint + filepath,
+    ctx['log'].debug('msg="readfile: InitiateFileDownloadRes returned" endpoint="%s"' % filedownloadres.download_endpoint)
+    fileinformation = requests.get(url=filedownloadres.download_endpoint + filepath,    # XXX this is a bug in Reva, the endpoint is supposed to be complete
                                    headers={'x-access-token': _authenticate(userid)})
     data = fileinformation.content
     if not data:

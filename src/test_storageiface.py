@@ -66,7 +66,7 @@ class TestStorage(unittest.TestCase):
     '''Assume a test.txt file exists with content = "bla"'''
     content = ''
     for chunk in self.storage.readfile(self.endpoint, '/test.txt', self.userid):
-      self.assertNotIsInstance(chunk, IOError, 'storage.readfile raised exception: %s' % chunk)
+      self.assertNotIsInstance(chunk, IOError, 'raised by storage.readfile')
       content += chunk.decode('utf-8')
     self.assertEqual(content, 'bla\n', 'File test.txt should contain the string "bla"')
 
