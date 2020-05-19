@@ -25,10 +25,14 @@ class TestStorage(unittest.TestCase):
     log.setLevel(logging.DEBUG)
     # read the configuration
     config = configparser.ConfigParser()
-    with open('/etc/wopi/wopiserver.defaults.conf') as fdef:
-      config.read_file(fdef)
-    config.read('/etc/wopi/wopiserver.conf')
-    storagetype = config.get('general', 'storagetype')
+    try:
+      with open('/etc/wopi/wopiserver.defaults.conf') as fdef:
+        config.read_file(fdef)
+      config.read('/etc/wopi/wopiserver.conf')
+      storagetype = config.get('general', 'storagetype')
+    except (KeyError, configparser.NoOptionError):
+      print("Missing option or missing configuration, check your /etc/wopi/wopiserver.conf file")
+      raise
     # this is taken from wopiserver.py::storage_layer_import
     if storagetype in ['local', 'xroot', 'cs3']:
       storagetype += 'iface'
@@ -61,8 +65,9 @@ class TestStorage(unittest.TestCase):
   def test_readfile(self):
     '''Assume a test.txt file exists with content = "bla"'''
     content = ''
-    for l in self.storage.readfile(self.endpoint, '/test.txt', self.userid):
-      content += l.decode('utf-8')
+    for chunk in self.storage.readfile(self.endpoint, '/test.txt', self.userid):
+      self.assertNotIsInstance(chunk, IOError, 'storage.readfile raised exception: %s' % chunk)
+      content += chunk.decode('utf-8')
     self.assertEqual(content, 'bla\n', 'File test.txt should contain the string "bla"')
 
   def test_writefile(self):
@@ -89,6 +94,15 @@ class TestStorage(unittest.TestCase):
     self.storage.rmxattr(self.endpoint, '/test.txt', self.userid, 'testkey')
     v = self.storage.getxattr(self.endpoint, '/test.txt', self.userid, 'testkey')
     self.assertEqual(v, None)
+
+  def test_rename(self):
+    '''Test renaming and stat of a file'''
+    self.storage.renamefile(self.endpoint, '/test.txt', '/test_renamed.txt', self.userid)
+    statInfo = self.storage.stat(self.endpoint, '/test_renamed.txt', self.userid)
+    self.assertEqual(statInfo['filepath'], '/test_renamed.txt')
+    self.storage.renamefile(self.endpoint, '/test_renamed.txt', '/test.txt', self.userid)
+    statInfo = self.storage.stat(self.endpoint, '/test.txt', self.userid)
+    self.assertEqual(statInfo['filepath'], '/test.txt')
 
 
 if __name__ == '__main__':
