@@ -11,6 +11,8 @@ Lovisa.Lugnegaard@cern.ch, CERN/IT-ST
 import time
 import requests
 import grpc
+import os
+# insert at 1, 0 is the script path (or '' in REPL)
 
 from tusclient import client as tusclient
 
@@ -166,14 +168,28 @@ def writefile(endpoint, filepath, userid, content, noversion=0):
     If noversion=1, the write explicitly disables versioning: this is useful for lock files.'''
   try:
     tstart = time.clock()
-    reference = spr.Reference(path=filepath, id=spr.ResourceId(storage_id=endpoint))
+
+    tend = time.clock()
+    # print("file size: " + os.path.getsize(filepath))
+    print('msg="File open for write" filename="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
+    # write the file. In a future implementation, we should find a way to only update the required chunks...
+
+    tstart = time.clock()
+    reference = spr.Reference(path = filepath)
+    uploadlength = os.path.getsize('/Users/lolu/cern/lovisaFork/wopiserver' +filepath)
+    print("length " + str(uploadlength))
 
     opaque = types.Opaque(
-               map = { 'Upload-Length': types.OpaqueEntry(decoder='plain',value='23'.encode('utf-8'))}
-             )
+				map = { 'Upload-Length': types.OpaqueEntry(decoder='plain',value=str(uploadlength).encode('utf-8'))}
+			)
+
+    tstart = time.clock()
+    reference = spr.Reference(path = filepath)
 
     req = sp.InitiateFileUploadRequest(ref = reference, opaque=opaque)
-    res1 = ctx['cs3stub'].InitiateFileUpload(request = req, metadata = [('x-access-token', _authenticate(userid))])
+    res1 = credentials['cs3stub'].InitiateFileUpload(request = req, metadata = [('x-access-token', _authenticate(userid))])
+    print(res1)
+
     metadata = {
       "filepath": filepath,
       "dir":      "/"
@@ -190,9 +206,13 @@ def writefile(endpoint, filepath, userid, content, noversion=0):
     my_client = tusclient.TusClient(res1.upload_endpoint, headers=headers)
     ctx['log'].debug('msg="Starting upload" filename="%s" uploadres="%s"' % (filepath, res1))
 
-    uploader = my_client.uploader(file_path='home/example.txt', metadata=metadata, client=my_client, url=res1.upload_endpoint)
-    #Not implemented for local fs on reva side
-    uploader.upload()
+    myfiles = {'file': open('src/example.txt' ,'rb')}
+    requests.put(url=res1.upload_endpoint, files=myfiles, headers=headers, data=metadata)    
+    # my_client = tusclient.TusClient(res1.upload_endpoint, headers=headers)
+
+    # uploader = my_client.uploader(file_path='home/example.txt', metadata=metadata, client=my_client, url=res1.upload_endpoint)
+    # #Not implemented for local fs on reva side
+    # uploader.upload()
     tend = time.clock()
     ctx['log'].info('msg="File open for write" filename="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
   except OSError as e:
