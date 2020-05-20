@@ -28,7 +28,6 @@ class TestStorage(unittest.TestCase):
     try:
       with open('wopiserver-test.conf') as fdef:
         config.read_file(fdef)
-      config.read('wopiserver-test.conf')
       storagetype = config.get('general', 'storagetype')
     except (KeyError, configparser.NoOptionError):
       print("Missing option or missing configuration, check the wopiserver-test.conf file")
