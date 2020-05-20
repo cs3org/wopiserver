@@ -37,6 +37,7 @@ def init(config, log):
   ctx['log'] = log
   ctx['chunksize'] = config.getint('io', 'chunksize')
   revahost = config.get('cs3', 'revahost')
+  ctx['datagw'] = config.get('cs3', 'datagateway')
   # prepare the gRPC connection
   ch = grpc.insecure_channel(revahost)
   ctx['cs3stub'] = cs3gw_grpc.GatewayAPIStub(ch)
@@ -136,47 +137,56 @@ def rmxattr(_endpoint, filepath, userid, key):
     ctx['log'].debug('msg="Invoked rmxattr" result="%s"' % res)
 
 
-def readfile(endpoint, filepath, userid):
+def readfile(_endpoint, filepath, userid):
   '''Read a file using the given userid as access token. Note that the function is a generator, managed by Flask.'''
-  ctx['log'].info('msg="Invoking readFile" filepath="%s"' % filepath)
-  #fileid = stat(endpoint, filepath, userid)['inode'].split(':')[1]
-  try:
-    reference = spr.Reference(path=filepath)
-    req = sp.InitiateFileDownloadRequest(ref=reference)
-    filedownloadres = ctx['cs3stub'].InitiateFileDownload(
-        request=req, metadata=[('x-access-token', _authenticate(userid))])
+  tstart = time.clock()
+  reference = spr.Reference(path=filepath)
+  # prepare endpoint
+  req = sp.InitiateFileDownloadRequest(ref=reference)
+  filedownloadres = ctx['cs3stub'].InitiateFileDownload(
+      request=req, metadata=[('x-access-token', _authenticate(userid))])
+  if filedownloadres.status.code == cs3code.CODE_NOT_FOUND:
+    ctx['log'].info('msg="File not found on read" filepath="%s"' % filepath)
+    yield IOError('No such file or directory')
+  elif filedownloadres.status.code != cs3code.CODE_OK:
+    ctx['log'].debug('msg="Failed to initiateFileDownload on read" filepath="%s" reason="%s"' % (
+                     filepath, filedownloadres.status.message))
+    yield IOError(filedownloadres.status.message)
 
-    # Download
-    ctx['log'].debug('msg="readfile: InitiateFileDownloadRes returned" endpoint="%s"' % filedownloadres.download_endpoint)
-    fileinformation = requests.get(url=filedownloadres.download_endpoint + filepath,    # XXX this is a bug in Reva, the endpoint is supposed to be complete
-                                   headers={'x-access-token': _authenticate(userid)})
-    data = fileinformation.content
-    if not data:
-      ctx['log'].info('msg="File not found on read" filepath="%s" rc="%s"' % (filepath, fileinformation))
-      yield IOError('No such file or directory')
-    else:
-      for i in range(0, len(data), ctx['chunksize']):
-        yield data[i:i+ctx['chunksize']]
-  except Exception as e:
-    ctx['log'].warning('msg="Error when reading file" filepath="%s" error="%s"' % (filepath, e))
-    yield IOError(e)
+  # Download
+  ctx['log'].debug('msg="readfile: InitiateFileDownloadRes returned" endpoint="%s"' % filedownloadres.download_endpoint)
+  fileget = requests.get(url=filedownloadres.download_endpoint,
+                         headers={'x-access-token': _authenticate(userid)})
+  tend = time.clock()
+  data = fileget.content
+  if fileget.status_code != http.client.OK:
+    ctx['log'].error('msg="Error downloading file from Reva" code="%d" reason="%s"' % (fileget.status_code, fileget.reason))
+    yield IOError(fileget.reason)
+  else:
+    ctx['log'].info('msg="File open for read" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
+    for i in range(0, len(data), ctx['chunksize']):
+      yield data[i:i+ctx['chunksize']]
 
 
-def writefile(endpoint, filepath, userid, content, noversion=0):
+def writefile(_endpoint, filepath, userid, content, _noversion=0):
   '''Write a file using the given userid as access token. The entire content is written
     and any pre-existing file is deleted (or moved to the previous version if supported).
-    If noversion=1, the write explicitly disables versioning: this is useful for lock files.'''
+    The noversion flag is currently not supported.'''
   try:
     # TODO: In a future implementation, we should find a way to only update the required chunks 
     # TODO: Use tus client instead of PUT
+    tstart = time.clock()
     headers = {
-      'Tus-Resumable': '1.0.0',
-      'x-access-token':  _authenticate(userid)
+        'Tus-Resumable': '1.0.0',
+        'x-access-token':  _authenticate(userid)
     }
-
-    requests.put(url='http://localhost:19001/data' + filepath, data=content, headers=headers)
+    res = requests.put(url=ctx['datagw'] + filepath, data=content, headers=headers)
+    tend = time.clock()
+    if res.status_code != http.client.OK:
+      raise IOError(res.reason)
+    ctx['log'].info('msg="File open for write" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
   except Exception as e:
-    print('msg="Error writing to file" filepath="%s" error="%s"' % (filepath, e))
+    ctx['log'].error('msg="Error writing to file" filepath="%s" error="%s"' % (filepath, e))
     raise IOError(e)
 
 
