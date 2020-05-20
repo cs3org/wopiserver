@@ -17,7 +17,7 @@ class TestStorage(unittest.TestCase):
   def __init__(self, *args, **kwargs):
     '''One-off initialization of the test environment: create mock logging and import the library'''
     super(TestStorage, self).__init__(*args, **kwargs)
-    loghandler = logging.FileHandler('/var/log/wopi/wopiserver.log')
+    loghandler = logging.FileHandler('/tmp/wopiserver.log')
     loghandler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)s[%(process)d] %(levelname)-8s %(message)s',
                                               datefmt='%Y-%m-%dT%H:%M:%S'))
     log = logging.getLogger('wopiserver.test')
