@@ -11,8 +11,7 @@ Lovisa.Lugnegaard@cern.ch, CERN/IT-ST
 import time
 import requests
 import grpc
-import os
-# insert at 1, 0 is the script path (or '' in REPL)
+import http
 
 from tusclient import client as tusclient
 
@@ -59,29 +58,29 @@ def stat(endpoint, fileid, userid):
   '''Stat a file and returns (size, mtime) as well as other extended info using the given userid as access token.'''
   if endpoint == 'default':
     raise IOError('A CS3API-compatible storage endpoint must be identified by a storage UUID')
-  try:
-    tstart = time.clock()
-    if fileid[0] == '/':
-      # assume this is a filepath
-      ref = spr.Reference(id=spr.ResourceId(storage_id=endpoint), path=fileid)
-    else:
-      # assume we have an opaque fileid
-      ref = spr.Reference(id=spr.ResourceId(storage_id=endpoint, opaque_id=fileid))
-    statInfo = ctx['cs3stub'].Stat(request=sp.StatRequest(ref=ref),
-                                   metadata=[('x-access-token', _authenticate(userid))])
-    tend = time.clock()
-    ctx['log'].info('msg="Invoked stat" fileid="%s" elapsedTimems="%.1f" res="%s"' % (fileid, (tend-tstart)*1000, statInfo))
-    if statInfo.status.code == cs3code.CODE_OK:
-      return {
-          'inode': statInfo.info.id.storage_id + ':' + statInfo.info.id.opaque_id,
-          'filepath': statInfo.info.path,
-          'userid': statInfo.info.owner.opaque_id,
-          'size': statInfo.info.size,
-          'mtime': statInfo.info.mtime
-          }
-  except Exception as e:
-    raise IOError(e)
-  raise IOError(statInfo.status.message)
+  tstart = time.clock()
+  if fileid[0] == '/':
+    # assume this is a filepath
+    ref = spr.Reference(path=fileid)
+  else:
+    # assume we have an opaque fileid
+    ref = spr.Reference(id=spr.ResourceId(storage_id=endpoint, opaque_id=fileid))
+  statInfo = ctx['cs3stub'].Stat(request=sp.StatRequest(ref=ref),
+                                 metadata=[('x-access-token', _authenticate(userid))])
+  tend = time.clock()
+  ctx['log'].info('msg="Invoked stat" fileid="%s" elapsedTimems="%.1f"' % (fileid, (tend-tstart)*1000))
+  if statInfo.status.code == cs3code.CODE_OK:
+    ctx['log'].debug('msg="Stat result" data="%s"' % statInfo)
+    return {
+        'inode': statInfo.info.id.storage_id + ':' + statInfo.info.id.opaque_id,
+        'filepath': statInfo.info.path,
+        'userid': statInfo.info.owner.opaque_id,
+        'size': statInfo.info.size,
+        'mtime': statInfo.info.mtime
+        }
+  else:
+    ctx['log'].info('msg="Failed stat" fileid="%s" reason="%s"' % (fileid, statInfo.status.message))
+    raise IOError(statInfo.status.message)
 
 
 def statx(endpoint, fileid, userid):
