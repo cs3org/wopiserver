@@ -26,12 +26,12 @@ class TestStorage(unittest.TestCase):
     # read the configuration
     config = configparser.ConfigParser()
     try:
-      with open('/etc/wopi/wopiserver.defaults.conf') as fdef:
+      with open('wopiserver-test.conf') as fdef:
         config.read_file(fdef)
-      config.read('/etc/wopi/wopiserver.conf')
+      config.read('wopiserver-test.conf')
       storagetype = config.get('general', 'storagetype')
     except (KeyError, configparser.NoOptionError):
-      print("Missing option or missing configuration, check your /etc/wopi/wopiserver.conf file")
+      print("Missing option or missing configuration, check the wopiserver-test.conf file")
       raise
 
     # this is taken from wopiserver.py::storage_layer_import
