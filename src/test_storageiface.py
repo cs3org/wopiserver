@@ -54,7 +54,7 @@ class TestStorage(unittest.TestCase):
     statInfo = self.storage.stat(self.endpoint, '/test.txt', self.userid)
     self.assertIsInstance(statInfo, dict)
     self.assertEqual(statInfo['filepath'], '/test.txt', 'Filepath should be /test.txt')
-    #self.storage.removefile(self.endpoint, '/test.txt', self.userid)
+    self.storage.removefile(self.endpoint, '/test.txt', self.userid)
 
   def test_stat_fileid(self):
     '''Call stat() and assert the path matches'''
@@ -67,7 +67,7 @@ class TestStorage(unittest.TestCase):
     statInfo = self.storage.stat(fileid[0], fileid[1], self.userid)
     self.assertIsInstance(statInfo, dict)
     self.assertEqual(statInfo['filepath'], '/test.txt', 'Filepath should be /test.txt')
-    #self.storage.removefile(self.endpoint, '/test.txt', self.userid)
+    self.storage.removefile(self.endpoint, '/test.txt', self.userid)
 
   def test_stat_nofile(self):
     '''Call stat() and assert the exception is as expected'''
@@ -81,7 +81,7 @@ class TestStorage(unittest.TestCase):
     statInfo = self.storage.statx(self.endpoint, '/test.txt', self.userid)
     self.assertIsInstance(statInfo, dict)
     self.assertEqual(statInfo['filepath'], '/test.txt', 'Filepath should be /test.txt')
-    #self.storage.removefile(self.endpoint, '/test.txt', self.userid)
+    self.storage.removefile(self.endpoint, '/test.txt', self.userid)
 
   def test_readfile(self):
     '''Writes a file and reads it back, validating that the content matches'''
@@ -92,13 +92,13 @@ class TestStorage(unittest.TestCase):
       self.assertNotIsInstance(chunk, IOError, 'raised by storage.readfile')
       content += chunk.decode('utf-8')
     self.assertEqual(content, 'bla\n', 'File test.txt should contain the string "bla"')
-    #self.storage.removefile(self.endpoint, '/test.txt', self.userid)
+    self.storage.removefile(self.endpoint, '/test.txt', self.userid)
 
   def test_read_nofile(self):
     '''Test reading of a non-existing file'''
-    read = next(self.storage.readfile(self.endpoint, '/hopefullynotexisting', self.userid))
-    self.assertIsInstance(read, IOError, 'readfile returned %s' % read)
-    self.assertEqual(str(read), 'No such file or directory', 'readfile returned %s' % read)
+    readex = next(self.storage.readfile(self.endpoint, '/hopefullynotexisting', self.userid))
+    self.assertIsInstance(readex, IOError, 'readfile returned %s' % readex)
+    self.assertEqual(str(readex), 'No such file or directory', 'readfile returned %s' % readex)
 
   def test_write_remove(self):
     '''Test write and removal of a file'''
@@ -118,14 +118,14 @@ class TestStorage(unittest.TestCase):
   def test_xattr(self):
     '''Test all xattr methods'''
     buf = b'bla\n'
-    self.storage.writefile(self.endpoint, '/test.txt', self.userid, buf)
-    self.storage.setxattr(self.endpoint, '/test.txt', self.userid, 'testkey', 'testvalue')
-    v = self.storage.getxattr(self.endpoint, '/test.txt', self.userid, 'testkey')
+    self.storage.writefile(self.endpoint, '/testxattr.txt', self.userid, buf)
+    self.storage.setxattr(self.endpoint, '/testxattr.txt', self.userid, 'testkey', 'testvalue')
+    v = self.storage.getxattr(self.endpoint, '/testxattr.txt', self.userid, 'testkey')
     self.assertEqual(v, b'testvalue')
-    self.storage.rmxattr(self.endpoint, '/test.txt', self.userid, 'testkey')
-    v = self.storage.getxattr(self.endpoint, '/test.txt', self.userid, 'testkey')
+    self.storage.rmxattr(self.endpoint, '/testxattr.txt', self.userid, 'testkey')
+    v = self.storage.getxattr(self.endpoint, '/testxattr.txt', self.userid, 'testkey')
     self.assertEqual(v, None)
-    #self.storage.removefile(self.endpoint, '/test.txt', self.userid)
+    self.storage.removefile(self.endpoint, '/testxattr.txt', self.userid)
 
   def test_rename(self):
     '''Test renaming and stat of a file'''
@@ -137,7 +137,7 @@ class TestStorage(unittest.TestCase):
     self.storage.renamefile(self.endpoint, '/test_renamed.txt', '/test.txt', self.userid)
     statInfo = self.storage.stat(self.endpoint, '/test.txt', self.userid)
     self.assertEqual(statInfo['filepath'], '/test.txt')
-    #self.storage.removefile(self.endpoint, '/test.txt', self.userid)
+    self.storage.removefile(self.endpoint, '/test.txt', self.userid)
 
 
 if __name__ == '__main__':
