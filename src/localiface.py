@@ -49,7 +49,7 @@ def stat(_endpoint, filepath, _userid):
     tend = time.clock()
     log.info('msg="Invoked stat" filepath="%s" elapsedTimems="%.1f"' % (_getfilepath(filepath), (tend-tstart)*1000))
     return {
-        'inode': statInfo.st_ino,
+        'inode': str(statInfo.st_ino),
         'filepath': filepath,
         'userid': str(statInfo.st_uid) + ':' + str(statInfo.st_gid),
         'size': statInfo.st_size,

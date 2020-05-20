@@ -128,7 +128,7 @@ def statx(endpoint, filepath, userid):
   if 'retc=' in rawinfo:
     raise IOError(rawinfo.strip('\n'))
   statxdata = rawinfo.split()
-  return {'inode': statxdata[2],
+  return {'inode': str(statxdata[2]),
           'filepath': filepath,
           'userid': str(statxdata[5]) + ':' + str(statxdata[6]),
           'size': int(statxdata[8]),
