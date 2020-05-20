@@ -88,51 +88,52 @@ def statx(endpoint, fileid, userid):
   return stat(endpoint, fileid, userid)
 
 
-def setxattr(endpoint, filepath, userid, key, value):
+def setxattr(_endpoint, filepath, userid, key, value):
   '''Set the extended attribute <key> to <value> using the given userid as access token'''
   # TODO implement this on the reva side (now reva returns operation not supported)
-  reference = spr.Reference(path=filepath, id=spr.ResourceId(storage_id=endpoint))
+  reference = spr.Reference(path=filepath)
   arbitrary_metadata = spr.ArbitraryMetadata()
   arbitrary_metadata.metadata.update({key: value})
   req = sp.SetArbitraryMetadataRequest(ref=reference, arbitrary_metadata=arbitrary_metadata)
-  try:
-    ctx['cs3stub'].SetArbitraryMetadata(
-        request=req, metadata=[('x-access-token', _authenticate(userid))])
-    # TODO check for error
-  except Exception as e:
-    raise IOError(e)
+  res = ctx['cs3stub'].SetArbitraryMetadata(request=req,
+                                            metadata=[('x-access-token', _authenticate(userid))])
+  if res.status.code != cs3code.CODE_OK:
+    ctx['log'].warning('msg="Failed to getxattr" filepath="%s" key="%s" reason="%s"' % (filepath, key, res.status.message))
+    raise IOError(res.status.message)
+  else:
+    ctx['log'].debug('msg="Invoked setxattr" result="%s"' % res)
 
 
-def getxattr(endpoint, filepath, userid, key):
+def getxattr(_endpoint, filepath, userid, key):
   '''Get the extended attribute <key> using the given userid as access token. Do not raise exceptions'''
+  tstart = time.clock()
+  reference = spr.Reference(path=filepath)
+  statInfo = ctx['cs3stub'].Stat(request=sp.StatRequest(ref=reference),
+                                 metadata=[('x-access-token', _authenticate(userid))])
+  tend = time.clock()
+  if statInfo.status.code != cs3code.CODE_OK:
+    ctx['log'].warning('msg="Failed to stat" filepath="%s" key="%s" reason="%s"' % (filepath, key, statInfo.status.message))
+    raise IOError(statInfo.status.message)
   try:
-    tstart = time.clock()
-    reference = spr.Reference(path=filepath, id=spr.ResourceId(storage_id=endpoint))
-    statInfo = ctx['cs3stub'].Stat(request=sp.StatRequest(ref=reference),
-                                   metadata=[('x-access-token', _authenticate(userid))])
-    tend = time.clock()
-    ctx['log'].info('msg="Invoked stat for getxattr" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
-    try:
-      return statInfo.info.arbitrary_metadata.metadata[key]
-    except KeyError:
-      ctx['log'].warning('msg="Key not found in getxattr" filepath="%s" key="%s"' % (filepath, key))
-  except Exception as e:
-    ctx['log'].warning('msg="Failed to getxattr" filepath="%s" key="%s" exception="%s"' % (filepath, key, e))
-    raise IOError(e)
-  return None
+    xattrvalue = statInfo.info.arbitrary_metadata.metadata[key]
+    ctx['log'].debug('msg="Invoked stat for getxattr" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
+    return xattrvalue
+  except KeyError:
+    ctx['log'].info('msg="Key not found in getxattr" filepath="%s" key="%s"' % (filepath, key))
+    return None
 
 
-def rmxattr(endpoint, filepath, userid, key):
+def rmxattr(_endpoint, filepath, userid, key):
   '''Remove the extended attribute <key> using the given userid as access token'''
   # TODO implement this on the reva side (now reva returns operation not supported)
-  reference = spr.Reference(path=filepath, id=spr.ResourceId(storage_id=endpoint))
+  reference = spr.Reference(path=filepath)
   req = sp.UnsetArbitraryMetadataRequest(ref=reference, arbitrary_metadata_keys=[key])
-  try:
-    ctx['cs3stub'].UnsetArbitraryMetadata(request=req, metadata=[('x-access-token', _authenticate(userid))])
-    # TODO check for error
-  except Exception as e:
-    ctx['log'].warning('msg="Failed to rmxattr" filepath="%s" key="%s" exception="%s"' % (filepath, key, e))
-    raise IOError(e)
+  res = ctx['cs3stub'].UnsetArbitraryMetadata(request=req, metadata=[('x-access-token', _authenticate(userid))])
+  if res.status.code != cs3code.CODE_OK:
+    ctx['log'].warning('msg="Failed to rmxattr" filepath="%s" key="%s" exception="%s"' % (filepath, key, res.status.message))
+    raise IOError(res.status.message)
+  else:
+    ctx['log'].debug('msg="Invoked rmxattr" result="%s"' % res)
 
 
 def readfile(endpoint, filepath, userid):
@@ -179,25 +180,27 @@ def writefile(endpoint, filepath, userid, content, noversion=0):
     raise IOError(e)
 
 
-def renamefile(endpoint, filepath, newfilepath, userid):
+def renamefile(_endpoint, filepath, newfilepath, userid):
   '''Rename a file from origfilepath to newfilepath using the given userid as access token.'''
-  source = spr.Reference(path=filepath, id=spr.ResourceId(storage_id=endpoint))
-  destination = spr.Reference(path=newfilepath, id=spr.ResourceId(storage_id=endpoint))
+  source = spr.Reference(path=filepath)
+  destination = spr.Reference(path=newfilepath)
   req = sp.MoveRequest(source=source, destination=destination)
-  try:
-    ctx['cs3stub'].Move(request=req, metadata=[('x-access-token', _authenticate(userid))])
-  except Exception as e:
-    ctx['log'].warning('msg="Failed to rename file" filepath="%s" error="%s"' % (filepath, e))
-    raise IOError(e)
+  res = ctx['cs3stub'].Move(request=req, metadata=[('x-access-token', _authenticate(userid))])
+  if res.status.code != cs3code.CODE_OK:
+    ctx['log'].warning('msg="Failed to rename file" filepath="%s" error="%s"' % (filepath, res.status.message))
+    raise IOError(res.status.message)
+  else:
+    ctx['log'].debug('msg="Invoked renamefile" result="%s"' % res)
 
 
-def removefile(endpoint, filepath, userid, _force=0):
+def removefile(_endpoint, filepath, userid, _force=0):
   '''Remove a file using the given userid as access token.
      The force argument is ignored for now for CS3 storage.'''
-  reference = spr.Reference(path=filepath, id=spr.ResourceId(storage_id=endpoint))
+  reference = spr.Reference(path=filepath)
   req = sp.DeleteRequest(ref=reference)
-  try:
-    ctx['cs3stub'].Delete(request=req, metadata=[('x-access-token', _authenticate(userid))])
-  except Exception as e:
-    ctx['log'].warning('msg="Failed to remove file" filepath="%s" error="%s"' % (filepath, e))
-    raise IOError(e)
+  res = ctx['cs3stub'].Delete(request=req, metadata=[('x-access-token', _authenticate(userid))])
+  if res.status.code != cs3code.CODE_OK:
+    ctx['log'].warning('msg="Failed to remove file" filepath="%s" error="%s"' % (filepath, res))
+    raise IOError(res.status.message)
+  else:
+    ctx['log'].debug('msg="Invoked removefile" result="%s"' % res)
