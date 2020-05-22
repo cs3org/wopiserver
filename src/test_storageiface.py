@@ -120,7 +120,7 @@ class TestStorage(unittest.TestCase):
     self.storage.writefile(self.endpoint, '/testxattr.txt', self.userid, buf)
     self.storage.setxattr(self.endpoint, '/testxattr.txt', self.userid, 'testkey', 'testvalue')
     v = self.storage.getxattr(self.endpoint, '/testxattr.txt', self.userid, 'testkey')
-    self.assertEqual(v, b'testvalue')
+    self.assertEqual(v, 'testvalue')
     self.storage.rmxattr(self.endpoint, '/testxattr.txt', self.userid, 'testkey')
     v = self.storage.getxattr(self.endpoint, '/testxattr.txt', self.userid, 'testkey')
     self.assertEqual(v, None)

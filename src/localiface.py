@@ -77,7 +77,7 @@ def getxattr(_endpoint, filepath, _userid, key):
   '''Get the extended attribute <key> on behalf of the given userid. Do not raise exceptions'''
   try:
     filepath = _getfilepath(filepath)
-    return os.getxattr(filepath, 'user.' + key)
+    return os.getxattr(filepath, 'user.' + key).decode('UTF-8')
   except (FileNotFoundError, PermissionError, OSError) as e:
     log.warning('msg="Failed to getxattr" filepath="%s" key="%s" exception="%s"' % (filepath, key, e))
     return None
