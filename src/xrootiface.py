@@ -51,7 +51,7 @@ def _eosargs(userid, atomicwrite=0, bookingsize=0):
       raise ValueError
     ruid = int(userid[0])
     rgid = int(userid[1])
-    return '?eos.ruid=' + ruid + '&eos.rgid=' + rgid + ('&eos.atomic=1' if atomicwrite else '') + \
+    return '?eos.ruid=' + str(ruid) + '&eos.rgid=' + str(rgid) + ('&eos.atomic=1' if atomicwrite else '') + \
             (('&eos.bookingsize='+str(bookingsize)) if bookingsize else '') + '&eos.app=wopi'
   except (ValueError, IndexError):
     raise ValueError('Only Unix-based userid is supported with xrootd storage')
@@ -119,7 +119,7 @@ def stat(endpoint, filepath, userid):
 def statx(endpoint, filepath, userid):
   '''Get extended stat info (inode, filepath, userid, size, mtime) via an xroot opaque query on behalf of the given userid'''
   tstart = time.clock()
-  rc, rawinfo = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(filepath) + _eosargs(userid) + '&mgm.pcmd=stat')
+  rc, rawinfo = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(filepath) + _eosargs(userid) +'&mgm.pcmd=stat')
   tend = time.clock()
   log.info('msg="Invoked stat" filepath="%s" elapsedTimems="%.1f"' % (_getfilepath(filepath), (tend-tstart)*1000))
   if '[SUCCESS]' not in str(rc):
@@ -170,11 +170,11 @@ def readfile(endpoint, filepath, userid):
       # the file could not be opened: check the case of ENOENT and log it as info to keep the logs cleaner
       if 'No such file or directory' in rc.message:
         log.info('msg="File not found on read" filepath="%s"' % filepath)
+        yield IOError('No such file or directory')
       else:
         log.warning('msg="Error opening the file for read" filepath="%s" code="%d" error="%s"' % \
                     (filepath, rc.shellcode, rc.message.strip('\n')))
-      # as this is a generator, we yield the error string instead of the file's contents
-      yield IOError(rc.message)
+        yield IOError(rc.message)
     else:
       log.info('msg="File open for read" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
       chunksize = config.getint('io', 'chunksize')

@@ -10,9 +10,6 @@ import configparser
 
 class TestStorage(unittest.TestCase):
   '''Simple tests for the storage layers of the WOPI server'''
-  endpoint = '123e4567-e89b-12d3-a456-426655440000'
-  userid = 'einstein'
-  storage = None
 
   def __init__(self, *args, **kwargs):
     '''One-off initialization of the test environment: create mock logging and import the library'''
@@ -29,6 +26,8 @@ class TestStorage(unittest.TestCase):
       with open('wopiserver-test.conf') as fdef:
         config.read_file(fdef)
       storagetype = config.get('general', 'storagetype')
+      self.userid = config.get(storagetype, 'userid')
+      self.endpoint = config.get(storagetype, 'endpoint')
     except (KeyError, configparser.NoOptionError):
       print("Missing option or missing configuration, check the wopiserver-test.conf file")
       raise
@@ -52,35 +51,32 @@ class TestStorage(unittest.TestCase):
     self.storage.writefile(self.endpoint, '/test.txt', self.userid, buf)
     statInfo = self.storage.stat(self.endpoint, '/test.txt', self.userid)
     self.assertIsInstance(statInfo, dict)
-    self.assertEqual(statInfo['filepath'], '/test.txt', 'Filepath should be /test.txt')
+    self.assertTrue('mtime' in statInfo, 'Missing mtime from stat output')
+    self.assertTrue('size' in statInfo, 'Missing size from stat output')
     self.storage.removefile(self.endpoint, '/test.txt', self.userid)
 
-  def test_stat_fileid(self):
+  def test_statx_fileid(self):
     '''Call stat() and assert the path matches'''
     buf = b'bla\n'
     self.storage.writefile(self.endpoint, '/test.txt', self.userid, buf)
-    statInfo = self.storage.stat(self.endpoint, '/test.txt', self.userid)
+    statInfo = self.storage.statx(self.endpoint, '/test.txt', self.userid)
     self.assertIsInstance(statInfo, dict)
     fileid = statInfo['inode'].split(':')
     self.assertEqual(len(fileid), 2, 'This storage interface does not support stat by fileid')
-    statInfo = self.storage.stat(fileid[0], fileid[1], self.userid)
+    statInfo = self.storage.statx(fileid[0], fileid[1], self.userid)
     self.assertIsInstance(statInfo, dict)
     self.assertEqual(statInfo['filepath'], '/test.txt', 'Filepath should be /test.txt')
     self.storage.removefile(self.endpoint, '/test.txt', self.userid)
 
   def test_stat_nofile(self):
     '''Call stat() and assert the exception is as expected'''
-    with self.assertRaises(IOError):
+    with self.assertRaises(IOError, msg='No such file or directory'):
       self.storage.stat(self.endpoint, '/hopefullynotexisting', self.userid)
 
-  def test_statx(self):
-    '''Call statx() and assert the path matches'''
-    buf = b'bla\n'
-    self.storage.writefile(self.endpoint, '/test.txt', self.userid, buf)
-    statInfo = self.storage.statx(self.endpoint, '/test.txt', self.userid)
-    self.assertIsInstance(statInfo, dict)
-    self.assertEqual(statInfo['filepath'], '/test.txt', 'Filepath should be /test.txt')
-    self.storage.removefile(self.endpoint, '/test.txt', self.userid)
+  def test_statx_nofile(self):
+    '''Call statx() and assert the exception is as expected'''
+    with self.assertRaises(IOError, msg='No such file or directory'):
+      self.storage.statx(self.endpoint, '/hopefullynotexisting', self.userid)
 
   def test_readfile(self):
     '''Writes a file and reads it back, validating that the content matches'''
@@ -126,15 +122,15 @@ class TestStorage(unittest.TestCase):
     self.assertEqual(v, None)
     self.storage.removefile(self.endpoint, '/testxattr.txt', self.userid)
 
-  def test_rename(self):
-    '''Test renaming and stat of a file'''
+  def test_rename_statx(self):
+    '''Test renaming and statx of a file'''
     buf = b'bla\n'
     self.storage.writefile(self.endpoint, '/test.txt', self.userid, buf)
     self.storage.renamefile(self.endpoint, '/test.txt', '/test_renamed.txt', self.userid)
-    statInfo = self.storage.stat(self.endpoint, '/test_renamed.txt', self.userid)
+    statInfo = self.storage.statx(self.endpoint, '/test_renamed.txt', self.userid)
     self.assertEqual(statInfo['filepath'], '/test_renamed.txt')
     self.storage.renamefile(self.endpoint, '/test_renamed.txt', '/test.txt', self.userid)
-    statInfo = self.storage.stat(self.endpoint, '/test.txt', self.userid)
+    statInfo = self.storage.statx(self.endpoint, '/test.txt', self.userid)
     self.assertEqual(statInfo['filepath'], '/test.txt')
     self.storage.removefile(self.endpoint, '/test.txt', self.userid)
 

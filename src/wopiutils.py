@@ -79,8 +79,8 @@ def generateAccessToken(userid, fileid, canedit, username, folderurl, endpoint):
   if canedit:
     try:
       # probe LibreOffice
-      line = next(_ctx['st'].readfile(endpoint, getLibreOfficeLockName(filename), userid))
-      if isinstance(line, IOError) or 'WOPIServer' in str(line):
+      lock = next(_ctx['st'].readfile(endpoint, getLibreOfficeLockName(filename), userid))
+      if isinstance(lock, IOError) or 'WOPIServer' in str(lock):
         # in case of read error, be optimistic and let it go (ENOENT would be fine, other cases have been
         # observed in production and likely are false positives)
         # also if a lock file is found but it is held by a WOPI Server, let it go: it will be sorted out
@@ -88,8 +88,9 @@ def generateAccessToken(userid, fileid, canedit, username, folderurl, endpoint):
         raise IOError
       canedit = False
       locked = True
+      lock = str(lock)
       _ctx['log'].warning('msg="Access downgraded to read-only because of an existing LibreOffice lock" ' \
-                          'filename="%s" holder="%s"' % (filename, str(line).split(',')[1]))
+                          'filename="%s" holder="%s"' % (filename, lock.split(',')[1] if ',' in lock else lock))
     except IOError:
       try:
         # same for MS Office, but don't try to go beyond stat

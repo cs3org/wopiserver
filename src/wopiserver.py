@@ -85,10 +85,12 @@ class Wopi:
       # prepare the Flask web app
       cls.port = int(cls.config.get('general', 'port'))
       cls.log.setLevel(cls.loglevels[cls.config.get('general', 'loglevel')])
-      cls.wopisecret = open(cls.config.get('security', 'wopisecretfile')).read().strip('\n')
-      cls.iopsecret = open(cls.config.get('security', 'iopsecretfile')).read().strip('\n')
+      with open(cls.config.get('security', 'wopisecretfile')) as s:
+        cls.wopisecret = s.read().strip('\n')
+      with open(cls.config.get('security', 'iopsecretfile')) as s:
+        cls.iopsecret = s.read().strip('\n')
       cls.tokenvalidity = cls.config.getint('general', 'tokenvalidity')
-      storage.init(cls.config, cls.log)                          # initialize the xroot client module
+      storage.init(cls.config, cls.log)                          # initialize the storage layer
       cls.config.get('general', 'allowedclients')          # read this to make sure it is configured
       cls.useHttps = cls.config.get('security', 'usehttps').lower() == 'yes'
       cls.repeatedLockRequests = {}               # cf. the wopiLock() function below
@@ -102,7 +104,7 @@ class Wopi:
       _ = cls.config.get('general', 'downloadurl')   # make sure this is defined
       # initialize the utils module
       utils.init(storage, cls)
-    except Exception as e:
+    except (configparser.NoOptionError, OSError) as e:
       # any error we get here with the configuration is fatal
       cls.log.fatal('msg="Failed to initialize the service, aborting" error="%s"' % e)
       sys.exit(-22)
@@ -128,10 +130,6 @@ class Wopi:
       cls.ENDPOINTS['.pptx']['view'] = oos + '/p/PowerPointFrame.aspx?PowerPointView=ReadingView'
       cls.ENDPOINTS['.pptx']['edit'] = oos + '/p/PowerPointFrame.aspx?PowerPointView=EditView'
       cls.ENDPOINTS['.pptx']['new']  = oos + '/p/PowerPointFrame.aspx?PowerPointView=EditView&New=1'   # pylint: disable=bad-whitespace
-      cls.ENDPOINTS['.one'] = {}
-      cls.ENDPOINTS['.one']['view']  = oos + '/o/onenoteframe.aspx?edit=0'                             # pylint: disable=bad-whitespace
-      cls.ENDPOINTS['.one']['edit']  = oos + '/o/onenoteframe.aspx?edit=1'                             # pylint: disable=bad-whitespace
-      cls.ENDPOINTS['.one']['new']   = oos + '/o/onenoteframe.aspx?edit=1&new=1'                       # pylint: disable=bad-whitespace
       cls.log.info('msg="Microsoft Office Online endpoints successfully configured"')
 
     code = cls.config.get('general', 'codeurl', fallback=None)
@@ -293,13 +291,13 @@ def cboxOpen():
                              'client="%s" user="%s"' % (req.remote_addr, userid))
             canedit = False
           try:
-            Wopi.log.info('msg="cboxOpen: access granted, generating token" client="%s" user="%s" ' \
-                          'friendlyname="%s" canedit="%s" endpoint="%s"' % \
-                          (req.remote_addr, userid, username, canedit, endpoint))
             inode, acctok = utils.generateAccessToken(userid, fileid, canedit, username, folderurl, endpoint)
             # return an URL-encoded WOPISrc URL for the Office Online server
             return '%s&access_token=%s' % (utils.generateWopiSrc(inode), acctok)      # no need to URL-encode the JWT token
-          except IOError:
+          except IOError as e:
+            Wopi.log.info('msg="cboxOpen: remote error on generating token" client="%s" user="%s" ' \
+                          'friendlyname="%s" canedit="%s" endpoint="%s" reason="%s"' % \
+                          (req.remote_addr, userid, username, canedit, endpoint, e))
             return 'Remote error or file not found', http.client.NOT_FOUND
     except socket.gaierror:
       Wopi.log.warning('msg="cboxOpen: %s found in configured allowed clients but unknown by DNS resolution, ignoring"' % c)
@@ -406,23 +404,24 @@ def cboxLock():
     acctok = {}
     acctok['filename'] = filename
     acctok['endpoint'] = endpoint
-    acctok['ruid'] = acctok['rgid'] = 0
+    acctok['userid'] = '0:0'
     utils.retrieveWopiLock(0, 'GETLOCK', '', acctok)
     # also probe if a LibreOffice lock exists (if the WOPI lock was valid, it is there)
-    lock = str(next(storage.readfile(endpoint, utils.getLibreOfficeLockName(filename), userid)))
+    lock = next(storage.readfile(endpoint, utils.getLibreOfficeLockName(filename), userid))
     if isinstance(lock, IOError):
       if query:
         Wopi.log.info('msg="cboxLock: lock to be queried not found" filename="%s"' % filename)
         return 'Previous lock not found', http.client.NOT_FOUND
       # in case of any read error (not only ENOENT), be optimistic and let it go: cf. _generateAccessToken()
       raise IOError
+    lock = str(lock)
     if 'OnlyOffice Online Editor' in lock:
       # if the lock was created for OnlyOffice, let it go as well: OnlyOffice will handle the collaborative session
       # but keep lock stat for later comparison
       lockstat = storage.stat(endpoint, utils.getLibreOfficeLockName(filename), userid)
       raise IOError
     Wopi.log.info('msg="cboxLock: found existing LibreOffice lock" filename="%s" holder="%s"' % \
-                  (filename, lock.split(',')[1]))
+                  (filename, lock.split(',')[1] if ',' in lock else lock))
     return 'Previous lock exists', http.client.CONFLICT
   except IOError as e:
     pass
@@ -490,21 +489,23 @@ def cboxUnlock():
   endpoint = req.args['endpoint'] if 'endpoint' in req.args else 'default'
   try:
     # probe if a WOPI/LibreOffice lock exists with the expected signature
-    lock = str(next(storage.readfile(endpoint, utils.getLibreOfficeLockName(filename), userid)))
+    lock = next(storage.readfile(endpoint, utils.getLibreOfficeLockName(filename), userid))
     if isinstance(lock, IOError):
       # typically ENOENT, any other error is grouped here
       Wopi.log.warning('msg="cboxUnlock: lock file not found" filename="%s"' % filename)
       return 'Lock not found', http.client.NOT_FOUND
+    lock = str(lock)
     if 'OnlyOffice Online Editor' in lock:
       # remove the LibreOffice-compatible lock file
       storage.removefile(endpoint, utils.getLibreOfficeLockName(filename), userid, 1)
       Wopi.log.info('msg="cboxUnlock: successfully removed LibreOffice-compatible lock file" filename="%s"' % filename)
       return 'OK', http.client.OK
     # else another lock exists
-    Wopi.log.info('msg="cboxUnlock: lock file held by another application" filename="%s"' % filename)
+    Wopi.log.info('msg="cboxUnlock: lock file held by another application" filename="%s" holder="%s"' % \
+                  (filename, lock.split(',')[1] if ',' in lock else lock))
     return 'Lock held by another application', http.client.CONFLICT
   except IOError as e:
-    Wopi.log.error('msg="cboxUnlock: I/O error with the requested LibreOffice-compatible lock" filename="%s" reason="%s"' % \
+    Wopi.log.error('msg="cboxUnlock: remote error with the requested lock" filename="%s" reason="%s"' % \
                    (filename, e))
     # return failure
     return 'Error unlocking file', http.client.INTERNAL_SERVER_ERROR
@@ -891,9 +892,9 @@ def wopiFilesPost(fileid):
     elif op == 'RENAME_FILE':
       return wopiRenameFile(fileid, headers, acctok)
     #elif op == 'PUT_USER_INFO':   https://wopirest.readthedocs.io/en/latest/files/PutUserInfo.html
-    else:
-      Wopi.log.warning('msg="Unknown/unsupported operation" operation="%s"' % op)
-      return 'Not supported operation found in header', http.client.NOT_IMPLEMENTED
+    # Any other op is unsupported
+    Wopi.log.warning('msg="Unknown/unsupported operation" operation="%s"' % op)
+    return 'Not supported operation found in header', http.client.NOT_IMPLEMENTED
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
     Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" token="%s"' % \
                      (flask.request.remote_addr, flask.request.base_url, flask.request.args['access_token']))

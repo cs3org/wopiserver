@@ -185,7 +185,6 @@ def writefile(_endpoint, filepath, userid, content, _noversion=0):
 
   # Upload
   try:
-    # TODO: In a future implementation, we should find a way to only update the required chunks 
     # TODO: Use tus client instead of PUT
     headers = {
         'Tus-Resumable': '1.0.0',

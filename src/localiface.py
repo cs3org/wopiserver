@@ -120,6 +120,8 @@ def writefile(_endpoint, filepath, _userid, content, _noversion=1):
   '''Write a file via xroot on behalf of the given userid. The entire content is written
      and any pre-existing file is deleted (or moved to the previous version if supported).
      On local storage, versioning is disabled, therefore the _noversion argument is ignored.'''
+  if isinstance(content, str):
+    content = bytes(content, 'UTF-8')
   size = len(content)
   filepath = _getfilepath(filepath)
   log.debug('msg="Invoking writeFile" filepath="%s" size="%d"' % (filepath, size))
@@ -128,9 +130,6 @@ def writefile(_endpoint, filepath, _userid, content, _noversion=1):
     f = open(filepath, mode='wb')
     tend = time.clock()
     log.info('msg="File open for write" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
-    # write the file. In a future implementation, we should find a way to only update the required chunks...
-    if isinstance(content, str):
-      content = bytes(content, 'UTF-8')
     written = f.write(content)
     f.close()
     if written != size:
