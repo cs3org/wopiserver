@@ -401,7 +401,14 @@ def cboxLock():
   query = req.method == 'GET'
   lockstat = None
   try:
-    # probe if a WOPI/LibreOffice lock already exists (a WOPI session always create a LibreOffice lock as well)
+    # probe if a WOPI lock already exists and expire it if too old:
+    # need to craft a special access token
+    acctok = {}
+    acctok['filename'] = filename
+    acctok['endpoint'] = endpoint
+    acctok['ruid'] = acctok['rgid'] = 0
+    utils.retrieveWopiLock(0, 'GETLOCK', '', acctok)
+    # also probe if a LibreOffice lock exists (if the WOPI lock was valid, it is there)
     lock = str(next(storage.readfile(endpoint, utils.getLibreOfficeLockName(filename), userid)))
     if isinstance(lock, IOError):
       if query:
