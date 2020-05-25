@@ -88,7 +88,6 @@ def statx(endpoint, fileid, userid):
 
 def setxattr(_endpoint, filepath, userid, key, value):
   '''Set the extended attribute <key> to <value> using the given userid as access token'''
-  # TODO implement this on the reva side (now reva returns operation not supported)
   reference = spr.Reference(path=filepath)
   arbitrary_metadata = spr.ArbitraryMetadata()
   arbitrary_metadata.metadata.update({key: value})
@@ -124,7 +123,6 @@ def getxattr(_endpoint, filepath, userid, key):
 
 def rmxattr(_endpoint, filepath, userid, key):
   '''Remove the extended attribute <key> using the given userid as access token'''
-  # TODO implement this on the reva side (now reva returns operation not supported)
   reference = spr.Reference(path=filepath)
   req = sp.UnsetArbitraryMetadataRequest(ref=reference, arbitrary_metadata_keys=[key])
   res = ctx['cs3stub'].UnsetArbitraryMetadata(request=req, metadata=[('x-access-token', _authenticate(userid))])

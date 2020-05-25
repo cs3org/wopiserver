@@ -378,7 +378,7 @@ def cboxLock():
   Request arguments:
   - string filename: the full path of the filename to be opened
   - string userid (optional): the user identity to create the file, defaults to 'root:root'
-  - string endpoint (optional): the storage endpoint to be used to look up the file, in case of
+  - string endpoint (optional): the storage endpoint to be used to look up the file or the storage id, in case of
     multi-instance underlying storage; defaults to 'default'
   The call returns:
   - HTTP UNAUTHORIZED (401) if the 'Authorization: Bearer' secret is not provided in the header (cf. /wopi/cbox/open)
@@ -404,9 +404,9 @@ def cboxLock():
     acctok = {}
     acctok['filename'] = filename
     acctok['endpoint'] = endpoint
-    acctok['userid'] = '0:0'
+    acctok['userid'] = userid
     utils.retrieveWopiLock(0, 'GETLOCK', '', acctok)
-    # also probe if a LibreOffice lock exists (if the WOPI lock was valid, it is there)
+    # also probe if a LibreOffice lock exists (if the WOPI lock was valid, the LibreOffice lock is still there)
     lock = next(storage.readfile(endpoint, utils.getLibreOfficeLockName(filename), userid))
     if isinstance(lock, IOError):
       if query:
@@ -420,15 +420,15 @@ def cboxLock():
       # but keep lock stat for later comparison
       lockstat = storage.stat(endpoint, utils.getLibreOfficeLockName(filename), userid)
       raise IOError
-    Wopi.log.info('msg="cboxLock: found existing LibreOffice lock" filename="%s" holder="%s"' % \
-                  (filename, lock.split(',')[1] if ',' in lock else lock))
+    Wopi.log.info('msg="cboxLock: found existing LibreOffice lock" filename="%s" holder="%s" lockmtime="%ld"' % \
+                  (filename, lock.split(',')[1] if ',' in lock else lock, lockstat['mtime']))
     return 'Previous lock exists', http.client.CONFLICT
   except IOError as e:
     pass
   try:
     # same for MS Office, but don't go beyond stat
     mslockstat = storage.stat(endpoint, utils.getMicrosoftOfficeLockName(filename), userid)
-    Wopi.log.info('msg="cboxLock: found existing Microsoft Office lock" filename="%s" mtime="%ld"' % \
+    Wopi.log.info('msg="cboxLock: found existing Microsoft Office lock" filename="%s" lockmtime="%ld"' % \
                   (filename, mslockstat['mtime']))
     return 'Previous lock exists', http.client.CONFLICT
   except IOError as e:
@@ -454,7 +454,7 @@ def cboxLock():
       Wopi.log.info('msg="cboxLock: file got modified after LibreOffice-compatible lock file was created" ' \
                     'filename="%s"' % filename)
       return 'File modified since open time', http.client.CONFLICT
-    Wopi.log.info('msg="cboxLock: lock file still valid" filename="%s"' % filename)
+    Wopi.log.info('msg="cboxLock: lock file still valid" filename="%s" lockmtime="%ld"' % (filename, lockstat['mtime']))
     return 'OK', http.client.OK
   except IOError as e:
     Wopi.log.error('msg="cboxLock: unable to store a LibreOffice-compatible lock" filename="%s" reason="%s"' % \
@@ -469,7 +469,7 @@ def cboxUnlock():
   Request arguments:
   - string filename: the full path of the filename to be opened
   - string userid (optional): the user identity to create the file, defaults to 'root:root'
-  - string endpoint (optional): the storage endpoint to be used to look up the file, in case of
+  - string endpoint (optional): the storage endpoint to be used to look up the file or the storage id, in case of
     multi-instance underlying storage; defaults to 'default'
   The call returns:
   - HTTP UNAUTHORIZED (401) if the 'Authorization: Bearer' secret is not provided in the header (cf. /wopi/cbox/open)
@@ -567,7 +567,7 @@ def wopiCheckFileInfo(fileid):
     filemd['LastModifiedTime'] = datetime.fromtimestamp(int(statInfo['mtime'])).isoformat()   # this is used by Collabora
     filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = \
         filemd['SupportsGetLock'] = filemd['SupportsDeleteFile'] = acctok['canedit']
-        #filemd['SupportsRename'] = filemd['UserCanRename'] = acctok['canedit']      # XXX broken in Office Online
+        #filemd['SupportsRename'] = filemd['UserCanRename'] = acctok['canedit']      # XXX broken in MS Office Online
     filemd['SupportsExtendedLockLength'] = True
     filemd['EnableOwnerTermination'] = True     # extension for Collabora Online
     #filemd['UserCanPresent'] = True   # what about the broadcasting feature in Office Online?

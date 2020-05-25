@@ -119,15 +119,15 @@ def stat(endpoint, filepath, userid):
 def statx(endpoint, filepath, userid):
   '''Get extended stat info (inode, filepath, userid, size, mtime) via an xroot opaque query on behalf of the given userid'''
   tstart = time.clock()
-  rc, rawinfo = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(filepath) + _eosargs(userid) +'&mgm.pcmd=stat')
+  rc, info = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(filepath) + _eosargs(userid) + '&mgm.pcmd=stat')
   tend = time.clock()
   log.info('msg="Invoked stat" filepath="%s" elapsedTimems="%.1f"' % (_getfilepath(filepath), (tend-tstart)*1000))
   if '[SUCCESS]' not in str(rc):
     raise IOError(str(rc).strip('\n'))
-  rawinfo = str(rawinfo)
-  if 'retc=' in rawinfo:
-    raise IOError(rawinfo.strip('\n'))
-  statxdata = rawinfo.split()
+  info = str(info)
+  if 'retc=' in info:
+    raise IOError(info.strip('\n'))
+  statxdata = info.split()
   return {'inode': str(statxdata[2]),
           'filepath': filepath,
           'userid': str(statxdata[5]) + ':' + str(statxdata[6]),
