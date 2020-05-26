@@ -7,6 +7,9 @@ Basic unit testing of the storage interfaces
 import unittest
 import logging
 import configparser
+import sys
+sys.path.append('../src')
+
 
 class TestStorage(unittest.TestCase):
   '''Simple tests for the storage layers of the WOPI server'''
