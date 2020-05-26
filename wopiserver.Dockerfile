@@ -14,7 +14,7 @@ RUN pip3 install --no-cache-dir --upgrade -r requirements.txt
 
 # install software
 RUN mkdir -p /var/log/wopi /var/wopi_local_storage
-ADD ./src/* ./docker/entrypoint /app/
+ADD ./src/* ./tools/* ./docker/entrypoint /app/
 ADD wopiserver.conf /etc/wopi/wopiserver.defaults.conf
 
 # add basic custom configuration; need to contextualize

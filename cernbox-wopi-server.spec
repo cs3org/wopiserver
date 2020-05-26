@@ -45,8 +45,6 @@ mkdir -p %buildroot/etc/logrotate.d
 mkdir -p %buildroot/usr/lib/systemd/system
 mkdir -p %buildroot/var/log/wopi
 install -m 755 src/wopiserver.py     %buildroot/usr/bin/wopiserver.py
-install -m 755 src/wopicheckfile.py  %buildroot/usr/bin/wopicheckfile.py
-install -m 755 src/wopilistopenfiles.sh %buildroot/usr/bin/wopilistopenfiles.sh
 install -m 644 src/wopiutils.py      %buildroot/%_python_lib/wopiutils.py
 install -m 644 src/xrootiface.py     %buildroot/%_python_lib/xrootiface.py
 install -m 644 src/localiface.py     %buildroot/%_python_lib/localiface.py
@@ -55,6 +53,8 @@ install -m 644 wopiserver.service    %buildroot/usr/lib/systemd/system/wopiserve
 install -m 644 wopiserver.conf       %buildroot/etc/wopi/wopiserver.defaults.conf
 install -m 644 wopiserver.logrotate  %buildroot/etc/logrotate.d/cernbox-wopi-server
 install -m 755 mon/wopi_grafana_feeder.py  %buildroot/usr/bin/wopi_grafana_feeder.py
+install -m 755 tools/wopicheckfile.py      %buildroot/usr/bin/wopicheckfile.py
+install -m 755 tools/wopilistopenfiles.sh  %buildroot/usr/bin/wopilistopenfiles.sh
 
 %clean
 rm -rf %buildroot/
