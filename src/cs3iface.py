@@ -43,11 +43,13 @@ def _authenticate(userid):
   if userid not in tokens:
     authRes = ctx['cs3stub'].Authenticate(authReq)
     tokens[userid] = authRes.token
+  # TODO implement some cache expiration for old tokens
   return tokens[userid]
 
 
 def stat(endpoint, fileid, userid):
-  '''Stat a file and returns (size, mtime) as well as other extended info using the given userid as access token. Note that endpoint here means the storage id.'''
+  '''Stat a file and returns (size, mtime) as well as other extended info using the given userid as access token.
+  Note that endpoint here means the storage id.'''
   if endpoint == 'default':
     raise IOError('A CS3API-compatible storage endpoint must be identified by a storage UUID')
   tstart = time.clock()
@@ -84,7 +86,7 @@ def setxattr(_endpoint, filepath, userid, key, value):
   '''Set the extended attribute <key> to <value> using the given userid as access token'''
   reference = cs3spr.Reference(path=filepath)
   arbitrary_metadata = cs3spr.ArbitraryMetadata()
-  arbitrary_metadata.metadata.update({key: value})
+  arbitrary_metadata.metadata.update({key: value})    # pylint: disable=no-member
   req = cs3sp.SetArbitraryMetadataRequest(ref=reference, arbitrary_metadata=arbitrary_metadata)
   res = ctx['cs3stub'].SetArbitraryMetadata(request=req,
                                             metadata=[('x-access-token', _authenticate(userid))])
@@ -131,18 +133,19 @@ def readfile(_endpoint, filepath, userid):
   tstart = time.clock()
   # prepare endpoint
   req = cs3sp.InitiateFileDownloadRequest(ref=cs3spr.Reference(path=filepath))
-  initiatefiledownloadres = ctx['cs3stub'].InitiateFileDownload(request=req, metadata=[('x-access-token', _authenticate(userid))])
-  if initiatefiledownloadres.status.code == cs3code.CODE_NOT_FOUND:
+  initfiledownloadres = ctx['cs3stub'].InitiateFileDownload(request=req, metadata=[('x-access-token', _authenticate(userid))])
+  if initfiledownloadres.status.code == cs3code.CODE_NOT_FOUND:
     ctx['log'].info('msg="File not found on read" filepath="%s"' % filepath)
     yield IOError('No such file or directory')
-  elif initiatefiledownloadres.status.code != cs3code.CODE_OK:
-    ctx['log'].debug('msg="Failed to initiateFileDownload on read" filepath="%s" reason="%s"' % (filepath, initiatefiledownloadres.status.message))
-    yield IOError(initiatefiledownloadres.status.message)
-  ctx['log'].debug('msg="readfile: InitiateFileDownloadRes returned" endpoint="%s"' % initiatefiledownloadres.download_endpoint)
+  elif initfiledownloadres.status.code != cs3code.CODE_OK:
+    ctx['log'].debug('msg="Failed to initiateFileDownload on read" filepath="%s" reason="%s"' % \
+                     (filepath, initfiledownloadres.status.message))
+    yield IOError(initfiledownloadres.status.message)
+  ctx['log'].debug('msg="readfile: InitiateFileDownloadRes returned" endpoint="%s"' % initfiledownloadres.download_endpoint)
 
   # Download
   try:
-    fileget = requests.get(url=initiatefiledownloadres.download_endpoint, headers={'x-access-token': _authenticate(userid)})
+    fileget = requests.get(url=initfiledownloadres.download_endpoint, headers={'x-access-token': _authenticate(userid)})
   except requests.exceptions.RequestException as e:
     ctx['log'].error('msg="Exception when downloading file from Reva" reason="%s"' % e)
     yield IOError(e)
@@ -164,12 +167,12 @@ def writefile(_endpoint, filepath, userid, content, _noversion=0):
   tstart = time.clock()
   # prepare endpoint
   req = cs3sp.InitiateFileUploadRequest(ref=cs3spr.Reference(path=filepath))
-  fileuploadres = ctx['cs3stub'].InitiateFileUpload(
-      request=req, metadata=[('x-access-token', _authenticate(userid))])
-  if fileuploadres.status.code != cs3code.CODE_OK:
-    ctx['log'].debug('msg="Failed to initiateFileUpload on write" filepath="%s" reason="%s"' % (filepath, fileuploadres.status.message))
-    raise IOError(fileuploadres.status.message)
-  ctx['log'].debug('msg="writefile: InitiateFileUploadRes returned" endpoint="%s"' % fileuploadres.upload_endpoint)
+  initfileuploadres = ctx['cs3stub'].InitiateFileUpload(request=req, metadata=[('x-access-token', _authenticate(userid))])
+  if initfileuploadres.status.code != cs3code.CODE_OK:
+    ctx['log'].debug('msg="Failed to initiateFileUpload on write" filepath="%s" reason="%s"' % \
+                     (filepath, initfileuploadres.status.message))
+    raise IOError(initfileuploadres.status.message)
+  ctx['log'].debug('msg="writefile: InitiateFileUploadRes returned" endpoint="%s"' % initfileuploadres.upload_endpoint)
 
   # Upload
   try:
@@ -178,7 +181,7 @@ def writefile(_endpoint, filepath, userid, content, _noversion=0):
         'Tus-Resumable': '1.0.0',
         'x-access-token':  _authenticate(userid)
     }
-    putres = requests.put(url=fileuploadres.upload_endpoint, data=content, headers=headers)
+    putres = requests.put(url=initfileuploadres.upload_endpoint, data=content, headers=headers)
   except requests.exceptions.RequestException as e:
     ctx['log'].error('msg="Exception when uploading file to Reva" reason="%s"' % e)
     raise IOError(e)
