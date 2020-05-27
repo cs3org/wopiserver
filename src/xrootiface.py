@@ -43,7 +43,7 @@ def _geturlfor(endpoint):
 
 
 def _eosargs(userid, atomicwrite=0, bookingsize=0):
-  '''Split userid into uid,gid and generate extra EOS-specific arguments for the xroot URL'''
+  '''Assume userid is in the form uid:gid and split userid into uid,gid and generate extra EOS-specific arguments for the xroot URL'''
   try:
     # try to assert that userid must follow a '%d:%d' format
     userid = userid.split(':')
@@ -83,7 +83,7 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args):
 
 
 def _getfilepath(filepath):
-  '''map the given filepath into the target namespace by prepending the homepath (see storagehomepath in wopiserver.conf)'''
+  '''Map the given filepath into the target namespace by prepending the homepath (see storagehomepath in wopiserver.conf)'''
   return homepath + filepath
 
 
