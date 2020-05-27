@@ -1,13 +1,16 @@
 '''
 test_storageiface.py
 
-Basic unit testing of the storage interfaces
+Basic unit testing of the storage interfaces. To run them, please make sure the
+wopiserver-test.conf is correctly configured (see /README.md). The storage layer
+to be tested can be overridden by the WOPI_STORAGE env variable.
 '''
 
 import unittest
 import logging
 import configparser
 import sys
+import os
 sys.path.append('../src')
 
 
@@ -26,9 +29,11 @@ class TestStorage(unittest.TestCase):
     # read the configuration
     config = configparser.ConfigParser()
     try:
-      with open('wopiserver-test.conf') as fdef:
-        config.read_file(fdef)
-      storagetype = config.get('general', 'storagetype')
+      with open('wopiserver-test.conf') as fdconf:
+        config.read_file(fdconf)
+      storagetype = os.environ.get('WOPI_STORAGE')
+      if not storagetype:
+        storagetype = config.get('general', 'storagetype')
       self.userid = config.get(storagetype, 'userid')
       self.endpoint = config.get(storagetype, 'endpoint')
     except (KeyError, configparser.NoOptionError):
