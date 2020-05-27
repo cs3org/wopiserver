@@ -15,7 +15,7 @@ sys.path.append('../src')
 
 
 class TestStorage(unittest.TestCase):
-  '''Simple tests for the storage layers of the WOPI server'''
+  '''Simple tests for the storage layers of the WOPI server. See README for how to run the tests for each storage provider'''
 
   def __init__(self, *args, **kwargs):
     '''One-off initialization of the test environment: create mock logging and import the library'''
@@ -26,7 +26,6 @@ class TestStorage(unittest.TestCase):
     log = logging.getLogger('wopiserver.test')
     log.addHandler(loghandler)
     log.setLevel(logging.DEBUG)
-    # read the configuration
     config = configparser.ConfigParser()
     try:
       with open('wopiserver-test.conf') as fdconf:

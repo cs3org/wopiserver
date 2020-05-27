@@ -42,7 +42,7 @@ def init(inconfig, inlog):
 
 
 def stat(_endpoint, filepath, _userid):
-  '''Stat a file and returns (size, mtime) as well as other extended info. Assume the given userid has access.'''
+  '''Stat a file and returns (size, mtime) as well as other extended info. This method assumes that the given userid has access.'''
   try:
     tstart = time.clock()
     statInfo = os.stat(_getfilepath(filepath))

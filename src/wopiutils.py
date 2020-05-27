@@ -125,12 +125,12 @@ def getLockName(filename):
 def retrieveWopiLock(fileid, operation, lock, acctok):
   '''Retrieves and logs an existing lock for a given file'''
   encacctok = flask.request.args['access_token'][-20:] if 'access_token' in flask.request.args else 'N/A'
-  l = b''
+  lockcontent = b''
   for line in _ctx['st'].readfile(acctok['endpoint'], getLockName(acctok['filename']), acctok['userid']):
     if isinstance(line, IOError):
       return None     # no pre-existing lock found, or error attempting to read it: assume it does not exist
     # the following check is necessary as it happens to get a str instead of bytes
-    l += line if isinstance(line, type(l)) else line.encode()
+    lockcontent += line if isinstance(line, type(l)) else line.encode()
   try:
     # check validity
     retrievedLock = jwt.decode(l, _ctx['wopi'].wopisecret, algorithms=['HS256'])
