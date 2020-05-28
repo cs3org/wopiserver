@@ -44,9 +44,9 @@ def init(inconfig, inlog):
 def stat(_endpoint, filepath, _userid):
   '''Stat a file and returns (size, mtime) as well as other extended info. This method assumes that the given userid has access.'''
   try:
-    tstart = time.clock()
+    tstart = time.time()
     statInfo = os.stat(_getfilepath(filepath))
-    tend = time.clock()
+    tend = time.time()
     log.info('msg="Invoked stat" filepath="%s" elapsedTimems="%.1f"' % (_getfilepath(filepath), (tend-tstart)*1000))
     return {
         'inode': str(statInfo.st_ino),
@@ -96,11 +96,11 @@ def readfile(_endpoint, filepath, _userid):
   '''Read a file on behalf of the given userid. Note that the function is a generator, managed by Flask.'''
   log.debug('msg="Invoking readFile" filepath="%s"' % filepath)
   try:
-    tstart = time.clock()
+    tstart = time.time()
     filepath = _getfilepath(filepath)
     chunksize = config.getint('io', 'chunksize')
     with open(filepath, mode='rb', buffering=chunksize) as f:
-      tend = time.clock()
+      tend = time.time()
       log.info('msg="File open for read" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
       # the actual read is buffered and managed by the Flask server
       for chunk in iter(lambda: f.read(chunksize), b''):
@@ -126,9 +126,9 @@ def writefile(_endpoint, filepath, _userid, content, _noversion=1):
   filepath = _getfilepath(filepath)
   log.debug('msg="Invoking writeFile" filepath="%s" size="%d"' % (filepath, size))
   try:
-    tstart = time.clock()
+    tstart = time.time()
     f = open(filepath, mode='wb')
-    tend = time.clock()
+    tend = time.time()
     log.info('msg="File open for write" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
     written = f.write(content)
     f.close()

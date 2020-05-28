@@ -63,9 +63,9 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args):
   with XrdClient.File() as f:
     url = _geturlfor(endpoint) + '//proc/user/' + _eosargs(userid) + '&mgm.cmd=' + cmd + \
           ('&mgm.subcmd=' + subcmd if subcmd else '') + '&' + args
-    tstart = time.clock()
+    tstart = time.time()
     rc, statInfo_unused = f.open(url, OpenFlags.READ)
-    tend = time.clock()
+    tend = time.time()
     log.info('msg="Invoked _xrootcmd" cmd="%s%s" url="%s" elapsedTimems="%.1f"' %
              (cmd, ('/' + subcmd if subcmd else ''), url, (tend-tstart)*1000))
     res = f.readline().decode('utf-8').strip('\n').split('&')
@@ -107,9 +107,9 @@ def init(inconfig, inlog):
 def stat(endpoint, filepath, userid):
   '''Stat a file via xroot on behalf of the given userid, and returns (size, mtime). Uses the default xroot API.'''
   filepath = _getfilepath(filepath)
-  tstart = time.clock()
+  tstart = time.time()
   rc, statInfo = _getxrdfor(endpoint).stat(filepath + _eosargs(userid))
-  tend = time.clock()
+  tend = time.time()
   log.info('msg="Invoked stat" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
   if statInfo is None:
     raise IOError(rc.message.strip('\n'))
@@ -118,9 +118,9 @@ def stat(endpoint, filepath, userid):
 
 def statx(endpoint, filepath, userid):
   '''Get extended stat info (inode, filepath, userid, size, mtime) via an xroot opaque query on behalf of the given userid'''
-  tstart = time.clock()
+  tstart = time.time()
   rc, info = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(filepath) + _eosargs(userid) + '&mgm.pcmd=stat')
-  tend = time.clock()
+  tend = time.time()
   log.info('msg="Invoked stat" filepath="%s" elapsedTimems="%.1f"' % (_getfilepath(filepath), (tend-tstart)*1000))
   if '[SUCCESS]' not in str(rc):
     raise IOError(str(rc).strip('\n'))
@@ -163,9 +163,9 @@ def readfile(endpoint, filepath, userid):
   log.debug('msg="Invoking readFile" filepath="%s"' % filepath)
   with XrdClient.File() as f:
     fileurl = _geturlfor(endpoint) + '/' + homepath + filepath + _eosargs(userid)
-    tstart = time.clock()
+    tstart = time.time()
     rc, statInfo_unused = f.open(fileurl, OpenFlags.READ)
-    tend = time.clock()
+    tend = time.time()
     if not rc.ok:
       # the file could not be opened: check the case of ENOENT and log it as info to keep the logs cleaner
       if 'No such file or directory' in rc.message:
@@ -192,10 +192,10 @@ def writefile(endpoint, filepath, userid, content, noversion=0):
   size = len(content)
   log.debug('msg="Invoking writeFile" filepath="%s" size="%d"' % (filepath, size))
   f = XrdClient.File()
-  tstart = time.clock()
+  tstart = time.time()
   rc, statInfo_unused = f.open(_geturlfor(endpoint) + '/' + homepath + filepath + _eosargs(userid, 1, size) + \
                                ('&sys.versioning=0' if noversion else ''), OpenFlags.DELETE)
-  tend = time.clock()
+  tend = time.time()
   log.info('msg="File open for write" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
   if not rc.ok:
     log.warning('msg="Error opening the file for write" filepath="%s" error="%s"' % (filepath, rc.message.strip('\n')))
