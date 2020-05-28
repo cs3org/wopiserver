@@ -164,10 +164,10 @@ def retrieveWopiLock(fileid, operation, lock, acctok):
 
 def storeWopiLock(operation, lock, acctok):
   '''Stores the lock for a given file in the form of an encoded JSON string (cf. the access token)'''
-  l = {}
-  l['wopilock'] = lock
+  lockcontent = {}
+  lockcontent['wopilock'] = lock
   # append or overwrite the expiration time
-  l['exp'] = int(time.time()) + _ctx['wopi'].config.getint('general', 'wopilockexpiration')
+  lockcontent['exp'] = int(time.time()) + _ctx['wopi'].config.getint('general', 'wopilockexpiration')
   try:
     # store the lock as encoded JWT
     s = jwt.encode(l, _ctx['wopi'].wopisecret, algorithm='HS256')
