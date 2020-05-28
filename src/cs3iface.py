@@ -9,6 +9,7 @@ Lovisa.Lugnegaard@cern.ch, CERN/IT-ST
 '''
 
 import time
+import asyncio
 import http
 import requests
 import grpc
@@ -22,17 +23,26 @@ import cs3.rpc.code_pb2 as cs3code
 
 # module-wide state
 ctx = {}        # "map" to store some module context: cf. init()
-tokens = {}     # map userid [string] to authentication token
+tokens = {}     # map userid [string] to {authentication token, token expiration time}
 
 
 def init(config, log):
   '''Init module-level variables'''
   ctx['log'] = log
   ctx['chunksize'] = config.getint('io', 'chunksize')
+  ctx['authtokenvalidity'] = config.getint('cs3', 'authtokenvalidity')
   revahost = config.get('cs3', 'revahost')
   # prepare the gRPC connection
   ch = grpc.insecure_channel(revahost)
   ctx['cs3stub'] = cs3gw_grpc.GatewayAPIStub(ch)
+
+
+async def _async_cleanuptokens():
+  '''A local function to go through existing tokens and remove the expired ones'''
+  now = time.time()
+  expiredkeys = [u for u in tokens if tokens[u]['exp'] < now]
+  for u in expiredkeys:
+    del tokens[u]
 
 
 def _authenticate(userid):
@@ -40,11 +50,13 @@ def _authenticate(userid):
   # TODO this will become
   #authReq = cs3gw.AuthenticateRequest(type='bearer', client_secret=userid)
   authReq = cs3gw.AuthenticateRequest(type='basic', client_id='einstein', client_secret='relativity')
-  if userid not in tokens:
+  if userid not in tokens or tokens[userid]['exp'] < time.time():
     authRes = ctx['cs3stub'].Authenticate(authReq)
-    tokens[userid] = authRes.token
-  # TODO implement some cache expiration for old tokens
-  return tokens[userid]
+    tokens[userid] = {'tok': authRes.token, 'exp': time.time() + ctx['authtokenvalidity']}
+    # piggy back on the opportunity to expire old tokens, but asynchronously
+    # as to not impact the current session: let's use python3.7's coroutines support
+    asyncio.run(_async_cleanuptokens())
+  return tokens[userid]['tok']
 
 
 def stat(endpoint, fileid, userid):
