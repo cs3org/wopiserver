@@ -130,10 +130,10 @@ def retrieveWopiLock(fileid, operation, lock, acctok):
     if isinstance(line, IOError):
       return None     # no pre-existing lock found, or error attempting to read it: assume it does not exist
     # the following check is necessary as it happens to get a str instead of bytes
-    lockcontent += line if isinstance(line, type(l)) else line.encode()
+    lockcontent += line if isinstance(line, type(lockcontent)) else line.encode()
   try:
     # check validity
-    retrievedLock = jwt.decode(l, _ctx['wopi'].wopisecret, algorithms=['HS256'])
+    retrievedLock = jwt.decode(lockcontent, _ctx['wopi'].wopisecret, algorithms=['HS256'])
     if retrievedLock['exp'] < time.time():
       # we got an expired lock, reject. Note that we may get an ExpiredSignatureError
       # by jwt.decode() as we had stored it with a timed signature.
@@ -170,14 +170,14 @@ def storeWopiLock(operation, lock, acctok):
   lockcontent['exp'] = int(time.time()) + _ctx['wopi'].config.getint('general', 'wopilockexpiration')
   try:
     # store the lock as encoded JWT
-    s = jwt.encode(l, _ctx['wopi'].wopisecret, algorithm='HS256')
+    s = jwt.encode(lockcontent, _ctx['wopi'].wopisecret, algorithm='HS256')
     _ctx['st'].writefile(acctok['endpoint'], getLockName(acctok['filename']), acctok['userid'], s, 1)
     _ctx['log'].info('msg="%s" filename="%s" token="%s" lock="%s" result="success"' % \
                      (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
     # also create a LibreOffice-compatible lock file for interoperability purposes
-    locontent = ',Collaborative Online Editor,%s,%s,WOPIServer;' % \
-            (_ctx['wopi'].wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())))
-    _ctx['st'].writefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], locontent, 1)
+    lockcontent = ',Collaborative Online Editor,%s,%s,WOPIServer;' % \
+                  (_ctx['wopi'].wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())))
+    _ctx['st'].writefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], lockcontent, 1)
   except IOError as e:
     _ctx['log'].warning('msg="%s" filename="%s" token="%s" lock="%s" result="unable to store lock" reason="%s"' % \
                         (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
