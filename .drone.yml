@@ -33,39 +33,6 @@ steps:
 ---
 kind: pipeline
 type: docker
-name: release-unstable
-
-platform:
-  os: linux
-  arch: amd64
-
-trigger:
-  branch:
-  - cs3
-  event:
-    exclude:
-    - pull_request
-    - tag
-    - promote
-    - rollback
-
-steps:
-- name: publish-docker-wopi-latest
-  pull: always
-  image: plugins/docker
-  settings:
-    repo: cs3org/wopiserver
-    tags: unstable
-    dockerfile: wopiserver.Dockerfile
-    username:
-      from_secret: dockerhub_username
-    password:
-      from_secret: dockerhub_password
-
-
----
-kind: pipeline
-type: docker
 name: release
 
 platform:
