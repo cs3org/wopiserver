@@ -66,6 +66,12 @@ if wopisrc.status_code != 200:
   sys.exit(-1)
 
 # return the full URL to the user
-url = apps[os.path.splitext(filename)[1]]['edit']
-url += '&' if '?' in url else '&'
-print('%sWOPISrc=%s' % (url, wopisrc.content.decode()))
+try:
+  url = apps[os.path.splitext(filename)[1]]['edit']
+  url += '?' if '?' not in url else '&'
+  print('App URL:\n%sWOPISrc=%s\n' % (url, wopisrc.content.decode()))
+except KeyError:
+  # no configured editor for this file type, skip
+  pass
+# in addition, return the WOPI URL and token as env vars for testing purposes
+print('WOPI_URL=%s\nWOPI_TOKEN=%s\n' % tuple(wopisrc.content.decode().split('&access_token=')))
