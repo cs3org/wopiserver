@@ -46,7 +46,15 @@ config = configparser.ConfigParser()
 config.read_file(open('/etc/wopi/wopiserver.defaults.conf'))    # fails if the file does not exist
 config.read('/etc/wopi/wopiserver.conf')
 iopsecret = open(config.get('security', 'iopsecretfile')).read().strip('\n')
-eos = 'root://eoshome-%s' % filename.split('/')[3]
+storagetype = config.get('general', 'storagetype')
+if storagetype == 'xroot':
+  endpoint = 'root://eoshome-%s' % filename.split('/')[3]      # blindly assume a path in the form /eos/user/l/...
+elif storagetype == 'cs3':
+  # TODO this should be derived, not read from the configuration
+  endpoint = config.get('cs3', 'endpoint')
+else:
+  endpoint = ''
+
 wopiurl = 'http%s://localhost:%d' % \
           ('s' if config.get('security', 'usehttps') == 'yes' else '', config.getint('general', 'port'))
 
@@ -59,7 +67,7 @@ apps = requests.get(wopiurl + '/wopi/cbox/endpoints', verify=False).json()
 # open the file and get WOPI token
 wopisrc = requests.get(wopiurl + '/wopi/cbox/open', verify=False,
                        headers={'Authorization': 'Bearer ' + iopsecret},
-                       params={'ruid': ruid, 'rgid': rgid, 'filename': filename, 'endpoint': eos,
+                       params={'ruid': ruid, 'rgid': rgid, 'filename': filename, 'endpoint': endpoint,
                                'canedit': 'True', 'username': 'Operator', 'folderurl': 'foo'})
 if wopisrc.status_code != 200:
   print('WOPI open request failed:\n%s' % wopisrc.content.decode())
