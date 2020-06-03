@@ -61,11 +61,11 @@ def _authenticate(userid):
 
 def stat(endpoint, fileid, userid):
   '''Stat a file and returns (size, mtime) as well as other extended info using the given userid as access token.
-  Note that endpoint here means the storage id.'''
+  Note that endpoint here means the storage id. Note that fileid can be either a path (which MUST begin with /), or an id (which MUST NOT
+  start with a /).'''
   if endpoint == 'default':
     raise IOError('A CS3API-compatible storage endpoint must be identified by a storage UUID')
   tstart = time.time()
-  # TODO check if filepath or opaque in a better way
   if fileid[0] == '/':
     # assume this is a filepath
     ref = cs3spr.Reference(path=fileid)
