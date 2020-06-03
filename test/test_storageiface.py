@@ -121,9 +121,9 @@ class TestStorage(unittest.TestCase):
     '''Test all xattr methods'''
     buf = b'bla\n'
     self.storage.writefile(self.endpoint, '/testxattr.txt', self.userid, buf)
-    self.storage.setxattr(self.endpoint, '/testxattr.txt', self.userid, 'testkey', 'testvalue')
+    self.storage.setxattr(self.endpoint, '/testxattr.txt', self.userid, 'testkey', 123)
     v = self.storage.getxattr(self.endpoint, '/testxattr.txt', self.userid, 'testkey')
-    self.assertEqual(v, 'testvalue')
+    self.assertEqual(v, '123')
     self.storage.rmxattr(self.endpoint, '/testxattr.txt', self.userid, 'testkey')
     v = self.storage.getxattr(self.endpoint, '/testxattr.txt', self.userid, 'testkey')
     self.assertEqual(v, None)

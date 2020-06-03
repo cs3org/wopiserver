@@ -48,7 +48,7 @@ def storage_layer_import(storagetype):
   try:
     storage = __import__(storagetype, globals(), locals())
   except ImportError:
-    print("Missing module when attempting to import {}. Please make sure dependencies are met.", storagetype)
+    print("Missing module when attempting to import %s.py. Please make sure dependencies are met." % storagetype)
     raise
 
 

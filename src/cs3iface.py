@@ -83,7 +83,7 @@ def stat(endpoint, fileid, userid):
         'filepath': statInfo.info.path,
         'userid': statInfo.info.owner.opaque_id,
         'size': statInfo.info.size,
-        'mtime': statInfo.info.mtime
+        'mtime': statInfo.info.mtime.seconds
         }
   ctx['log'].info('msg="Failed stat" fileid="%s" reason="%s"' % (fileid, statInfo.status.message))
   raise IOError(statInfo.status.message)
@@ -98,7 +98,7 @@ def setxattr(_endpoint, filepath, userid, key, value):
   '''Set the extended attribute <key> to <value> using the given userid as access token'''
   reference = cs3spr.Reference(path=filepath)
   arbitrary_metadata = cs3spr.ArbitraryMetadata()
-  arbitrary_metadata.metadata.update({key: value})    # pylint: disable=no-member
+  arbitrary_metadata.metadata.update({key: str(value)})    # pylint: disable=no-member
   req = cs3sp.SetArbitraryMetadataRequest(ref=reference, arbitrary_metadata=arbitrary_metadata)
   res = ctx['cs3stub'].SetArbitraryMetadata(request=req,
                                             metadata=[('x-access-token', _authenticate(userid))])
