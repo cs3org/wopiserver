@@ -13,15 +13,18 @@ Source: %{name}-%{version}.tar.gz
 
 BuildRequires: python(abi) >= 3.6
 Requires: python(abi) >= 3.6, python36-pip
-# pip3-installed "Requires": python3-flask, python3-jwt, python3-pyOpenSSL, requests
-# Note that python3-xrootd and python3-cs3api are not explicit dependencies given that they are dynamically loaded.
+# pip3-installed "Requires" are to be found in the requirements.txt file.
+# Note that python3-xrootd and the CS3APIs bindings are not explicit dependencies given that they are dynamically loaded.
+# Also note that when using the CS3APIs the required python version is 3.8, which is NOT available
+# in CentOS 7. This RPM targets xrootd based deployments, where python 3.6 is sufficient.
+
 # The following to avoid to pick up /bin/python as an automatic dependency
 AutoReq: no
 
 %description
 This RPM provides a Flask-based reference implementation of the WOPI protocol for the CS3 ScienceMesh IOP.
 
-The server supports storage via the CS3 APIs to the IOP (still work in progress), local storage for testing purposes,
+The server supports storage via the CS3 APIs to the IOP, local storage for testing purposes,
 as well as xrootd-based storages currently used in production at CERN for CERNBox.
 
 # Don't do any post-install weirdness, especially compiling .py files
@@ -76,9 +79,11 @@ touch /etc/wopi/iopsecret
 %_python_lib/*
 
 %changelog
-* Fri May 22 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.0
-- General refactoring of the code base and evolution to
-  become fully vendor-neutral
+* Fri Jun  5 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.0
+- General refactoring of the code base and evolution to become
+  fully vendor-neutral: see https://github.com/cs3org/wopiserver/pull/14
+- Included a pure python-based docker image
+- Ported to xrootd 4.12 and python 3.8
 - Moved to the CS3 Organisation
 * Wed May 14 2020 Giuseppe Lo Presti <lopresti@cern.ch> 4.3
 - Included some fixes around locking; this is hopefully the last release
