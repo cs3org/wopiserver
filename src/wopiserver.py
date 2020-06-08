@@ -24,6 +24,7 @@ import json
 import wopiutils as utils
 try:
   import flask                   # Flask app server, python3-flask-0.12.2 + python3-pyOpenSSL-17.3.0
+  from werkzeug.exceptions import HTTPException
   import jwt                     # PyJWT JSON Web Token, python3-jwt-1.6.1 or above
 except ImportError:
   print("Missing modules, please install Flask and JWT with `pip3 install flask PyJWT pyOpenSSL`")
@@ -217,6 +218,12 @@ class Wopi:
 #
 # The Flask web application starts here
 #
+@Wopi.app.errorhandler(HTTPException)
+def handleException(e):
+  '''Generic method to log any uncaught exception'''
+  return utils.logGeneralExceptionAndReturn(e, flask.request)
+
+
 @Wopi.app.route("/", methods=['GET'])
 def index():
   '''Return a default index page with some user-friendly information about this service'''
