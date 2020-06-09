@@ -29,15 +29,3 @@ This is a proof-of-concept WOPI bridge server, currently only targeting CodiMD, 
 * `PutFile`: store a file's content
 * `PutRelative`: store a file under a different name
 * `Unlock`: unlock a file on close
-
-## TODO
-* permissions management: e.g. from readonly mode one can switch to edit mode (but modifications are silently dropped)
-* detect changes in CodiMD and push them to WOPI every N minutes
-* delete files/entries from CodiMD DB
-
-### Required CodiMD APIs to implement the above features
-* given a note id, change permissions of a note. In particular switch from `Freely` to `Locked`.
-* given a note id, delete a note from DB as well as its attached files.
-* given a note id, return the note's last modification time.
-* given a picture/attachment and a hashed filename, store it in the store (or fail if the filename was already used).
-
