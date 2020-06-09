@@ -402,7 +402,6 @@ def cboxLock():
   userid = req.args['userid'] if 'userid' in req.args else '0:0'
   endpoint = req.args['endpoint'] if 'endpoint' in req.args else 'default'
   query = req.method == 'GET'
-  lockstat = None
   lockid = int(time.time())
   try:
     # probe if a WOPI lock already exists and expire it if too old:
@@ -422,18 +421,16 @@ def cboxLock():
       raise IOError
     lock = lock.decode('utf-8')
     if 'OnlyOffice Online Editor' in lock:
-      # if the lock was created for OnlyOffice, let it go as well: OnlyOffice will handle the collaborative session
-      # but keep lock stat for later comparison
-      lockstat = storage.stat(endpoint, utils.getLibreOfficeLockName(filename), userid)
       try:
-        # also recover the creation timestamp on the pre-existing lock if any (see below how the lock is constructed)
+        # if the lock was created for OnlyOffice, let it go as well (OnlyOffice will handle the collaborative session)
+        # and recover the creation timestamp on the pre-existing lock if any (see below how the lock is constructed)
         lockid = int(lock.split(';\n')[1].strip(';'))
       except (IndexError, ValueError):
         # lock got corrupted and did not contain the extra creation timestamp: it will be refreshed later on
         pass
       raise IOError
-    Wopi.log.info('msg="cboxLock: found existing LibreOffice lock" filename="%s" holder="%s" lockmtime="%ld"' % \
-                  (filename, lock.split(',')[1] if ',' in lock else lock, lockstat['mtime']))
+    Wopi.log.info('msg="cboxLock: found existing LibreOffice lock" filename="%s" holder="%s"' % \
+                  (filename, lock.split(',')[1] if ',' in lock else lock))
     return 'Previous lock exists', http.client.CONFLICT
   except IOError as e:
     pass
@@ -463,17 +460,20 @@ def cboxLock():
       storage.writefile(endpoint, utils.getLibreOfficeLockName(filename), userid, lolockcontent, 1)
       Wopi.log.info('msg="cboxLock: (re)created LibreOffice-compatible lock file" filename="%s" id="%d"' % (filename, lockid))
       return str(lockid), http.client.OK
-    if query and filestat['mtime'] > lockstat['mtime']:
+    # query case: check the xattr on the file to see if it has been overwritten meanwhile
+    lastsavetime = storage.getxattr(endpoint, filename, userid, LASTSAVETIMEKEY)
+    if not lastsavetime:
       # we were asked to query an existing lock, but the file was modified in between (e.g. by a sync client):
       # notify potential conflict
       Wopi.log.info('msg="cboxLock: file got modified after LibreOffice-compatible lock file was created" ' \
-                    'filename="%s"' % filename)
+                    'filename="%s" filemtime="%ld"' % (filename, filestat['mtime']))
       return 'File modified since open time', http.client.CONFLICT
-    Wopi.log.info('msg="cboxLock: lock file still valid" filename="%s" id="%d" lockmtime="%ld"' % \
-                  (filename, lockid, lockstat['mtime']))
+    # if we got the attribute, the file was saved within OnlyOffice and thus the lock is valid
+    Wopi.log.info('msg="cboxLock: lock file still valid" filename="%s" id="%d" lastsavetime="%s"' % \
+                  (filename, lockid, lastsavetime))
     return str(lockid), http.client.OK
   except IOError as e:
-    Wopi.log.error('msg="cboxLock: unable to store a LibreOffice-compatible lock" filename="%s" reason="%s"' % \
+    Wopi.log.error('msg="cboxLock: unable to store or retrieve a LibreOffice-compatible lock" filename="%s" reason="%s"' % \
                    (filename, e))
     # return failure, though the caller should just try and go ahead
     return 'Error locking file', http.client.INTERNAL_SERVER_ERROR

@@ -4,7 +4,7 @@
 Name:      cernbox-wopi-server
 Summary:   A WOPI server to support Office online suites for the ScienceMesh IOP
 Version:   5.0
-Release:   1%{?dist}
+Release:   2%{?dist}
 License:   GPLv3
 Buildroot: %{_tmppath}/%{name}-buildroot
 Group:     CERN-IT/ST
@@ -83,6 +83,7 @@ touch /etc/wopi/iopsecret
 - General refactoring of the code base and evolution to become
   fully vendor-neutral: see https://github.com/cs3org/wopiserver/pull/14
 - Included a pure python-based docker image
+- Extended interop locks for OnlyOffice to cover race conditions
 - Ported to xrootd 4.12 and python 3.8
 - Moved to the CS3 Organisation
 * Wed May 14 2020 Giuseppe Lo Presti <lopresti@cern.ch> 4.3
