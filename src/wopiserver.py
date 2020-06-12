@@ -588,8 +588,9 @@ def wopiCheckFileInfo(fileid):
         filemd['SupportsGetLock'] = filemd['SupportsDeleteFile'] = acctok['canedit']
         #filemd['SupportsRename'] = filemd['UserCanRename'] = acctok['canedit']      # XXX broken in MS Office Online
     filemd['SupportsExtendedLockLength'] = True
-    filemd['EnableOwnerTermination'] = True     # extension for Collabora Online
     #filemd['UserCanPresent'] = True   # what about the broadcasting feature in Office Online?
+    filemd['EnableOwnerTermination'] = True     # extension for Collabora Online
+    filemd['DisableExport'] = filemd['DisableCopy'] = filemd['DisablePrint'] = not acctok['canedit']
     Wopi.log.info('msg="File metadata response" token="%s" metadata="%s"' % (flask.request.args['access_token'][-20:], filemd))
     # send in JSON format
     return flask.Response(json.dumps(filemd), mimetype='application/json')
