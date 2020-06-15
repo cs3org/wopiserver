@@ -11,7 +11,7 @@ import traceback
 import hashlib
 import json
 import urllib.parse
-from enum import Enum
+from enum import IntEnum
 import http.client
 import flask
 import jwt
@@ -21,7 +21,7 @@ import jwt
 _ctx = {}
 
 
-class ViewMode(Enum):
+class ViewMode(IntEnum):
   '''File view mode: reference is
   https://github.com/cs3org/cs3apis/blob/master/cs3/app/provider/v1beta1/provider_api.proto#L79
   '''
@@ -116,7 +116,7 @@ def generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint)
   acctok = jwt.encode({'userid': userid, 'filename': filename, 'username': username, 'viewmode': viewmode,
                        'extlock': locked, 'folderurl': folderurl, 'exp': exptime, 'endpoint': endpoint}, \
                       _ctx['wopi'].wopisecret, algorithm='HS256').decode('UTF-8')
-  _ctx['log'].info('msg="Access token generated" userid="%s" viewmode="%s" filename="%s" inode="%s" ' \
+  _ctx['log'].info('msg="Access token generated" userid="%s" mode="%s" filename="%s" inode="%s" ' \
                    'mtime="%s" folderurl="%s" expiration="%d" token="%s"' % \
                    (userid, viewmode, filename, statInfo['inode'], statInfo['mtime'], folderurl, exptime, acctok[-20:]))
   # return the inode == fileid and the access token

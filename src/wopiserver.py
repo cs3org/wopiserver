@@ -307,7 +307,7 @@ def iopOpen():
             return '%s&access_token=%s' % (utils.generateWopiSrc(inode), acctok)      # no need to URL-encode the JWT token
           except IOError as e:
             Wopi.log.info('msg="cboxOpen: remote error on generating token" client="%s" user="%s" ' \
-                          'friendlyname="%s" viewmode="%s" endpoint="%s" reason="%s"' % \
+                          'friendlyname="%s" mode="%s" endpoint="%s" reason="%s"' % \
                           (req.remote_addr, userid, username, viewmode, endpoint, e))
             return 'Remote error or file not found', http.client.NOT_FOUND
     except socket.gaierror:
@@ -822,7 +822,7 @@ def wopiPutRelative(fileid, reqheaders, acctok):
     return 'I/O Error', http.client.INTERNAL_SERVER_ERROR
   # generate an access token for the new file
   Wopi.log.info('msg="PutRelative: generating new access token" user="%s" filename="%s" ' \
-                'viewmode="ViewMode.READ_WRITE" friendlyname="%s"' % \
+                'mode="ViewMode.READ_WRITE" friendlyname="%s"' % \
                 (acctok['userid'], targetName, acctok['username']))
   inode, newacctok = utils.generateAccessToken(acctok['userid'], targetName, utils.ViewMode.READ_WRITE, acctok['username'], \
                                                acctok['folderurl'], acctok['endpoint'])

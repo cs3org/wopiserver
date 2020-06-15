@@ -11,21 +11,24 @@ import sys, os, getopt, configparser, requests
 # usage function
 def usage(exitcode):
   '''Prints usage'''
-  print('Usage : ' + sys.argv[0] + ' [-h|--help] <filename> <uid> <gid>')
+  print('Usage : ' + sys.argv[0] + ' [-h|--help] [-m|--mode 1|2|3] <filename> <uid> <gid>')
   sys.exit(exitcode)
 
 # first parse the options
 try:
-  options, args = getopt.getopt(sys.argv[1:], 'hv', ['help', 'verbose'])
+  options, args = getopt.getopt(sys.argv[1:], 'hvm:', ['help', 'verbose', 'mode'])
 except getopt.GetoptError as e:
   print(e)
   usage(1)
 verbose = False
+mode = 3   # 3 is full access, 2 for read-only, 1 for view-only.
 for f, v in options:
   if f == '-h' or f == '--help':
     usage(0)
   elif f == '-v' or f == '--verbose':
     verbose = True
+  elif f == '-m' or f == '--mode':
+    mode = v
   else:
     print("unknown option : " + f)
     usage(1)
@@ -68,7 +71,7 @@ apps = requests.get(wopiurl + '/wopi/cbox/endpoints', verify=False).json()
 wopisrc = requests.get(wopiurl + '/wopi/iop/open', verify=False,
                        headers={'Authorization': 'Bearer ' + iopsecret},
                        params={'ruid': ruid, 'rgid': rgid, 'filename': filename, 'endpoint': endpoint,
-                               'canedit': 'True', 'username': 'Operator', 'folderurl': 'foo'})
+                               'viewmode': mode, 'username': 'Operator', 'folderurl': 'foo'})
 if wopisrc.status_code != 200:
   print('WOPI open request failed:\n%s' % wopisrc.content.decode())
   sys.exit(-1)
