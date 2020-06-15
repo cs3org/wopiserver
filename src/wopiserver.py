@@ -221,6 +221,9 @@ class Wopi:
 @Wopi.app.errorhandler(HTTPException)
 def handleException(e):
   '''Generic method to log any uncaught exception'''
+  if 'favicon.ico' in flask.request.url:
+    # ignore harmless favicon requests
+    return 'Not exist', http.client.NOT_FOUND
   return utils.logGeneralExceptionAndReturn(e, flask.request)
 
 
