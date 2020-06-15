@@ -11,6 +11,7 @@ import traceback
 import hashlib
 import json
 import urllib.parse
+from enum import Enum
 import http.client
 import flask
 import jwt
@@ -19,14 +20,25 @@ import jwt
 # Convenience dictionary to store some context and avoid globals
 _ctx = {}
 
-credentials = {}
+
+class ViewMode(Enum):
+  '''File view mode: reference is
+  https://github.com/cs3org/cs3apis/blob/master/cs3/app/provider/v1beta1/provider_api.proto#L79
+  '''
+  INVALID = 0
+  # The file can be opened but not downloaded
+  VIEW_ONLY = 1
+  # The file can be downloaded
+  READ_ONLY = 2
+  # The file can be downloaded and updated
+  READ_WRITE = 3
 
 
-def init(storage, wopi):
+def init(storage, wopiserver):
   '''Convenience method to iniialise this module'''
   _ctx['st'] = storage
-  _ctx['wopi'] = wopi
-  _ctx['log'] = _ctx['wopi'].log
+  _ctx['wopi'] = wopiserver
+  _ctx['log'] = wopiserver.log
 
 
 def logGeneralExceptionAndReturn(ex, req):
@@ -62,10 +74,9 @@ def getMicrosoftOfficeLockName(filename):
 
 
 
-def generateAccessToken(userid, fileid, canedit, username, folderurl, endpoint):
+def generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint):
   '''Generates an access token for a given file and a given user, and returns a tuple with
-  the file's inode and the URL-encoded access token.
-  Access to this function is protected by source IP address.'''
+  the file's inode and the URL-encoded access token.'''
   try:
     # stat now the file to check for existence and get inode and modification time
     # the inode serves as fileid, the mtime can be used for version information
@@ -76,7 +87,7 @@ def generateAccessToken(userid, fileid, canedit, username, folderurl, endpoint):
   # if write access is requested, probe whether there's already a lock file coming from Desktop applications
   locked = False
   filename = statInfo['filepath']
-  if canedit:
+  if viewmode == ViewMode.READ_WRITE:
     try:
       # probe LibreOffice
       lock = next(_ctx['st'].readfile(endpoint, getLibreOfficeLockName(filename), userid))
@@ -86,7 +97,7 @@ def generateAccessToken(userid, fileid, canedit, username, folderurl, endpoint):
         # also if a lock file is found but it is held by a WOPI Server, let it go: it will be sorted out
         # by the collaborative editor via WOPI Lock calls
         raise IOError
-      canedit = False
+      viewmode = ViewMode.READ_ONLY
       locked = True
       lock = str(lock)
       _ctx['log'].warning('msg="Access downgraded to read-only because of an existing LibreOffice lock" ' \
@@ -95,19 +106,19 @@ def generateAccessToken(userid, fileid, canedit, username, folderurl, endpoint):
       try:
         # same for MS Office, but don't try to go beyond stat
         lockInfo = _ctx['st'].stat(endpoint, getMicrosoftOfficeLockName(filename), userid)
-        canedit = False
+        viewmode = ViewMode.READ_ONLY
         locked = True
         _ctx['log'].warning('msg="Access downgraded to read-only because of an existing Microsoft Office lock" ' \
         	                  'filename="%s" mtime="%ld"' % (filename, lockInfo['mtime']))
       except IOError:
         pass
   exptime = int(time.time()) + _ctx['wopi'].tokenvalidity
-  acctok = jwt.encode({'userid': userid, 'filename': filename, 'username': username, 'canedit': canedit,
+  acctok = jwt.encode({'userid': userid, 'filename': filename, 'username': username, 'viewmode': viewmode,
                        'extlock': locked, 'folderurl': folderurl, 'exp': exptime, 'endpoint': endpoint}, \
                       _ctx['wopi'].wopisecret, algorithm='HS256').decode('UTF-8')
-  _ctx['log'].info('msg="Access token generated" userid="%s" canedit="%r" filename="%s" inode="%s" ' \
+  _ctx['log'].info('msg="Access token generated" userid="%s" viewmode="%s" filename="%s" inode="%s" ' \
                    'mtime="%s" folderurl="%s" expiration="%d" token="%s"' % \
-                   (userid, canedit, filename, statInfo['inode'], statInfo['mtime'], folderurl, exptime, acctok[-20:]))
+                   (userid, viewmode, filename, statInfo['inode'], statInfo['mtime'], folderurl, exptime, acctok[-20:]))
   # return the inode == fileid and the access token
   return statInfo['inode'], acctok
 

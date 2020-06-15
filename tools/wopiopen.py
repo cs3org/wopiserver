@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-Call the /wopi/cbox/open REST API on the given file and return a URL for direct editing it
+Call the /wopi/iop/open REST API on the given file and return a URL for direct editing it
 
 Author: Giuseppe.LoPresti@cern.ch
 CERN IT/ST
@@ -65,7 +65,7 @@ requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.
 apps = requests.get(wopiurl + '/wopi/cbox/endpoints', verify=False).json()
 
 # open the file and get WOPI token
-wopisrc = requests.get(wopiurl + '/wopi/cbox/open', verify=False,
+wopisrc = requests.get(wopiurl + '/wopi/iop/open', verify=False,
                        headers={'Authorization': 'Bearer ' + iopsecret},
                        params={'ruid': ruid, 'rgid': rgid, 'filename': filename, 'endpoint': endpoint,
                                'canedit': 'True', 'username': 'Operator', 'folderurl': 'foo'})
