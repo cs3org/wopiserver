@@ -294,12 +294,6 @@ def cboxOpen():
           username = req.args['username'] if 'username' in req.args else ''
           folderurl = urllib.parse.unquote(req.args['folderurl'])
           endpoint = req.args['endpoint'] if 'endpoint' in req.args else 'default'
-          # XXX workaround for new files that cannot be opened in collaborative edit mode until they're closed for the first time
-          # XXX and for now this workaround assumes fileid == filepath! need to check if Collabora is also affected by this.
-          if canedit and fileid in Wopi.openfiles and Wopi.openfiles[fileid][0] == '0':
-            Wopi.log.warning('msg="cboxOpen: forcing read-only mode on collaborative editing of a new file" ' \
-                             'client="%s" user="%s"' % (req.remote_addr, userid))
-            canedit = False
           try:
             inode, acctok = utils.generateAccessToken(userid, fileid, canedit, username, folderurl, endpoint)
             # return an URL-encoded WOPISrc URL for the Office Online server
