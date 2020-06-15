@@ -3,8 +3,8 @@
 #
 Name:      cernbox-wopi-server
 Summary:   A WOPI server to support Office online suites for the ScienceMesh IOP
-Version:   5.0
-Release:   1%{?dist}
+Version:   5.1
+Release:   0%{?dist}
 License:   GPLv3
 Buildroot: %{_tmppath}/%{name}-buildroot
 Group:     CERN-IT/ST
@@ -79,6 +79,10 @@ touch /etc/wopi/iopsecret
 %_python_lib/*
 
 %changelog
+* Mon Jun 15 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.1
+- Expose a new /wopi/iop/open endpoint to match Reva. The
+  former /wopi/cbox/open endpoint is deprecated and will
+  be dropped once production moves forward.
 * Fri Jun  5 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.0
 - General refactoring of the code base and evolution to become
   fully vendor-neutral: see https://github.com/cs3org/wopiserver/pull/14
