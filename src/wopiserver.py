@@ -574,8 +574,13 @@ def wopiCheckFileInfo(fileid):
       filemd['BreadcrumbFolderName'] = 'Back to ' + acctok['filename'].split('/')[-2]
     filemd['DownloadUrl'] = '%s?access_token=%s' % \
                             (Wopi.config.get('general', 'downloadurl'), flask.request.args['access_token'])
-    filemd['HostViewUrl'] = '%s&%s' % (Wopi.ENDPOINTS[fExt]['view'], wopiSrc)
-    filemd['HostEditUrl'] = '%s&%s' % (Wopi.ENDPOINTS[fExt]['edit'], wopiSrc)
+    try:
+      # TODO once the endpoints are managed by Reva, these have to be provided e.g. in the access token
+      filemd['HostViewUrl'] = '%s&%s' % (Wopi.ENDPOINTS[fExt]['view'], wopiSrc)
+      filemd['HostEditUrl'] = '%s&%s' % (Wopi.ENDPOINTS[fExt]['edit'], wopiSrc)
+    except KeyError:
+      # if the doc type is unknown, don't provide those URLs but still return the other metadata
+      pass
     # the following is to enable the 'Edit in Word/Excel/PowerPoint' (desktop) action (probably broken)
     try:
       filemd['ClientUrl'] = Wopi.config.get('general', 'webdavurl') + '/' + acctok['filename']
@@ -585,6 +590,7 @@ def wopiCheckFileInfo(fileid):
     filemd['OwnerId'] = statInfo['userid']
     filemd['UserId'] = acctok['userid']     # typically same as OwnerId; different when accessing shared documents
     filemd['Size'] = statInfo['size']
+    # TODO the version is generated like this in ownCloud: 'V' . $file->getEtag() . \md5($file->getChecksum());
     filemd['Version'] = statInfo['mtime']   # mtime is used as version here
     filemd['LastModifiedTime'] = datetime.fromtimestamp(int(statInfo['mtime'])).isoformat()   # this is used by Collabora
     filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = \
