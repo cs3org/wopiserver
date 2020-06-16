@@ -27,7 +27,7 @@ except ImportError:
   print("Missing modules, please install with `pip3 install flask requests`")
   raise
 
-WBSERVERVERSION = '0.3'
+WBVERSION = '0.3'
 
 class WB:
   '''A singleton container for all state information of the server'''
@@ -130,7 +130,7 @@ def index():
     <i>ScienceMesh WOPI Bridge %s at %s. Powered by Flask %s for Python %s</i>.</div>
     </body>
     </html>
-    """ % (WBSERVERVERSION, socket.getfqdn(), flask.__version__, python_version())
+    """ % (WBVERSION, socket.getfqdn(), flask.__version__, python_version())
 
 
 def _getattachments(mddoc, docfilename):
@@ -283,6 +283,14 @@ def mdOpen():
   resp = flask.Response(WB.frame_page_templated_html % (filemd['BreadcrumbDocName'], filemd['UserFriendlyName'], \
                         WB.wopibridgeurl, wopiSrc, acctok, filemd['UserCanWrite'], redirecturl))
   return resp
+
+
+@WB.app.route("/<noteid>/save", methods=['GET'])
+def mdSave(noteid):
+  '''Saves an MD doc given a note id and its WOPI context'''
+  acctok = flask.request.args['access_token']
+  wopiSrc = flask.request.args['WOPISrc']
+  return 'WIP', http.client.NOT_IMPLEMENTED
 
 
 @WB.app.route("/close", methods=['GET'])

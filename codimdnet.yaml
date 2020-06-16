@@ -28,6 +28,7 @@ services:
       - CMD_ALLOW_ANONYMOUS=true
       - CMD_ALLOW_ANONYMOUS_EDITS=true
       - CMD_ALLOW_ANONYMOUS_VIEWS=true
+      - CMD_SAVE_HOOK=http://codimd-wopi.codinet:8000
     depends_on:
       - database
     ports:
