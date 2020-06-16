@@ -27,13 +27,12 @@ except ImportError:
   print("Missing modules, please install with `pip3 install flask requests`")
   raise
 
-WBSERVERVERSION = '0.2'
+WBSERVERVERSION = '0.3'
 
 class WB:
   '''A singleton container for all state information of the server'''
   app = flask.Flask("WOPIBridge")
   port = 0
-  lastConfigReadTime = time.time()
   loglevels = {"Critical": logging.CRITICAL,  # 50
                "Error":    logging.ERROR,     # 40
                "Warning":  logging.WARNING,   # 30
@@ -95,8 +94,7 @@ class WB:
       cls.codimdexturl = os.environ.get('CODIMD_EXT_URL')    # this is the external-facing URL
       cls.codimdurl = os.environ.get('CODIMD_INT_URL')       # this is the internal URL (e.g. as visible in a docker network)
       cls.codimdstore = os.environ.get('CODIMD_STORAGE_PATH')
-      cls.useHttps = False
-      _autodetected_server = '%s://%s:%d' % (('https' if cls.useHttps else 'http'), socket.getfqdn(), cls.port)
+      _autodetected_server = 'http://%s:%d' % (socket.getfqdn(), cls.port)
       cls.wopibridgeurl = os.environ.get('WOPIBRIDGE_URL')
       if not cls.wopibridgeurl:
         cls.wopibridgeurl = _autodetected_server
@@ -111,14 +109,9 @@ class WB:
 
   @classmethod
   def run(cls):
-    '''Runs the Flask app in either secure (https) or test (http) mode'''
-    if cls.useHttps:
-      cls.log.info('msg="WOPI Bridge starting in secure mode" url="%s" proxied="%s"' % (cls.wopibridgeurl, cls.proxied))
-      cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=True)
-                  #ssl_context=(cls.config.get('security', 'wopicert'), cls.config.get('security', 'wopikey')))
-    else:
-      cls.log.info('msg="WOPI Bridge starting in unsecure mode" url="%s" proxied="%s"' % (cls.wopibridgeurl, cls.proxied))
-      cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=True)
+    '''Runs the Flask app in unsecure mode. Secure https mode is to be provided by the infrastructure (k8s ingress, nginx...)'''
+    cls.log.info('msg="WOPI Bridge starting in unsecure mode" url="%s" proxied="%s"' % (cls.wopibridgeurl, cls.proxied))
+    cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=True)
 
 
 # The Web Application starts here
@@ -138,12 +131,6 @@ def index():
     </body>
     </html>
     """ % (WBSERVERVERSION, socket.getfqdn(), flask.__version__, python_version())
-
-
-@WB.app.route('/new', methods=['GET'])
-def mdNew():
-  '''Create a new MD doc to the given WOPISrc and allow user to start working on it'''
-  # TODO
 
 
 def _getattachments(mddoc, docfilename):
@@ -204,10 +191,6 @@ def mdOpen():
   except (ValueError, json.decoder.JSONDecodeError) as e:
     WB.log.warning('msg="Malformed JSON from WOPI" error="%s"' % e)
     return 'Invalid or non existing access_token', http.client.NOT_FOUND
-
-  # Login to CodiMD
-  #loginreq = requests.post(WB.codimdurl + '/login', {'login': '...', 'password': '...'})
-  #WB.log.debug('msg="Logged in to CodiMD" cookies="%s"' % loginreq.cookies)
 
   # WOPI GetLock
   WB.log.debug('msg="Calling WOPI GetLock" url="%s"' % wopiSrc)
@@ -291,18 +274,12 @@ def mdOpen():
   else:
     # read-only mode, in this case the redirection url is created in publish mode
     # TODO switch CodiMD to readonly mode for real
-    #loginreq = requests.post(WB.codimdurl + '/login', {'login': ..., 'password': ...})
     redirecturl = WB.codimdexturl + wopilock['docid'] + '/publish'
 
   WB.log.debug('msg="Redirecting client to CodiMD" redirecturl="%s"' % redirecturl)
   # generate a hook for close and return an iframe to the client
   resp = flask.Response(WB.frame_page_templated_html % (filemd['BreadcrumbDocName'], filemd['UserFriendlyName'], \
                         WB.wopibridgeurl, wopiSrc, acctok, filemd['UserCanWrite'], redirecturl))
-  # set login cookies: this cannot work this way, we'd need to set the cookie at the iframe level,
-  # but then we have several security issues: an iframe cookie is like a tracking cookie, and the domain is different.
-  # To be seen if we could actually keep using CodiMD in fully anonymous mode.
-  #for c in loginreq.cookies:
-  #  resp.set_cookie(c.name, c.value)
   return resp
 
 
