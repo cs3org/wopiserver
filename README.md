@@ -52,3 +52,10 @@ By default, the local storage is tested. To run the tests, use the standard pyth
 2. Go to the test folder `cd test`
 3. Configure `wopiserver-test.conf` according to your Eos setup. The provided defaults are valid at CERN.
 4. Run the tests: `WOPI_STORAGE=xroot python3 test_storageiface.py`
+
+## Run the WOPI server locally
+1. Install all requirements listed in requirement.txt
+2. Add log file directory: `sudo mkdir /var/log/wopi/`
+3. Add the log file: `sudo vim /var/log/wopi/wopiserver.log`
+4. Make sure you have write permissions to the log file `sudo chmod a+rwx /var/log/wopi/wopiserver.log`
+5. From the WOPIserver folder run: `python3 src/wopiserver.py`
