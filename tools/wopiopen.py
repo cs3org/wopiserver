@@ -7,6 +7,7 @@ CERN IT/ST
 '''
 
 import sys, os, getopt, configparser, requests
+from wopiutils import ViewMode
 
 # usage function
 def usage(exitcode):
@@ -21,7 +22,7 @@ except getopt.GetoptError as e:
   print(e)
   usage(1)
 verbose = False
-mode = 3   # 3 is full access, 2 for read-only, 1 for view-only.
+mode = ViewMode.READ_WRITE
 for f, v in options:
   if f == '-h' or f == '--help':
     usage(0)
