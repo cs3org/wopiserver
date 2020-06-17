@@ -19,13 +19,13 @@ services:
       - "database-data:/var/lib/postgresql/data"
     restart: always
   frontend:
-    image: nabo.codimd.dev/hackmdio/hackmd:2.0.1
+    image: hackmdio/hackmd:cern
     container_name: codimd-web
     hostname: cbox-codimd-web
     environment:
       - CMD_DB_URL=postgres://codimd:${DBPWD}@codimd-postgres/codimd
       - CMD_AUTO_VERSION_CHECK=false
-      - CMD_ALLOW_ANONYMOUS=true         # switch to false to use logins and enforce protections. Can it be avoided?
+      - CMD_ALLOW_ANONYMOUS=true
       - CMD_ALLOW_ANONYMOUS_EDITS=true
       - CMD_ALLOW_ANONYMOUS_VIEWS=true
     depends_on:

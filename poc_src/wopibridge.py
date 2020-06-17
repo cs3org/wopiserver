@@ -238,8 +238,11 @@ def mdOpen():
       mddoc = _unzipattachments(mdfile, WB.codimdstore)
     else:
       mddoc = mdfile
+    newparams = None
+    if not filemd['UserCanWrite']:
+      newparams = {'mode': 'locked'}     # this is an extended feature in "our" CodiMD
     res = requests.post(WB.codimdurl + '/new', data=mddoc, allow_redirects=False, \
-                        headers={'Content-Type': 'text/markdown'})   # cookies=loginreq.cookies)
+                        headers={'Content-Type': 'text/markdown'}, params=newparams)
     if res.status_code != http.client.FOUND:
       raise ValueError(res.status_code)
     # we got the hash of the document just created as a redirected URL, store it in our WOPI lock structure
@@ -273,7 +276,6 @@ def mdOpen():
     redirecturl = WB.codimdexturl + wopilock['docid'] + '?both'
   else:
     # read-only mode, in this case the redirection url is created in publish mode
-    # TODO switch CodiMD to readonly mode for real
     redirecturl = WB.codimdexturl + wopilock['docid'] + '/publish'
 
   WB.log.debug('msg="Redirecting client to CodiMD" redirecturl="%s"' % redirecturl)
