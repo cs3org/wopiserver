@@ -79,7 +79,7 @@ if wopisrc.status_code != 200:
 
 # return the full URL to the user
 try:
-  url = apps[os.path.splitext(filename)[1]]['edit']
+  url = apps[os.path.splitext(filename)[1]]['edit' if mode == ViewMode.READ_WRITE else 'view']
   url += '?' if '?' not in url else '&'
   print('App URL:\n%sWOPISrc=%s\n' % (url, wopisrc.content.decode()))
 except KeyError:
