@@ -12,24 +12,21 @@ from wopiutils import ViewMode
 # usage function
 def usage(exitcode):
   '''Prints usage'''
-  print('Usage : ' + sys.argv[0] + ' [-h|--help] [-m|--mode 1|2|3] <filename> <uid> <gid>')
+  print('Usage : ' + sys.argv[0] + ' [-h|--help] [-v|--viewmode 1|2|3] <filename> <uid> <gid>')
   sys.exit(exitcode)
 
 # first parse the options
 try:
-  options, args = getopt.getopt(sys.argv[1:], 'hvm:', ['help', 'verbose', 'mode'])
+  options, args = getopt.getopt(sys.argv[1:], 'hv:', ['help', 'viewmode'])
 except getopt.GetoptError as e:
   print(e)
   usage(1)
-verbose = False
-mode = ViewMode.READ_WRITE
+viewmode = ViewMode.READ_WRITE
 for f, v in options:
   if f == '-h' or f == '--help':
     usage(0)
-  elif f == '-v' or f == '--verbose':
-    verbose = True
-  elif f == '-m' or f == '--mode':
-    mode = v
+  elif f == '-v' or f == '--viewmode':
+    viewmode = v
   else:
     print("unknown option : " + f)
     usage(1)
@@ -72,14 +69,14 @@ apps = requests.get(wopiurl + '/wopi/cbox/endpoints', verify=False).json()
 wopisrc = requests.get(wopiurl + '/wopi/iop/open', verify=False,
                        headers={'Authorization': 'Bearer ' + iopsecret},
                        params={'ruid': ruid, 'rgid': rgid, 'filename': filename, 'endpoint': endpoint,
-                               'viewmode': mode, 'username': 'Operator', 'folderurl': 'foo'})
+                               'viewmode': viewmode, 'username': 'Operator', 'folderurl': 'foo'})
 if wopisrc.status_code != 200:
   print('WOPI open request failed:\n%s' % wopisrc.content.decode())
   sys.exit(-1)
 
 # return the full URL to the user
 try:
-  url = apps[os.path.splitext(filename)[1]]['edit' if mode == ViewMode.READ_WRITE else 'view']
+  url = apps[os.path.splitext(filename)[1]]['edit' if viewmode == ViewMode.READ_WRITE else 'view']
   url += '?' if '?' not in url else '&'
   print('App URL:\n%sWOPISrc=%s\n' % (url, wopisrc.content.decode()))
 except KeyError:
