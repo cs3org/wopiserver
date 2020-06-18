@@ -259,12 +259,11 @@ def iopOpen():
   - string endpoint (optional): the storage endpoint to be used to look up the file or the storage id, in case of
     multi-instance underlying storage; defaults to 'default'
   Note: this is the most sensitive call of this WOPI server as it provides direct
-  access to any user's file, therefore it is protected both by IP and a shared secret. The shared
-  secret protection is disabled when running in plain http mode for testing purposes.'''
+  access to any user's file, therefore it is protected both by IP and a shared secret.'''
   Wopi.refreshconfig()
   req = flask.request
   # if running in https mode, first check if the shared secret matches ours
-  if Wopi.useHttps and ('Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.iopsecret):
+  if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.iopsecret:
     Wopi.log.warning('msg="cboxOpen: unauthorized access attempt, missing authorization token" ' \
                      'client="%s"' % req.remote_addr)
     return 'Client not authorized', http.client.UNAUTHORIZED
@@ -281,7 +280,7 @@ def iopOpen():
       if ruid == 0 or rgid == 0:
         raise ValueError
   except ValueError:
-    Wopi.log.warning('msg="cboxOpen: invalid user/group in request" client="%s" user="%s"' % \
+    Wopi.log.warning('msg="cboxOpen: invalid or missing user/token in request" client="%s" user="%s"' % \
                      (req.remote_addr, userid))
     return 'Client not authorized', http.client.UNAUTHORIZED
   # then resolve the client and reject unauthorized ones
