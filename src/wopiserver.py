@@ -328,18 +328,17 @@ def iopGetOpenFiles():
   '''Returns a list of all currently opened files, for operations purposes only.
   This call is protected by the same shared secret as the /wopi/iop/open call.'''
   req = flask.request
-  # first check if the shared secret matches ours
   if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.iopsecret:
     Wopi.log.warning('msg="iopGetOpenFiles: unauthorized access attempt, missing authorization token" ' \
                      'client="%s"' % req.remote_addr)
     return 'Client not authorized', http.client.UNAUTHORIZED
   # first convert the sets into lists, otherwise sets cannot be serialized in JSON format
-  jl = {}
+  jlist = {}
   for f in list(Wopi.openfiles.keys()):
-    jl[f] = (Wopi.openfiles[f][0], tuple(Wopi.openfiles[f][1]))
+    jlist[f] = (Wopi.openfiles[f][0], tuple(Wopi.openfiles[f][1]))
   # dump the current list of opened files in JSON format
   Wopi.log.info('msg="iopGetOpenFiles: returning list of open files" client="%s"' % req.remote_addr)
-  return flask.Response(json.dumps(jl), mimetype='application/json')
+  return flask.Response(json.dumps(jlist), mimetype='application/json')
 
 
 @Wopi.app.route("/wopi/cbox/download", methods=['GET'])
