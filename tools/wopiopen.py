@@ -21,7 +21,7 @@ try:
 except getopt.GetoptError as e:
   print(e)
   usage(1)
-viewmode = ViewMode.READ_WRITE
+viewmode = int(ViewMode.READ_WRITE)
 for f, v in options:
   if f == '-h' or f == '--help':
     usage(0)
