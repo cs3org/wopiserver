@@ -8,9 +8,11 @@ Contributions: Michael.DSilva@aarnet.edu.au
 '''
 
 import time
+import os
 from XRootD import client as XrdClient
-from XRootD.client.flags import OpenFlags, QueryCode
+from XRootD.client.flags import OpenFlags, QueryCode, MkDirFlags
 
+EOSVERSIONPREFIX = '.sys.v#.'
 
 # module-wide state
 config = None
@@ -120,15 +122,37 @@ def statx(endpoint, filepath, userid):
   '''Get extended stat info (inode, filepath, userid, size, mtime) via an xroot opaque query on behalf of the given userid'''
   tstart = time.time()
   rc, info = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(filepath) + _eosargs(userid) + '&mgm.pcmd=stat')
-  tend = time.time()
-  log.info('msg="Invoked stat" filepath="%s" elapsedTimems="%.1f"' % (_getfilepath(filepath), (tend-tstart)*1000))
+  info = str(info)
+  log.info('msg="Invoked stat" filepath="%s"' % _getfilepath(filepath))
   if '[SUCCESS]' not in str(rc):
     raise IOError(str(rc).strip('\n'))
-  info = str(info)
   if 'retc=' in info:
     raise IOError(info.strip('\n'))
   statxdata = info.split()
-  return {'inode': str(statxdata[2]),
+  # now stat the corresponding version folder to get an inode invariant to save operations
+  verFolder = os.path.dirname(filepath) + EOSVERSIONPREFIX + os.path.basename(filepath)
+  rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder) + _eosargs(userid) + '&mgm.pcmd=stat')
+  tend = time.time()
+  log.debug('msg="Invoked stat on version folder" filepath="%s" elapsedTimems="%.1f"' % (_getfilepath(verFolder), (tend-tstart)*1000))
+  infov = str(infov)
+  try:
+    if '[SUCCESS]' not in str(rcv) or 'retc=' in infov:
+      # the version folder does not exist: create it
+      # cf. https://github.com/cernbox/revaold/blob/master/api/public_link_manager_owncloud/public_link_manager_owncloud.go#L127
+      rcmkdir = _getxrdfor(endpoint).mkdir(_getfilepath(verFolder) + _eosargs(userid), MkDirFlags.MAKEPATH)
+      log.debug('msg="Invoked mkdir on version folder" filepath="%s" rc="%s"' % (_getfilepath(verFolder), rcmkdir))
+      if '[SUCCESS]' not in str(rcmkdir):
+        raise IOError
+      rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder) + _eosargs(userid) + '&mgm.pcmd=stat')
+      infov = str(infov)
+      log.debug('msg="Invoked stat on version folder" filepath="%s"' % _getfilepath(verFolder))
+      if '[SUCCESS]' not in str(rcv) or 'retc=' in infov:
+        raise IOError
+    statxvdata = infov.split()
+  except IOError:
+    log.warn('msg="Failed to mkdir/stat version folder" rc="%s"' % rcv)
+    statxvdata = statxdata
+  return {'inode': str(statxvdata[2]),
           'filepath': filepath,
           'userid': str(statxdata[5]) + ':' + str(statxdata[6]),
           'size': int(statxdata[8]),
