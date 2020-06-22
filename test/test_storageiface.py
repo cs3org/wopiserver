@@ -63,7 +63,7 @@ class TestStorage(unittest.TestCase):
     self.storage.removefile(self.endpoint, '/test.txt', self.userid)
 
   def test_statx_fileid(self):
-    '''Call stat() and assert the path matches'''
+    '''Call statx() via both filepath and fileid'''
     buf = b'bla\n'
     self.storage.writefile(self.endpoint, '/test.txt', self.userid, buf)
     statInfo = self.storage.statx(self.endpoint, '/test.txt', self.userid)
@@ -73,6 +73,20 @@ class TestStorage(unittest.TestCase):
     statInfo = self.storage.statx(fileid[0], fileid[1], self.userid)
     self.assertIsInstance(statInfo, dict)
     self.assertEqual(statInfo['filepath'], '/test.txt', 'Filepath should be /test.txt')
+    self.storage.removefile(self.endpoint, '/test.txt', self.userid)
+
+  def test_statx_invariant_fileid(self):
+    '''Call statx() before and after updating a file, and assert the inode did not change'''
+    buf = b'bla\n'
+    self.storage.writefile(self.endpoint, '/test.txt', self.userid, buf)
+    statInfo = self.storage.statx(self.endpoint, '/test.txt', self.userid)
+    self.assertIsInstance(statInfo, dict)
+    inode = statInfo['inode']
+    buf = b'blabla\n'
+    self.storage.writefile(self.endpoint, '/test.txt', self.userid, buf)
+    statInfo = self.storage.statx(self.endpoint, '/test.txt', self.userid)
+    self.assertIsInstance(statInfo, dict)
+    self.assertEqual(statInfo['inode'], inode, 'Fileid should be invariant to multiple write operations')
     self.storage.removefile(self.endpoint, '/test.txt', self.userid)
 
   def test_stat_nofile(self):
