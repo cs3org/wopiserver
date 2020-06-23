@@ -92,7 +92,6 @@ class Wopi:
         cls.iopsecret = s.read().strip('\n')
       cls.tokenvalidity = cls.config.getint('general', 'tokenvalidity')
       storage.init(cls.config, cls.log)                          # initialize the storage layer
-      cls.config.get('general', 'allowedclients')          # read this to make sure it is configured
       cls.useHttps = cls.config.get('security', 'usehttps').lower() == 'yes'
       cls.repeatedLockRequests = {}               # cf. the wopiLock() function below
       cls.wopiurl = cls.config.get('general', 'wopiurl')
@@ -248,23 +247,24 @@ def index():
 def iopOpen():
   '''Generates a WOPISrc target and an access token to be passed to a WOPI-compatible Office-like app
   for accessing a given file for a given user.
-  Request arguments:
+  Required headers:
+  - Authorization: a bearer shared secret to protect this call as it provides direct access to any user's file
   - TokenHeader: an x-access-token to serve as user identity towards Reva
-    - OR int ruid, rgid: a real Unix user identity (id:group); this is for legacy compatibility
-  - enum viewmode: how the user should access the file, according to utils.ViewMode
+    - OR int ruid, rgid as query parameters: a real Unix user identity (id:group); this is for legacy compatibility
+  Request arguments:
+  - enum viewmode: how the user should access the file, according to utils.ViewMode/the CS3 app provider API
     - OR bool canedit: True if full access should be given to the user, otherwise read-only access is granted
   - string username (optional): user's full display name, typically shown by the Office app
   - string filename OR fileid: the full path of the filename to be opened, or its fileid
   - string folderurl: the URL to come back to the containing folder for this file, typically shown by the Office app
   - string endpoint (optional): the storage endpoint to be used to look up the file or the storage id, in case of
     multi-instance underlying storage; defaults to 'default'
-  Note: this is the most sensitive call of this WOPI server as it provides direct
-  access to any user's file, therefore it is protected both by IP and a shared secret.'''
+  '''
   Wopi.refreshconfig()
   req = flask.request
   # if running in https mode, first check if the shared secret matches ours
   if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.iopsecret:
-    Wopi.log.warning('msg="cboxOpen: unauthorized access attempt, missing authorization token" ' \
+    Wopi.log.warning('msg="iopOpen: unauthorized access attempt, missing authorization token" ' \
                      'client="%s"' % req.remote_addr)
     return 'Client not authorized', http.client.UNAUTHORIZED
   # now validate the user identity and deny root access
@@ -280,41 +280,33 @@ def iopOpen():
       if ruid == 0 or rgid == 0:
         raise ValueError
   except ValueError:
-    Wopi.log.warning('msg="cboxOpen: invalid or missing user/token in request" client="%s" user="%s"' % \
+    Wopi.log.warning('msg="iopOpen: invalid or missing user/token in request" client="%s" user="%s"' % \
                      (req.remote_addr, userid))
     return 'Client not authorized', http.client.UNAUTHORIZED
-  # then resolve the client and reject unauthorized ones
-  allowedclients = Wopi.config.get('general', 'allowedclients').split()
-  for c in allowedclients:
+  fileid = urllib.parse.unquote(req.args['filename'] if 'filename' in req.args else req.args['fileid'])
+  if 'viewmode' in req.args:
     try:
-      for ip in socket.getaddrinfo(c, None):
-        if ip[4][0] == req.remote_addr:
-          # we got a match, generate the access token
-          fileid = urllib.parse.unquote(req.args['filename'] if 'filename' in req.args else req.args['fileid'])
-          if 'viewmode' in req.args:
-            viewmode = utils.ViewMode(int(req.args['viewmode']))
-          else:
-            # backwards compatibility
-            viewmode = utils.ViewMode.READ_WRITE if 'canedit' in req.args and req.args['canedit'].lower() == 'true' \
-                       else utils.ViewMode.READ_ONLY
-          username = req.args['username'] if 'username' in req.args else ''
-          folderurl = urllib.parse.unquote(req.args['folderurl'])
-          endpoint = req.args['endpoint'] if 'endpoint' in req.args else 'default'
-          try:
-            inode, acctok = utils.generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint)
-            # return an URL-encoded WOPISrc URL for the Office Online server
-            return '%s&access_token=%s' % (utils.generateWopiSrc(inode), acctok)      # no need to URL-encode the JWT token
-          except IOError as e:
-            Wopi.log.info('msg="cboxOpen: remote error on generating token" client="%s" user="%s" ' \
-                          'friendlyname="%s" mode="%s" endpoint="%s" reason="%s"' % \
-                          (req.remote_addr, userid, username, viewmode, endpoint, e))
-            return 'Remote error or file not found', http.client.NOT_FOUND
-    except socket.gaierror:
-      Wopi.log.warning('msg="cboxOpen: %s found in configured allowed clients but unknown by DNS resolution, ignoring"' % c)
-  # no match found, fail
-  Wopi.log.warning('msg="cboxOpen: unauthorized access attempt, client IP not whitelisted" ' \
-                   'client="%s"' % req.remote_addr)
-  return 'Client not authorized', http.client.UNAUTHORIZED
+      viewmode = utils.ViewMode(req.args['viewmode'])
+    except ValueError:
+      Wopi.log.warning('msg="iopOpen: invalid viewmode parameter" client="%s" viewmode="%s"' % \
+                       (req.remote_addr, req.args['viewmode']))
+      return 'Invalid argument', http.client.BAD_REQUEST
+  else:
+    # backwards compatibility
+    viewmode = utils.ViewMode.READ_WRITE if 'canedit' in req.args and req.args['canedit'].lower() == 'true' \
+               else utils.ViewMode.READ_ONLY
+  username = req.args['username'] if 'username' in req.args else ''
+  folderurl = urllib.parse.unquote(req.args['folderurl'])
+  endpoint = req.args['endpoint'] if 'endpoint' in req.args else 'default'
+  try:
+    inode, acctok = utils.generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint)
+    # return an URL-encoded WOPISrc URL for the Office Online server
+    return '%s&access_token=%s' % (utils.generateWopiSrc(inode), acctok)      # no need to URL-encode the JWT token
+  except IOError as e:
+    Wopi.log.info('msg="iopOpen: remote error on generating token" client="%s" user="%s" ' \
+                  'friendlyname="%s" mode="%s" endpoint="%s" reason="%s"' % \
+                  (req.remote_addr, userid, username, viewmode, endpoint, e))
+    return 'Remote error or file not found', http.client.NOT_FOUND
 
 
 @Wopi.app.route("/wopi/cbox/open", methods=['GET'])

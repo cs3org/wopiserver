@@ -11,7 +11,7 @@ import traceback
 import hashlib
 import json
 import urllib.parse
-from enum import IntEnum
+from enum import Enum
 import http.client
 import flask
 import jwt
@@ -21,17 +21,16 @@ import jwt
 _ctx = {}
 
 
-class ViewMode(IntEnum):
+class ViewMode(Enum):
   '''File view mode: reference is
   https://github.com/cs3org/cs3apis/blob/master/cs3/app/provider/v1beta1/provider_api.proto#L79
   '''
-  INVALID = 0
   # The file can be opened but not downloaded
-  VIEW_ONLY = 1
+  VIEW_ONLY = "VIEW_MODE_VIEW_ONLY"
   # The file can be downloaded
-  READ_ONLY = 2
+  READ_ONLY = "VIEW_MODE_READ_ONLY"
   # The file can be downloaded and updated
-  READ_WRITE = 3
+  READ_WRITE = "VIEW_MODE_READ_WRITE"
 
 
 def init(storage, wopiserver):
