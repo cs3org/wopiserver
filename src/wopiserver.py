@@ -540,6 +540,7 @@ def wopiCheckFileInfo(fileid):
   Wopi.refreshconfig()
   try:
     acctok = jwt.decode(flask.request.args['access_token'], Wopi.wopisecret, algorithms=['HS256'])
+    acctok['viewmode'] = utils.ViewMode(acctok['viewmode'])
     if acctok['exp'] < time.time():
       raise jwt.exceptions.ExpiredSignatureError
     Wopi.log.info('msg="CheckFileInfo" user="%s" filename="%s" fileid="%s" token="%s"' % \
@@ -569,7 +570,7 @@ def wopiCheckFileInfo(fileid):
     else:
       filemd['UserFriendlyName'] = acctok['username']
       filemd['BreadcrumbFolderName'] = 'Back to ' + acctok['filename'].split('/')[-2]
-    if acctok['viewmode'] >= utils.ViewMode.READ_ONLY:
+    if acctok['viewmode'] in (utils.ViewMode.READ_ONLY, utils.ViewMode.READ_WRITE):
       filemd['DownloadUrl'] = '%s?access_token=%s' % \
                               (Wopi.config.get('general', 'downloadurl'), flask.request.args['access_token'])
     try:
@@ -905,7 +906,7 @@ def wopiFilesPost(fileid):
       raise jwt.exceptions.ExpiredSignatureError
     headers = flask.request.headers
     op = headers['X-WOPI-Override']       # must be one of the following strings, throws KeyError if missing
-    if op != 'GET_LOCK' and acctok['viewmode'] != utils.ViewMode.READ_WRITE:
+    if op != 'GET_LOCK' and utils.ViewMode(acctok['viewmode']) != utils.ViewMode.READ_WRITE:
       # protect this call if the WOPI client does not have privileges
       return 'Attempting to perform a write operation using a read-only token', http.client.UNAUTHORIZED
     if op in ('LOCK', 'REFRESH_LOCK'):

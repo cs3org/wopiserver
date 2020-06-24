@@ -112,7 +112,7 @@ def generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint)
       except IOError:
         pass
   exptime = int(time.time()) + _ctx['wopi'].tokenvalidity
-  acctok = jwt.encode({'userid': userid, 'filename': filename, 'username': username, 'viewmode': viewmode,
+  acctok = jwt.encode({'userid': userid, 'filename': filename, 'username': username, 'viewmode': viewmode.value,
                        'extlock': locked, 'folderurl': folderurl, 'exp': exptime, 'endpoint': endpoint}, \
                       _ctx['wopi'].wopisecret, algorithm='HS256').decode('UTF-8')
   _ctx['log'].info('msg="Access token generated" userid="%s" mode="%s" filename="%s" inode="%s" ' \

@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 '''
-Call the /wopi/iop/open REST API on the given file and return a URL for direct editing it
+Call the /wopi/iop/open REST API on the given file and return a URL for direct editing it.
+This tool is meant to be used from a WOPI server for opreations purposes, not externally.
 
 Author: Giuseppe.LoPresti@cern.ch
 CERN IT/ST
@@ -12,7 +13,7 @@ from wopiutils import ViewMode
 # usage function
 def usage(exitcode):
   '''Prints usage'''
-  print('Usage : ' + sys.argv[0] + ' [-h|--help] [-v|--viewmode 1|2|3] <filename> <uid> <gid>')
+  print('Usage : ' + sys.argv[0] + ' [-h|--help] [-v|--viewmode VIEW_ONLY|READ_ONLY|READ_WRITE] <filename> <uid> <gid>')
   sys.exit(exitcode)
 
 # first parse the options
@@ -21,14 +22,18 @@ try:
 except getopt.GetoptError as e:
   print(e)
   usage(1)
-viewmode = int(ViewMode.READ_WRITE)
+viewmode = ViewMode.READ_WRITE.value
 for f, v in options:
   if f == '-h' or f == '--help':
     usage(0)
   elif f == '-v' or f == '--viewmode':
-    viewmode = v
+    try:
+      viewmode = ViewMode('VIEW_MODE_' + v)
+    except ValueError:
+      print("invalid argument for viewmode: " + v)
+      usage(1)
   else:
-    print("unknown option : " + f)
+    print("unknown option: " + f)
     usage(1)
 
 # deal with arguments
@@ -69,7 +74,7 @@ apps = requests.get(wopiurl + '/wopi/cbox/endpoints', verify=False).json()
 wopisrc = requests.get(wopiurl + '/wopi/iop/open', verify=False,
                        headers={'Authorization': 'Bearer ' + iopsecret},
                        params={'ruid': ruid, 'rgid': rgid, 'filename': filename, 'endpoint': endpoint,
-                               'viewmode': viewmode, 'username': 'Operator', 'folderurl': 'foo'})
+                               'viewmode': viewmode.value, 'username': 'Operator', 'folderurl': 'foo'})
 if wopisrc.status_code != 200:
   print('WOPI open request failed:\n%s' % wopisrc.content.decode())
   sys.exit(-1)
