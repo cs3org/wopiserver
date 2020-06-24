@@ -79,12 +79,12 @@ class TestStorage(unittest.TestCase):
     '''Call statx() before and after updating a file, and assert the inode did not change'''
     buf = b'bla\n'
     self.storage.writefile(self.endpoint, '/test.txt', self.userid, buf)
-    statInfo = self.storage.statx(self.endpoint, '/test.txt', self.userid)
+    statInfo = self.storage.statx(self.endpoint, '/test.txt', self.userid, versioninv=1)
     self.assertIsInstance(statInfo, dict)
     inode = statInfo['inode']
     buf = b'blabla\n'
     self.storage.writefile(self.endpoint, '/test.txt', self.userid, buf)
-    statInfo = self.storage.statx(self.endpoint, '/test.txt', self.userid)
+    statInfo = self.storage.statx(self.endpoint, '/test.txt', self.userid, versioninv=1)
     self.assertIsInstance(statInfo, dict)
     self.assertEqual(statInfo['inode'], inode, 'Fileid should be invariant to multiple write operations')
     self.storage.removefile(self.endpoint, '/test.txt', self.userid)

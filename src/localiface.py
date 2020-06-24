@@ -59,8 +59,9 @@ def stat(_endpoint, filepath, _userid):
     raise IOError(e)
 
 
-def statx(_endpoint, filepath, _userid):
-  '''Get extended stat info (inode, filepath, userid, size, mtime). Equivalent to stat in the case of local storage.'''
+def statx(_endpoint, filepath, _userid, _versioninv=1):
+  '''Get extended stat info (inode, filepath, userid, size, mtime). Equivalent to stat in the case of local storage.
+  The versioninv flag is ignored as local storage always supports version-invariant inodes (cf. CERNBOX-1216).'''
   return stat(_endpoint, filepath, _userid)
 
 

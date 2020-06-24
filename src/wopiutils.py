@@ -77,9 +77,9 @@ def generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint)
   '''Generates an access token for a given file and a given user, and returns a tuple with
   the file's inode and the URL-encoded access token.'''
   try:
-    # stat now the file to check for existence and get inode and modification time
-    # the inode serves as fileid, the mtime can be used for version information
-    statInfo = _ctx['st'].statx(endpoint, fileid, userid)
+    # stat the file to check for existence and get a version-invariant inode and modification time:
+    # the inode serves as fileid (and must not change across save operations), the mtime is used for version information.
+    statInfo = _ctx['st'].statx(endpoint, fileid, userid, versioninv=1)
   except IOError as e:
     _ctx['log'].info('msg="Requested file not found" fileid="%s" error="%s"' % (fileid, e))
     raise

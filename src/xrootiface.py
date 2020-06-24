@@ -118,8 +118,9 @@ def stat(endpoint, filepath, userid):
   return {'size': statInfo.size, 'mtime': statInfo.modtime}
 
 
-def statx(endpoint, filepath, userid):
-  '''Get extended stat info (inode, filepath, userid, size, mtime) via an xroot opaque query on behalf of the given userid'''
+def statx(endpoint, filepath, userid, versioninv=0):
+  '''Get extended stat info (inode, filepath, userid, size, mtime) via an xroot opaque query on behalf of the given userid.
+  If versioninv=1, the logic to support the version folder is not triggered.'''
   tstart = time.time()
   rc, info = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(filepath) + _eosargs(userid) + '&mgm.pcmd=stat')
   info = str(info)
@@ -129,7 +130,14 @@ def statx(endpoint, filepath, userid):
   if 'retc=' in info:
     raise IOError(info.strip('\n'))
   statxdata = info.split()
-  # now stat the corresponding version folder to get an inode invariant to save operations
+  if versioninv == 0:
+    # classic statx info of the given file
+    return {'inode': str(statxdata[2]),
+            'filepath': filepath,
+            'userid': str(statxdata[5]) + ':' + str(statxdata[6]),
+            'size': int(statxdata[8]),
+            'mtime': statxdata[12]}
+  # now stat the corresponding version folder to get an inode invariant to save operations, see CERNBOX-1216
   verFolder = os.path.dirname(filepath) + os.path.sep + EOSVERSIONPREFIX + os.path.basename(filepath)
   rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder) + _eosargs(userid) + '&mgm.pcmd=stat')
   tend = time.time()
@@ -153,6 +161,7 @@ def statx(endpoint, filepath, userid):
   except IOError:
     log.warn('msg="Failed to mkdir/stat version folder" rc="%s"' % rcv)
     statxvdata = statxdata
+  # return the metadata of the given file, except for the inode that is taken from the version folder
   return {'inode': str(statxvdata[2]),
           'filepath': filepath,
           'userid': str(statxdata[5]) + ':' + str(statxdata[6]),

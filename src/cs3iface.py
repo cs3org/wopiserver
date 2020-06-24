@@ -59,12 +59,15 @@ def _authenticate(userid):
   return tokens[userid]['tok']
 
 
-def stat(endpoint, fileid, userid):
+def stat(endpoint, fileid, userid, versioninv=0):
   '''Stat a file and returns (size, mtime) as well as other extended info using the given userid as access token.
-  Note that endpoint here means the storage id. Note that fileid can be either a path (which MUST begin with /), or an id (which MUST NOT
-  start with a /).'''
+  Note that endpoint here means the storage id. Note that fileid can be either a path (which MUST begin with /),
+  or an id (which MUST NOT start with a /).
+  The versioninv flag is currently not supported, see CERNBOX-1216.'''
   if endpoint == 'default':
     raise IOError('A CS3API-compatible storage endpoint must be identified by a storage UUID')
+  if versioninv == 1:
+    ctx['log'].warning('msg="Version-invariant Stat not yet supported, going for standard Stat"')
   tstart = time.time()
   if fileid[0] == '/':
     # assume this is a filepath
@@ -89,9 +92,9 @@ def stat(endpoint, fileid, userid):
   raise IOError(statInfo.status.message)
 
 
-def statx(endpoint, fileid, userid):
+def statx(endpoint, fileid, userid, versioninv=0):
   '''Get extended stat info (inode, filepath, userid, size, mtime). Equivalent to stat.'''
-  return stat(endpoint, fileid, userid)
+  return stat(endpoint, fileid, userid, versioninv)
 
 
 def setxattr(_endpoint, filepath, userid, key, value):
