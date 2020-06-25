@@ -585,7 +585,7 @@ def wopiCheckFileInfo(fileid):
     filemd['Size'] = statInfo['size']
     # TODO the version is generated like this in ownCloud: 'V' . $file->getEtag() . \md5($file->getChecksum());
     filemd['Version'] = statInfo['mtime']   # mtime is used as version here
-    filemd['LastModifiedTime'] = datetime.fromtimestamp(int(statInfo['mtime'])).isoformat()   # this is used by Collabora
+    #filemd['LastModifiedTime'] = datetime.fromtimestamp(int(statInfo['mtime'])).isoformat()   # this is supposed to be used by Collabora, but it breaks
     filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = \
         filemd['SupportsGetLock'] = filemd['SupportsDeleteFile'] = acctok['canedit']
         #filemd['SupportsRename'] = filemd['UserCanRename'] = acctok['canedit']      # XXX broken in MS Office Online
