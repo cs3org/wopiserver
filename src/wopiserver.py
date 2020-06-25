@@ -402,7 +402,6 @@ def cboxLock():
   userid = req.args['userid'] if 'userid' in req.args else '0:0'
   endpoint = req.args['endpoint'] if 'endpoint' in req.args else 'default'
   query = req.method == 'GET'
-  lockstat = None
   lockid = int(time.time())
   try:
     # probe if a WOPI lock already exists and expire it if too old:
@@ -421,10 +420,10 @@ def cboxLock():
       # in case of any read error (not only ENOENT), be optimistic and let it go: cf. _generateAccessToken()
       raise IOError
     lock = lock.decode('utf-8')
+    # keep lock stat for later comparison
+    lockstat = storage.stat(endpoint, utils.getLibreOfficeLockName(filename), userid)
     if 'OnlyOffice Online Editor' in lock:
       # if the lock was created for OnlyOffice, let it go as well: OnlyOffice will handle the collaborative session
-      # but keep lock stat for later comparison
-      lockstat = storage.stat(endpoint, utils.getLibreOfficeLockName(filename), userid)
       try:
         # also recover the creation timestamp on the pre-existing lock if any (see below how the lock is constructed)
         lockid = int(lock.split(';\n')[1].strip(';'))
