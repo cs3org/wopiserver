@@ -79,10 +79,12 @@ touch /etc/wopi/iopsecret
 %_python_lib/*
 
 %changelog
-* Mon Jun 15 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.1
-- Expose a new /wopi/iop/open endpoint to match Reva. The
+* Fri Jun 26 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.1
+- Exposed a new /wopi/iop/open endpoint to match Reva. The
   former /wopi/cbox/open endpoint is deprecated and will
   be dropped once production moves forward.
+- Added support for inodes invariant to save operations,
+  in order to properly support collaborative editing
 * Fri Jun  5 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.0
 - General refactoring of the code base and evolution to become
   fully vendor-neutral: see https://github.com/cs3org/wopiserver/pull/14
