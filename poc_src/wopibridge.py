@@ -9,7 +9,6 @@ Author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 
 import os
 import sys
-import time
 import socket
 import re
 from platform import python_version
@@ -273,10 +272,12 @@ def mdOpen():
     # keep track of this open document for statistical purposes
     WB.openfiles[wopilock['docid']] = wopilock['tokens']
     # create the external redirect URL to be returned to the client
-    redirecturl = WB.codimdexturl + wopilock['docid'] + '?both'
+    redirecturl = WB.codimdexturl + wopilock['docid'] + '?both&'
   else:
     # read-only mode, in this case the redirection url is created in publish mode
-    redirecturl = WB.codimdexturl + wopilock['docid'] + '/publish'
+    redirecturl = WB.codimdexturl + wopilock['docid'] + '/publish?'
+  # append displayName (again this is an extended feature of CodiMD)
+  redirecturl += 'displayName=' + urllib.parse.quote_plus(filemd['UserFriendlyName'])
 
   WB.log.debug('msg="Redirecting client to CodiMD" redirecturl="%s"' % redirecturl)
   # generate a hook for close and return an iframe to the client
