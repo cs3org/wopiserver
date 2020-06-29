@@ -9,7 +9,7 @@ services:
   wopiserver:
     build:
       context: .
-      dockerfile: wopiserver.Dockerfile
+      dockerfile: wopiserver${WOPI_DOCKER_TYPE}.Dockerfile
     image: wopiserver:cern
     container_name: wopiserver
     hostname: cbox-iop-wopi
