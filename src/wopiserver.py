@@ -227,6 +227,7 @@ def handleException(e):
 
 
 @Wopi.app.route("/", methods=['GET'])
+@Wopi.app.route("/wopi", methods=['GET'])
 def index():
   '''Return a default index page with some user-friendly information about this service'''
   Wopi.log.info('msg="Accessed index page" client="%s"' % flask.request.remote_addr)
