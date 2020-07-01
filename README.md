@@ -58,4 +58,8 @@ By default, the local storage is tested. To run the tests, use the standard pyth
 2. Add log file directory: `sudo mkdir /var/log/wopi/`
 3. Add the log file: `sudo vim /var/log/wopi/wopiserver.log`
 4. Make sure you have write permissions to the log file `sudo chmod a+rwx /var/log/wopi/wopiserver.log`
-5. From the WOPIserver folder run: `python3 src/wopiserver.py`
+5. Create the folder for the wop config `mkdir /etc/wopi/``
+6. Copy `iopsecret` and `wopiscret` from `etc` to `/etc/wopi/`
+7. Copy `etc/wopiserver.conf` to `/etc/wop/wopiserver.defaults.conf`
+8. Update the `wopiserver.defaults.config` file according to your needs.
+9. From the WOPIserver folder run: `python3 src/wopiserver.py`
