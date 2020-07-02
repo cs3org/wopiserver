@@ -1,11 +1,15 @@
 # Dockerfile for WOPI Server
 #
-# Please, build and run via docker-compose file: wopiserver.yaml
+# Build: make docker or docker-compose -f wopiserver.yaml build --build-arg VERSION=`./getbuildversion.sh` wopiserver
+# Run: docker-compose -f wopiserver.yaml up -d
+
 FROM python:3
+
+ARG VERSION=latest
 
 LABEL maintainer="cernbox-admins@cern.ch" \
   org.opencontainers.image.title="The ScienceMesh IOP WOPI server" \
-  org.opencontainers.image.version="1.0"
+  org.opencontainers.image.version="$VERSION"
 
 # prerequisites
 WORKDIR /app
@@ -14,7 +18,9 @@ RUN pip3 install --no-cache-dir --upgrade -r requirements.txt
 
 # install software
 RUN mkdir -p /var/log/wopi /var/wopi_local_storage
-ADD ./src/* ./tools/* ./docker/entrypoint /app/
+ADD ./src/* ./tools/* /app/
+RUN sed -i "s/WOPISERVERVERSION = 'git'/WOPISERVERVERSION = '$VERSION'/" /app/wopiserver.py
+RUN grep 'WOPISERVERVERSION =' /app/wopiserver.py
 ADD wopiserver.conf /etc/wopi/wopiserver.defaults.conf
 
 # add basic custom configuration; need to contextualize

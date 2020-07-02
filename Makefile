@@ -1,7 +1,8 @@
 FILES_TO_RPM = src mon tools wopiserver.conf wopiserver.service wopiserver.logrotate
 SPECFILE = $(shell find . -type f -name *.spec)
+VERSREL  = $(shell ./getbuildversion.sh)
+VERSION  = $(shell echo ${VERSREL} | cut -d\- -f 1)
 PACKAGE  = $(shell awk '$$1 == "Name:"     { print $$2 }' $(SPECFILE) )
-VERSION  = $(shell awk '$$1 == "Version:"  { print $$2 }' $(SPECFILE) )
 RELEASE  = $(shell awk '$$1 == "Release:"  { print $$2 }' $(SPECFILE) )
 rpmbuild = ${shell pwd}/rpmbuild
 
@@ -17,7 +18,8 @@ rpmdefines=--define='_topdir ${rpmbuild}' \
 	--define='_sourcedir %{_topdir}/SOURCES' \
 	--define='_builddir %{_topdir}/BUILD' \
 	--define='_srcrpmdir %{_topdir}/SRPMS' \
-	--define='_rpmdir %{_topdir}/RPMS'
+	--define='_rpmdir %{_topdir}/RPMS' \
+	--define='_version $(VERSION)'
 
 dist: clean
 	@mkdir -p $(PACKAGE)-$(VERSION)
@@ -40,3 +42,6 @@ srpm: prepare $(SPECFILE)
 rpm: srpm
 	rpmbuild --nodeps -bb $(rpmdefines) $(SPECFILE)
 	cp $(rpmbuild)/RPMS/noarch/* .
+
+docker: clean
+	sudo docker-compose -f wopiserver.yaml build --build-arg VERSION=$(VERSREL) wopiserver

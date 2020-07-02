@@ -3,7 +3,7 @@
 #
 Name:      cernbox-wopi-server
 Summary:   A WOPI server to support Office online suites for the ScienceMesh IOP
-Version:   5.1
+Version:   %{_version}
 Release:   0%{?dist}
 License:   GPLv3
 Buildroot: %{_tmppath}/%{name}-buildroot
