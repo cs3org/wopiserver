@@ -84,9 +84,9 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args):
   return res[0][res[0].find('stdout=')+7:]
 
 
-def _getfilepath(filepath):
+def _getfilepath(filepath, encodeamp=False):
   '''Map the given filepath into the target namespace by prepending the homepath (see storagehomepath in wopiserver.conf)'''
-  return homepath + filepath
+  return homepath + (filepath if not encodeamp else filepath.replace('&', '#AND#'))     # this is a special legacy encoding by eos
 
 
 def init(inconfig, inlog):
@@ -172,12 +172,12 @@ def statx(endpoint, filepath, userid, versioninv=0):
 def setxattr(endpoint, filepath, userid, key, value):
   '''Set the extended attribute <key> to <value> via a special open on behalf of the given userid'''
   _xrootcmd(endpoint, 'attr', 'set', userid, 'mgm.attr.key=' + key + '&mgm.attr.value=' + str(value) + \
-            '&mgm.path=' + _getfilepath(filepath))
+            '&mgm.path=' + _getfilepath(filepath, encodeamp=True))
 
 
 def getxattr(endpoint, filepath, userid, key):
   '''Get the extended attribute <key> via a special open on behalf of the given userid'''
-  res = _xrootcmd(endpoint, 'attr', 'get', userid, 'mgm.attr.key=' + key + '&mgm.path=' + _getfilepath(filepath))
+  res = _xrootcmd(endpoint, 'attr', 'get', userid, 'mgm.attr.key=' + key + '&mgm.path=' + _getfilepath(filepath, encodeamp=True))
   # if no error, the response comes in the format <key>="<value>"
   try:
     return res.split('"')[1]
@@ -188,8 +188,7 @@ def getxattr(endpoint, filepath, userid, key):
 
 def rmxattr(endpoint, filepath, userid, key):
   '''Remove the extended attribute <key> via a special open on behalf of the given userid'''
-  filepath = _getfilepath(filepath)
-  _xrootcmd(endpoint, 'attr', 'rm', userid, 'mgm.attr.key=' + key + '&mgm.path=' + filepath)
+  _xrootcmd(endpoint, 'attr', 'rm', userid, 'mgm.attr.key=' + key + '&mgm.path=' + _getfilepath(filepath, encodeamp=True))
 
 
 def readfile(endpoint, filepath, userid):
@@ -251,8 +250,9 @@ def writefile(endpoint, filepath, userid, content, noversion=0):
 
 def renamefile(endpoint, origfilepath, newfilepath, userid):
   '''Rename a file via a special open from origfilepath to newfilepath on behalf of the given userid.'''
-  _xrootcmd(endpoint, 'file', 'rename', userid, 'mgm.path=' + _getfilepath(origfilepath) + \
-            '&mgm.file.source=' + _getfilepath(origfilepath) + '&mgm.file.target=' + _getfilepath(newfilepath))
+  _xrootcmd(endpoint, 'file', 'rename', userid, 'mgm.path=' + _getfilepath(origfilepath, encodeamp=True) + \
+            '&mgm.file.source=' + _getfilepath(origfilepath, encodeamp=True) + \
+            '&mgm.file.target=' + _getfilepath(newfilepath, encodeamp=True))
 
 
 def removefile(endpoint, filepath, userid, force=0):
@@ -261,5 +261,5 @@ def removefile(endpoint, filepath, userid, force=0):
      This is useful for lock files, but as it requires root access the userid is overridden.'''
   if force:
     userid = '0:0'
-  _xrootcmd(endpoint, 'rm', None, userid, 'mgm.path=' + _getfilepath(filepath) + \
+  _xrootcmd(endpoint, 'rm', None, userid, 'mgm.path=' + _getfilepath(filepath, encodeamp=True) + \
                                      ('&mgm.option=f' if force else ''))
