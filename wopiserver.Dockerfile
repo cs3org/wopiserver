@@ -17,11 +17,12 @@ COPY requirements.txt .
 RUN pip3 install --no-cache-dir --upgrade -r requirements.txt
 
 # install software
-RUN mkdir -p /var/log/wopi /var/wopi_local_storage
+RUN mkdir -p /app /test /etc/wopi /var/log/wopi /var/wopi_local_storage
 ADD ./src/* ./tools/* /app/
 RUN sed -i "s/WOPISERVERVERSION = 'git'/WOPISERVERVERSION = '$VERSION'/" /app/wopiserver.py
 RUN grep 'WOPISERVERVERSION =' /app/wopiserver.py
 ADD wopiserver.conf /etc/wopi/wopiserver.defaults.conf
+ADD test/*py test/*conf /test/
 
 # add basic custom configuration; need to contextualize
 ADD ./docker/etc/*secret  ./docker/etc/wopiserver.conf /etc/wopi/
