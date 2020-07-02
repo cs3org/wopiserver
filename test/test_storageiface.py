@@ -125,14 +125,14 @@ class TestStorage(unittest.TestCase):
     self.assertEqual(str(readex), 'No such file or directory', 'readfile returned %s' % readex)
 
   def test_write_remove(self):
-    '''Test write and removal of a file'''
+    '''Test write and removal of a file with special chars'''
     buf = b'ebe5tresbsrdthbrdhvdtr'
-    self.storage.writefile(self.endpoint, '/testwrite', self.userid, buf)
-    statInfo = self.storage.stat(self.endpoint, '/testwrite', self.userid)
+    self.storage.writefile(self.endpoint, '/testwrite&rm', self.userid, buf)
+    statInfo = self.storage.stat(self.endpoint, '/testwrite&rm', self.userid)
     self.assertIsInstance(statInfo, dict)
-    self.storage.removefile(self.endpoint, '/testwrite', self.userid)
+    self.storage.removefile(self.endpoint, '/testwrite&rm', self.userid)
     with self.assertRaises(IOError):
-      self.storage.stat(self.endpoint, '/testwrite', self.userid)
+      self.storage.stat(self.endpoint, '/testwrite&rm', self.userid)
 
   def test_remove_nofile(self):
     '''Test removal of a non-existing file'''
@@ -140,25 +140,25 @@ class TestStorage(unittest.TestCase):
       self.storage.removefile(self.endpoint, '/hopefullynotexisting', self.userid)
 
   def test_xattr(self):
-    '''Test all xattr methods'''
+    '''Test all xattr methods with special chars'''
     buf = b'bla\n'
-    self.storage.writefile(self.endpoint, '/testxattr.txt', self.userid, buf)
-    self.storage.setxattr(self.endpoint, '/testxattr.txt', self.userid, 'testkey', 123)
-    v = self.storage.getxattr(self.endpoint, '/testxattr.txt', self.userid, 'testkey')
+    self.storage.writefile(self.endpoint, '/test&xattr.txt', self.userid, buf)
+    self.storage.setxattr(self.endpoint, '/test&xattr.txt', self.userid, 'testkey', 123)
+    v = self.storage.getxattr(self.endpoint, '/test&xattr.txt', self.userid, 'testkey')
     self.assertEqual(v, '123')
-    self.storage.rmxattr(self.endpoint, '/testxattr.txt', self.userid, 'testkey')
-    v = self.storage.getxattr(self.endpoint, '/testxattr.txt', self.userid, 'testkey')
+    self.storage.rmxattr(self.endpoint, '/test&xattr.txt', self.userid, 'testkey')
+    v = self.storage.getxattr(self.endpoint, '/test&xattr.txt', self.userid, 'testkey')
     self.assertEqual(v, None)
-    self.storage.removefile(self.endpoint, '/testxattr.txt', self.userid)
+    self.storage.removefile(self.endpoint, '/test&xattr.txt', self.userid)
 
   def test_rename_statx(self):
-    '''Test renaming and statx of a file'''
+    '''Test renaming and statx of a file with special chars'''
     buf = b'bla\n'
     self.storage.writefile(self.endpoint, '/test.txt', self.userid, buf)
-    self.storage.renamefile(self.endpoint, '/test.txt', '/test_renamed.txt', self.userid)
-    statInfo = self.storage.statx(self.endpoint, '/test_renamed.txt', self.userid)
-    self.assertEqual(statInfo['filepath'], '/test_renamed.txt')
-    self.storage.renamefile(self.endpoint, '/test_renamed.txt', '/test.txt', self.userid)
+    self.storage.renamefile(self.endpoint, '/test.txt', '/test&renamed.txt', self.userid)
+    statInfo = self.storage.statx(self.endpoint, '/test&renamed.txt', self.userid)
+    self.assertEqual(statInfo['filepath'], '/test&renamed.txt')
+    self.storage.renamefile(self.endpoint, '/test&renamed.txt', '/test.txt', self.userid)
     statInfo = self.storage.statx(self.endpoint, '/test.txt', self.userid)
     self.assertEqual(statInfo['filepath'], '/test.txt')
     self.storage.removefile(self.endpoint, '/test.txt', self.userid)
