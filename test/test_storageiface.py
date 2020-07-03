@@ -18,10 +18,6 @@ sys.path.append('/app')    # for tests within the Docker image
 class TestStorage(unittest.TestCase):
   '''Simple tests for the storage layers of the WOPI server. See README for how to run the tests for each storage provider'''
 
-  def cs3login(self):
-    '''Login to a CS3 endpoint and obtain the corresponding x-access-token, or raise exception in case of failure'''
-    # TODO
-
   def __init__(self, *args, **kwargs):
     '''One-off initialization of the test environment: create mock logging and import the library'''
     super(TestStorage, self).__init__(*args, **kwargs)
@@ -54,7 +50,7 @@ class TestStorage(unittest.TestCase):
       self.storage.init(config, log)
       if storagetype == 'cs3iface':
         # we need to login for this case
-        self.cs3login()
+        self.userid = self.storage.authenticate_for_test(self.userid, config.get('cs3', 'userpwd'))
     except ImportError:
       print("Missing module when attempting to import {}. Please make sure dependencies are met.", storagetype)
       raise
