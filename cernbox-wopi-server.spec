@@ -79,6 +79,9 @@ touch /etc/wopi/iopsecret
 %_python_lib/*
 
 %changelog
+* Fri Jul  2 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.2
+- Fixed xrootd encoding of file names with special chars
+- Incorporated unit test suite in the docker images
 * Fri Jun 26 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.1
 - Exposed a new /wopi/iop/open endpoint to match Reva. The
   former /wopi/cbox/open endpoint is deprecated and will
