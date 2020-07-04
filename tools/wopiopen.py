@@ -13,7 +13,7 @@ from wopiutils import ViewMode
 # usage function
 def usage(exitcode):
   '''Prints usage'''
-  print('Usage : ' + sys.argv[0] + ' [-h|--help] [-v|--viewmode VIEW_ONLY|READ_ONLY|READ_WRITE] <filename> <uid> <gid>')
+  print('Usage : ' + sys.argv[0] + ' [-h|--help] [-v|--viewmode VIEW_ONLY|READ_ONLY|READ_WRITE] <filename> <userid|x-access-token>')
   sys.exit(exitcode)
 
 # first parse the options
@@ -37,15 +37,14 @@ for f, v in options:
     usage(1)
 
 # deal with arguments
-if len(args) < 3:
+if len(args) < 2:
   print('Not enough arguments')
   usage(1)
-if len(args) > 3:
+if len(args) > 2:
   print('Too many arguments')
   usage(1)
 filename = args[0]
-ruid = args[1]
-rgid = args[2]
+userid = args[1]
 
 # initialization
 config = configparser.ConfigParser()
@@ -71,10 +70,18 @@ requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.
 apps = requests.get(wopiurl + '/wopi/cbox/endpoints', verify=False).json()
 
 # open the file and get WOPI token
+wopiheaders = {'Authorization': 'Bearer ' + iopsecret}
+wopiparams = {'filename': filename, 'endpoint': endpoint,
+              'viewmode': viewmode.value, 'username': 'Operator', 'folderurl': 'foo'}
+if len(userid.split(':')) == 2:
+  # assume userid is in the form `uid:gid`. If not, raises exceptions
+  wopiparams['ruid'] = int(userid.split(':')[0])
+  wopiparams['rgid'] = int(userid.split(':')[1])
+else:
+  # assume we've got an x-access-token
+  wopiheaders['TokenHeader'] = userid
 wopisrc = requests.get(wopiurl + '/wopi/iop/open', verify=False,
-                       headers={'Authorization': 'Bearer ' + iopsecret},
-                       params={'ruid': ruid, 'rgid': rgid, 'filename': filename, 'endpoint': endpoint,
-                               'viewmode': viewmode.value, 'username': 'Operator', 'folderurl': 'foo'})
+                       headers=wopiheaders, params=wopiparams)
 if wopisrc.status_code != 200:
   print('WOPI open request failed:\n%s' % wopisrc.content.decode())
   sys.exit(-1)
