@@ -69,7 +69,7 @@ def stat(endpoint, fileid, userid, versioninv=0):
   if statInfo.status.code == cs3code.CODE_OK:
     ctx['log'].debug('msg="Stat result" data="%s"' % statInfo)
     return {
-        'inode': statInfo.info.id.storage_id + ':' + statInfo.info.id.opaque_id,
+        'inode': hash(statInfo.info.id.storage_id + statInfo.info.id.opaque_id),
         'filepath': statInfo.info.path,
         'userid': statInfo.info.owner.opaque_id,
         'size': statInfo.info.size,

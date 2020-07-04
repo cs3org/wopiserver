@@ -66,19 +66,6 @@ class TestStorage(unittest.TestCase):
     self.assertTrue('size' in statInfo, 'Missing size from stat output')
     self.storage.removefile(self.endpoint, '/test.txt', self.userid)
 
-  def test_statx_fileid(self):
-    '''Call statx() via both filepath and fileid'''
-    buf = b'bla\n'
-    self.storage.writefile(self.endpoint, '/test.txt', self.userid, buf)
-    statInfo = self.storage.statx(self.endpoint, '/test.txt', self.userid)
-    self.assertIsInstance(statInfo, dict)
-    fileid = statInfo['inode'].split(':')
-    self.assertEqual(len(fileid), 2, 'This storage interface does not support stat by fileid')
-    statInfo = self.storage.statx(fileid[0], fileid[1], self.userid)
-    self.assertIsInstance(statInfo, dict)
-    self.assertEqual(statInfo['filepath'], '/test.txt', 'Filepath should be /test.txt')
-    self.storage.removefile(self.endpoint, '/test.txt', self.userid)
-
   def test_statx_invariant_fileid(self):
     '''Call statx() before and after updating a file, and assert the inode did not change'''
     buf = b'bla\n'
