@@ -68,8 +68,13 @@ def stat(endpoint, fileid, userid, versioninv=0):
   ctx['log'].info('msg="Invoked stat" fileid="%s" elapsedTimems="%.1f"' % (fileid, (tend-tstart)*1000))
   if statInfo.status.code == cs3code.CODE_OK:
     ctx['log'].debug('msg="Stat result" data="%s"' % statInfo)
+    try:
+      inode = int(statInfo.info.id.opaque_id)
+    except ValueError:
+      # the storage behind Reva provided a non-int file inode: let's hash it to really have an int
+      inode = hash(statInfo.info.id.opaque_id)
     return {
-        'inode': hash(statInfo.info.id.storage_id + statInfo.info.id.opaque_id),
+        'inode': statInfo.info.id.storage_id + '-' + str(inode),
         'filepath': statInfo.info.path,
         'userid': statInfo.info.owner.opaque_id,
         'size': statInfo.info.size,
