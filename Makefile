@@ -1,6 +1,6 @@
 FILES_TO_RPM = src mon tools wopiserver.conf wopiserver.service wopiserver.logrotate
 SPECFILE = $(shell find . -type f -name *.spec)
-VERSREL  = $(shell ./getbuildversion.sh)
+VERSREL  = $(shell git describe | sed 's/^v//')
 VERSION  = $(shell echo ${VERSREL} | cut -d\- -f 1)
 PACKAGE  = $(shell awk '$$1 == "Name:"     { print $$2 }' $(SPECFILE) )
 RELEASE  = $(shell awk '$$1 == "Release:"  { print $$2 }' $(SPECFILE) )

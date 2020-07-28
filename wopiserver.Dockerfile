@@ -1,6 +1,6 @@
 # Dockerfile for WOPI Server
 #
-# Build: make docker or docker-compose -f wopiserver.yaml build --build-arg VERSION=`./getbuildversion.sh` wopiserver
+# Build: make docker or docker-compose -f wopiserver.yaml build --build-arg VERSION=`git describe | sed 's/^v//'` wopiserver
 # Run: docker-compose -f wopiserver.yaml up -d
 
 FROM python:3

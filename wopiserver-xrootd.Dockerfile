@@ -1,6 +1,6 @@
 # Dockerfile for WOPI Server
 #
-# Build: WOPI_DOCKER_TYPE=-xrootd docker-compose -f wopiserver.yaml build --build-arg VERSION=`./getbuildversion.sh` wopiserver
+# Build: WOPI_DOCKER_TYPE=-xrootd docker-compose -f wopiserver.yaml build --build-arg VERSION=`git describe | sed 's/^v//'` wopiserver
 # Run: docker-compose -f wopiserver.yaml up -d
 
 FROM cern/cc7-base:latest
