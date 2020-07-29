@@ -44,4 +44,4 @@ rpm: srpm
 	cp $(rpmbuild)/RPMS/noarch/* .
 
 docker: clean
-	sudo docker-compose -f wopiserver.yaml build --build-arg VERSION=$(VERSREL) wopiserver
+	docker-compose -f wopiserver.yaml build --build-arg VERSION=$(VERSREL) wopiserver
