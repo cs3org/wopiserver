@@ -284,7 +284,7 @@ def iopOpen():
     Wopi.log.warning('msg="iopOpen: invalid or missing user/token in request" client="%s" user="%s"' % \
                      (req.remote_addr, userid))
     return 'Client not authorized', http.client.UNAUTHORIZED
-  fileid = urllib.parse.unquote(req.args['filename'] if 'filename' in req.args else req.args['fileid'])
+  fileid = urllib.parse.unquote(req.args['filename']) if 'filename' in req.args else req.args['fileid']
   if 'viewmode' in req.args:
     try:
       viewmode = utils.ViewMode(req.args['viewmode'])
