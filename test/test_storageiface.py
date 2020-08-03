@@ -50,6 +50,7 @@ class TestStorage(unittest.TestCase):
       self.storage.init(config, log)
       if storagetype == 'cs3iface':
         # we need to login for this case
+        self.username = self.userid
         self.userid = self.storage.authenticate_for_test(self.userid, config.get('cs3', 'userpwd'))
     except ImportError:
       print("Missing module when attempting to import {}. Please make sure dependencies are met.", storagetype)
@@ -66,6 +67,17 @@ class TestStorage(unittest.TestCase):
     self.assertTrue('size' in statInfo, 'Missing size from stat output')
     self.storage.removefile(self.endpoint, '/test.txt', self.userid)
 
+  def test_statx_fileid(self):
+    '''Call statx() and test if fileid-based stat is supported'''
+    buf = b'bla\n'
+    self.storage.writefile(self.endpoint, '/test.txt', self.userid, buf)
+    statInfo = self.storage.statx(self.endpoint, '/test.txt', self.userid)
+    if self.endpoint in statInfo['inode']:
+      # detected CS3 storage, test if fileid-based stat is supported
+      statInfoId = self.storage.stat(self.endpoint, 'fileid-' + self.username + '%2Ftest.txt', self.userid)
+      self.assertTrue(statInfo['inode'] == statInfoId['inode'])
+    self.storage.removefile(self.endpoint, '/test.txt', self.userid)
+
   def test_statx_invariant_fileid(self):
     '''Call statx() before and after updating a file, and assert the inode did not change'''
     buf = b'bla\n'
@@ -77,7 +89,7 @@ class TestStorage(unittest.TestCase):
     self.storage.writefile(self.endpoint, '/test.txt', self.userid, buf)
     statInfo = self.storage.statx(self.endpoint, '/test.txt', self.userid, versioninv=1)
     self.assertIsInstance(statInfo, dict)
-    self.assertEqual(statInfo['inode'], inode, 'Fileid should be invariant to multiple write operations')
+    self.assertEqual(statInfo['inode'], inode, 'Fileid is not invariant to multiple write operations')
     self.storage.removefile(self.endpoint, '/test.txt', self.userid)
 
   def test_stat_nofile(self):
