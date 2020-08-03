@@ -95,8 +95,6 @@ class Wopi:
       cls.useHttps = cls.config.get('security', 'usehttps').lower() == 'yes'
       cls.repeatedLockRequests = {}               # cf. the wopiLock() function below
       cls.wopiurl = cls.config.get('general', 'wopiurl')
-      if urllib.parse.urlparse(cls.wopiurl).port is None:
-        cls.wopiurl += ':%d' % cls.port
       if cls.config.has_option('general', 'lockpath'):
         cls.lockpath = cls.config.get('general', 'lockpath')
       else:
