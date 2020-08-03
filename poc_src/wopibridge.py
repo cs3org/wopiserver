@@ -62,10 +62,6 @@ class WB:
           function(data) {}
         );
       };
-      $(document).ready(function() {
-        $('a[rel!=ext]').click(function() { window.onbeforeunload = null; });
-        $('form').submit(function() { window.onbeforeunload = null; });
-      });
     </script>
     </head>
     <body>
@@ -124,7 +120,7 @@ def index():
     <html><head><title>ScienceMesh WOPI Bridge</title></head>
     <body>
     <div align="center" style="color:#000080; padding-top:50px; font-family:Verdana; size:11">
-    This is a WOPI HTTP bridge, to be used in conjunction with a WOPI-enabled EFSS.<br>This proof-of-concept supports CodiMD only.</div>
+    This is a WOPI HTTP bridge, to be used in conjunction with a WOPI-enabled EFSS.<br>This proof-of-concept supports CodiMD for now.</div>
     <div style="position: absolute; bottom: 10px; left: 10px; width: 99%%;"><hr>
     <i>ScienceMesh WOPI Bridge %s at %s. Powered by Flask %s for Python %s</i>.</div>
     </body>
@@ -178,9 +174,13 @@ def _deleteattachments(mddoc, targetpath):
 @WB.app.route("/open", methods=['GET'])
 def mdOpen():
   '''Open a MD doc by contacting the provided WOPISrc with the given access_token'''
-  wopiSrc = urllib.parse.unquote(flask.request.args['WOPISrc'])
-  acctok = flask.request.args['access_token']
-  WB.log.info('msg="Open called" client="%s" token="%s"' % (flask.request.remote_addr, acctok[-20:]))
+  try:
+    wopiSrc = urllib.parse.unquote(flask.request.args['WOPISrc'])
+    acctok = flask.request.args['access_token']
+    WB.log.info('msg="Open called" client="%s" token="%s"' % (flask.request.remote_addr, acctok[-20:]))
+  except KeyError as e:
+    WB.log.error('msg="Open called" error="Unable to open the file, missing WOPI context: %s"' % e)
+    return 'Missing arguments', http.client.BAD_REQUEST
 
   # WOPI GetFileInfo
   url = '%s?access_token=%s' % (wopiSrc, acctok)
