@@ -30,10 +30,10 @@ for f, v in options:
     try:
       viewmode = ViewMode('VIEW_MODE_' + v)
     except ValueError:
-      print("invalid argument for viewmode: " + v)
+      print("Invalid argument for viewmode: " + v)
       usage(1)
   else:
-    print("unknown option: " + f)
+    print("Unknown option: " + f)
     usage(1)
 
 # deal with arguments
@@ -52,11 +52,19 @@ config.read_file(open('/etc/wopi/wopiserver.defaults.conf'))    # fails if the f
 config.read('/etc/wopi/wopiserver.conf')
 iopsecret = open(config.get('security', 'iopsecretfile')).read().strip('\n')
 storagetype = config.get('general', 'storagetype')
-if storagetype == 'xroot':
-  endpoint = 'root://eoshome-%s' % filename.split('/')[3]      # blindly assume a path in the form /eos/user/l/...
-elif storagetype == 'cs3':
-  # TODO this should be derived, not read from the configuration
-  endpoint = config.get('cs3', 'endpoint')
+# work out the endpoint
+if storagetype == 'cs3':
+  # here we assume the filename has the form storageid:/path/to/file
+  if ':/' in filename:
+    endpoint, filename = filename.split(':')
+  else:
+    print("Invalid argument for filename, storageid:/full/path form required")
+    usage(1)
+elif '/eos/user/' in filename:
+  # shortcuts for eos (on xrootd)
+  endpoint = 'root://eoshome-%s' % filename.split('/')[3]
+elif '/eos/project' in filename:
+  endpoint = 'root://eosproject-%s' % filename.split('/')[3]
 else:
   endpoint = ''
 
