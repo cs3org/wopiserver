@@ -79,8 +79,11 @@ touch /etc/wopi/iopsecret
 %_python_lib/*
 
 %changelog
-* Mon Aug  3 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.3
-- Fixed CS3-based open-file-in-app-provider workflow
+* Tue Aug  4 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.3
+- Fixed CS3-based workflows: the wopiopen.py tool and the
+  open-file-in-app-provider reva command both support
+  generic storage ids and have been tested with Collabora
+- Fixed wopiurl config parameter
 * Fri Jul  2 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.2
 - Fixed xrootd encoding of file names with special chars
 - Incorporated unit test suite in the docker images
