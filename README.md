@@ -11,8 +11,8 @@ This is a proof-of-concept WOPI bridge server, currently only targeting CodiMD, 
 * Collaborative editing and locking of the file
 * Transparent handling of uploads (i.e. pictures):
   * If a note has no pictures, it is handled as a text file.
-  * Once a picture is included, the save to WOPI is executed as a zipped bundle, with a `.mdx` extension.
-  * Files ending as `.mdx` are equally treated as zipped bundles and expanded to CodiMD: this currently requires direct access to the underlying storage used by CodiMD when pushing the pictures from the EFSS storage.
+  * Once a picture is included, the save to WOPI is executed as a zipped bundle, with a `.zmd` extension.
+  * Files ending as `.zmd` are equally treated as zipped bundles and expanded to CodiMD: this currently requires direct access to the underlying storage used by CodiMD when pushing the pictures from the EFSS storage.
 
 ## Required CodiMD APIs
 * `/new`                    push a file to CodiMD

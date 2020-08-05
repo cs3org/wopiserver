@@ -227,7 +227,7 @@ def mdOpen():
     if res.status_code != http.client.OK:
       raise ValueError(res.status_code)
     mdfile = res.content
-    wasbundle = os.path.splitext(filemd['BaseFileName'])[1] == '.mdx'
+    wasbundle = os.path.splitext(filemd['BaseFileName'])[1] == '.zmd'
 
     # then push the document to CodiMD:
     # if it's a bundled file, unzip it and push the attachments in the appropriate folder
@@ -329,8 +329,8 @@ def mdClose():
   if res.status_code != http.client.OK:
     raise ValueError(res.status_code)
   mddoc = res.content
-  bundlefile = _getattachments(mddoc.decode(), wopilock['filename'].replace('.mdx', '.md'))
-  wasbundle = os.path.splitext(wopilock['filename'])[1] == '.mdx'
+  bundlefile = _getattachments(mddoc.decode(), wopilock['filename'].replace('.zmd', '.md'))
+  wasbundle = os.path.splitext(wopilock['filename'])[1] == '.zmd'
 
   # WOPI PutFile
   url = '%s/contents?access_token=%s' % (wopiSrc, acctok)
