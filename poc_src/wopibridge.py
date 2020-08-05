@@ -186,14 +186,14 @@ def mdOpen():
   url = '%s?access_token=%s' % (wopiSrc, acctok)
   WB.log.debug('msg="Calling WOPI" url="%s"' % wopiSrc)
   try:
-    filemd = requests.get(url).json()
+    filemd = requests.get(url, verify=False).json()
   except (ValueError, json.decoder.JSONDecodeError) as e:
     WB.log.warning('msg="Malformed JSON from WOPI" error="%s"' % e)
     return 'Invalid or non existing access_token', http.client.NOT_FOUND
 
   # WOPI GetLock
   WB.log.debug('msg="Calling WOPI GetLock" url="%s"' % wopiSrc)
-  res = requests.post(url, headers={'X-Wopi-Override': 'GET_LOCK'})
+  res = requests.post(url, headers={'X-Wopi-Override': 'GET_LOCK'}, verify=False)
   if res.status_code != http.client.OK:
     raise ValueError(res.status_code)
   wopilock = res.headers.pop('X-WOPI-Lock', None)   # if present, the lock is a dict { docid, filename, tokens }
@@ -223,7 +223,7 @@ def mdOpen():
     # WOPI GetFile
     url = '%s/contents?access_token=%s' % (wopiSrc, acctok)
     WB.log.debug('msg="Calling WOPI GetFile" url="%s"' % wopiSrc)
-    res = requests.get(url)
+    res = requests.get(url, verify=False)
     if res.status_code != http.client.OK:
       raise ValueError(res.status_code)
     mdfile = res.content
@@ -262,7 +262,7 @@ def mdOpen():
       oldlock = json.loads(json.dumps(wopilock))    # this is a hack for a deep copy, to be redone in Go
       oldlock['tokens'].remove(acctok[-20:])
       lockheaders['X-WOPI-OldLock'] = json.dumps(oldlock)
-    res = requests.post(url, headers=lockheaders)
+    res = requests.post(url, headers=lockheaders, verify=False)
     if res.status_code != http.client.OK:
       # Failed to lock the file: open in read-only mode
       WB.log.warning('msg="Failed to lock the file" token="%s" returncode="%d"' % (acctok[-20:], res.status_code))
@@ -313,7 +313,7 @@ def mdClose():
   # get current lock to have extra context
   WB.log.debug('msg="Calling WOPI GetLock" url="%s"' % wopiSrc)
   url = '%s?access_token=%s' % (wopiSrc, acctok)
-  res = requests.post(url, headers={'X-Wopi-Override': 'GET_LOCK'})
+  res = requests.post(url, headers={'X-Wopi-Override': 'GET_LOCK'}, verify=False)
   if res.status_code != http.client.OK:
     raise ValueError(res.status_code)
   try:
@@ -335,7 +335,7 @@ def mdClose():
   # WOPI PutFile
   url = '%s/contents?access_token=%s' % (wopiSrc, acctok)
   WB.log.debug('msg="Calling WOPI PutFile" url="%s"' % wopiSrc)
-  res = requests.post(url, headers={'X-WOPI-Lock': json.dumps(wopilock)}, data=bundlefile if wasbundle else mddoc)
+  res = requests.post(url, headers={'X-WOPI-Lock': json.dumps(wopilock)}, data=bundlefile if wasbundle else mddoc, verify=False)
   if res.status_code != http.client.OK:
     WB.log.warning('msg="Calling WOPI PutFile failed" url="%s" response="%s"' % (wopiSrc, res.status_code))
     return 'Error saving the file', res.status_code
@@ -348,7 +348,7 @@ def mdClose():
         'X-WOPI-Lock': json.dumps(wopilock),
         'X-WOPI-Override': 'PUT_RELATIVE',
         'X-WOPI-SuggestedTarget': wopilock['filename'] + 'x'      # do not overwrite an existing file
-        }, data=bundlefile)
+        }, data=bundlefile, verify=False)
     if res.status_code == http.client.OK:
       WB.log.info('msg="PutRelative completed" result="%s"' % res.content)
     else:
@@ -382,7 +382,7 @@ def mdClose():
                    'X-WOPI-OldLock': json.dumps(wopilock),
                    'X-WOPI-Lock': json.dumps(newlock)
                   }
-    res = requests.post(url, headers=lockheaders)
+    res = requests.post(url, headers=lockheaders, verify=False)
     if res.status_code != http.client.OK:
       WB.log.warning('msg="Calling WOPI RefreshLock failed" url="%s" response="%s"' % (wopiSrc, res.status_code))
       return 'Error unlocking the file', res.status_code
