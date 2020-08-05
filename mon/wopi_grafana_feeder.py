@@ -60,7 +60,7 @@ def get_wopi_metrics(data):
       openfiles['ods'] = {}
       openfiles['odp'] = {}
       openfiles['md'] = {}
-      openfiles['mdx'] = {}
+      openfiles['zmd'] = {}
       openfiles['txt'] = {}
       openfiles['slide'] = {}
       wrfiles = {}
@@ -71,7 +71,7 @@ def get_wopi_metrics(data):
       wrfiles['ods'] = {}
       wrfiles['odp'] = {}
       wrfiles['md'] = {}
-      wrfiles['mdx'] = {}
+      wrfiles['zmd'] = {}
       wrfiles['txt'] = {}
       wrfiles['slide'] = {}
       collab = 0

@@ -175,9 +175,9 @@ class Wopi:
       cls.ENDPOINTS['.md'] = {}
       cls.ENDPOINTS['.md']['view'] = cls.ENDPOINTS['.md']['edit'] = codimd + '/open'
       cls.ENDPOINTS['.md']['new'] = codimd + '/new'
-      cls.ENDPOINTS['.mdx'] = {}
-      cls.ENDPOINTS['.mdx']['view'] = cls.ENDPOINTS['.mdx']['edit'] = codimd + '/open'
-      cls.ENDPOINTS['.mdx']['new'] = codimd + '/new'
+      cls.ENDPOINTS['.zmd'] = {}
+      cls.ENDPOINTS['.zmd']['view'] = cls.ENDPOINTS['.zmd']['edit'] = codimd + '/open'
+      cls.ENDPOINTS['.zmd']['new'] = codimd + '/new'
       cls.ENDPOINTS['.txt'] = {}
       cls.ENDPOINTS['.txt']['view'] = cls.ENDPOINTS['.txt']['edit'] = codimd + '/open'
       cls.ENDPOINTS['.txt']['new'] = codimd + '/new'
