@@ -45,7 +45,7 @@ class WB:
   frame_page_templated_html = """
     <html>
     <head>
-    <title>%s | WOPI-enabled CodiMD PoC | %s</title>
+    <title>%s | CERNBox-integrated CodiMD PoC</title>
     <style type="text/css">
       body, html
       {
@@ -281,7 +281,7 @@ def mdOpen():
 
   WB.log.debug('msg="Redirecting client to CodiMD" redirecturl="%s"' % redirecturl)
   # generate a hook for close and return an iframe to the client
-  resp = flask.Response(WB.frame_page_templated_html % (filemd['BreadcrumbDocName'], filemd['UserFriendlyName'], \
+  resp = flask.Response(WB.frame_page_templated_html % (filemd['BreadcrumbDocName'], \
                         WB.wopibridgeurl, wopiSrc, acctok, filemd['UserCanWrite'], redirecturl))
   return resp
 
