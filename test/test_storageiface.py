@@ -122,7 +122,7 @@ class TestStorage(unittest.TestCase):
     self.assertIsInstance(readex, IOError, 'readfile returned %s' % readex)
     self.assertEqual(str(readex), 'No such file or directory', 'readfile returned %s' % readex)
 
-  def test_write_remove(self):
+  def test_write_remove_specialchars(self):
     '''Test write and removal of a file with special chars'''
     buf = b'ebe5tresbsrdthbrdhvdtr'
     self.storage.writefile(self.endpoint, self.homepath + '/testwrite&rm', self.userid, buf)
@@ -131,6 +131,16 @@ class TestStorage(unittest.TestCase):
     self.storage.removefile(self.endpoint, self.homepath + '/testwrite&rm', self.userid)
     with self.assertRaises(IOError):
       self.storage.stat(self.endpoint, self.homepath + '/testwrite&rm', self.userid)
+
+  def test_write_nooverwrite(self):
+    '''Test double write with nooverwrite flag'''
+    buf = b'ebe5tresbsrdthbrdhvdtr'
+    self.storage.writefile(self.endpoint, '/testoverwrite', self.userid, buf, nooverwrite=1)
+    statInfo = self.storage.stat(self.endpoint, '/testoverwrite', self.userid)
+    self.assertIsInstance(statInfo, dict)
+    with self.assertRaises(IOError):
+      self.storage.writefile(self.endpoint, '/testoverwrite', self.userid, buf, nooverwrite=1)
+    self.storage.removefile(self.endpoint, '/testoverwrite', self.userid)
 
   def test_remove_nofile(self):
     '''Test removal of a non-existing file'''

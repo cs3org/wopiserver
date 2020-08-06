@@ -117,7 +117,7 @@ def readfile(_endpoint, filepath, _userid):
     yield IOError(e)
 
 
-def writefile(_endpoint, filepath, _userid, content, _noversion=1):
+def writefile(_endpoint, filepath, _userid, content, _noversion=1, nooverwrite=0):
   '''Write a file via xroot on behalf of the given userid. The entire content is written
      and any pre-existing file is deleted (or moved to the previous version if supported).
      On local storage, versioning is disabled, therefore the _noversion argument is ignored.'''
@@ -126,23 +126,35 @@ def writefile(_endpoint, filepath, _userid, content, _noversion=1):
   size = len(content)
   filepath = _getfilepath(filepath)
   log.debug('msg="Invoking writeFile" filepath="%s" size="%d"' % (filepath, size))
+  tstart = time.time()
+  fd = 0
+  if nooverwrite:
+    # apparently there's no way to pass the O_CREAT without O_TRUNC to the python f.open()!
+    # cf. https://stackoverflow.com/questions/38530910/python-open-flags-for-open-or-create
+    try:
+      fd = os.open(filepath, os.O_CREAT | os.O_EXCL)   # no O_BINARY in Linux
+      f = os.fdopen(fd, mode='wb')
+    except FileExistsError:
+      log.info('msg="File exists on write and nooverwrite flag requested" filepath="%s"' % filepath)
+      raise IOError('File exists and nooverwrite flag requested')
+  else:
+    try:
+      f = open(filepath, mode='wb')
+    except OSError as e:
+      log.warning('msg="Error opening file for write" filepath="%s" error="%s"' % (filepath, e))
+      raise IOError(e)
+  tend = time.time()
+  log.info('msg="File open for write" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
   try:
-    tstart = time.time()
-    f = open(filepath, mode='wb')
-    tend = time.time()
-    log.info('msg="File open for write" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
     written = f.write(content)
-    f.close()
+    if fd == 0:
+      f.close()
+    # else for some reason we get a EBADF if we close a file opened with os.open, though it should be closed!
     if written != size:
       raise IOError('Written %d bytes but content is %d bytes' % (written, size))
   except OSError as e:
     log.warning('msg="Error writing to file" filepath="%s" error="%s"' % (filepath, e))
     raise IOError(e)
-  except Exception:
-    ex_type, ex_value, ex_traceback = sys.exc_info()
-    log.error('msg="Unknown error writing to file" filepath="%s" traceback="%s"' % \
-              (filepath, traceback.format_exception(ex_type, ex_value, ex_traceback)))
-    raise
 
 
 def renamefile(_endpoint, origfilepath, newfilepath, _userid):

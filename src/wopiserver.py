@@ -747,7 +747,7 @@ def wopiGetLock(fileid, _reqheaders_unused, acctok):
   # we might want to check if a non-WOPI lock exists for this file:
   #try:
   #  lockstat = storage.stat(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), acctok['userid'])
-  #  return utils.makeConflictResponse('GetLock', 'Locked by Libre Office', '', '', acctok['filename'])
+  #  return utils.makeConflictResponse('GetLock', 'Locked by an external application', '', '', acctok['filename'])
   #except IOError:
   #  pass
   # however implications have to be properly understood as we've seen cases of locks left behind
