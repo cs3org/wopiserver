@@ -358,7 +358,7 @@ def mdClose():
     # yes, call WOPI Unlock
     url = '%s?access_token=%s' % (wopiSrc, acctok)
     WB.log.debug('msg="Calling WOPI Unlock" url="%s"' % wopiSrc)
-    res = requests.post(url, headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
+    res = requests.post(url, headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'}, verify=False)
     if res.status_code != http.client.OK:
       WB.log.warning('msg="Calling WOPI Unlock failed" url="%s" response="%s"' % (wopiSrc, res.status_code))
     # clean list of active documents
