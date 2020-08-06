@@ -332,16 +332,13 @@ def mdClose():
   bundlefile = _getattachments(mddoc.decode(), wopilock['filename'].replace('.zmd', '.md'))
   wasbundle = os.path.splitext(wopilock['filename'])[1] == '.zmd'
 
-  # WOPI PutFile
-  url = '%s/contents?access_token=%s' % (wopiSrc, acctok)
-  WB.log.debug('msg="Calling WOPI PutFile" url="%s"' % wopiSrc)
-  res = requests.post(url, headers={'X-WOPI-Lock': json.dumps(wopilock)}, data=bundlefile if wasbundle else mddoc, verify=False)
-  if res.status_code != http.client.OK:
-    WB.log.warning('msg="Calling WOPI PutFile failed" url="%s" response="%s"' % (wopiSrc, res.status_code))
-    return 'Error saving the file', res.status_code
-
-  # WOPI PutRelative for the attachments, if this is the first time we have attachments
-  if not wasbundle and bundlefile:
+  # WOPI PutFile for the file or the bundle if it already existed
+  if wasbundle or not bundlefile:
+    url = '%s/contents?access_token=%s' % (wopiSrc, acctok)
+    WB.log.debug('msg="Calling WOPI PutFile" url="%s"' % wopiSrc)
+    res = requests.post(url, headers={'X-WOPI-Lock': json.dumps(wopilock)}, data=bundlefile if wasbundle else mddoc, verify=False)
+  # WOPI PutRelative for the new bundle (not touching the original file), if this is the first time we have attachments
+  else:
     url = '%s?access_token=%s' % (wopiSrc, acctok)
     WB.log.debug('msg="Calling WOPI PutFile" url="%s"' % wopiSrc)
     res = requests.post(url, headers={
@@ -349,10 +346,12 @@ def mdClose():
         'X-WOPI-Override': 'PUT_RELATIVE',
         'X-WOPI-SuggestedTarget': wopilock['filename'] + 'x'      # do not overwrite an existing file
         }, data=bundlefile, verify=False)
-    if res.status_code == http.client.OK:
-      WB.log.info('msg="PutRelative completed" result="%s"' % res.content)
-    else:
-      WB.log.warning('msg="Calling WOPI PutRelative failed" url="%s" response="%s"' % (wopiSrc, res.status_code))
+
+  if res.status_code == http.client.OK:
+    WB.log.info('msg="Save completed" result="%s"' % res.content)
+  else:
+    WB.log.warning('msg="Calling WOPI PutFile/PutRelative failed" url="%s" response="%s"' % (wopiSrc, res.status_code))
+    return 'Error saving the file', res.status_code
 
   # is this the last editor for this file?
   if len(wopilock['tokens']) == 1 and wopilock['tokens'][0] == acctok[-20:]:
