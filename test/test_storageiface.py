@@ -132,14 +132,14 @@ class TestStorage(unittest.TestCase):
     with self.assertRaises(IOError):
       self.storage.stat(self.endpoint, self.homepath + '/testwrite&rm', self.userid)
 
-  def test_write_nooverwrite(self):
-    '''Test double write with nooverwrite flag'''
+  def test_write_islock(self):
+    '''Test double write with islock flag'''
     buf = b'ebe5tresbsrdthbrdhvdtr'
-    self.storage.writefile(self.endpoint, '/testoverwrite', self.userid, buf, nooverwrite=1)
+    self.storage.writefile(self.endpoint, '/testoverwrite', self.userid, buf, islock=True)
     statInfo = self.storage.stat(self.endpoint, '/testoverwrite', self.userid)
     self.assertIsInstance(statInfo, dict)
     with self.assertRaises(IOError):
-      self.storage.writefile(self.endpoint, '/testoverwrite', self.userid, buf, nooverwrite=1)
+      self.storage.writefile(self.endpoint, '/testoverwrite', self.userid, buf, islock=True)
     self.storage.removefile(self.endpoint, '/testoverwrite', self.userid)
 
   def test_remove_nofile(self):

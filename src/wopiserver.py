@@ -462,7 +462,7 @@ def cboxLock():
       # provided we can extend it in a similar way.
       lolockcontent = ',OnlyOffice Online Editor,%s,%s,ExtWebApp;\n%d;' % \
            (Wopi.wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())), lockid)
-      storage.writefile(endpoint, utils.getLibreOfficeLockName(filename), userid, lolockcontent, 1)
+      storage.writefile(endpoint, utils.getLibreOfficeLockName(filename), userid, lolockcontent, islock=True)
       Wopi.log.info('msg="cboxLock: (re)created LibreOffice-compatible lock file" filename="%s" id="%d"' % (filename, lockid))
       return str(lockid), http.client.OK
     if query and filestat['mtime'] > lockstat['mtime']:

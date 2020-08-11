@@ -218,24 +218,24 @@ def readfile(endpoint, filepath, userid):
         yield chunk
 
 
-def writefile(endpoint, filepath, userid, content, noversion=0, nooverwrite=0):
+def writefile(endpoint, filepath, userid, content, islock=False):
   '''Write a file via xroot on behalf of the given userid. The entire content is written
      and any pre-existing file is deleted (or moved to the previous version if supported).
-     If noversion=1, the write explicitly disables versioning: this is useful for lock files.
-     If nooverwrite=1, the file is opened with O_CREAT|O_EXCL, preventing race conditions.'''
+     With islock=True, the write explicitly disables versioning, and the file is opened with
+     O_CREAT|O_EXCL, preventing race conditions.'''
   size = len(content)
   log.debug('msg="Invoking writeFile" filepath="%s" size="%d"' % (filepath, size))
   f = XrdClient.File()
   tstart = time.time()
   rc, statInfo_unused = f.open(_geturlfor(endpoint) + '/' + homepath + filepath + _eosargs(userid, 1, size) + \
-                               ('&sys.versioning=0' if noversion else ''), \
-                               OpenFlags.DELETE if not nooverwrite else OpenFlags.NEW)
+                               ('&sys.versioning=0' if islock else ''), \
+                               OpenFlags.DELETE if not islock else OpenFlags.NEW)
   tend = time.time()
   log.info('msg="File open for write" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
   if not rc.ok:
-    if nooverwrite and rc.shellcode == 50:
-      log.info('msg="File exists on write and nooverwrite flag requested" filepath="%s"' % filepath)
-      raise IOError('File exists and nooverwrite flag requested')
+    if islock and rc.shellcode == 50:
+      log.info('msg="File exists on write and islock flag requested" filepath="%s"' % filepath)
+      raise IOError('File exists and islock flag requested')
     log.warning('msg="Error opening the file for write" filepath="%s" error="%s"' % (filepath, rc.message.strip('\n')))
     raise IOError(rc.message.strip('\n'))
   # write the file. In a future implementation, we should find a way to only update the required chunks...

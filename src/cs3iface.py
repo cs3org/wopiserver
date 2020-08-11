@@ -172,12 +172,13 @@ def readfile(_endpoint, filepath, userid):
       yield data[i:i+ctx['chunksize']]
 
 
-def writefile(_endpoint, filepath, userid, content, _noversion=0, nooverwrite=0):
+def writefile(_endpoint, filepath, userid, content, islock=False):
   '''Write a file using the given userid as access token. The entire content is written
     and any pre-existing file is deleted (or moved to the previous version if supported).
-    The noversion and nooverwrite flags are currently not supported.'''
-  if nooverwrite == 1:
-    ctx['log'].warning('msg="No-overwrite flag not yet supported, going for standard Upload"')
+    The islock flag is currently not supported. TODO the backend should at least support
+    writing the file with O_CREAT|O_EXCL flags to prevent races.'''
+  if islock:
+    ctx['log'].warning('msg="Lock (no-overwrite) flag not yet supported, going for standard upload"')
   tstart = time.time()
   # prepare endpoint
   if isinstance(content, str):

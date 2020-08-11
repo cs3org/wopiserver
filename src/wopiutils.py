@@ -181,13 +181,14 @@ def storeWopiLock(operation, lock, acctok):
   try:
     # store the lock as encoded JWT
     s = jwt.encode(lockcontent, _ctx['wopi'].wopisecret, algorithm='HS256')
-    _ctx['st'].writefile(acctok['endpoint'], getLockName(acctok['filename']), acctok['userid'], s, 1)
+    _ctx['st'].writefile(acctok['endpoint'], getLockName(acctok['filename']), acctok['userid'], s, islock=True)
     _ctx['log'].info('msg="%s" filename="%s" token="%s" lock="%s" result="success"' % \
                      (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
     # also create a LibreOffice-compatible lock file for interoperability purposes
     lockcontent = ',Collaborative Online Editor,%s,%s,WOPIServer;' % \
                   (_ctx['wopi'].wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())))
-    _ctx['st'].writefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], lockcontent, 1)
+    _ctx['st'].writefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], \
+                         lockcontent, islock=True)
   except IOError as e:
     _ctx['log'].warning('msg="%s" filename="%s" token="%s" lock="%s" result="unable to store lock" reason="%s"' % \
                         (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
