@@ -12,12 +12,14 @@ import time
 import http
 import requests
 import grpc
+import sys
 
 import cs3.storage.provider.v1beta1.resources_pb2 as cs3spr
 import cs3.storage.provider.v1beta1.provider_api_pb2 as cs3sp
 import cs3.gateway.v1beta1.gateway_api_pb2_grpc as cs3gw_grpc
 import cs3.gateway.v1beta1.gateway_api_pb2 as cs3gw
 import cs3.rpc.code_pb2 as cs3code
+import cs3.types.v1beta1.types_pb2 as types
 
 
 # module-wide state
@@ -30,6 +32,7 @@ def init(config, log):
   ctx['log'] = log
   ctx['chunksize'] = config.getint('io', 'chunksize')
   ctx['authtokenvalidity'] = config.getint('cs3', 'authtokenvalidity')
+  ctx['revamountpath'] = config.get('cs3', 'revamountpath', fallback='')
   revahost = config.get('cs3', 'revahost')
   # prepare the gRPC connection
   ch = grpc.insecure_channel(revahost)
@@ -51,6 +54,12 @@ def stat(endpoint, fileid, userid, versioninv=0):
   Note that endpoint here means the storage id. Note that fileid can be either a path (which MUST begin with /),
   or an id (which MUST NOT start with a /).
   The versioninv flag is currently not supported, see CERNBOX-1216.'''
+
+  def unmountpath(path):
+    if path.startswith(ctx['revamountpath']):
+      return path[len(ctx['revamountpath']):]
+    return path
+
   if endpoint == 'default':
     raise IOError('A CS3API-compatible storage endpoint must be identified by a storage UUID')
   if versioninv == 1:
@@ -58,7 +67,9 @@ def stat(endpoint, fileid, userid, versioninv=0):
   tstart = time.time()
   if fileid[0] == '/':
     # assume this is a filepath
-    ref = cs3spr.Reference(path=fileid)
+    # reva can have different mount paths configured for different storage providers
+    mounted_path = ctx['revamountpath'] + fileid
+    ref = cs3spr.Reference(path=mounted_path)
   else:
     # assume we have an opaque fileid
     ref = cs3spr.Reference(id=cs3spr.ResourceId(storage_id=endpoint, opaque_id=fileid))
@@ -75,7 +86,7 @@ def stat(endpoint, fileid, userid, versioninv=0):
       inode = hash(statInfo.info.id.opaque_id)
     return {
         'inode': statInfo.info.id.storage_id + '-' + str(inode),
-        'filepath': statInfo.info.path,
+        'filepath': unmountpath(statInfo.info.path),
         'userid': statInfo.info.owner.opaque_id,
         'size': statInfo.info.size,
         'mtime': statInfo.info.mtime.seconds
@@ -91,7 +102,9 @@ def statx(endpoint, fileid, userid, versioninv=0):
 
 def setxattr(_endpoint, filepath, userid, key, value):
   '''Set the extended attribute <key> to <value> using the given userid as access token'''
-  reference = cs3spr.Reference(path=filepath)
+  # reva can have different mount paths configured for different storage providers
+  mounted_path = ctx['revamountpath'] + filepath
+  reference = cs3spr.Reference(path=mounted_path)
   arbitrary_metadata = cs3spr.ArbitraryMetadata()
   arbitrary_metadata.metadata.update({key: str(value)})    # pylint: disable=no-member
   req = cs3sp.SetArbitraryMetadataRequest(ref=reference, arbitrary_metadata=arbitrary_metadata)
@@ -106,7 +119,9 @@ def setxattr(_endpoint, filepath, userid, key, value):
 def getxattr(_endpoint, filepath, userid, key):
   '''Get the extended attribute <key> using the given userid as access token. Do not raise exceptions'''
   tstart = time.time()
-  reference = cs3spr.Reference(path=filepath)
+  # reva can have different mount paths configured for different storage providers
+  mounted_path = ctx['revamountpath'] + filepath
+  reference = cs3spr.Reference(path=mounted_path)
   statInfo = ctx['cs3stub'].Stat(request=cs3sp.StatRequest(ref=reference),
                                  metadata=[('x-access-token', userid)])
   tend = time.time()
@@ -126,7 +141,9 @@ def getxattr(_endpoint, filepath, userid, key):
 
 def rmxattr(_endpoint, filepath, userid, key):
   '''Remove the extended attribute <key> using the given userid as access token'''
-  reference = cs3spr.Reference(path=filepath)
+  # reva can have different mount paths configured for different storage providers
+  mounted_path = ctx['revamountpath'] + filepath
+  reference = cs3spr.Reference(path=mounted_path)
   req = cs3sp.UnsetArbitraryMetadataRequest(ref=reference, arbitrary_metadata_keys=[key])
   res = ctx['cs3stub'].UnsetArbitraryMetadata(request=req, metadata=[('x-access-token', userid)])
   if res.status.code != cs3code.CODE_OK:
@@ -139,7 +156,9 @@ def readfile(_endpoint, filepath, userid):
   '''Read a file using the given userid as access token. Note that the function is a generator, managed by Flask.'''
   tstart = time.time()
   # prepare endpoint
-  req = cs3sp.InitiateFileDownloadRequest(ref=cs3spr.Reference(path=filepath))
+  # reva can have different mount paths configured for different storage providers
+  mounted_path = ctx['revamountpath'] + filepath
+  req = cs3sp.InitiateFileDownloadRequest(ref=cs3spr.Reference(path=mounted_path))
   initfiledownloadres = ctx['cs3stub'].InitiateFileDownload(request=req, metadata=[('x-access-token', userid)])
   if initfiledownloadres.status.code == cs3code.CODE_NOT_FOUND:
     ctx['log'].info('msg="File not found on read" filepath="%s"' % filepath)
@@ -152,7 +171,11 @@ def readfile(_endpoint, filepath, userid):
 
   # Download
   try:
-    fileget = requests.get(url=initfiledownloadres.download_endpoint, headers={'x-access-token': userid})
+    headers = {
+        'x-access-token': userid,
+        'X-Reva-Transfer': initfiledownloadres.token    # needed if the downloads pass through the data gateway in reva
+    }
+    fileget = requests.get(url=initfiledownloadres.download_endpoint, headers=headers)
   except requests.exceptions.RequestException as e:
     ctx['log'].error('msg="Exception when downloading file from Reva" reason="%s"' % e)
     yield IOError(e)
@@ -173,7 +196,11 @@ def writefile(_endpoint, filepath, userid, content, _noversion=0):
     The noversion flag is currently not supported.'''
   tstart = time.time()
   # prepare endpoint
-  req = cs3sp.InitiateFileUploadRequest(ref=cs3spr.Reference(path=filepath))
+  # reva can have different mount paths configured for different storage providers
+  mounted_path = ctx['revamountpath'] + filepath
+  content_size = str(len(content.decode('utf-8')))    # assuming that contents is a bytes object
+  metadata = types.Opaque(map={"Upload-Length": types.OpaqueEntry(decoder="plain", value=str.encode(content_size))})
+  req = cs3sp.InitiateFileUploadRequest(ref=cs3spr.Reference(path=mounted_path), opaque=metadata)
   initfileuploadres = ctx['cs3stub'].InitiateFileUpload(request=req, metadata=[('x-access-token', userid)])
   if initfileuploadres.status.code != cs3code.CODE_OK:
     ctx['log'].debug('msg="Failed to initiateFileUpload on write" filepath="%s" reason="%s"' % \
@@ -183,10 +210,12 @@ def writefile(_endpoint, filepath, userid, content, _noversion=0):
 
   # Upload
   try:
-    # TODO: Use tus client instead of PUT
     headers = {
         'Tus-Resumable': '1.0.0',
-        'x-access-token':  userid
+        'x-access-token': userid,
+        'File-Path': mounted_path,
+        'File-Size': content_size,
+        'X-Reva-Transfer': initfileuploadres.token    # needed if the uploads pass through the data gateway in reva
     }
     putres = requests.put(url=initfileuploadres.upload_endpoint, data=content, headers=headers)
   except requests.exceptions.RequestException as e:
@@ -201,8 +230,8 @@ def writefile(_endpoint, filepath, userid, content, _noversion=0):
 
 def renamefile(_endpoint, filepath, newfilepath, userid):
   '''Rename a file from origfilepath to newfilepath using the given userid as access token.'''
-  source = cs3spr.Reference(path=filepath)
-  destination = cs3spr.Reference(path=newfilepath)
+  source = cs3spr.Reference(path=ctx['revamountpath'] + filepath)
+  destination = cs3spr.Reference(path=ctx['revamountpath'] + newfilepath)
   req = cs3sp.MoveRequest(source=source, destination=destination)
   res = ctx['cs3stub'].Move(request=req, metadata=[('x-access-token', userid)])
   if res.status.code != cs3code.CODE_OK:
@@ -214,7 +243,7 @@ def renamefile(_endpoint, filepath, newfilepath, userid):
 def removefile(_endpoint, filepath, userid, _force=0):
   '''Remove a file using the given userid as access token.
      The force argument is ignored for now for CS3 storage.'''
-  reference = cs3spr.Reference(path=filepath)
+  reference = cs3spr.Reference(path=ctx['revamountpath'] + filepath)
   req = cs3sp.DeleteRequest(ref=reference)
   res = ctx['cs3stub'].Delete(request=req, metadata=[('x-access-token', userid)])
   if res.status.code != cs3code.CODE_OK:
