@@ -26,25 +26,9 @@ By default, the local storage is tested. To run the tests, use the standard pyth
 ### Test against a Reva endpoint:
 
 1. Clone reva (https://github.com/cs3org/reva)
-2. Configure `http.services.dataprovider`  and `grpc.services.storageprovider` in `examples/ocmd/ocmd-server-1.toml` with `disable_tus = true`, it will look like this:
-
-   ```
-   ...
-   [http.services.dataprovider]
-   ...
-   disable_tus = true
-   ``` 
-   and:
-
-   ```
-   [grpc.services.storageprovider]
-   ...
-   disable_tus = true
-   ```
-
-3. Run Reva according to <https://reva.link/docs/tutorials/share-tutorial/> (ie up until step 4 in the instructions).
-4. Go to the test folder `cd test`
-5. Run the tests: `WOPI_STORAGE=cs3 python3 test_storageiface.py`
+2. Run Reva according to <https://reva.link/docs/tutorials/share-tutorial/> (ie up until step 4 in the instructions).
+3. Go to the test folder `cd test`
+4. Run the tests: `WOPI_STORAGE=cs3 python3 test_storageiface.py`
 
 ### Test against an Eos endpoint:
 
