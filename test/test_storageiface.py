@@ -48,10 +48,12 @@ class TestStorage(unittest.TestCase):
     try:
       self.storage = __import__(storagetype, globals(), locals())
       self.storage.init(config, log)
+      self.homepath = ''
       if storagetype == 'cs3iface':
         # we need to login for this case
         self.username = self.userid
         self.userid = self.storage.authenticate_for_test(self.userid, config.get('cs3', 'userpwd'))
+        self.homepath = config.get('cs3', 'storagehomepath')
     except ImportError:
       print("Missing module when attempting to import {}. Please make sure dependencies are met.", storagetype)
       raise
@@ -60,103 +62,104 @@ class TestStorage(unittest.TestCase):
   def test_stat(self):
     '''Call stat() and assert the path matches'''
     buf = b'bla\n'
-    self.storage.writefile(self.endpoint, '/test.txt', self.userid, buf)
-    statInfo = self.storage.stat(self.endpoint, '/test.txt', self.userid)
+    self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, buf)
+    statInfo = self.storage.stat(self.endpoint, self.homepath + '/test.txt', self.userid)
     self.assertIsInstance(statInfo, dict)
     self.assertTrue('mtime' in statInfo, 'Missing mtime from stat output')
     self.assertTrue('size' in statInfo, 'Missing size from stat output')
-    self.storage.removefile(self.endpoint, '/test.txt', self.userid)
+    self.storage.removefile(self.endpoint, self.homepath + '/test.txt', self.userid)
 
   def test_statx_fileid(self):
     '''Call statx() and test if fileid-based stat is supported'''
     buf = b'bla\n'
-    self.storage.writefile(self.endpoint, '/test.txt', self.userid, buf)
-    statInfo = self.storage.statx(self.endpoint, '/test.txt', self.userid)
+    self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, buf)
+    statInfo = self.storage.statx(self.endpoint, self.homepath + '/test.txt', self.userid)
     if self.endpoint in statInfo['inode']:
       # detected CS3 storage, test if fileid-based stat is supported
+      # (notably, homepath is not part of the fileid)
       statInfoId = self.storage.stat(self.endpoint, 'fileid-' + self.username + '%2Ftest.txt', self.userid)
       self.assertTrue(statInfo['inode'] == statInfoId['inode'])
-    self.storage.removefile(self.endpoint, '/test.txt', self.userid)
+    self.storage.removefile(self.endpoint, self.homepath + '/test.txt', self.userid)
 
   def test_statx_invariant_fileid(self):
     '''Call statx() before and after updating a file, and assert the inode did not change'''
     buf = b'bla\n'
-    self.storage.writefile(self.endpoint, '/test.txt', self.userid, buf)
-    statInfo = self.storage.statx(self.endpoint, '/test.txt', self.userid, versioninv=1)
+    self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, buf)
+    statInfo = self.storage.statx(self.endpoint, self.homepath + '/test.txt', self.userid, versioninv=1)
     self.assertIsInstance(statInfo, dict)
     inode = statInfo['inode']
     buf = b'blabla\n'
-    self.storage.writefile(self.endpoint, '/test.txt', self.userid, buf)
-    statInfo = self.storage.statx(self.endpoint, '/test.txt', self.userid, versioninv=1)
+    self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, buf)
+    statInfo = self.storage.statx(self.endpoint, self.homepath + '/test.txt', self.userid, versioninv=1)
     self.assertIsInstance(statInfo, dict)
     self.assertEqual(statInfo['inode'], inode, 'Fileid is not invariant to multiple write operations')
-    self.storage.removefile(self.endpoint, '/test.txt', self.userid)
+    self.storage.removefile(self.endpoint, self.homepath + '/test.txt', self.userid)
 
   def test_stat_nofile(self):
     '''Call stat() and assert the exception is as expected'''
     with self.assertRaises(IOError, msg='No such file or directory'):
-      self.storage.stat(self.endpoint, '/hopefullynotexisting', self.userid)
+      self.storage.stat(self.endpoint, self.homepath + '/hopefullynotexisting', self.userid)
 
   def test_statx_nofile(self):
     '''Call statx() and assert the exception is as expected'''
     with self.assertRaises(IOError, msg='No such file or directory'):
-      self.storage.statx(self.endpoint, '/hopefullynotexisting', self.userid)
+      self.storage.statx(self.endpoint, self.homepath + '/hopefullynotexisting', self.userid)
 
   def test_readfile(self):
     '''Writes a file and reads it back, validating that the content matches'''
     content = b'bla\n'
-    self.storage.writefile(self.endpoint, '/test.txt', self.userid, content)
+    self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, content)
     content = ''
-    for chunk in self.storage.readfile(self.endpoint, '/test.txt', self.userid):
+    for chunk in self.storage.readfile(self.endpoint, self.homepath + '/test.txt', self.userid):
       self.assertNotIsInstance(chunk, IOError, 'raised by storage.readfile')
       content += chunk.decode('utf-8')
     self.assertEqual(content, 'bla\n', 'File test.txt should contain the string "bla"')
-    self.storage.removefile(self.endpoint, '/test.txt', self.userid)
+    self.storage.removefile(self.endpoint, self.homepath + '/test.txt', self.userid)
 
   def test_read_nofile(self):
     '''Test reading of a non-existing file'''
-    readex = next(self.storage.readfile(self.endpoint, '/hopefullynotexisting', self.userid))
+    readex = next(self.storage.readfile(self.endpoint, self.homepath + '/hopefullynotexisting', self.userid))
     self.assertIsInstance(readex, IOError, 'readfile returned %s' % readex)
     self.assertEqual(str(readex), 'No such file or directory', 'readfile returned %s' % readex)
 
   def test_write_remove(self):
     '''Test write and removal of a file with special chars'''
     buf = b'ebe5tresbsrdthbrdhvdtr'
-    self.storage.writefile(self.endpoint, '/testwrite&rm', self.userid, buf)
-    statInfo = self.storage.stat(self.endpoint, '/testwrite&rm', self.userid)
+    self.storage.writefile(self.endpoint, self.homepath + '/testwrite&rm', self.userid, buf)
+    statInfo = self.storage.stat(self.endpoint, self.homepath + '/testwrite&rm', self.userid)
     self.assertIsInstance(statInfo, dict)
-    self.storage.removefile(self.endpoint, '/testwrite&rm', self.userid)
+    self.storage.removefile(self.endpoint, self.homepath + '/testwrite&rm', self.userid)
     with self.assertRaises(IOError):
-      self.storage.stat(self.endpoint, '/testwrite&rm', self.userid)
+      self.storage.stat(self.endpoint, self.homepath + '/testwrite&rm', self.userid)
 
   def test_remove_nofile(self):
     '''Test removal of a non-existing file'''
     with self.assertRaises(IOError):
-      self.storage.removefile(self.endpoint, '/hopefullynotexisting', self.userid)
+      self.storage.removefile(self.endpoint, self.homepath + '/hopefullynotexisting', self.userid)
 
   def test_xattr(self):
     '''Test all xattr methods with special chars'''
     buf = b'bla\n'
-    self.storage.writefile(self.endpoint, '/test&xattr.txt', self.userid, buf)
-    self.storage.setxattr(self.endpoint, '/test&xattr.txt', self.userid, 'testkey', 123)
-    v = self.storage.getxattr(self.endpoint, '/test&xattr.txt', self.userid, 'testkey')
+    self.storage.writefile(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, buf)
+    self.storage.setxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey', 123)
+    v = self.storage.getxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey')
     self.assertEqual(v, '123')
-    self.storage.rmxattr(self.endpoint, '/test&xattr.txt', self.userid, 'testkey')
-    v = self.storage.getxattr(self.endpoint, '/test&xattr.txt', self.userid, 'testkey')
+    self.storage.rmxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey')
+    v = self.storage.getxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey')
     self.assertEqual(v, None)
-    self.storage.removefile(self.endpoint, '/test&xattr.txt', self.userid)
+    self.storage.removefile(self.endpoint, self.homepath + '/test&xattr.txt', self.userid)
 
   def test_rename_statx(self):
     '''Test renaming and statx of a file with special chars'''
     buf = b'bla\n'
-    self.storage.writefile(self.endpoint, '/test.txt', self.userid, buf)
-    self.storage.renamefile(self.endpoint, '/test.txt', '/test&renamed.txt', self.userid)
-    statInfo = self.storage.statx(self.endpoint, '/test&renamed.txt', self.userid)
-    self.assertEqual(statInfo['filepath'], '/test&renamed.txt')
-    self.storage.renamefile(self.endpoint, '/test&renamed.txt', '/test.txt', self.userid)
-    statInfo = self.storage.statx(self.endpoint, '/test.txt', self.userid)
-    self.assertEqual(statInfo['filepath'], '/test.txt')
-    self.storage.removefile(self.endpoint, '/test.txt', self.userid)
+    self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, buf)
+    self.storage.renamefile(self.endpoint, self.homepath + '/test.txt', self.homepath + '/test&renamed.txt', self.userid)
+    statInfo = self.storage.statx(self.endpoint, self.homepath + '/test&renamed.txt', self.userid)
+    self.assertEqual(statInfo['filepath'], self.homepath + '/test&renamed.txt')
+    self.storage.renamefile(self.endpoint, self.homepath + '/test&renamed.txt', self.homepath + '/test.txt', self.userid)
+    statInfo = self.storage.statx(self.endpoint, self.homepath + '/test.txt', self.userid)
+    self.assertEqual(statInfo['filepath'], self.homepath + '/test.txt')
+    self.storage.removefile(self.endpoint, self.homepath + '/test.txt', self.userid)
 
 
 if __name__ == '__main__':
