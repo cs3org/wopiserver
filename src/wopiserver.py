@@ -701,7 +701,14 @@ def wopiLock(fileid, reqheaders, acctok):
                      (op, acctok['userid'], acctok['filename'], \
                       flask.request.args['access_token'][-20:]))
   # LOCK or REFRESH_LOCK: set the lock to the given one, including the expiration time
-  utils.storeWopiLock(op, lock, acctok)
+  try:
+    utils.storeWopiLock(op, lock, acctok)
+  except IOError as e:
+    if 'File exists and islock flag requested' in str(e):
+      # this file was already locked externally: storeWopiLock looks at LibreOffice-compatible locks
+      return utils.makeConflictResponse(op, 'External App', lock, oldLock, acctok['filename'])
+    # any other failure
+    return str(e), http.client.INTERNAL_SERVER_ERROR
   if not retrievedLock:
     # on first lock, set an xattr with the current time for later conflicts checking
     try:

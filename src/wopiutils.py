@@ -157,7 +157,7 @@ def retrieveWopiLock(fileid, operation, lock, acctok):
     except IOError:
       # ignore, it's not worth to report anything here
       pass
-    # also remove the LibreOffice-compatible lock file, if it has the expected signature - cf. _storeWopiLock()
+    # also remove the LibreOffice-compatible lock file, if it has the expected signature - cf. storeWopiLock()
     try:
       lock = str(next(_ctx['st'].readfile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'])))
       if 'WOPIServer' in lock:
@@ -179,19 +179,32 @@ def storeWopiLock(operation, lock, acctok):
   # append or overwrite the expiration time
   lockcontent['exp'] = int(time.time()) + _ctx['wopi'].config.getint('general', 'wopilockexpiration')
   try:
-    # store the lock as encoded JWT
+    # store the lock as encoded JWT: note that we do not use islock=True, because the WOPI specs require
+    # this operation to be essentially idempotent, so it should not fail if the lock was there or is being
+    # created by another thread.
     s = jwt.encode(lockcontent, _ctx['wopi'].wopisecret, algorithm='HS256')
-    _ctx['st'].writefile(acctok['endpoint'], getLockName(acctok['filename']), acctok['userid'], s, islock=True)
+    _ctx['st'].writefile(acctok['endpoint'], getLockName(acctok['filename']), acctok['userid'], s)
     _ctx['log'].info('msg="%s" filename="%s" token="%s" lock="%s" result="success"' % \
                      (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
-    # also create a LibreOffice-compatible lock file for interoperability purposes
+    # also create a LibreOffice-compatible lock file for interoperability purposes, making sure to
+    # not overwrite any existing or being created lock
     lockcontent = ',Collaborative Online Editor,%s,%s,WOPIServer;' % \
                   (_ctx['wopi'].wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())))
     _ctx['st'].writefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], \
                          lockcontent, islock=True)
   except IOError as e:
-    _ctx['log'].warning('msg="%s" filename="%s" token="%s" lock="%s" result="unable to store lock" reason="%s"' % \
-                        (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
+    if 'File exists and islock flag requested' in str(e):
+      # retrieve the LibreOffice-compatible lock just found
+      lock = next(_ctx['st'].readfile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid']))
+      if 'WOPIServer' not in lock:
+        # the file was externally locked, make this call fail
+        raise
+      #else it's our previous lock: all right, nothing else to do
+    else:
+      # any other error is logged and raised
+      _ctx['log'].warning('msg="%s" filename="%s" token="%s" lock="%s" result="unable to store lock" reason="%s"' % \
+                          (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
+      raise
 
 
 def compareWopiLocks(lock1, lock2):
