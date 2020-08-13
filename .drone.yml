@@ -1,0 +1,58 @@
+---
+kind: pipeline
+type: docker
+name: release-latest
+
+platform:
+  os: linux
+  arch: amd64
+
+trigger:
+  branch:
+  - master
+  event:
+    exclude:
+    - pull_request
+    - tag
+    - promote
+    - rollback
+
+steps:
+- name: publish-docker-wopibridge-latest
+  pull: always
+  image: plugins/docker
+  settings:
+    repo: cs3org/wopibridge
+    tags: latest
+    dockerfile: wopibridge-poc.Dockerfile
+    username:
+      from_secret: dockerhub_username
+    password:
+      from_secret: dockerhub_password
+
+---
+kind: pipeline
+type: docker
+name: release
+
+platform:
+  os: linux
+  arch: amd64
+
+trigger:
+  event:
+    include:
+    - tag
+
+steps:
+- name: publish-docker-wopibridge-tag
+  pull: always
+  image: plugins/docker
+  settings:
+    repo: cs3org/wopibridge
+    tags: ${DRONE_TAG}
+    dockerfile: wopibridge-poc.Dockerfile
+    username:
+      from_secret: dockerhub_username
+    password:
+      from_secret: dockerhub_password
