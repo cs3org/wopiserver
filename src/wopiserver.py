@@ -145,15 +145,15 @@ class Wopi:
         # The supported Collabora end-points
         cls.ENDPOINTS['.odt'] = {}
         cls.ENDPOINTS['.odt']['view'] = urlsrc + 'permission=readonly'
-        cls.ENDPOINTS['.odt']['edit'] = urlsrc + 'permission=view'
+        cls.ENDPOINTS['.odt']['edit'] = urlsrc + 'permission=edit'
         cls.ENDPOINTS['.odt']['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace
         cls.ENDPOINTS['.ods'] = {}
         cls.ENDPOINTS['.ods']['view'] = urlsrc + 'permission=readonly'
-        cls.ENDPOINTS['.ods']['edit'] = urlsrc + 'permission=view'
+        cls.ENDPOINTS['.ods']['edit'] = urlsrc + 'permission=edit'
         cls.ENDPOINTS['.ods']['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace
         cls.ENDPOINTS['.odp'] = {}
         cls.ENDPOINTS['.odp']['view'] = urlsrc + 'permission=readonly'
-        cls.ENDPOINTS['.odp']['edit'] = urlsrc + 'permission=view'
+        cls.ENDPOINTS['.odp']['edit'] = urlsrc + 'permission=edit'
         cls.ENDPOINTS['.odp']['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace
         cls.log.info('msg="Collabora Online endpoints successfully configured" CODEURL="%s"' % cls.ENDPOINTS['.odt']['edit'])
 
@@ -590,7 +590,6 @@ def wopiCheckFileInfo(fileid):
     filemd['Size'] = statInfo['size']
     # TODO the version is generated like this in ownCloud: 'V' . $file->getEtag() . \md5($file->getChecksum());
     filemd['Version'] = statInfo['mtime']   # mtime is used as version here
-    #filemd['LastModifiedTime'] = datetime.fromtimestamp(int(statInfo['mtime'])).isoformat()   # this is supposed to be used by Collabora, but it breaks
     filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = \
         filemd['SupportsGetLock'] = filemd['SupportsDeleteFile'] = acctok['viewmode'] == utils.ViewMode.READ_WRITE
         # XXX broken in MS Office Online
@@ -600,6 +599,7 @@ def wopiCheckFileInfo(fileid):
     # extensions for Collabora Online
     filemd['EnableOwnerTermination'] = True
     filemd['DisableExport'] = filemd['DisableCopy'] = filemd['DisablePrint'] = acctok['viewmode'] == utils.ViewMode.VIEW_ONLY
+    #filemd['LastModifiedTime'] = datetime.fromtimestamp(int(statInfo['mtime'])).isoformat()   # this currently breaks
     Wopi.log.info('msg="File metadata response" token="%s" metadata="%s"' % (flask.request.args['access_token'][-20:], filemd))
     return flask.Response(json.dumps(filemd), mimetype='application/json')
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
