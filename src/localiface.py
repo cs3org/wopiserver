@@ -144,7 +144,6 @@ def writefile(_endpoint, filepath, _userid, content, islock=False):
       log.warning('msg="Error opening file for write" filepath="%s" error="%s"' % (filepath, e))
       raise IOError(e)
   tend = time.time()
-  log.info('msg="File open for write" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
   try:
     written = f.write(content)
     if fd == 0:
@@ -152,6 +151,8 @@ def writefile(_endpoint, filepath, _userid, content, islock=False):
     # else for some reason we get a EBADF if we close a file opened with os.open, though it should be closed!
     if written != size:
       raise IOError('Written %d bytes but content is %d bytes' % (written, size))
+    log.info('msg="File written successfully" filepath="%s" elapsedTimems="%.1f" islock="%s"' % \
+             (filepath, (tend-tstart)*1000, islock))
   except OSError as e:
     log.warning('msg="Error writing to file" filepath="%s" error="%s"' % (filepath, e))
     raise IOError(e)

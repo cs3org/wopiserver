@@ -224,16 +224,15 @@ def writefile(endpoint, filepath, userid, content, islock=False):
      With islock=True, the write explicitly disables versioning, and the file is opened with
      O_CREAT|O_EXCL, preventing race conditions.'''
   size = len(content)
-  log.debug('msg="Invoking writeFile" filepath="%s" size="%d"' % (filepath, size))
+  log.debug('msg="Invoking writeFile" filepath="%s" userid="%s" size="%d" islock="%s"' % (filepath, userid, size, islock))
   f = XrdClient.File()
   tstart = time.time()
-  rc, statInfo_unused = f.open(_geturlfor(endpoint) + '/' + homepath + filepath + _eosargs(userid, 1, size) + \
+  rc, statInfo_unused = f.open(_geturlfor(endpoint) + '/' + homepath + filepath + _eosargs(userid, not islock, size) + \
                                ('&sys.versioning=0' if islock else ''), \
-                               OpenFlags.DELETE if not islock else OpenFlags.NEW)
+                               OpenFlags.NEW if islock else OpenFlags.DELETE)
   tend = time.time()
-  log.info('msg="File open for write" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
   if not rc.ok:
-    if islock and rc.shellcode == 50:
+    if islock and 'File exists' in rc.message:
       log.info('msg="File exists on write and islock flag requested" filepath="%s"' % filepath)
       raise IOError('File exists and islock flag requested')
     log.warning('msg="Error opening the file for write" filepath="%s" error="%s"' % (filepath, rc.message.strip('\n')))
@@ -251,6 +250,8 @@ def writefile(endpoint, filepath, userid, content, islock=False):
   if not rc.ok:
     log.warning('msg="Error closing the file" filepath="%s" error="%s"' % (filepath, rc.message.strip('\n')))
     raise IOError(rc.message.strip('\n'))
+  log.info('msg="File written successfully" filepath="%s" elapsedTimems="%.1f" islock="%s"' % \
+           (filepath, (tend-tstart)*1000, islock))
 
 
 def renamefile(endpoint, origfilepath, newfilepath, userid):

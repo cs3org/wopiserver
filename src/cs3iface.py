@@ -210,7 +210,8 @@ def writefile(_endpoint, filepath, userid, content, islock=False):
   if putres.status_code != http.client.OK:
     ctx['log'].error('msg="Error uploading file to Reva" code="%d" reason="%s"' % (putres.status_code, putres.reason))
     raise IOError(putres.reason)
-  ctx['log'].info('msg="File open for write" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
+  ctx['log'].info('msg="File written successfully" filepath="%s" elapsedTimems="%.1f" islock="%s"' % \
+                  (filepath, (tend-tstart)*1000, islock))
 
 
 def renamefile(_endpoint, filepath, newfilepath, userid):

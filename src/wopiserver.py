@@ -405,6 +405,7 @@ def cboxLock():
   userid = req.args['userid'] if 'userid' in req.args else '0:0'
   endpoint = req.args['endpoint'] if 'endpoint' in req.args else 'default'
   query = req.method == 'GET'
+  Wopi.log.info('msg="cboxLock: start processing" filename="%s" request="%s"' % (filename, "query" if query else "create"))
 
   # first make sure the file itself exists
   try:
@@ -443,12 +444,12 @@ def cboxLock():
       # we were asked to query an existing lock, but the file was modified in between (e.g. by a sync client):
       # notify potential conflict
       Wopi.log.info('msg="cboxLock: file got modified after LibreOffice-compatible lock file was created" ' \
-                    'filename="%s"' % filename)
+                    'filename="%s" request="query"' % filename)
       return 'File modified since open time', http.client.CONFLICT
     # now check content
     lock = lock.decode('utf-8')
     if 'OnlyOffice Online Editor' not in lock:
-      Wopi.log.info('msg="cboxLock: found existing LibreOffice lock" filename="%s" holder="%s" lockmtime="%ld"' % \
+      Wopi.log.info('msg="cboxLock: found existing LibreOffice lock" filename="%s" holder="%s" lockmtime="%ld" request="query"' % \
                     (filename, lock.split(',')[1] if ',' in lock else lock, lockstat['mtime']))
       return 'Previous lock exists', http.client.CONFLICT
     # if the lock was created for OnlyOffice, it's OK (OnlyOffice will handle the collaborative session)
@@ -458,7 +459,7 @@ def cboxLock():
     except (IndexError, ValueError):
       # lock got corrupted and did not contain the extra creation timestamp: current time will be returned
       lockid = int(time.time())
-    Wopi.log.info('msg="cboxLock: lock file still valid" filename="%s" id="%d" lockmtime="%ld"' % \
+    Wopi.log.info('msg="cboxLock: lock file still valid" filename="%s" id="%d" lockmtime="%ld" request="query"' % \
                   (filename, lockid, lockstat['mtime']))
     return str(lockid), http.client.OK
 
@@ -469,7 +470,7 @@ def cboxLock():
   try:
     lockid = int(time.time())
     lolockcontent = ',OnlyOffice Online Editor,%s,%s,ExtWebApp;\n%d;' % \
-         (Wopi.wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())), lockid)
+                    (Wopi.wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())), lockid)
     # try to write in exclusive mode (and if a valid WOPI lock exists, assume the corresponding LibreOffice lock
     # is still there so the write will fail)
     storage.writefile(endpoint, utils.getLibreOfficeLockName(filename), userid, lolockcontent, islock=True)
@@ -495,13 +496,16 @@ def cboxLock():
     lock = lock.decode('utf-8')
     if 'OnlyOffice Online Editor' not in lock:
       # a previous lock existed and it's not held by us, fail with conflict
-      Wopi.log.info('msg="cboxLock: found existing LibreOffice lock" filename="%s" holder="%s" lockmtime="%ld"' % \
+      Wopi.log.info('msg="cboxLock: found existing LibreOffice lock" ' \
+                    'filename="%s" holder="%s" lockmtime="%ld" request="create"' % \
                     (filename, lock.split(',')[1] if ',' in lock else lock, lockstat['mtime']))
       return 'Previous lock exists', http.client.CONFLICT
     # otherwise, extract the previous timestamp and refresh the lock itself
     # (this is equivalent to a touch, needed to make the mtime check on query valid, see above)
     try:
       lockid = int(lock.split(';\n')[1].strip(';'))
+      lolockcontent = ',OnlyOffice Online Editor,%s,%s,ExtWebApp;\n%d;' % \
+                      (Wopi.wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())), lockid)
       storage.writefile(endpoint, utils.getLibreOfficeLockName(filename), userid, lolockcontent, islock=False)
       Wopi.log.info('msg="cboxLock: refreshed LibreOffice-compatible lock file" filename="%s" id="%d"' % (filename, lockid))
       return str(lockid), http.client.OK
@@ -536,6 +540,7 @@ def cboxUnlock():
   filename = req.args['filename']
   userid = req.args['userid'] if 'userid' in req.args else '0:0'
   endpoint = req.args['endpoint'] if 'endpoint' in req.args else 'default'
+  Wopi.log.info('msg="cboxUnlock: start processing" filename="%s"' % filename)
   try:
     # probe if a WOPI/LibreOffice lock exists with the expected signature
     lock = next(storage.readfile(endpoint, utils.getLibreOfficeLockName(filename), userid))
@@ -543,7 +548,7 @@ def cboxUnlock():
       # typically ENOENT, any other error is grouped here
       Wopi.log.warning('msg="cboxUnlock: lock file not found" filename="%s"' % filename)
       return 'Lock not found', http.client.NOT_FOUND
-    lock = str(lock)
+    lock = lock.decode('utf-8')
     if 'OnlyOffice Online Editor' in lock:
       # remove the LibreOffice-compatible lock file
       storage.removefile(endpoint, utils.getLibreOfficeLockName(filename), userid, 1)
