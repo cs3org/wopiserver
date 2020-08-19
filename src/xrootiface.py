@@ -254,25 +254,6 @@ def writefile(endpoint, filepath, userid, content, islock=False):
            (filepath, (tend-tstart)*1000, islock))
 
 
-def openfileexcl(endpoint, filepath, userid, content):
-  size = len(content)
-  log.debug('msg="Invoking openfileexcl" filepath="%s" size="%d" userid="%s"' % (filepath, size, userid))
-  f = XrdClient.File()
-  tstart = time.time()
-  rc, statInfo_unused = f.open(_geturlfor(endpoint) + '/' + homepath + filepath + _eosargs(userid, 0, size) + \
-                               ('&sys.versioning=0'), OpenFlags.NEW)
-  tend = time.time()
-  if not rc.ok:
-    if 'File exists' in rc.message:
-      log.info('msg="File exists on write and islock flag requested" filepath="%s"' % filepath)
-      raise IOError('File exists and islock flag requested')
-    log.warning('msg="Error opening the file for write" filepath="%s" error="%s"' % (filepath, rc.message.strip('\n')))
-    raise IOError(rc.message.strip('\n'))
-  # write the file. In a future implementation, we should find a way to only update the required chunks...
-  #rc, statInfo_unused = f.write(content, offset=0, size=size)
-  log.info('msg="openfileexcl completed, file left open" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
-
-
 def renamefile(endpoint, origfilepath, newfilepath, userid):
   '''Rename a file via a special open from origfilepath to newfilepath on behalf of the given userid.'''
   _xrootcmd(endpoint, 'file', 'rename', userid, 'mgm.path=' + _getfilepath(origfilepath, encodeamp=True) + \
