@@ -195,8 +195,8 @@ def storeWopiLock(operation, lock, acctok):
   except IOError as e:
     if 'File exists and islock flag requested' in str(e):
       # retrieve the LibreOffice-compatible lock just found
-      lock = next(_ctx['st'].readfile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid']))
-      if 'WOPIServer' not in lock:
+      retrievedlock = next(_ctx['st'].readfile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid']))
+      if 'WOPIServer' not in retrievedlock.decode('utf-8'):
         # the file was externally locked, make this call fail
         raise
       #else it's our previous lock: all right, nothing else to do
