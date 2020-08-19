@@ -11,6 +11,8 @@ import logging
 import configparser
 import sys
 import os
+from threading import Thread
+import time
 sys.path.append('../src')  # for tests out of the git repo
 sys.path.append('/app')    # for tests within the Docker image
 
@@ -97,13 +99,15 @@ class TestStorage(unittest.TestCase):
 
   def test_stat_nofile(self):
     '''Call stat() and assert the exception is as expected'''
-    with self.assertRaises(IOError, msg='No such file or directory'):
+    with self.assertRaises(IOError) as context:
       self.storage.stat(self.endpoint, self.homepath + '/hopefullynotexisting', self.userid)
+    self.assertIn('No such file or directory', str(context.exception))
 
   def test_statx_nofile(self):
     '''Call statx() and assert the exception is as expected'''
-    with self.assertRaises(IOError, msg='No such file or directory'):
+    with self.assertRaises(IOError) as context:
       self.storage.statx(self.endpoint, self.homepath + '/hopefullynotexisting', self.userid)
+    self.assertIn('No such file or directory', str(context.exception))
 
   def test_readfile(self):
     '''Writes a file and reads it back, validating that the content matches'''
@@ -133,14 +137,35 @@ class TestStorage(unittest.TestCase):
       self.storage.stat(self.endpoint, self.homepath + '/testwrite&rm', self.userid)
 
   def test_write_islock(self):
-    '''Test double write with islock flag'''
+    '''Test double write with the islock flag'''
     buf = b'ebe5tresbsrdthbrdhvdtr'
+    try:
+      self.storage.removefile(self.endpoint, '/testoverwrite', self.userid)
+    except IOError:
+      pass
     self.storage.writefile(self.endpoint, '/testoverwrite', self.userid, buf, islock=True)
     statInfo = self.storage.stat(self.endpoint, '/testoverwrite', self.userid)
     self.assertIsInstance(statInfo, dict)
-    with self.assertRaises(IOError):
+    with self.assertRaises(IOError) as context:
       self.storage.writefile(self.endpoint, '/testoverwrite', self.userid, buf, islock=True)
+    self.assertIn('File exists and islock flag requested', str(context.exception))
     self.storage.removefile(self.endpoint, '/testoverwrite', self.userid)
+
+  def test_write_race(self):
+    '''Test multithreaded double write with the islock flag'''
+    buf = b'ebe5tresbsrdthbrdhvdtr'
+    try:
+      self.storage.removefile(self.endpoint, '/testwriterace', self.userid)
+    except IOError:
+      pass
+    t = Thread(target=self.storage.writefile,
+               args=[self.endpoint, '/testwriterace', self.userid, buf], kwargs={'islock': True})
+    t.start()
+    with self.assertRaises(IOError) as context:
+      self.storage.writefile(self.endpoint, '/testwriterace', self.userid, buf, islock=True)
+    self.assertIn('File exists and islock flag requested', str(context.exception))
+    t.join()
+    self.storage.removefile(self.endpoint, '/testwriterace', self.userid)
 
   def test_remove_nofile(self):
     '''Test removal of a non-existing file'''
