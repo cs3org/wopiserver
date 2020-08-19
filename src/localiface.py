@@ -157,6 +157,23 @@ def writefile(_endpoint, filepath, _userid, content, islock=False):
     log.warning('msg="Error writing to file" filepath="%s" error="%s"' % (filepath, e))
     raise IOError(e)
 
+def openfileexcl(_endpoint, filepath, _userid, content):
+  if isinstance(content, str):
+    content = bytes(content, 'UTF-8')
+  size = len(content)
+  filepath = _getfilepath(filepath)
+  log.debug('msg="Invoking openfileexcl" filepath="%s" size="%d"' % (filepath, size))
+  tstart = time.time()
+  fd = 0
+  try:
+    fd = os.open(filepath, os.O_CREAT | os.O_EXCL)   # no O_BINARY in Linux
+    f = os.fdopen(fd, mode='wb')
+  except FileExistsError:
+    log.info('msg="File exists on write and islock flag requested" filepath="%s"' % filepath)
+    raise IOError('File exists and islock flag requested')
+  tend = time.time()
+  log.info('msg="openfileexcl completed, file left open" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
+
 
 def renamefile(_endpoint, origfilepath, newfilepath, _userid):
   '''Rename a file from origfilepath to newfilepath on behalf of the given userid.'''
