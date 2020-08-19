@@ -127,7 +127,9 @@ def statx(endpoint, filepath, userid, versioninv=0):
   log.info('msg="Invoked stat" filepath="%s"' % _getfilepath(filepath))
   if '[SUCCESS]' not in str(rc):
     raise IOError(str(rc).strip('\n'))
-  if 'retc=' in info:
+  if 'retc=2\\x00' in info:
+    raise IOError('No such file or directory')   # convert ENOENT
+  elif 'retc=' in info:
     raise IOError(info.strip('\n'))
   statxdata = info.split()
   if versioninv == 0:
