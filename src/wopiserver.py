@@ -587,10 +587,6 @@ def wopiCheckFileInfo(fileid):
     # populate metadata for this file
     filemd = {}
     filemd['BaseFileName'] = filemd['BreadcrumbDocName'] = os.path.basename(acctok['filename'])
-    if acctok['extlock']:
-      # an external lock was found: let's somehow tell the user that the file is forced readonly
-      # note that we strip the extension, otherwise Office would strip it (along with our comment!)
-      filemd['BreadcrumbDocName'] = os.path.splitext(filemd['BaseFileName'])[0] + ' (locked by another app)'
     furl = acctok['folderurl']
     # encode the path part as it is going to be an URL GET argument
     filemd['BreadcrumbFolderUrl'] = furl[:furl.find('=')+1] + urllib.parse.quote_plus(furl[furl.find('=')+1:])

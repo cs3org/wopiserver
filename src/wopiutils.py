@@ -84,40 +84,14 @@ def generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint)
     _ctx['log'].info('msg="Requested file not found" fileid="%s" error="%s"' % (fileid, e))
     raise
   # if write access is requested, probe whether there's already a lock file coming from Desktop applications
-  locked = False
-  filename = statInfo['filepath']
-  if viewmode == ViewMode.READ_WRITE:
-    try:
-      # probe LibreOffice
-      lock = next(_ctx['st'].readfile(endpoint, getLibreOfficeLockName(filename), userid))
-      if isinstance(lock, IOError) or 'WOPIServer' in str(lock):
-        # in case of read error, be optimistic and let it go (ENOENT would be fine, other cases have been
-        # observed in production and likely are false positives)
-        # also if a lock file is found but it is held by a WOPI Server, let it go: it will be sorted out
-        # by the collaborative editor via WOPI Lock calls
-        raise IOError
-      viewmode = ViewMode.READ_ONLY
-      locked = True
-      lock = str(lock)
-      _ctx['log'].warning('msg="Access downgraded to read-only because of an existing LibreOffice lock" ' \
-                          'filename="%s" holder="%s"' % (filename, lock.split(',')[1] if ',' in lock else lock))
-    except IOError:
-      try:
-        # same for MS Office, but don't try to go beyond stat
-        lockInfo = _ctx['st'].stat(endpoint, getMicrosoftOfficeLockName(filename), userid)
-        viewmode = ViewMode.READ_ONLY
-        locked = True
-        _ctx['log'].warning('msg="Access downgraded to read-only because of an existing Microsoft Office lock" ' \
-        	                  'filename="%s" mtime="%ld"' % (filename, lockInfo['mtime']))
-      except IOError:
-        pass
   exptime = int(time.time()) + _ctx['wopi'].tokenvalidity
-  acctok = jwt.encode({'userid': userid, 'filename': filename, 'username': username, 'viewmode': viewmode.value,
-                       'extlock': locked, 'folderurl': folderurl, 'exp': exptime, 'endpoint': endpoint}, \
+  acctok = jwt.encode({'userid': userid, 'filename': statInfo['filepath'], 'username': username, 'viewmode': viewmode.value,
+                       'folderurl': folderurl, 'exp': exptime, 'endpoint': endpoint}, \
                       _ctx['wopi'].wopisecret, algorithm='HS256').decode('UTF-8')
   _ctx['log'].info('msg="Access token generated" userid="%s" mode="%s" filename="%s" inode="%s" ' \
                    'mtime="%s" folderurl="%s" expiration="%d" token="%s"' % \
-                   (userid, viewmode, filename, statInfo['inode'], statInfo['mtime'], folderurl, exptime, acctok[-20:]))
+                   (userid, viewmode, statInfo['filepath'], statInfo['inode'], statInfo['mtime'], \
+                    folderurl, exptime, acctok[-20:]))
   # return the inode == fileid and the access token
   return statInfo['inode'], acctok
 
@@ -174,19 +148,18 @@ def retrieveWopiLock(fileid, operation, lock, acctok):
 
 def storeWopiLock(operation, lock, acctok):
   '''Stores the lock for a given file in the form of an encoded JSON string (cf. the access token)'''
-  lockcontent = {}
-  lockcontent['wopilock'] = lock
-  # append or overwrite the expiration time
-  lockcontent['exp'] = int(time.time()) + _ctx['wopi'].config.getint('general', 'wopilockexpiration')
   try:
-    # store the lock as encoded JWT: note that we do not use islock=True, because the WOPI specs require
-    # this operation to be essentially idempotent, so it should not fail if the lock was there or is being
-    # created by another thread.
-    s = jwt.encode(lockcontent, _ctx['wopi'].wopisecret, algorithm='HS256')
-    _ctx['st'].writefile(acctok['endpoint'], getLockName(acctok['filename']), acctok['userid'], s)
-    _ctx['log'].info('msg="%s" filename="%s" token="%s" lock="%s" result="success"' % \
-                     (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
-    # also create a LibreOffice-compatible lock file for interoperability purposes, making sure to
+    # first try to look for a MS Office lock
+    lockInfo = _ctx['st'].stat(acctok['endpoint'], getMicrosoftOfficeLockName(acctok['filename']), acctok['userid'])
+    _ctx['log'].warning('msg="WOPI lock denied because of an existing Microsoft Office lock" filename="%s" mtime="%ld"' % \
+                        (acctok['filename'], lockInfo['mtime']))
+    raise IOError('File exists and islock flag requested')
+  except IOError as e:
+    if 'File exists and islock flag requested' in str(e):
+      raise
+    #else any other error is ignored here, move on
+  try:
+    # then create a LibreOffice-compatible lock file for interoperability purposes, making sure to
     # not overwrite any existing or being created lock
     lockcontent = ',Collaborative Online Editor,%s,%s,WOPIServer;' % \
                   (_ctx['wopi'].wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())))
@@ -195,16 +168,36 @@ def storeWopiLock(operation, lock, acctok):
   except IOError as e:
     if 'File exists and islock flag requested' in str(e):
       # retrieve the LibreOffice-compatible lock just found
-      retrievedlock = next(_ctx['st'].readfile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid']))
-      if 'WOPIServer' not in retrievedlock.decode('utf-8'):
+      retrievedlock = next(_ctx['st'].readfile(acctok['endpoint'], \
+                                               getLibreOfficeLockName(acctok['filename']), acctok['userid'])).decode('utf-8')
+      if 'WOPIServer' not in retrievedlock:
         # the file was externally locked, make this call fail
+        _ctx['log'].warning('msg="WOPI lock denied because of an existing LibreOffice lock" filename="%s" holder="%s"' % \
+                            (acctok['filename'], retrievedlock.split(',')[1] if ',' in retrievedlock else retrievedlock))
         raise
-      #else it's our previous lock: all right, nothing else to do
+      #else it's our previous lock: all right, move on
     else:
       # any other error is logged and raised
-      _ctx['log'].warning('msg="%s" filename="%s" token="%s" lock="%s" result="unable to store lock" reason="%s"' % \
+      _ctx['log'].warning('msg="%s" filename="%s" token="%s" lock="%s" result="unable to store LibreOffice-compatible lock" reason="%s"' % \
                           (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
       raise
+  try:
+    # now store the lock as encoded JWT: note that we do not use islock=True, because the WOPI specs require
+    # this operation to be essentially idempotent, so it should not fail if the lock was there or is being
+    # created by another thread.
+    lockcontent = {}
+    lockcontent['wopilock'] = lock
+    # append or overwrite the expiration time
+    lockcontent['exp'] = int(time.time()) + _ctx['wopi'].config.getint('general', 'wopilockexpiration')
+    _ctx['st'].writefile(acctok['endpoint'], getLockName(acctok['filename']), acctok['userid'], \
+                         jwt.encode(lockcontent, _ctx['wopi'].wopisecret, algorithm='HS256'))
+    _ctx['log'].info('msg="%s" filename="%s" token="%s" lock="%s" result="success"' % \
+                     (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
+  except IOError as e:
+    # any other error is logged and raised
+    _ctx['log'].warning('msg="%s" filename="%s" token="%s" lock="%s" result="unable to store WOPI lock" reason="%s"' % \
+                        (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
+    raise
 
 
 def compareWopiLocks(lock1, lock2):
@@ -215,7 +208,7 @@ def compareWopiLocks(lock1, lock2):
   if lock1 == lock2:
     _ctx['log'].debug('msg="compareLocks" lock1="%s" lock2="%s" result="True"' % (lock1, lock2))
     return True
-  # before giving up, attempt to parse the lock as a JSON dictionary
+  # XXX before giving up, attempt to parse the lock as a JSON dictionary
   try:
     l1 = json.loads(lock1)
     try:
@@ -223,9 +216,6 @@ def compareWopiLocks(lock1, lock2):
       if 'S' in l1 and 'S' in l2:
         _ctx['log'].debug('msg="compareLocks" lock1="%s" lock2="%s" result="%r"' % (lock1, lock2, l1['S'] == l2['S']))
         return l1['S'] == l2['S']     # used by Word
-      #elif 'L' in lock1 and 'L' in lock2:
-      #  _ctx['log'].debug('msg="compareLocks" lock1="%s" lock2="%s" result="%r"' % (lock1, lock2, lock1['L'] == lock2['L']))
-      #  return lock1['L'] == lock2['L']     # used by Excel and PowerPoint
       _ctx['log'].debug('msg="compareLocks" lock1="%s" lock2="%s" result="False"' % (lock1, lock2))
       return False
     except (TypeError, ValueError):
