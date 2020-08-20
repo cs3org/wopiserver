@@ -23,7 +23,7 @@ class TestStorage(unittest.TestCase):
   def __init__(self, *args, **kwargs):
     '''One-off initialization of the test environment: create mock logging and import the library'''
     super(TestStorage, self).__init__(*args, **kwargs)
-    loghandler = logging.FileHandler('/tmp/wopiserver.log')
+    loghandler = logging.FileHandler('/tmp/wopiserver-test.log')
     loghandler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)s[%(process)d] %(levelname)-8s %(message)s',
                                               datefmt='%Y-%m-%dT%H:%M:%S'))
     log = logging.getLogger('wopiserver.test')
@@ -109,15 +109,26 @@ class TestStorage(unittest.TestCase):
       self.storage.statx(self.endpoint, self.homepath + '/hopefullynotexisting', self.userid)
     self.assertIn('No such file or directory', str(context.exception))
 
-  def test_readfile(self):
-    '''Writes a file and reads it back, validating that the content matches'''
-    content = b'bla\n'
+  def test_readfile_bin(self):
+    '''Writes a binary file and reads it back, validating that the content matches'''
+    content = b'bla'
     self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, content)
     content = ''
     for chunk in self.storage.readfile(self.endpoint, self.homepath + '/test.txt', self.userid):
       self.assertNotIsInstance(chunk, IOError, 'raised by storage.readfile')
       content += chunk.decode('utf-8')
-    self.assertEqual(content, 'bla\n', 'File test.txt should contain the string "bla"')
+    self.assertEqual(content, 'bla', 'File test.txt should contain the string "bla"')
+    self.storage.removefile(self.endpoint, self.homepath + '/test.txt', self.userid)
+
+  def test_readfile_text(self):
+    '''Writes a text file and reads it back, validating that the content matches'''
+    content = 'bla\n'
+    self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, content)
+    content = ''
+    for chunk in self.storage.readfile(self.endpoint, self.homepath + '/test.txt', self.userid):
+      self.assertNotIsInstance(chunk, IOError, 'raised by storage.readfile')
+      content += chunk.decode('utf-8')
+    self.assertEqual(content, 'bla\n', 'File test.txt should contain the text "bla\\n"')
     self.storage.removefile(self.endpoint, self.homepath + '/test.txt', self.userid)
 
   def test_read_nofile(self):
@@ -140,32 +151,32 @@ class TestStorage(unittest.TestCase):
     '''Test double write with the islock flag'''
     buf = b'ebe5tresbsrdthbrdhvdtr'
     try:
-      self.storage.removefile(self.endpoint, '/testoverwrite', self.userid)
+      self.storage.removefile(self.endpoint, self.homepath + '/testoverwrite', self.userid)
     except IOError:
       pass
-    self.storage.writefile(self.endpoint, '/testoverwrite', self.userid, buf, islock=True)
-    statInfo = self.storage.stat(self.endpoint, '/testoverwrite', self.userid)
+    self.storage.writefile(self.endpoint, self.homepath + '/testoverwrite', self.userid, buf, islock=True)
+    statInfo = self.storage.stat(self.endpoint, self.homepath + '/testoverwrite', self.userid)
     self.assertIsInstance(statInfo, dict)
     with self.assertRaises(IOError) as context:
-      self.storage.writefile(self.endpoint, '/testoverwrite', self.userid, buf, islock=True)
+      self.storage.writefile(self.endpoint, self.homepath + '/testoverwrite', self.userid, buf, islock=True)
     self.assertIn('File exists and islock flag requested', str(context.exception))
-    self.storage.removefile(self.endpoint, '/testoverwrite', self.userid)
+    self.storage.removefile(self.endpoint, self.homepath + '/testoverwrite', self.userid)
 
   def test_write_race(self):
     '''Test multithreaded double write with the islock flag'''
     buf = b'ebe5tresbsrdthbrdhvdtr'
     try:
-      self.storage.removefile(self.endpoint, '/testwriterace', self.userid)
+      self.storage.removefile(self.endpoint, self.homepath + '/testwriterace', self.userid)
     except IOError:
       pass
     t = Thread(target=self.storage.writefile,
-               args=[self.endpoint, '/testwriterace', self.userid, buf], kwargs={'islock': True})
+               args=[self.endpoint, self.homepath + '/testwriterace', self.userid, buf], kwargs={'islock': True})
     t.start()
     with self.assertRaises(IOError) as context:
-      self.storage.writefile(self.endpoint, '/testwriterace', self.userid, buf, islock=True)
+      self.storage.writefile(self.endpoint, self.homepath + '/testwriterace', self.userid, buf, islock=True)
     self.assertIn('File exists and islock flag requested', str(context.exception))
     t.join()
-    self.storage.removefile(self.endpoint, '/testwriterace', self.userid)
+    self.storage.removefile(self.endpoint, self.homepath + '/testwriterace', self.userid)
 
   def test_remove_nofile(self):
     '''Test removal of a non-existing file'''
