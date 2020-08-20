@@ -82,7 +82,7 @@ def stat(endpoint, fileid, userid, versioninv=0):
         'mtime': statInfo.info.mtime.seconds
         }
   ctx['log'].info('msg="Failed stat" fileid="%s" reason="%s"' % (fileid, statInfo.status.message))
-  raise IOError(statInfo.status.message)
+  raise IOError(statInfo.status.message if 'file not found' not in statInfo.status.message else 'No such file or directory')
 
 
 def statx(endpoint, fileid, userid, versioninv=0):
@@ -178,8 +178,10 @@ def writefile(_endpoint, filepath, userid, content, _noversion=0):
     The noversion flag is currently not supported.'''
   tstart = time.time()
   # prepare endpoint
-  content_size = str(len(content.decode('utf-8')))    # assuming that contents is a bytes object
-  metadata = types.Opaque(map={"Upload-Length": types.OpaqueEntry(decoder="plain", value=str.encode(content_size))})
+  if isinstance(content, str):
+    content = bytes(content, 'UTF-8')
+  size = str(len(content))
+  metadata = types.Opaque(map={"Upload-Length": types.OpaqueEntry(decoder="plain", value=str.encode(size))})
   req = cs3sp.InitiateFileUploadRequest(ref=cs3spr.Reference(path=filepath), opaque=metadata)
   initfileuploadres = ctx['cs3stub'].InitiateFileUpload(request=req, metadata=[('x-access-token', userid)])
   if initfileuploadres.status.code != cs3code.CODE_OK:
@@ -194,7 +196,7 @@ def writefile(_endpoint, filepath, userid, content, _noversion=0):
         'Tus-Resumable': '1.0.0',
         'x-access-token': userid,
         'File-Path': filepath,
-        'File-Size': content_size,
+        'Upload-Length': size,
         'X-Reva-Transfer': initfileuploadres.token    # needed if the uploads pass through the data gateway in reva
     }
     putres = requests.put(url=initfileuploadres.upload_endpoint, data=content, headers=headers)
