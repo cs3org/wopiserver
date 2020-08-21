@@ -210,8 +210,7 @@ def mdOpen():
       # this lock cannot be parsed, it likely follows a different lock scheme: force read-only mode
       WB.log.error('msg="Lock already held by another app" lock="%s"' % wopilock)
       filemd['UserCanWrite'] = False
-      if '(locked by another app)' not in filemd['BreadcrumbDocName']:
-        filemd['BreadcrumbDocName'] += ' (locked by another app)'
+      filemd['BreadcrumbDocName'] += ' (locked by another app)'
       wopilock = None
     except KeyError:
       WB.log.error('msg="Lock already held, but missing tokens?" lock="%s"' % wopilock)
