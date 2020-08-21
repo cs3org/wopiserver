@@ -235,8 +235,10 @@ def writefile(endpoint, filepath, userid, content, islock=False):
   tend = time.time()
   if not rc.ok:
     if islock and 'File exists' in rc.message:
-      log.info('msg="File exists on write and islock flag requested" filepath="%s"' % filepath)
+      # racing against an existing file
+      log.info('msg="File exists on write but islock flag requested" filepath="%s"' % filepath)
       raise IOError('File exists and islock flag requested')
+    # any other failure is reported as is
     log.warning('msg="Error opening the file for write" filepath="%s" error="%s"' % (filepath, rc.message.strip('\n')))
     raise IOError(rc.message.strip('\n'))
   # write the file. In a future implementation, we should find a way to only update the required chunks...

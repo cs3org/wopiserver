@@ -228,7 +228,7 @@ def handleException(e):
 @Wopi.app.route("/wopi", methods=['GET'])
 def index():
   '''Return a default index page with some user-friendly information about this service'''
-  Wopi.log.info('msg="Accessed index page" client="%s"' % flask.request.remote_addr)
+  Wopi.log.debug('msg="Accessed index page" client="%s"' % flask.request.remote_addr)
   return """
     <html><head><title>ScienceMesh WOPI Server</title></head>
     <body>
@@ -552,7 +552,10 @@ def cboxUnlock():
     if 'OnlyOffice Online Editor' in lock:
       # remove the LibreOffice-compatible lock file
       storage.removefile(endpoint, utils.getLibreOfficeLockName(filename), userid, 1)
-      Wopi.log.info('msg="cboxUnlock: successfully removed LibreOffice-compatible lock file" filename="%s"' % filename)
+      # and log this along with the previous lockid for reference
+      lockid = int(lock.split(';\n')[1].strip(';'))
+      Wopi.log.info('msg="cboxUnlock: successfully removed LibreOffice-compatible lock file" filename="%s" id="%d"' % \
+                    (filename, lockid))
       return 'OK', http.client.OK
     # else another lock exists
     Wopi.log.info('msg="cboxUnlock: lock file held by another application" filename="%s" holder="%s"' % \

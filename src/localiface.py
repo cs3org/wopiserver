@@ -135,7 +135,7 @@ def writefile(_endpoint, filepath, _userid, content, islock=False):
       fd = os.open(filepath, os.O_CREAT | os.O_EXCL)   # no O_BINARY in Linux
       f = os.fdopen(fd, mode='wb')
     except FileExistsError:
-      log.info('msg="File exists on write and islock flag requested" filepath="%s"' % filepath)
+      log.info('msg="File exists on write but islock flag requested" filepath="%s"' % filepath)
       raise IOError('File exists and islock flag requested')
   else:
     try:

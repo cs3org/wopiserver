@@ -151,8 +151,8 @@ def storeWopiLock(operation, lock, acctok):
   try:
     # first try to look for a MS Office lock
     lockInfo = _ctx['st'].stat(acctok['endpoint'], getMicrosoftOfficeLockName(acctok['filename']), acctok['userid'])
-    _ctx['log'].warning('msg="WOPI lock denied because of an existing Microsoft Office lock" filename="%s" mtime="%ld"' % \
-                        (acctok['filename'], lockInfo['mtime']))
+    _ctx['log'].info('msg="WOPI lock denied because of an existing Microsoft Office lock" filename="%s" mtime="%ld"' % \
+                     (acctok['filename'], lockInfo['mtime']))
     raise IOError('File exists and islock flag requested')
   except IOError as e:
     if 'File exists and islock flag requested' in str(e):
@@ -172,14 +172,14 @@ def storeWopiLock(operation, lock, acctok):
                                                getLibreOfficeLockName(acctok['filename']), acctok['userid'])).decode('utf-8')
       if 'WOPIServer' not in retrievedlock:
         # the file was externally locked, make this call fail
-        _ctx['log'].warning('msg="WOPI lock denied because of an existing LibreOffice lock" filename="%s" holder="%s"' % \
-                            (acctok['filename'], retrievedlock.split(',')[1] if ',' in retrievedlock else retrievedlock))
+        _ctx['log'].info('msg="WOPI lock denied because of an existing LibreOffice lock" filename="%s" holder="%s"' % \
+                         (acctok['filename'], retrievedlock.split(',')[1] if ',' in retrievedlock else retrievedlock))
         raise
       #else it's our previous lock: all right, move on
     else:
       # any other error is logged and raised
-      _ctx['log'].warning('msg="%s" filename="%s" token="%s" lock="%s" result="unable to store LibreOffice-compatible lock" reason="%s"' % \
-                          (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
+      _ctx['log'].error('msg="%s: unable to store LibreOffice-compatible lock" filename="%s" token="%s" lock="%s" reason="%s"' % \
+                        (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
       raise
   try:
     # now store the lock as encoded JWT: note that we do not use islock=True, because the WOPI specs require
@@ -195,8 +195,8 @@ def storeWopiLock(operation, lock, acctok):
                      (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
   except IOError as e:
     # any other error is logged and raised
-    _ctx['log'].warning('msg="%s" filename="%s" token="%s" lock="%s" result="unable to store WOPI lock" reason="%s"' % \
-                        (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
+    _ctx['log'].error('msg="%s: unable to store WOPI lock" filename="%s" token="%s" lock="%s" reason="%s"' % \
+                      (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
     raise
 
 
