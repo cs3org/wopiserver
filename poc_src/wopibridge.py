@@ -244,8 +244,9 @@ def mdOpen():
     if res.status_code != http.client.FOUND:
       raise ValueError(res.status_code)
     # we got the hash of the document just created as a redirected URL, store it in our WOPI lock structure
-    wopilock = {'docid': urllib.parse.urlsplit(res.next.url).path, \
-                'filename': filemd['BaseFileName'], \
+    wopilock = {'docid': '/' + urllib.parse.urlsplit(res.next.url).path.split('/')[-1],
+                'filename': filemd['BaseFileName'],
+                'ispresentation': mddoc.decode().find('---\ntitle:') == 0,
                 'tokens': [acctok[-20:]]
                }
     WB.log.info('msg="Pushed document to CodiMD" url="%s" token="%s"' % (wopilock['docid'], acctok[-20:]))
