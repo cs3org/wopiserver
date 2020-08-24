@@ -55,12 +55,17 @@ class WB:
     <script src="https://code.jquery.com/jquery-latest.min.js"></script>
     <script>
       window.onbeforeunload = function() {
-        $.get("%s/close",
-          {WOPISrc: '%s',
-           access_token: '%s',
-           save: '%s'},
-          function(data) {}
-        );
+        try {
+          $.get("%s/close",
+            {WOPISrc: '%s',
+             access_token: '%s',
+             save: '%s'},
+            function(data) {}
+          );
+        }
+        catch(err) {
+          window.alert('Save to CERNBox failed: ' + err.message);
+        }
       };
     </script>
     </head>
