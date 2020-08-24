@@ -275,7 +275,10 @@ def mdOpen():
     redirecturl = WB.codimdexturl + wopilock['docid'] + '?both&'
   else:
     # read-only mode, in this case the redirection url is created in publish mode
-    redirecturl = WB.codimdexturl + wopilock['docid'] + '/publish?'
+    if wopilock['ispresentation']:
+      redirecturl = WB.codimdexturl + wopilock['docid'] + '/slide'
+    else:
+      redirecturl = WB.codimdexturl + wopilock['docid'] + '/publish?'
   # append displayName (again this is an extended feature of CodiMD)
   redirecturl += 'displayName=' + urllib.parse.quote_plus(filemd['UserFriendlyName'])
 
