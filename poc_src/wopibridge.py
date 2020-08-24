@@ -52,7 +52,7 @@ class WB:
         margin: 0; padding: 0; height: 100%%; overflow: hidden;
       }
     </style>
-    <script src="http://code.jquery.com/jquery-latest.min.js"></script>
+    <script src="https://code.jquery.com/jquery-latest.min.js"></script>
     <script>
       window.onbeforeunload = function() {
         $.get("%s/close",
