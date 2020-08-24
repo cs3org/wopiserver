@@ -356,7 +356,7 @@ def mdClose():
         }, data=bundlefile, verify=False)
 
   if res.status_code == http.client.OK:
-    WB.log.info('msg="Save completed" result="%s"' % res.content)
+    WB.log.debug('msg="Save completed successfully"')
   else:
     WB.log.warning('msg="Calling WOPI PutFile/PutRelative failed" url="%s" response="%s"' % (wopiSrc, res.status_code))
     return 'Error saving the file', res.status_code
