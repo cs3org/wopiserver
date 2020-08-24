@@ -105,7 +105,7 @@ class WB:
   @classmethod
   def run(cls):
     '''Runs the Flask app in unsecure mode. Secure https mode is to be provided by the infrastructure (k8s ingress, nginx...)'''
-    cls.log.info('msg="WOPI Bridge starting in unsecure mode" url="%s" proxied="%s"' % (cls.wopibridgeurl, cls.proxied))
+    cls.log.info('msg="WOPI Bridge starting in unsecure/embedded mode" url="%s" proxied="%s"' % (cls.wopibridgeurl, cls.proxied))
     cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=True)
 
 
@@ -115,7 +115,7 @@ class WB:
 @WB.app.route("/", methods=['GET'])
 def index():
   '''Return a default index page with some user-friendly information about this service'''
-  WB.log.info('msg="Accessed index page" client="%s"' % flask.request.remote_addr)
+  #WB.log.debug('msg="Accessed index page" client="%s"' % flask.request.remote_addr)
   return """
     <html><head><title>ScienceMesh WOPI Bridge</title></head>
     <body>
@@ -274,15 +274,15 @@ def mdOpen():
     # create the external redirect URL to be returned to the client
     redirecturl = WB.codimdexturl + wopilock['docid'] + '?both&'
   else:
-    # read-only mode, in this case the redirection url is created in publish mode
+    # read-only mode, in this case the redirection url is created in publish mode or slide mode
     if wopilock['ispresentation']:
-      redirecturl = WB.codimdexturl + wopilock['docid'] + '/slide'
+      redirecturl = WB.codimdexturl + wopilock['docid'] + '/slide&'
     else:
       redirecturl = WB.codimdexturl + wopilock['docid'] + '/publish?'
   # append displayName (again this is an extended feature of CodiMD)
   redirecturl += 'displayName=' + urllib.parse.quote_plus(filemd['UserFriendlyName'])
 
-  WB.log.debug('msg="Redirecting client to CodiMD" redirecturl="%s"' % redirecturl)
+  WB.log.info('msg="Redirecting client to CodiMD" redirecturl="%s"' % redirecturl)
   # generate a hook for close and return an iframe to the client
   resp = flask.Response(WB.frame_page_templated_html % (filemd['BreadcrumbDocName'], \
                         WB.wopibridgeurl, wopiSrc, acctok, filemd['UserCanWrite'], redirecturl))
