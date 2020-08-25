@@ -56,9 +56,9 @@ class WB:
       window.addEventListener("unload", function close() {
         try {
           navigator.sendBeacon("%s/close",
-            {WOPISrc: '%s',
-             access_token: '%s',
-             save: '%s'});
+            { WOPISrc: '%s',
+              access_token: '%s',
+              save: '%s'});
         }
         catch(err) {
           window.alert('Save to CERNBox failed: ' + err.message);
