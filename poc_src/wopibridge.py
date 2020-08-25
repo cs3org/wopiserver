@@ -52,21 +52,18 @@ class WB:
         margin: 0; padding: 0; height: 100%%; overflow: hidden;
       }
     </style>
-    <script src="https://code.jquery.com/jquery-latest.min.js"></script>
     <script>
-      window.onbeforeunload = function() {
+      window.addEventListener("unload", function close() {
         try {
-          $.get("%s/close",
+          navigator.sendBeacon("%s/close",
             {WOPISrc: '%s',
              access_token: '%s',
-             save: '%s'},
-            function(data) {}
-          );
+             save: '%s'});
         }
         catch(err) {
           window.alert('Save to CERNBox failed: ' + err.message);
         }
-      };
+      });
     </script>
     </head>
     <body>
@@ -302,7 +299,7 @@ def mdSave(noteid):
   return 'WIP', http.client.NOT_IMPLEMENTED
 
 
-@WB.app.route("/close", methods=['GET'])
+@WB.app.route("/close", methods=['POST'])
 def mdClose():
   '''Close a MD doc by saving it back to the previously given WOPI Src and using the provided access token'''
   try:
@@ -373,8 +370,7 @@ def mdClose():
     del WB.openfiles[wopilock['docid']]
 
     # as we're the last, delete on CodiMD:
-    # TODO the API is still missing for the note
-    # delete all attachments if bundle
+    # TODO the API is still missing, for now delete all attachments if bundle
     if bundlefile:
       _deleteattachments(mddoc.decode(), WB.codimdstore)
 
