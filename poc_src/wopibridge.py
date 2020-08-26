@@ -250,7 +250,7 @@ def mdOpen():
     # we got the hash of the document just created as a redirected URL, store it in our WOPI lock structure
     wopilock = {'docid': '/' + urllib.parse.urlsplit(res.next.url).path.split('/')[-1],
                 'filename': filemd['BaseFileName'],
-                'ispresentation': mddoc.decode().find('---\ntitle:') == 0,
+                'slide': mddoc.decode().find('---\ntitle:') == 0,
                 'tokens': [acctok[-20:]]
                }
     WB.log.info('msg="Pushed document to CodiMD" url="%s" token="%s"' % (wopilock['docid'], acctok[-20:]))
@@ -278,9 +278,9 @@ def mdOpen():
     # create the external redirect URL to be returned to the client
     redirecturl = WB.codimdexturl + wopilock['docid'] + '?both&'
   else:
-    # read-only mode, in this case the redirection url is created in publish mode or slide mode
-    if wopilock['ispresentation']:
-      redirecturl = WB.codimdexturl + wopilock['docid'] + '/slide&'
+    # read-only mode: in this case redirect to publish mode or slide mode depending on the content
+    if wopilock['slide']:
+      redirecturl = WB.codimdexturl + wopilock['docid'] + '/slide?'
     else:
       redirecturl = WB.codimdexturl + wopilock['docid'] + '/publish?'
   # append displayName (again this is an extended feature of CodiMD)
