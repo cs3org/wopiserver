@@ -53,8 +53,8 @@ def _eosargs(userid, atomicwrite=0, bookingsize=0):
       raise ValueError
     ruid = int(userid[0])
     rgid = int(userid[1])
-    return '?eos.ruid=' + str(ruid) + '&eos.rgid=' + str(rgid) + ('&eos.atomic=1' if atomicwrite else '') + \
-            (('&eos.bookingsize='+str(bookingsize)) if bookingsize else '') + '&eos.app=wopi'
+    return '?eos.ruid=%d&eos.rgid=%d' % (ruid, rgid) + '&eos.app=' + ('fuse::wopi' if not atomicwrite else 'wopi') + \
+            (('&eos.bookingsize='+str(bookingsize)) if bookingsize else '')
   except (ValueError, IndexError):
     raise ValueError('Only Unix-based userid is supported with xrootd storage')
 
@@ -229,8 +229,7 @@ def writefile(endpoint, filepath, userid, content, islock=False):
   log.debug('msg="Invoking writeFile" filepath="%s" userid="%s" size="%d" islock="%s"' % (filepath, userid, size, islock))
   f = XrdClient.File()
   tstart = time.time()
-  rc, statInfo_unused = f.open(_geturlfor(endpoint) + '/' + homepath + filepath + _eosargs(userid, not islock, size) + \
-                               ('&sys.versioning=0' if islock else ''), \
+  rc, statInfo_unused = f.open(_geturlfor(endpoint) + '/' + homepath + filepath + _eosargs(userid, not islock, size),
                                OpenFlags.NEW if islock else OpenFlags.DELETE)
   tend = time.time()
   if not rc.ok:
