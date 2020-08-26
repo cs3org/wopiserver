@@ -4,7 +4,7 @@
 Name:      cernbox-wopi-server
 Summary:   A WOPI server to support Office online suites for the ScienceMesh IOP
 Version:   %{_version}
-Release:   1%{?dist}
+Release:   0%{?dist}
 License:   GPLv3
 Buildroot: %{_tmppath}/%{name}-buildroot
 Group:     CERN-IT/ST
@@ -79,6 +79,11 @@ touch /etc/wopi/iopsecret
 %_python_lib/*
 
 %changelog
+* Wed Aug 26 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.4
+- Make CS3-based uploads work with tus and through gateway
+- Fixed race condition in cboxLock
+- Delay lock checks when needed (i.e. in WOPI LOCK), not
+  at access token creation time
 * Tue Aug  4 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.3
 - Fixed CS3-based workflows: the wopiopen.py tool and the
   open-file-in-app-provider reva command both support
