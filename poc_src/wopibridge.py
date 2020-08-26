@@ -56,9 +56,11 @@ class WB:
       window.addEventListener("unload", function close() {
         try {
           navigator.sendBeacon("%s/close",
-            { WOPISrc: '%s',
+            new Blob([JSON.stringify({
+              WOPISrc: '%s',
               access_token: '%s',
-              save: '%s'});
+              save: '%s'})], { type: 'text/plain' })
+          );
         }
         catch(err) {
           window.alert('Save to CERNBox failed: ' + err.message);
@@ -303,9 +305,10 @@ def mdSave(noteid):
 def mdClose():
   '''Close a MD doc by saving it back to the previously given WOPI Src and using the provided access token'''
   try:
-    acctok = flask.request.args['access_token']
-    wopiSrc = flask.request.args['WOPISrc']
-    if flask.request.args['save'] == 'False':
+    close_payload = flask.request.get_json(force=True)
+    acctok = close_payload['access_token']
+    wopiSrc = close_payload['WOPISrc']
+    if close_payload['save'] == 'False':
       WB.log.info('msg="Close called" save="False" client="%s" token="%s"' % \
                   (flask.request.remote_addr, acctok[-20:]))
       # TODO delete content from CodiMD - API is missing
