@@ -352,7 +352,7 @@ def mdClose():
     res = requests.post(url, headers={
         'X-WOPI-Lock': json.dumps(wopilock),
         'X-WOPI-Override': 'PUT_RELATIVE',
-        'X-WOPI-SuggestedTarget': wopilock['filename'] + 'x'      # do not overwrite an existing file
+        'X-WOPI-SuggestedTarget': os.path.splitext(wopilock['filename'])[0] + '.zmd'    # do not overwrite an existing file
         }, data=bundlefile, verify=False)
 
   if res.status_code == http.client.OK:
