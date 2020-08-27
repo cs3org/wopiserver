@@ -235,7 +235,7 @@ def writefile(endpoint, filepath, userid, content, islock=False):
   if not rc.ok:
     if islock and 'File exists' in rc.message:
       # racing against an existing file
-      log.info('msg="File exists on write but islock flag requested" filepath="%s"' % filepath)
+      log.info('msg="File exists on write but islock flag requested" filepath="%s" error="%s"' % (filepath, rc.message.strip('\n')))
       raise IOError('File exists and islock flag requested')
     # any other failure is reported as is
     log.warning('msg="Error opening the file for write" filepath="%s" error="%s"' % (filepath, rc.message.strip('\n')))
