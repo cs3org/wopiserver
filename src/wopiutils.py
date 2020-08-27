@@ -229,13 +229,16 @@ def compareWopiLocks(lock1, lock2):
     return False
 
 
-def makeConflictResponse(operation, retrievedlock, lock, oldlock, filename):
+def makeConflictResponse(operation, retrievedlock, lock, oldlock, filename, reason=None):
   '''Generates and logs an HTTP 401 response in case of locks conflict'''
   resp = flask.Response()
   resp.headers['X-WOPI-Lock'] = retrievedlock if retrievedlock else ''
+  if reason:
+    resp.headers['X-WOPI-LockFailureReason'] = reason
   resp.status_code = http.client.CONFLICT
-  _ctx['log'].info('msg="%s" filename="%s" token="%s", lock="%s" oldLock="%s" retrievedLock="%s" result="conflict"' % \
-                   (operation.title(), filename, flask.request.args['access_token'][-20:], lock, oldlock, retrievedlock))
+  _ctx['log'].info('msg="%s" filename="%s" token="%s" lock="%s" oldLock="%s" retrievedLock="%s" %s' % \
+                   (operation.title(), filename, flask.request.args['access_token'][-20:], \
+                    lock, oldlock, retrievedlock, ('reason="%s"' % reason if reason else 'result="conflict"')))
   return resp
 
 
