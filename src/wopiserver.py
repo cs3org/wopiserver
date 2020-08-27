@@ -741,7 +741,8 @@ def wopiLock(fileid, reqheaders, acctok):
   except IOError as e:
     if 'File exists and islock flag requested' in str(e):
       # this file was already locked externally: storeWopiLock looks at LibreOffice-compatible locks
-      return utils.makeConflictResponse(op, 'External App', lock, oldLock, acctok['filename'])
+      return utils.makeConflictResponse(op, 'External App', lock, oldLock, acctok['filename'], \
+                                        'The file was locked by another application')
     # any other failure
     return str(e), http.client.INTERNAL_SERVER_ERROR
   if not retrievedLock:
@@ -789,7 +790,8 @@ def wopiGetLock(fileid, _reqheaders_unused, acctok):
   # we might want to check if a non-WOPI lock exists for this file:
   #try:
   #  lockstat = storage.stat(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), acctok['userid'])
-  #  return utils.makeConflictResponse('GetLock', 'Locked by an external application', '', '', acctok['filename'])
+  #  return utils.makeConflictResponse('GetLock', 'External App', '', '', acctok['filename'], \
+  #                                    'The file was locked by another application')
   #except IOError:
   #  pass
   # however implications have to be properly understood as we've seen cases of locks left behind
@@ -842,7 +844,7 @@ def wopiPutRelative(fileid, reqheaders, acctok):
     except IOError:
       pass
     if fileExists and (not overwriteTarget or retrievedLock):
-      return utils.makeConflictResponse('PUTRELATIVE', retrievedLock, '', '', relTarget)
+      return utils.makeConflictResponse('PUTRELATIVE', retrievedLock, '', '', relTarget, 'Target file already exists')
     # else we can use the relative target
     targetName = relTarget
   # either way, we now have a targetName to save the file: attempt to do so
@@ -989,7 +991,8 @@ def wopiPutFile(fileid):
     lock = flask.request.headers['X-WOPI-Lock']
     retrievedLock = utils.retrieveWopiLock(fileid, 'PUTFILE', lock, acctok)
     if retrievedLock is not None and not utils.compareWopiLocks(retrievedLock, lock):
-      return utils.makeConflictResponse('PUTFILE', retrievedLock, lock, '', acctok['filename'])
+      return utils.makeConflictResponse('PUTFILE', retrievedLock, lock, '', acctok['filename'], \
+                                        'Cannot overwrite file locked by another application')
     # OK, we can save the file now
     Wopi.log.info('msg="PutFile" user="%s" filename="%s" fileid="%s" action="edit" token="%s"' % \
                   (acctok['userid'], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
