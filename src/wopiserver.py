@@ -931,7 +931,7 @@ def wopiCreateNewFile(fileid, acctok):
   except IOError:
     # indeed the file did not exist, so we write it for the first time
     utils.storeWopiFile(flask.request, acctok, LASTSAVETIMEKEY)
-    Wopi.log.info('msg="File successfully written" action="editnew" user="%s" filename="%s" token="%s"' % \
+    Wopi.log.info('msg="File stored successfully" action="editnew" user="%s" filename="%s" token="%s"' % \
                   (acctok['userid'], acctok['filename'], flask.request.args['access_token']))
     # and we keep track of it as an open file with timestamp = Epoch, despite not having any lock yet.
     # XXX this is to work around an issue with concurrent editing of newly created files (cf. cboxOpen)
@@ -1034,7 +1034,7 @@ def wopiPutFile(fileid):
     # but the previous check still gives the opportunity of a race condition. We just live with it.
     # Anyhow, the EFSS should support versioning for such cases.
     utils.storeWopiFile(flask.request, acctok, LASTSAVETIMEKEY)
-    Wopi.log.info('msg="File successfully written" action="edit" user="%s" filename="%s" token="%s"' % \
+    Wopi.log.info('msg="File stored successfully" action="edit" user="%s" filename="%s" token="%s"' % \
                   (acctok['userid'], acctok['filename'], flask.request.args['access_token'][-20:]))
     return 'OK', http.client.OK
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
