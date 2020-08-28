@@ -133,11 +133,14 @@ def retrieveWopiLock(fileid, operation, lock, acctok):
       pass
     # also remove the LibreOffice-compatible lock file, if it has the expected signature - cf. storeWopiLock()
     try:
-      lock = str(next(_ctx['st'].readfile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'])))
-      if 'WOPIServer' in lock:
+      lolock = next(_ctx['st'].readfile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid']))
+      if isinstance(lolock, IOError):
+        raise lolock
+      if 'WOPIServer' in lolock.decode('utf-8'):
         _ctx['st'].removefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], 1)
-    except IOError as e:
-      _ctx['log'].warning('msg="Unable to delete the LibreOffice-compatible lock file" error="%s"' % e)
+    except (IOError, StopIteration) as e:
+      _ctx['log'].warning('msg="Unable to delete the LibreOffice-compatible lock file" error="%s"' % \
+                          ('empty lock' if isinstance(e, StopIteration) else str(e)))
     return None
   _ctx['log'].info('msg="%s" user="%s" filename="%s" fileid="%s" lock="%s" retrievedLock="%s" expTime="%s" token="%s"' % \
                    (operation.title(), acctok['userid'], acctok['filename'], fileid, lock,
@@ -168,8 +171,14 @@ def storeWopiLock(operation, lock, acctok):
   except IOError as e:
     if 'File exists and islock flag requested' in str(e):
       # retrieve the LibreOffice-compatible lock just found
-      retrievedlock = next(_ctx['st'].readfile(acctok['endpoint'], \
-                                               getLibreOfficeLockName(acctok['filename']), acctok['userid'])).decode('utf-8')
+      try:
+        retrievedlock = next(_ctx['st'].readfile(acctok['endpoint'], \
+                                                 getLibreOfficeLockName(acctok['filename']), acctok['userid']))
+        if isinstance(retrievedlock, IOError):
+          raise retrievedlock
+        retrievedlock = retrievedlock.decode('utf-8')
+      except (IOError, StopIteration) as e:
+        retrievedlock = ''   # could not read the lock, maybe it's empty: still, deny WOPI lock
       if 'WOPIServer' not in retrievedlock:
         # the file was externally locked, make this call fail
         _ctx['log'].info('msg="WOPI lock denied because of an existing LibreOffice lock" filename="%s" holder="%s"' % \

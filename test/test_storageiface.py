@@ -131,6 +131,16 @@ class TestStorage(unittest.TestCase):
     self.assertEqual(content, 'bla\n', 'File test.txt should contain the text "bla\\n"')
     self.storage.removefile(self.endpoint, self.homepath + '/test.txt', self.userid)
 
+  def test_readfile_empty(self):
+    '''Writes an empty file and reads it back, validating that the read does not fail'''
+    content = ''
+    self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, content)
+    for chunk in self.storage.readfile(self.endpoint, self.homepath + '/test.txt', self.userid):
+      self.assertNotIsInstance(chunk, IOError, 'raised by storage.readfile')
+      content += chunk.decode('utf-8')
+    self.assertEqual(content, '', 'File test.txt should be empty')
+    self.storage.removefile(self.endpoint, self.homepath + '/test.txt', self.userid)
+
   def test_read_nofile(self):
     '''Test reading of a non-existing file'''
     readex = next(self.storage.readfile(self.endpoint, self.homepath + '/hopefullynotexisting', self.userid))

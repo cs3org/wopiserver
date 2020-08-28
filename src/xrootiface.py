@@ -214,7 +214,7 @@ def readfile(endpoint, filepath, userid):
       log.info('msg="File open for read" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
       chunksize = config.getint('io', 'chunksize')
       rc, statInfo = f.stat()
-      chunksize = min(chunksize, statInfo.size-1)
+      chunksize = min(chunksize, statInfo.size)
       # the actual read is buffered and managed by the Flask server
       for chunk in f.readchunks(offset=0, chunksize=chunksize):
         yield chunk
