@@ -160,16 +160,7 @@ class Wopi:
       except Exception as e:
         cls.log.warning('msg="Failed to initialize Collabora Online endpoints" error="%s"' % e)
 
-    # The future-supported Slides end-point
-    slides = cls.config.get('general', 'slidesurl', fallback=None)
-    if slides:
-      cls.ENDPOINTS['.slide'] = {}
-      cls.ENDPOINTS['.slide']['view'] = slides + '?edit=0'
-      cls.ENDPOINTS['.slide']['edit'] = slides + '?edit=1'
-      cls.ENDPOINTS['.slide']['new'] = slides + '?edit=1'
-      cls.log.info('msg="Slides endpoints successfully configured"')
-
-    # The future-supported CodiMD end-point
+    # The CodiMD end-point
     codimd = cls.config.get('general', 'codimdurl', fallback=None)
     if codimd:
       cls.ENDPOINTS['.md'] = {}

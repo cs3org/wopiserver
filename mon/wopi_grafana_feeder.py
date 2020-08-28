@@ -62,7 +62,6 @@ def get_wopi_metrics(data):
       openfiles['md'] = {}
       openfiles['zmd'] = {}
       openfiles['txt'] = {}
-      openfiles['slide'] = {}
       wrfiles = {}
       wrfiles['docx'] = {}
       wrfiles['xlsx'] = {}
@@ -73,7 +72,6 @@ def get_wopi_metrics(data):
       wrfiles['md'] = {}
       wrfiles['zmd'] = {}
       wrfiles['txt'] = {}
-      wrfiles['slide'] = {}
       collab = 0
     try:
       if ' ERROR ' in line:
