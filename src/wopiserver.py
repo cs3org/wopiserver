@@ -485,8 +485,8 @@ def cboxLock():
       #  CERNBOX-1279: another thread was faster in creating the lock, but it's still in flight (StopIteration = no content)!
       Wopi.log.warning('msg="cboxLock: detected race condition, attempting to re-read LibreOffice-compatible lock" ' \
                        'filename="%s" reason="%s"' % (filename, 'empty lock' if isinstance(e, StopIteration) else str(e)))
-      # let's just try again
-      time.sleep(2)
+      # let's just try again in a short while (not too short though: 2 secs were not enough in testing)
+      time.sleep(5)
       try:
         lock = next(storage.readfile(endpoint, utils.getLibreOfficeLockName(filename), userid))
         if isinstance(lock, IOError):
