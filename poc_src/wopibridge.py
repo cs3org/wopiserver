@@ -83,10 +83,6 @@ class WB:
       loghandler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)s[%(process)d] %(levelname)-8s %(message)s',
                                                 datefmt='%Y-%m-%dT%H:%M:%S'))
       cls.log.addHandler(loghandler)
-      # read the configuration - not needed for now
-      #cls.config = configparser.ConfigParser()
-      #cls.config.read_file(open('/etc/wopi/codimdtowopi.defaults.conf'))
-      #cls.config.read('/etc/wopi/codimdtowopi.conf')
       # prepare the Flask web app
       cls.port = 8000
       cls.log.setLevel(cls.loglevels['Debug'])
@@ -293,11 +289,11 @@ def mdOpen():
   return resp
 
 
-@WB.app.route("/<noteid>/save", methods=['GET'])
-def mdSave(noteid):
+@WB.app.route("/save", methods=['GET'])
+def mdSave():
   '''Saves an MD doc given a note id and its WOPI context'''
-  acctok = flask.request.args['access_token']
   wopiSrc = flask.request.args['WOPISrc']
+  acctok = flask.request.args['access_token']
   return 'WIP', http.client.NOT_IMPLEMENTED
 
 
