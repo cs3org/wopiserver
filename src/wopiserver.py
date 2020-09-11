@@ -206,12 +206,12 @@ class Wopi:
 # The Flask web application starts here
 #
 @Wopi.app.errorhandler(Exception)
-def handleException(e):
+def handleException(ex):
   '''Generic method to log any uncaught exception'''
   if 'favicon.ico' in flask.request.url:
     # ignore harmless favicon requests
     return 'Not exist', http.client.NOT_FOUND
-  return utils.logGeneralExceptionAndReturn(e, flask.request)
+  return utils.logGeneralExceptionAndReturn(ex, flask.request)
 
 
 @Wopi.app.route("/", methods=['GET'])
@@ -451,8 +451,10 @@ def cboxLock():
       # extract the creation timestamp on the pre-existing lock if any (see below how the lock is constructed)
       lockid = int(lock.split(';\n')[1].strip(';'))
     except (IndexError, ValueError):
-      # lock got corrupted and did not contain the extra creation timestamp: current time will be returned
-      lockid = int(time.time())
+      # lock got corrupted and did not contain the extra creation timestamp
+      Wopi.log.info('msg="cboxLock: found existing LibreOffice lock" filename="%s" holder="%s" lockmtime="%ld" request="query"' % \
+                    (filename, lock.split(',')[1] if ',' in lock else lock, lockstat['mtime']))
+      return 'Previous lock exists', http.client.CONFLICT
     Wopi.log.info('msg="cboxLock: lock file still valid" filename="%s" id="%d" lockmtime="%ld" request="query"' % \
                   (filename, lockid, lockstat['mtime']))
     return str(lockid), http.client.OK
