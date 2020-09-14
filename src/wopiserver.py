@@ -612,13 +612,11 @@ def wopiCheckFileInfo(fileid):
     if acctok['viewmode'] in (utils.ViewMode.READ_ONLY, utils.ViewMode.READ_WRITE):
       filemd['DownloadUrl'] = '%s?access_token=%s' % \
                               (Wopi.config.get('general', 'downloadurl'), flask.request.args['access_token'])
-    try:
+    # the following properties are only used by MS Office Online
+    if fExt in ['.docx', '.xlsx', '.pptx']:
       # TODO once the endpoints are managed by Reva, these have to be provided in the initial /open call
       filemd['HostViewUrl'] = '%s&%s' % (Wopi.ENDPOINTS[fExt]['view'], wopiSrc)
       filemd['HostEditUrl'] = '%s&%s' % (Wopi.ENDPOINTS[fExt]['edit'], wopiSrc)
-    except KeyError:
-      # if the doc type is unknown, don't provide those URLs but still return the other metadata
-      pass
     # the following is to enable the 'Edit in Word/Excel/PowerPoint' (desktop) action (probably broken)
     try:
       filemd['ClientUrl'] = Wopi.config.get('general', 'webdavurl') + '/' + acctok['filename']
