@@ -30,7 +30,7 @@ services:
       - CMD_ALLOW_ANONYMOUS_VIEWS=true
       - CMD_EMAIL=false
       - CMD_ALLOW_EMAIL_REGISTER=false
-      - CMD_SAVE_HOOK=http://codimd-wopi.codinet:8000
+      - CMD_SAVE_WEBHOOK=http://codimd-wopi.codinet:8000/save
     depends_on:
       - database
     ports:
