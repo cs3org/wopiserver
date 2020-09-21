@@ -4,7 +4,7 @@
 # Run with:     DBPWD='yourdbpassword' HOST='http://yourserver' docker-compose -f codimd.yaml up -d
 #
 
-version: "3"
+version: "3.1"
 services:
   database:
     image: postgres:11.6-alpine
@@ -30,11 +30,16 @@ services:
       - CMD_ALLOW_ANONYMOUS_VIEWS=true
       - CMD_EMAIL=false
       - CMD_ALLOW_EMAIL_REGISTER=false
+      - CMD_USESSL=true
       - CMD_SAVE_WEBHOOK=http://codimd-wopi.codinet:8000/save
     depends_on:
       - database
     ports:
       - 3000:3000
+    secrets:
+      - cert.pem
+      - key.pem
+      - dhparam.pem
     network_mode: codinet
     volumes:
       - upload-data:/home/hackmd/app/public/uploads
@@ -53,12 +58,15 @@ services:
       - CODIMD_STORAGE_PATH=/mnt/codimd_storage
     depends_on:
       - frontend
-    network_mode: codinet
-    restart: always
     ports:
       - 8000:8000
+    secrets:
+      - cert.pem
+      - key.pem
     volumes:
       - upload-data:/mnt/codimd_storage
+    network_mode: codinet
+    restart: always
     healthcheck:
       test: ["CMD", "curl", "--insecure", "http://localhost:8000"]
       interval: 600s
@@ -71,3 +79,12 @@ volumes:
 
 networks:
   codinet:
+
+secrets:
+  cert.pem:
+    file: /etc/grid-security/hostcert.pem
+  key.pem:
+    file: /etc/grid-security/hostkey.pem
+  dhparam.pem:
+    file: ./dhparams.pem
+
