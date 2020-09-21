@@ -4,7 +4,7 @@
 Name:      cernbox-wopi-server
 Summary:   A WOPI server to support Office online suites for the ScienceMesh IOP
 Version:   %{_version}
-Release:   3%{?dist}
+Release:   0%{?dist}
 License:   GPLv3
 Buildroot: %{_tmppath}/%{name}-buildroot
 Group:     CERN-IT/ST
@@ -73,12 +73,16 @@ touch /etc/wopi/iopsecret
 %defattr(-,root,root,-)
 /etc/wopi
 /etc/logrotate.d/cernbox-wopi-server
-%attr(-,cboxwopi,def-cg) /var/log/wopi
+%attr(0775,cboxwopi,def-cg) /var/log/wopi
 /usr/lib/systemd/system/wopiserver.service
 /usr/bin/*
 %_python_lib/*
 
 %changelog
+* Tue Sep 22 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.5.0
+- Moved to 3-digit releases to help drone-based automatic builds
+- Minor fixes in cboxLock and CheckFileInfo
+- Made logs group-writable for flume agents to push them to Kibana
 * Thu Aug 27 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.4
 - Make CS3-based uploads work with tus and through gateway
 - Fixed race condition in cboxLock

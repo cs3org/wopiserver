@@ -14,13 +14,14 @@ LABEL maintainer="cernbox-admins@cern.ch" \
 # prerequisites
 WORKDIR /app
 COPY requirements.txt .
-RUN pip3 install --no-cache-dir --upgrade -r requirements.txt
+RUN pip3 install --upgrade pip && \
+    pip3 install --no-cache-dir --upgrade -r requirements.txt
 
 # install software
 RUN mkdir -p /app /test /etc/wopi /var/log/wopi /var/wopi_local_storage
 ADD ./src/* ./tools/* /app/
-RUN sed -i "s/WOPISERVERVERSION = 'git'/WOPISERVERVERSION = '$VERSION'/" /app/wopiserver.py
-RUN grep 'WOPISERVERVERSION =' /app/wopiserver.py
+RUN sed -i "s/WOPISERVERVERSION = 'git'/WOPISERVERVERSION = '$VERSION'/" /app/wopiserver.py && \
+    grep 'WOPISERVERVERSION =' /app/wopiserver.py
 ADD wopiserver.conf /etc/wopi/wopiserver.defaults.conf
 ADD test/*py test/*conf /test/
 
@@ -28,3 +29,4 @@ ADD test/*py test/*conf /test/
 ADD ./docker/etc/*secret  ./docker/etc/wopiserver.conf /etc/wopi/
 
 ENTRYPOINT ["/app/wopiserver.py"]
+
