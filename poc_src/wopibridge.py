@@ -104,9 +104,15 @@ class WB:
 
   @classmethod
   def run(cls):
-    '''Runs the Flask app in unsecure mode. Secure https mode is to be provided by the infrastructure (k8s ingress, nginx...)'''
-    cls.log.info('msg="WOPI Bridge starting in unsecure/embedded mode" url="%s" proxied="%s"' % (cls.wopibridgeurl, cls.proxied))
-    cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=True)
+    '''Runs the Flask app in secure (standalone) or unsecure mode depending on the context.
+       Secure https mode typically is to be provided by the infrastructure (k8s ingress, nginx...)'''
+    if os.path.isfile('/var/run/secrets/cert.pem'):
+      cls.log.info('msg="WOPI Bridge starting in secure mode" url="%s" proxied="%s"' % (cls.wopibridgeurl, cls.proxied))
+      cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=True,
+                  ssl_context=('/var/run/secrets/cert.pem', '/var/run/secrets/key.pem'))
+    else:
+      cls.log.info('msg="WOPI Bridge starting in unsecure mode" url="%s" proxied="%s"' % (cls.wopibridgeurl, cls.proxied))
+      cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=True)
 
 
 # The Web Application starts here
@@ -136,7 +142,7 @@ def _getattachments(mddoc, docfilename):
   zip_buffer = io.BytesIO()
   for attachment in WB.upload_re.findall(mddoc):
     WB.log.debug('msg="Fetching attachment" url="%s"' % attachment)
-    res = requests.get(WB.codimdurl + attachment)
+    res = requests.get(WB.codimdurl + attachment, verify=False)
     if res.status_code != http.client.OK:
       WB.log.error('msg="Failed to fetch included file" path="%s" returncode="%d"' % (attachment, res.status_code))
       continue
@@ -179,10 +185,10 @@ def _deleteattachments(mddoc, targetpath):
       WB.log.warning('msg="Failed to delete attachment" path="%s" error="%s"' % (attachment, e))
 
 
-def _wopicall(wopisrc, acctok, method, contents=False, headers={}):
+def _wopicall(wopisrc, acctok, method, contents=False, headers=None):
   '''Execute a WOPI call with the given parameters and headers'''
   wopiurl = '%s%s' % (wopisrc, ('/contents' if contents and \
-            ('X-WOPI-Override' not in headers or headers['X-WOPI-Override'] != 'PUT_RELATIVE') else ''))
+            (not headers or 'X-WOPI-Override' not in headers or headers['X-WOPI-Override'] != 'PUT_RELATIVE') else ''))
   WB.log.debug('msg="Calling WOPI" url="%s" headers="%s" acctok="%s"' % \
                (wopiurl, headers, acctok[-20:]))
   if method == 'GET':
@@ -213,9 +219,9 @@ def _storagetocodimd(filemd, wopisrc, acctok):
     codiheaders['X-CERNBox-Metadata'] = urllib.parse.quote_plus('%s?t=%s' % (wopisrc, acctok))
   else:
     newparams = {'mode': 'locked'}     # this is another extended feature in CodiMD
-  
+
   # push the document to CodiMD
-  res = requests.post(WB.codimdurl + '/new', data=mddoc, allow_redirects=False, params=newparams, headers=codiheaders)
+  res = requests.post(WB.codimdurl + '/new', data=mddoc, allow_redirects=False, params=newparams, headers=codiheaders, verify=False)
   if res.status_code != http.client.FOUND:
     raise ValueError(res.status_code)
   # we got the hash of the document just created as a redirected URL, store it in our WOPI lock structure
@@ -242,7 +248,7 @@ def _codimdtostorage(wopisrc, acctok, isclose):
   # We must save and have all required context. Get document from CodiMD
   WB.log.info('msg="Close called, fetching file" save="True" client="%s" codimdurl="%s" token="%s"' % \
                (flask.request.remote_addr, WB.codimdurl + wopilock['docid'], acctok[-20:]))
-  res = requests.get(WB.codimdurl + wopilock['docid'] + '/download')
+  res = requests.get(WB.codimdurl + wopilock['docid'] + '/download', verify=False)
   if res.status_code != http.client.OK:
     return 'Failed to fetch document from CodiMD', res.status_code
   mddoc = res.content
@@ -378,7 +384,7 @@ def mdOpen():
     # keep track of this open document for statistical purposes
     WB.openfiles[wopilock['docid']] = wopilock['tokens']
     # create the external redirect URL to be returned to the client
-    redirecturl = WB.codimdexturl + wopilock['docid'] + '?both&'
+    redirecturl = WB.codimdexturl + wopilock['docid'] + '?'
   else:
     # read-only mode: in this case redirect to publish mode or slide mode depending on the content
     if wopilock['slide']:
