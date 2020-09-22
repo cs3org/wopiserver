@@ -26,8 +26,5 @@ ADD test/*py test/*conf /test/
 
 # add basic custom configuration; need to contextualize
 ADD ./docker/etc/*secret  ./docker/etc/wopiserver.conf /etc/wopi/
-#RUN mkdir /etc/certs
-#ADD ./etc/*.pem /etc/certs/   if certificates shall be added
 
-#CMD /app/entrypoint
 ENTRYPOINT ["/app/wopiserver.py"]
