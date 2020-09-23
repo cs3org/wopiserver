@@ -31,6 +31,7 @@ services:
       - CMD_EMAIL=false
       - CMD_ALLOW_EMAIL_REGISTER=false
       - CMD_USESSL=true
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
       - CMD_SAVE_WEBHOOK=https://codimd-wopi.codinet:8000/save
     depends_on:
       - database
