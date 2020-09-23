@@ -213,21 +213,20 @@ def _storagetocodimd(filemd, wopisrc, acctok):
   else:
     mddoc = mdfile
   newparams = None
-  codiheaders = {'Content-Type': 'text/markdown'}
-  if filemd['UserCanWrite']:
-    # add some metadata for the autosave (this is an extended feature of CodiMD)
-    codiheaders['X-CERNBox-Metadata'] = urllib.parse.quote_plus('%s?t=%s' % (wopisrc, acctok))
-  else:
-    newparams = {'mode': 'locked'}     # this is another extended feature in CodiMD
+  if not filemd['UserCanWrite']:
+    newparams = {'mode': 'locked'}     # this is an extended feature in CodiMD
 
   # push the document to CodiMD
-  res = requests.post(WB.codimdurl + '/new', data=mddoc, allow_redirects=False, params=newparams, headers=codiheaders, verify=False)
+  res = requests.post(WB.codimdurl + '/new', data=mddoc, allow_redirects=False, params=newparams,
+                      headers={'Content-Type': 'text/markdown'}, verify=False)
   if res.status_code != http.client.FOUND:
     raise ValueError(res.status_code)
   WB.log.debug('msg="Got redirect from CodiMD" url="%s"' % res.next.url)
   # we got the hash of the document just created as a redirected URL, store it in our WOPI lock structure
-  # the lock is a dict { docid, filename, isslide, isdirty }
+  # the lock is a dict { docid, metadata, filename, isslide, isdirty }
   wopilock = {'docid': '/' + urllib.parse.urlsplit(res.next.url).path.split('/')[-1],
+              # used for autosave (this is an extended feature of CodiMD)
+              'metadata': urllib.parse.quote_plus('%s?t=%s' % (wopisrc, acctok)),
               'filename': filemd['BaseFileName'],
               'isslide': mddoc.decode().find('---\ntitle:') == 0,
               'isdirty': 'False',
@@ -242,7 +241,7 @@ def _codimdtostorage(wopisrc, acctok, isclose):
     res = _wopicall(wopisrc, acctok, 'POST', headers={'X-Wopi-Override': 'GET_LOCK'})
     if res.status_code != http.client.OK:
       raise ValueError(res.status_code)
-    wopilock = json.loads(res.headers.pop('X-WOPI-Lock'))   # the lock is a dict { docid, filename, isslide, isdirty }
+    wopilock = json.loads(res.headers.pop('X-WOPI-Lock'))   # the lock is a dict { docid, metadata, filename, isslide, isdirty }
   except (ValueError, KeyError, json.decoder.JSONDecodeError) as e:
     WB.log.error('msg="Save called" error="Unable to store the file, malformed or missing WOPI lock" exception="%s"' % e)
     return 'Failed to fetch WOPI context', http.client.NOT_FOUND
@@ -336,7 +335,7 @@ def mdOpen():
     res = _wopicall(wopisrc, acctok, 'POST', headers={'X-Wopi-Override': 'GET_LOCK'})
     if res.status_code != http.client.OK:
       raise ValueError(res.status_code)
-    wopilock = res.headers.pop('X-WOPI-Lock', None)   # if present, the lock is a dict { docid, filename, isslide, isdirty }
+    wopilock = res.headers.pop('X-WOPI-Lock', None)   # if present, the lock is a dict { docid, metadata, filename, isslide, isdirty }
 
     if wopilock:
       try:
@@ -370,7 +369,7 @@ def mdOpen():
     # keep track of this open document for statistical purposes
     #WB.openfiles[wopilock['docid']] = wopilock['tokens']
     # create the external redirect URL to be returned to the client
-    redirecturl = WB.codimdexturl + wopilock['docid'] + '?'
+    redirecturl = WB.codimdexturl + wopilock['docid'] + '?metadata=' + wopilock['metadata'] + '&'
   else:
     # read-only mode: in this case redirect to publish mode or slide mode depending on the content
     if wopilock['isslide']:
