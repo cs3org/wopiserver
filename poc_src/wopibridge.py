@@ -42,38 +42,6 @@ class WB:
   log = app.logger
   openfiles = {}      # a map of all open codimd docs hashes -> list of active access tokens for each of them
 
-  # the following is a template with seven (!) parameters. TODO need to convert to a Jinjia template
-  frame_page_templated_html = """
-    <html>
-    <head>
-    <title>%s | CERNBox-integrated CodiMD PoC</title>
-    <style type="text/css">
-      body, html
-      {
-        margin: 0; padding: 0; height: 100%%; overflow: hidden;
-      }
-    </style>
-    <script>
-      window.addEventListener("unload", function close() {
-        try {
-          navigator.sendBeacon("%s/close",
-            new Blob([JSON.stringify({
-              WOPISrc: '%s',
-              access_token: '%s',
-              save: '%s'})], { type: 'text/plain' })
-          );
-        }
-        catch(err) {
-          window.alert('Save to CERNBox failed: ' + err.message);
-        }
-      });
-    </script>
-    </head>
-    <body>
-    <iframe width="100%%" height="100%%" src="%s"></iframe>
-    </body>
-    </html>
-    """
 
   @classmethod
   def init(cls):
@@ -359,7 +327,7 @@ def mdOpen():
         # this lock cannot be parsed, probably got corrupted: force read-only mode
         WB.log.error('msg="Lock already held by another app" lock="%s"' % wopilock)
         filemd['UserCanWrite'] = False
-        filemd['BreadcrumbDocName'] += ' (locked by another app)'
+        #filemd['BreadcrumbDocName'] += ' (locked by another app)'
         wopilock = None
 
     if not wopilock:
@@ -394,10 +362,7 @@ def mdOpen():
   redirecturl += 'displayName=' + urllib.parse.quote_plus(filemd['UserFriendlyName'])
 
   WB.log.info('msg="Redirecting client to CodiMD" redirecturl="%s"' % redirecturl)
-  # generate a hook for close and return an iframe to the client
-  resp = flask.Response(WB.frame_page_templated_html % (filemd['BreadcrumbDocName'], \
-                        WB.wopibridgeurl, wopisrc, acctok, filemd['UserCanWrite'], redirecturl))
-  return resp
+  return flask.redirect(redirecturl)
 
 
 @WB.app.route("/save", methods=['POST'])
@@ -414,26 +379,6 @@ def mdSave():
       (flask.request.remote_addr, flask.request.headers, type(e), e))
     return 'Malformed or missing metadata', http.client.BAD_REQUEST
   return _codimdtostorage(wopisrc, acctok, isclose)
-
-
-@WB.app.route("/close", methods=['POST'])
-def mdClose():
-  '''Close a MD doc by saving it back to the previously given WOPI src and using the provided access token'''
-  try:
-    close_payload = flask.request.get_json(force=True)
-    wopisrc = close_payload['WOPISrc']
-    acctok = close_payload['access_token']
-    if close_payload['save'] == 'False':
-      WB.log.info('msg="Close called" client="%s" token="%s"' % \
-                  (flask.request.remote_addr, acctok[-20:]))
-      # TODO delete content from CodiMD - API is missing
-      #_deleteattachments(mddoc.decode(), WB.codimdstore)
-      return 'OK', http.client.OK
-  except KeyError as e:
-    WB.log.error('msg="Close called" error="Unable to store the file, missing WOPI context: %s"' % e)
-    return 'Missing arguments', http.client.BAD_REQUEST
-
-  return _codimdtostorage(wopisrc, acctok, True)
 
 
 @WB.app.route("/list", methods=['GET'])
