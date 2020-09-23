@@ -224,11 +224,13 @@ def _storagetocodimd(filemd, wopisrc, acctok):
   res = requests.post(WB.codimdurl + '/new', data=mddoc, allow_redirects=False, params=newparams, headers=codiheaders, verify=False)
   if res.status_code != http.client.FOUND:
     raise ValueError(res.status_code)
+  WB.log.debug('msg="Got redirect from CodiMD" url="%s"' % res.next.url)
   # we got the hash of the document just created as a redirected URL, store it in our WOPI lock structure
+  # the lock is a dict { docid, filename, isslide, isdirty }
   wopilock = {'docid': '/' + urllib.parse.urlsplit(res.next.url).path.split('/')[-1],
               'filename': filemd['BaseFileName'],
-              'slide': mddoc.decode().find('---\ntitle:') == 0,
-              'tokens': [acctok[-20:]]
+              'isslide': mddoc.decode().find('---\ntitle:') == 0,
+              'isdirty': 'False',
               }
   WB.log.info('msg="Pushed document to CodiMD" url="%s" token="%s"' % (wopilock['docid'], acctok[-20:]))
   return wopilock
@@ -240,14 +242,14 @@ def _codimdtostorage(wopisrc, acctok, isclose):
     res = _wopicall(wopisrc, acctok, 'POST', headers={'X-Wopi-Override': 'GET_LOCK'})
     if res.status_code != http.client.OK:
       raise ValueError(res.status_code)
-    wopilock = json.loads(res.headers.pop('X-WOPI-Lock'))   # the lock is a JSON dict { docid, filename, tokens }
+    wopilock = json.loads(res.headers.pop('X-WOPI-Lock'))   # the lock is a dict { docid, filename, isslide, isdirty }
   except (ValueError, KeyError, json.decoder.JSONDecodeError) as e:
-    WB.log.error('msg="Close called" error="Unable to store the file, malformed or missing WOPI lock" exception="%s"' % e)
+    WB.log.error('msg="Save called" error="Unable to store the file, malformed or missing WOPI lock" exception="%s"' % e)
     return 'Failed to fetch WOPI context', http.client.NOT_FOUND
 
   # We must save and have all required context. Get document from CodiMD
-  WB.log.info('msg="Close called, fetching file" save="True" client="%s" codimdurl="%s" token="%s"' % \
-               (flask.request.remote_addr, WB.codimdurl + wopilock['docid'], acctok[-20:]))
+  WB.log.info('msg="Save called, fetching file" close="%s" client="%s" codimdurl="%s" token="%s"' % \
+               (isclose, flask.request.remote_addr, WB.codimdurl + wopilock['docid'], acctok[-20:]))
   res = requests.get(WB.codimdurl + wopilock['docid'] + '/download', verify=False)
   if res.status_code != http.client.OK:
     return 'Failed to fetch document from CodiMD', res.status_code
@@ -273,39 +275,35 @@ def _codimdtostorage(wopisrc, acctok, isclose):
     return 'Error saving the file', res.status_code
   WB.log.debug('msg="Save completed successfully"')
 
-  # The following is to close the session
   if isclose:
-    # is this the last editor for this file?
-    if len(wopilock['tokens']) == 1 and wopilock['tokens'][0] == acctok[-20:]:
-      # yes, call WOPI Unlock
-      res = _wopicall(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
-      if res.status_code != http.client.OK:
-        WB.log.warning('msg="Calling WOPI Unlock failed" url="%s" response="%s"' % (wopisrc, res.status_code))
-      # clean list of active documents
-      del WB.openfiles[wopilock['docid']]
+    # this the last editor for this file, unlock document
+    res = _wopicall(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
+    if res.status_code != http.client.OK:
+      WB.log.warning('msg="Calling WOPI Unlock failed" url="%s" response="%s"' % (wopisrc, res.status_code))
+    # clean list of active documents
+    #del WB.openfiles[wopilock['docid']]
 
-      # as we're the last, delete on CodiMD:
-      # TODO the API is still missing, for now delete all attachments if bundle
-      if bundlefile:
-        _deleteattachments(mddoc.decode(), WB.codimdstore)
+    # as we're the last, delete on CodiMD:
+    # TODO the API is still missing, for now delete all attachments if bundle
+    if bundlefile:
+      _deleteattachments(mddoc.decode(), WB.codimdstore)
 
-    else:
-      # we're not the last: still need to update the lock and take this session out
-      # WOPI Lock
-      newlock = json.loads(json.dumps(wopilock))    # this is a hack for a deep copy, to be redone in Go
-      newlock['tokens'].remove(acctok[-20:])
-      lockheaders = {'X-Wopi-Override': 'REFRESH_LOCK',
-                     'X-WOPI-OldLock': json.dumps(wopilock),
-                     'X-WOPI-Lock': json.dumps(newlock)
-                    }
-      res = _wopicall(wopisrc, acctok, 'POST', headers=lockheaders)
-      if res.status_code != http.client.OK:
-        WB.log.warning('msg="Calling WOPI RefreshLock failed" url="%s" response="%s"' % (wopisrc, res.status_code))
+  else:
+    # regular save, also refresh the lock
+    newlock = json.loads(json.dumps(wopilock))    # this is a hack for a deep copy, to be redone in Go
+    newlock['isdirty'] = 'True'
+    lockheaders = {'X-Wopi-Override': 'REFRESH_LOCK',
+                   'X-WOPI-OldLock': json.dumps(wopilock),
+                   'X-WOPI-Lock': json.dumps(newlock)
+                  }
+    res = _wopicall(wopisrc, acctok, 'POST', headers=lockheaders)
+    if res.status_code != http.client.OK:
+      WB.log.warning('msg="Calling WOPI RefreshLock failed" url="%s" response="%s"' % (wopisrc, res.status_code))
 
-      # refresh list of active documents for statistical purposes
-      WB.openfiles[wopilock['docid']] = newlock['tokens']
+    # refresh list of active documents for statistical purposes
+    #WB.openfiles[wopilock['docid']] = newlock['tokens']
 
-  WB.log.info('msg="Close completed" client="%s" token="%s"' % \
+  WB.log.info('msg="Save completed" client="%s" token="%s"' % \
                (flask.request.remote_addr, acctok[-20:]))
   return 'OK', http.client.OK
 
@@ -338,15 +336,12 @@ def mdOpen():
     res = _wopicall(wopisrc, acctok, 'POST', headers={'X-Wopi-Override': 'GET_LOCK'})
     if res.status_code != http.client.OK:
       raise ValueError(res.status_code)
-    wopilock = res.headers.pop('X-WOPI-Lock', None)   # if present, the lock is a dict { docid, filename, tokens }
+    wopilock = res.headers.pop('X-WOPI-Lock', None)   # if present, the lock is a dict { docid, filename, isslide, isdirty }
 
     if wopilock:
       try:
         wopilock = json.loads(wopilock)
-        # file is already locked and it's a JSON: assume we hold it, and append this access token to it
-        wopilock['tokens'].append(acctok[-20:])
-        # remove duplicates
-        wopilock['tokens'] = list(set(wopilock['tokens']))
+        # file is already locked and it's a JSON: assume we hold it
         WB.log.info('msg="Lock already held" lock="%s"' % wopilock)
       except json.decoder.JSONDecodeError:
         # this lock cannot be parsed, probably got corrupted: force read-only mode
@@ -354,10 +349,6 @@ def mdOpen():
         filemd['UserCanWrite'] = False
         filemd['BreadcrumbDocName'] += ' (locked by another app)'
         wopilock = None
-      except KeyError:
-        WB.log.warning('msg="Lock already held, but missing tokens?" lock="%s"' % wopilock)
-        wopilock['tokens'] = list()
-        wopilock['tokens'].append(acctok[-20:])
 
     if not wopilock:
       # file is not locked or lock is unreadable, fetch the file from storage
@@ -365,11 +356,6 @@ def mdOpen():
 
     # WOPI Lock
     lockheaders = {'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'LOCK'}
-    if len(wopilock['tokens']) > 1:
-      # in this case we need to refresh an existing lock
-      oldlock = json.loads(json.dumps(wopilock))    # this is a hack for a deep copy, to be redone in Go
-      oldlock['tokens'].remove(acctok[-20:])
-      lockheaders['X-WOPI-OldLock'] = json.dumps(oldlock)
     res = _wopicall(wopisrc, acctok, 'POST', headers=lockheaders)
     if res.status_code != http.client.OK:
       # Failed to lock the file: open in read-only mode
@@ -382,12 +368,12 @@ def mdOpen():
 
   if filemd['UserCanWrite']:
     # keep track of this open document for statistical purposes
-    WB.openfiles[wopilock['docid']] = wopilock['tokens']
+    #WB.openfiles[wopilock['docid']] = wopilock['tokens']
     # create the external redirect URL to be returned to the client
     redirecturl = WB.codimdexturl + wopilock['docid'] + '?'
   else:
     # read-only mode: in this case redirect to publish mode or slide mode depending on the content
-    if wopilock['slide']:
+    if wopilock['isslide']:
       redirecturl = WB.codimdexturl + wopilock['docid'] + '/slide?'
     else:
       redirecturl = WB.codimdexturl + wopilock['docid'] + '/publish?'
@@ -424,7 +410,7 @@ def mdClose():
     wopisrc = close_payload['WOPISrc']
     acctok = close_payload['access_token']
     if close_payload['save'] == 'False':
-      WB.log.info('msg="Close called" save="False" client="%s" token="%s"' % \
+      WB.log.info('msg="Close called" client="%s" token="%s"' % \
                   (flask.request.remote_addr, acctok[-20:]))
       # TODO delete content from CodiMD - API is missing
       #_deleteattachments(mddoc.decode(), WB.codimdstore)
