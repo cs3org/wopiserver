@@ -144,16 +144,6 @@ def _unzipattachments(inputbuf, targetpath):
   return mddoc
 
 
-def _deleteattachments(mddoc, targetpath):
-  '''Delete all files included in the given markdown doc. XXX To be removed'''
-  for attachment in WB.upload_re.findall(mddoc):
-    WB.log.debug('msg="Deleting attachment" path="%s"' % attachment)
-    try:
-      os.remove(targetpath + attachment.replace('/uploads/', '/'))
-    except OSError as e:
-      WB.log.warning('msg="Failed to delete attachment" path="%s" error="%s"' % (attachment, e))
-
-
 def _wopicall(wopisrc, acctok, method, contents=False, headers=None):
   '''Execute a WOPI call with the given parameters and headers'''
   wopiurl = '%s%s' % (wopisrc, ('/contents' if contents and \
@@ -262,11 +252,6 @@ def _codimdtostorage(wopisrc, acctok, isclose):
       WB.log.warning('msg="Calling WOPI Unlock failed" url="%s" response="%s"' % (wopisrc, res.status_code))
     # clean list of active documents
     #del WB.openfiles[wopilock['docid']]
-
-    # as we're the last, delete on CodiMD:
-    # TODO the API is still missing, for now delete all attachments if bundle
-    if bundlefile:
-      _deleteattachments(mddoc.decode(), WB.codimdstore)
 
   else:
     # regular save, also refresh the lock
@@ -378,7 +363,10 @@ def mdSave():
     WB.log.error('msg="Save: malformed or missing metadata" client="%s" headers="%s" exception="%s" error="%s"' % \
       (flask.request.remote_addr, flask.request.headers, type(e), e))
     return 'Malformed or missing metadata', http.client.BAD_REQUEST
-  return _codimdtostorage(wopisrc, acctok, isclose)
+  # enqueue the request, it will be processed asynchronously
+  _codimdtostorage(wopisrc, acctok, isclose)
+  # return latest known state for this document
+  return http.client.OK if True else 'Error', http.client.PRECONDITION_FAILED
 
 
 @WB.app.route("/list", methods=['GET'])
