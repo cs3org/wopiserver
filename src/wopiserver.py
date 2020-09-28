@@ -501,9 +501,8 @@ def cboxLock():
     lock = lock.decode('utf-8')
     if 'OnlyOffice Online Editor' not in lock:
       # a previous lock existed and it's not held by us, fail with conflict
-      Wopi.log.info('msg="cboxLock: found existing LibreOffice lock" ' \
-                    'filename="%s" holder="%s" lockmtime="%ld" request="create"' % \
-                    (filename, lock.split(',')[1] if ',' in lock else lock, lockstat['mtime']))
+      Wopi.log.info('msg="cboxLock: found existing LibreOffice lock" filename="%s" holder="%s" request="create"' % \
+                    (filename, lock.split(',')[1] if ',' in lock else lock))
       return 'Previous lock exists', http.client.CONFLICT
     # otherwise, extract the previous timestamp and refresh the lock itself
     # (this is equivalent to a touch, needed to make the mtime check on query valid, see above)
