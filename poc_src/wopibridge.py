@@ -364,9 +364,9 @@ def mdSave():
       (flask.request.remote_addr, flask.request.headers, type(e), e))
     return 'Malformed or missing metadata', http.client.BAD_REQUEST
   # enqueue the request, it will be processed asynchronously
-  _codimdtostorage(wopisrc, acctok, isclose)
+  return _codimdtostorage(wopisrc, acctok, isclose)
   # return latest known state for this document
-  return http.client.OK if True else 'Error', http.client.PRECONDITION_FAILED
+  #return 'OK', http.client.OK if True else 'Error', http.client.PRECONDITION_FAILED
 
 
 @WB.app.route("/list", methods=['GET'])
