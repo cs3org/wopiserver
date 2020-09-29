@@ -73,7 +73,7 @@ touch /etc/wopi/iopsecret
 %defattr(-,root,root,-)
 /etc/wopi
 /etc/logrotate.d/cernbox-wopi-server
-%attr(0775,cboxwopi,def-cg) /var/log/wopi
+%attr(0755,cboxwopi,def-cg) /var/log/wopi
 /usr/lib/systemd/system/wopiserver.service
 /usr/bin/*
 %_python_lib/*
