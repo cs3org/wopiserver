@@ -1000,11 +1000,12 @@ def wopiPutFile(fileid):
                   (acctok['userid'], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
     try:
       # check now the destination file against conflicts
-      savetime = int(storage.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], LASTSAVETIMEKEY))
-      # we got our xattr: if mtime is greater, someone may have updated the file from a different source (e.g. FUSE or SMB mount)
+      savetime = storage.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], LASTSAVETIMEKEY)
       mtime = storage.stat(acctok['endpoint'], acctok['filename'], acctok['userid'])['mtime']
-      if int(mtime) > int(savetime):
-        # this is the case, force conflict. Note we can't get a time resolution better than one second!
+      if savetime is None or int(mtime) > int(savetime):
+        # no xattr was there or we got our xattr but mtime is more recent: someone may have updated the file
+        # from a different source (e.g. FUSE or SMB mount), therefore force conflict.
+        # Note we can't get a time resolution better than one second!
         Wopi.log.info('msg="Forcing conflict based on lastWopiSaveTime" user="%s" filename="%s" token="%s" ' \
                       'savetime="%ld" lastmtime="%ld"' % \
                       (acctok['userid'], acctok['filename'], \
