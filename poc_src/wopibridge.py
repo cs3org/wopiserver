@@ -275,6 +275,22 @@ def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
     WB.log.warning('msg="Calling WOPI PutFile/PutRelative failed" url="%s" response="%s"' % (wopisrc, res.status_code))
     return 'Error saving the file', res.status_code
 
+  if res.find('Url'):
+    # PutRelative returns the new file's metadata, fetch the new wopisrc/acctok
+    res = res.json()
+    newwopi = res['Url']
+    newwopisrc = newwopi[:newwopi.find('?')]
+    newacctok = newwopi[newwopi.find('access_token=')+13:]
+    WB.openfiles[newwopisrc] = {'acctok': newacctok, 'isclose': isclose, 'tosave': False,
+                                'lastsave': int(time.time())}
+    wopilock['filename'] = res['Name']
+    lockheaders = {'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'LOCK'}
+    res = _wopicall(wopisrc, acctok, 'POST', headers=lockheaders)
+    if res.status_code != http.client.OK:
+      # Failed to lock the new file
+      WB.log.warning('msg="Failed to lock the new file" token="%s" returncode="%d"' % (newacctok[-20:], res.status_code))
+    # TODO shall we delete the original .md now that we moved to .zmd?
+
   # finally refresh the WOPI lock
   _refreshlock(wopisrc, acctok, True, wopilock)
 
@@ -393,7 +409,7 @@ def appsave():
                   (flask.request.remote_addr, resp))
       del WB.saveresponses[wopisrc]
       return resp
-    WB.log.info('msg="Save: enqueued action" client="%s"' % flask.request.remote_addr)
+    WB.log.info('msg="Save: enqueued action" wopisrc="%s"' % wopisrc)
     return 'Enqueued', http.client.ACCEPTED
 
 
