@@ -999,13 +999,12 @@ def wopiPutFile(fileid):
         # from a different source (e.g. FUSE or SMB mount), therefore force conflict.
         # Note we can't get a time resolution better than one second!
         Wopi.log.info('msg="Forcing conflict based on lastWopiSaveTime" user="%s" filename="%s" token="%s" ' \
-                      'savetime="%ld" lastmtime="%ld"' % \
+                      'savetime="%s" lastmtime="%s"' % \
                       (acctok['userid'], acctok['filename'], \
                        flask.request.args['access_token'][-20:], savetime, mtime))
         raise IOError
-      Wopi.log.info('msg="Got lastWopiSaveTime" user="%s" filename="%s" token="%s" savetime="%ld" lastmtime="%ld"' % \
-                    (acctok['userid'], acctok['filename'], \
-                     flask.request.args['access_token'][-20:], savetime, mtime))
+      Wopi.log.debug('msg="Got lastWopiSaveTime" user="%s" filename="%s" token="%s" savetime="%s" lastmtime="%s"' % \
+                     (acctok['userid'], acctok['filename'], flask.request.args['access_token'][-20:], savetime, mtime))
     except IOError:
       # either the file was deleted or it was updated/overwritten by others: force conflict
       newname, ext = os.path.splitext(acctok['filename'])
