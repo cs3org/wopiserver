@@ -118,8 +118,8 @@ def retrieveWopiLock(fileid, operation, lock, acctok):
   try:
     # check validity
     retrievedLock = jwt.decode(lockcontent, _ctx['wopi'].wopisecret, algorithms=['HS256'])
-    if retrievedLock['exp'] < time.time():
-      # we got an expired lock, reject. Note that we may get an ExpiredSignatureError
+    if 'exp' not in retrievedLock or retrievedLock['exp'] < time.time():
+      # we got a malformed or expired lock, reject. Note that we may get an ExpiredSignatureError
       # by jwt.decode() as we had stored it with a timed signature.
       raise jwt.exceptions.ExpiredSignatureError
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
