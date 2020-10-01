@@ -137,7 +137,7 @@ class Wopi:
         discData = requests.get(url=(code + '/hosting/discovery'), verify=False).content
         discXml = ET.fromstring(discData)
         if discXml is None:
-          raise Exception('Failed to parse XML: %s' % discData)
+          raise IOError('Failed to parse XML: %s' % discData)
         # extract urlsrc from first <app> node inside <net-zone>
         urlsrc = discXml.find('net-zone/app')[0].attrib['urlsrc']
 
@@ -156,7 +156,7 @@ class Wopi:
         cls.ENDPOINTS['.odp']['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace
         cls.log.info('msg="Collabora Online endpoints successfully configured" CODEURL="%s"' % cls.ENDPOINTS['.odt']['edit'])
 
-      except Exception as e:
+      except IOError as e:
         cls.log.warning('msg="Failed to initialize Collabora Online endpoints" error="%s"' % e)
 
     # The CodiMD end-point
@@ -349,8 +349,6 @@ def cboxDownload():
   except KeyError as e:
     Wopi.log.error('msg="Invalid access token or request argument" error="%s"' % e)
     return 'Invalid access token', http.client.UNAUTHORIZED
-  except Exception as e:
-    return utils.logGeneralExceptionAndReturn(e, flask.request)
 
 
 @Wopi.app.route("/wopi/cbox/endpoints", methods=['GET'])
@@ -650,8 +648,6 @@ def wopiCheckFileInfo(fileid):
   except KeyError as e:
     Wopi.log.error('msg="Invalid access token or request argument" error="%s"' % e)
     return 'Invalid access token', http.client.UNAUTHORIZED
-  except Exception as e:
-    return utils.logGeneralExceptionAndReturn(e, flask.request)
 
 
 @Wopi.app.route("/wopi/files/<fileid>/contents", methods=['GET'])
@@ -670,11 +666,9 @@ def wopiGetFile(fileid):
     resp.status_code = http.client.OK
     return resp
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
-    Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" token="%s"' % \
-                     (flask.request.remote_addr, flask.request.base_url, flask.request.args['access_token']))
+    Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" error="%s" token="%s"' % \
+                     (flask.request.remote_addr, flask.request.base_url, e, flask.request.args['access_token']))
     return 'Invalid access token', http.client.UNAUTHORIZED
-  except Exception as e:
-    return utils.logGeneralExceptionAndReturn(e, flask.request)
 
 
 #
@@ -971,11 +965,9 @@ def wopiFilesPost(fileid):
     Wopi.log.warning('msg="Unknown/unsupported operation" operation="%s"' % op)
     return 'Not supported operation found in header', http.client.NOT_IMPLEMENTED
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
-    Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" token="%s"' % \
-                     (flask.request.remote_addr, flask.request.base_url, flask.request.args['access_token']))
+    Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" error="%s" token="%s"' % \
+                     (flask.request.remote_addr, flask.request.base_url, e, flask.request.args['access_token']))
     return 'Invalid access token', http.client.NOT_FOUND
-  except Exception as e:
-    return utils.logGeneralExceptionAndReturn(e, flask.request)
 
 
 @Wopi.app.route("/wopi/files/<fileid>/contents", methods=['POST'])
@@ -1030,8 +1022,8 @@ def wopiPutFile(fileid):
       # the xattr was not an integer: assume Office Online is looping on an already conflicting file,
       # therefore do nothing and keep reporting internal error. Of course if the attribute was modified by hand,
       # this mechanism fails.
-      Wopi.log.info('msg="Conflicting copy already created" user="%s" token="%s" filename="%s"' % \
-                    (acctok['userid'], flask.request.args['access_token'], acctok['filename']))
+      Wopi.log.info('msg="Conflicting copy already created" user="%s" filename="%s" error="%s" token="%s"' % \
+                    (acctok['userid'], acctok['filename'], e, flask.request.args['access_token'][-20:]))
       return 'Conflicting copy already created', http.client.INTERNAL_SERVER_ERROR
     # Go for overwriting the file. Note that the entire check+write operation should be atomic,
     # but the previous check still gives the opportunity of a race condition. We just live with it.
@@ -1048,8 +1040,6 @@ def wopiPutFile(fileid):
     Wopi.log.info('msg="Error writing file" filename="%s" token="%s" error="%s"' % \
                   (acctok['filename'], flask.request.args['access_token'], e))
     return 'I/O Error', http.client.INTERNAL_SERVER_ERROR
-  except Exception as e:
-    return utils.logGeneralExceptionAndReturn(e, flask.request)
 
 
 #
