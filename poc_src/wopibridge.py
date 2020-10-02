@@ -33,6 +33,12 @@ except ImportError:
 
 WBVERSION = '1.0'
 
+class InvalidLock(Exception):
+  '''A custom exception to represent an invalid or missing WOPI lock'''
+
+class CodiMDFailure(Exception):
+  '''A custom exception to represent a fatal failure when contacting CodiMD'''
+
 class WB:
   '''A singleton container for all state information of the server'''
   app = flask.Flask("WOPIBridge")
@@ -129,6 +135,37 @@ def index():
     """ % (WBVERSION, socket.getfqdn(), flask.__version__, python_version())
 
 
+def _wopicall(wopisrc, acctok, method, contents=False, headers=None):
+  '''Execute a WOPI call with the given parameters and headers'''
+  wopiurl = '%s%s' % (wopisrc, ('/contents' if contents and \
+            (not headers or 'X-WOPI-Override' not in headers or headers['X-WOPI-Override'] != 'PUT_RELATIVE') else ''))
+  WB.log.debug('msg="Calling WOPI" url="%s" headers="%s" acctok="%s"' % \
+               (wopiurl, headers, acctok[-20:]))
+  if method == 'GET':
+    return requests.get('%s?access_token=%s' % (wopiurl, acctok), verify=False)
+  if method == 'POST':
+    return requests.post('%s?access_token=%s' % (wopiurl, acctok), verify=False, headers=headers, data=contents)
+  return None
+
+
+def _refreshlock(wopisrc, acctok, isdirty, wopilock):
+  '''Refresh an existing WOPI lock. Returns True if successful, False otherwise'''
+  if isdirty and wopilock['digest'] != 'dirty':
+    newlock = json.loads(json.dumps(wopilock))    # this is a hack for a deep copy, to be redone in Go
+    newlock['digest'] = 'dirty'
+  else:
+    newlock = wopilock
+  lockheaders = {'X-Wopi-Override': 'REFRESH_LOCK',
+                 'X-WOPI-OldLock': json.dumps(wopilock),
+                 'X-WOPI-Lock': json.dumps(newlock)
+                }
+  res = _wopicall(wopisrc, acctok, 'POST', headers=lockheaders)
+  if res.status_code != http.client.OK:
+    WB.log.warning('msg="Calling WOPI RefreshLock failed" url="%s" response="%s"' % (wopisrc, res.status_code))
+    return False
+  return True
+
+
 def _getattachments(mddoc, docfilename):
   '''Parse a markdown file and generate a zip file containing all included files'''
   if WB.upload_re.search(mddoc) is None:
@@ -170,19 +207,6 @@ def _unzipattachments(inputbuf, targetpath):
   return mddoc
 
 
-def _wopicall(wopisrc, acctok, method, contents=False, headers=None):
-  '''Execute a WOPI call with the given parameters and headers'''
-  wopiurl = '%s%s' % (wopisrc, ('/contents' if contents and \
-            (not headers or 'X-WOPI-Override' not in headers or headers['X-WOPI-Override'] != 'PUT_RELATIVE') else ''))
-  WB.log.debug('msg="Calling WOPI" url="%s" headers="%s" acctok="%s"' % \
-               (wopiurl, headers, acctok[-20:]))
-  if method == 'GET':
-    return requests.get('%s?access_token=%s' % (wopiurl, acctok), verify=False)
-  if method == 'POST':
-    return requests.post('%s?access_token=%s' % (wopiurl, acctok), verify=False, headers=headers, data=contents)
-  return None
-
-
 def _storagetocodimd(filemd, wopisrc, acctok):
   '''Copy document from storage to CodiMD'''
   # WOPI GetFile
@@ -209,7 +233,7 @@ def _storagetocodimd(filemd, wopisrc, acctok):
   if res.status_code != http.client.FOUND:
     WB.log.error('msg="Unable to push document to CodiMD" token="%s" response="%s: %s"' % \
                  (acctok[-20:], res.status_code, res.content))
-    raise IOError
+    raise CodiMDFailure
   WB.log.debug('msg="Got redirect from CodiMD" url="%s"' % res.next.url)
   # we got the hash of the document just created as a redirected URL, store it in our WOPI lock structure
   # the lock is a dict { docid, filename, digest, app }
@@ -220,22 +244,6 @@ def _storagetocodimd(filemd, wopisrc, acctok):
               }
   WB.log.info('msg="Pushed document to CodiMD" url="%s" token="%s"' % (wopilock['docid'], acctok[-20:]))
   return wopilock
-
-
-def _refreshlock(wopisrc, acctok, isdirty, wopilock):
-  '''Refresh an existing WOPI lock. Returns True if successful, False otherwise'''
-  newlock = json.loads(json.dumps(wopilock))    # this is a hack for a deep copy, to be redone in Go
-  if isdirty:
-    newlock['digest'] = 'dirty'
-  lockheaders = {'X-Wopi-Override': 'REFRESH_LOCK',
-                 'X-WOPI-OldLock': json.dumps(wopilock),
-                 'X-WOPI-Lock': json.dumps(newlock)
-                }
-  res = _wopicall(wopisrc, acctok, 'POST', headers=lockheaders)
-  if res.status_code != http.client.OK:
-    WB.log.warning('msg="Calling WOPI RefreshLock failed" url="%s" response="%s"' % (wopisrc, res.status_code))
-    return False
-  return True
 
 
 def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
@@ -371,7 +379,7 @@ def appopen():
     WB.log.info('msg="Redirecting client to CodiMD" redirecturl="%s"' % redirecturl)
     return flask.redirect(redirecturl)
  
-  except IOError:
+  except CodiMDFailure:
     # this can be risen by _storagetocodimd
     return 'Unable to contact CodiMD, please try again later', http.client.INTERNAL_SERVER_ERROR
 
@@ -423,10 +431,6 @@ def applist():
 #
 ## Code for the async thread for save operations
 #
-class InvalidLock(Exception):
-  '''A custom exception to represent an invalid or missing WOPI lock'''
-
-
 def _getwopilock(wopisrc, acctok):
   '''Get the currently held WOPI lock, and return None if not found'''
   try:
@@ -494,6 +498,7 @@ def dosavetostorage():
 def stopsavethread():
   '''Exit handler to cleanly stop the storage sync thread'''
   WB.log.info('msg="Waiting for storage sync thread to complete"')
+  print('msg="Waiting for storage sync thread to complete"\n')
   WB.savecv.acquire()
   WB.active = False
   WB.savecv.notify()
