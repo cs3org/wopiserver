@@ -166,9 +166,9 @@ def _refreshlock(wopisrc, acctok, isdirty, wopilock):
   return True
 
 
-def _getattachments(mddoc, docfilename):
+def _getattachments(mddoc, docfilename, forcezip=False):
   '''Parse a markdown file and generate a zip file containing all included files'''
-  if WB.upload_re.search(mddoc) is None:
+  if not forcezip and WB.upload_re.search(mddoc) is None:
     # no attachments
     return None
   zip_buffer = io.BytesIO()
@@ -277,24 +277,23 @@ def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
       return 'OK', http.client.OK
 
   # check if we have attachments
-  bundlefile = _getattachments(mddoc.decode(), wopilock['filename'].replace('.zmd', '.md'))
   wasbundle = os.path.splitext(wopilock['filename'])[1] == '.zmd'
+  bundlefile = _getattachments(mddoc.decode(), wopilock['filename'].replace('.zmd', '.md'), (wasbundle and not isclose))
 
   # WOPI PutFile for the file or the bundle if it already existed
-  if wasbundle ^ (not bundlefile):
+  if (wasbundle ^ (not bundlefile)) or not isclose:
     res = _wopicall(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock)},
                     contents=(bundlefile if wasbundle else mddoc))
     # and refresh the WOPI lock
     _refreshlock(wopisrc, acctok, True, wopilock)
 
-  # WOPI PutRelative for either the new bundle, if this is the first time we have attachments,
-  # or the single file, if there are no more attachments
+  # On close, use WOPI PutRelative for either the new bundle, if this is the first time we have attachments,
+  # or the single file, if there are no more attachments.
   else:
     putrelheaders = {'X-WOPI-Lock': json.dumps(wopilock),
                      'X-WOPI-Override': 'PUT_RELATIVE',
-                     # RelativeTarget to force overwrite of the file, as we could repeat this operation several times
-                     'X-WOPI-OverwriteRelativeTarget': 'True',
-                     'X-WOPI-RelativeTarget': os.path.splitext(wopilock['filename'])[0] + ('.zmd' if bundlefile else '.md')
+                     # SuggestedTarget to not overwrite a possibly existing file
+                     'X-WOPI-SuggestedTarget': os.path.splitext(wopilock['filename'])[0] + ('.zmd' if bundlefile else '.md')
                     }
     res = _wopicall(wopisrc, acctok, 'POST', headers=putrelheaders, contents=(bundlefile if bundlefile else mddoc))
 
