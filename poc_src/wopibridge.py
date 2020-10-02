@@ -176,7 +176,7 @@ def _getattachments(mddoc, docfilename):
     WB.log.debug('msg="Fetching attachment" url="%s"' % attachment)
     res = requests.get(WB.codimdurl + attachment, verify=False)
     if res.status_code != http.client.OK:
-      WB.log.error('msg="Failed to fetch included file" path="%s" returncode="%d"' % (attachment, res.status_code))
+      WB.log.error('msg="Failed to fetch included file" path="%s" response="%d"' % (attachment, res.status_code))
       continue
     with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_STORED, allowZip64=False) as zip_file:
       zip_file.writestr(attachment.split('/')[-1], res.content)
@@ -281,39 +281,53 @@ def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
   wasbundle = os.path.splitext(wopilock['filename'])[1] == '.zmd'
 
   # WOPI PutFile for the file or the bundle if it already existed
-  if (wasbundle or not bundlefile):
+  if wasbundle ^ (not bundlefile):
     res = _wopicall(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock)},
                     contents=(bundlefile if wasbundle else mddoc))
-  # WOPI PutRelative for the new bundle (not touching the original file), if this is the first time we have attachments
+    # and refresh the WOPI lock
+    _refreshlock(wopisrc, acctok, True, wopilock)
+
+  # WOPI PutRelative for either the new bundle, if this is the first time we have attachments,
+  # or the single file, if there are no more attachments
   else:
     putrelheaders = {'X-WOPI-Lock': json.dumps(wopilock),
                      'X-WOPI-Override': 'PUT_RELATIVE',
-                     # SuggestedTarget to not overwrite a possibly existing file
-                     'X-WOPI-SuggestedTarget': os.path.splitext(wopilock['filename'])[0] + '.zmd'
+                     # RelativeTarget to force overwrite of the file, as we could repeat this operation several times
+                     'X-WOPI-OverwriteRelativeTarget': 'True',
+                     'X-WOPI-RelativeTarget': os.path.splitext(wopilock['filename'])[0] + ('.zmd' if bundlefile else '.md')
                     }
-    res = _wopicall(wopisrc, acctok, 'POST', headers=putrelheaders, contents=bundlefile)
+    res = _wopicall(wopisrc, acctok, 'POST', headers=putrelheaders, contents=(bundlefile if bundlefile else mddoc))
 
   if res.status_code != http.client.OK:
     WB.log.warning('msg="Calling WOPI PutFile/PutRelative failed" url="%s" response="%s"' % (wopisrc, res.status_code))
     return 'Error saving the file', res.status_code
 
-  if res.content.find('Url'):
-    # PutRelative returns the new file's metadata, fetch the new wopisrc/acctok
+  if res.content.decode().find('Url') > 0 and isclose:
+    # use the new file's metadata from PutRelative to remove the previous file: we can do that only on close
+    # because we need to keep using the current wopisrc/acctok until the session is alive in CodiMD
     res = res.json()
-    newwopi = res['Url']
+    newwopi = urllib.parse.unquote(res['Url'])
     newwopisrc = newwopi[:newwopi.find('?')]
     newacctok = newwopi[newwopi.find('access_token=')+13:]
-    WB.openfiles[newwopisrc] = {'acctok': newacctok, 'isclose': isclose, 'tosave': False, 'lastsave': int(time.time())}
-    wopilock['filename'] = res['Name']
-    lockheaders = {'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'LOCK'}
-    res = _wopicall(wopisrc, acctok, 'POST', headers=lockheaders)
+    newlock = json.loads(json.dumps(wopilock))    # this is a hack for a deep copy, to be redone in Go
+    newlock['filename'] = res['Name']
+    res = _wopicall(newwopisrc, newacctok, 'POST', headers={'X-WOPI-Lock': json.dumps(newlock), 'X-Wopi-Override': 'LOCK'})
     if res.status_code != http.client.OK:
-      # Failed to lock the new file
-      WB.log.warning('msg="Failed to lock the new file" token="%s" returncode="%d"' % (newacctok[-20:], res.status_code))
-    # TODO shall we delete the original .md now that we moved to .zmd?
+      # Failed to lock the new file just written, not a big deal as we're closing
+      WB.log.warning('msg="Failed to lock the new file" token="%s" response="%d"' % (newacctok[-20:], res.status_code))
+    
+    # unlock and delete original file
+    res = _wopicall(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
+    if res.status_code != http.client.OK:
+      WB.log.warning('msg="Failed to unlock the previous file" token="%s" response="%d"' % (acctok[-20:], res.status_code))
+    else:
+      res = _wopicall(wopisrc, acctok, 'POST', headers={'X-Wopi-Override': 'DELETE'})
+      if res.status_code == http.client.OK:
+        WB.log.info('msg="Previous file unlocked and removed successfully" token="%s"' % acctok[-20:])
 
-  # finally refresh the WOPI lock
-  _refreshlock(wopisrc, acctok, True, wopilock)
+    # update our metadata: note we already hold the condition variable as we're called within the save thread
+    WB.openfiles[newwopisrc] = {'acctok': newacctok, 'isclose': isclose, 'tosave': False, 'lastsave': int(time.time())}
+    del WB.openfiles[wopisrc]
 
   WB.log.info('msg="Save completed" token="%s"' % acctok[-20:])
   return 'OK', http.client.OK
@@ -338,7 +352,7 @@ def appopen():
     res = _wopicall(wopisrc, acctok, 'GET')
     filemd = res.json()
   except json.decoder.JSONDecodeError as e:
-    WB.log.warning('msg="Malformed JSON from WOPI" error="%s" returncode="%d"' % (e, res.status_code))
+    WB.log.warning('msg="Malformed JSON from WOPI" error="%s" response="%d"' % (e, res.status_code))
     return 'Invalid WOPI context', http.client.NOT_FOUND
 
   try:
@@ -367,7 +381,7 @@ def appopen():
       res = _wopicall(wopisrc, acctok, 'POST', headers=lockheaders)
       if res.status_code != http.client.OK:
         # Failed to lock the file: open in read-only mode
-        WB.log.warning('msg="Failed to lock the file" token="%s" returncode="%d"' % (acctok[-20:], res.status_code))
+        WB.log.warning('msg="Failed to lock the file" token="%s" response="%d"' % (acctok[-20:], res.status_code))
         filemd['UserCanWrite'] = False
 
     else:
