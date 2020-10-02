@@ -21,6 +21,7 @@ import http.client
 import json
 import io
 import zipfile
+from random import randint
 import hashlib
 import threading
 import atexit
@@ -69,7 +70,6 @@ class WB:
       cls.log.setLevel(cls.loglevels['Debug'])
       cls.codimdexturl = os.environ.get('CODIMD_EXT_URL')    # this is the external-facing URL
       cls.codimdurl = os.environ.get('CODIMD_INT_URL')       # this is the internal URL (e.g. as visible in docker/K8s)
-      cls.codimdstore = os.environ.get('CODIMD_STORAGE_PATH')
       try:
         cls.saveinterval = int(os.environ.get('APP_SAVE_INTERVAL'))
       except TypeError:
@@ -116,7 +116,7 @@ def handleException(ex):
   ex_type, ex_value, ex_traceback = sys.exc_info()
   WB.log.error('msg="Unexpected exception caught" exception="%s" type="%s" traceback="%s"' % \
                (ex, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback)))
-  return 'Internal error', http.client.INTERNAL_SERVER_ERROR
+  return 'Internal error, please contact support', http.client.INTERNAL_SERVER_ERROR
 
 
 @WB.app.route("/", methods=['GET'])
@@ -186,24 +186,36 @@ def _getattachments(mddoc, docfilename):
   return zip_buffer.getvalue()
 
 
-def _unzipattachments(inputbuf, targetpath):
-  '''Unzip the given input buffer to targetpath and return the contained .md file
-  XXX this requires direct access to the storage, need to use HTTP instead'''
+def _unzipattachments(inputbuf):
+  '''Unzip the given input buffer uploading the content to CodiMD and return the contained .md file'''
   inputzip = zipfile.ZipFile(io.BytesIO(inputbuf), compression=zipfile.ZIP_STORED)
   mddoc = None
-  for fname in inputzip.namelist():
-    WB.log.debug('msg="Extracting attachment" name="%s"' % fname)
-    if os.path.splitext(fname)[1] == '.md':
-      mddoc = inputzip.read(fname)
+  for zipinfo in inputzip.infolist():
+    WB.log.debug('msg="Extracting attachment" name="%s"' % zipinfo.filename)
+    if os.path.splitext(zipinfo.filename)[1] == '.md':
+      mddoc = inputzip.read(zipinfo)
     else:
-      # TODO perform upload via HTTP as opposed to the following
-      inputzip.extract(fname, path=targetpath)
-      #blob = inputzip.read(fname)
-      #url = WB.codimdurl + '/uploads/' + fname
-      #WB.log.debug('msg="Pushing attachment" url="%s"' % url)
-      #res = requests.post(url)
-      #if res.status_code != http.client.OK:
-      #  WB.log.error('msg="Failed to push included file" path="%s" returncode="%d"' % (url, res.status_code))
+      # first check if the file already exists in CodiMD:
+      fname = zipinfo.filename
+      res = requests.head(WB.codimdurl + '/uploads/' + fname, verify=False)
+      if res.status_code == http.client.OK and int(res.headers['Content-Length']) == zipinfo.file_size:
+        # yes (assume that hashed filename AND size matching is a good enough content match!)
+        WB.log.debug('msg="Skipped existing attachment" filename="%s"' % fname)
+        continue
+      # check for collision
+      if res.status_code == http.client.OK:
+        WB.log.warning('msg="Attachment collision detected" filename="%s"' % fname)
+        # append a random letter to the filename
+        name, ext = os.path.splitext(fname)
+        fname = name + chr(randint(65, 65+26)) + ext
+        # and replace its reference in the document (this creates a copy, not very efficient)
+        mddoc = mddoc.replace(zipinfo.filename, fname)
+      # OK, let's upload
+      WB.log.debug('msg="Pushing attachment" filename="%s"' % fname)
+      res = requests.post(WB.codimdurl + '/uploadimage', params={'generateFilename': 'false'},
+                          files={'image': (fname, inputzip.read(zipinfo))}, verify=False)
+      if res.status_code != http.client.OK:
+        WB.log.error('msg="Failed to push included file" filename="%s" httpcode="%d"' % (fname, res.status_code))
   return mddoc
 
 
@@ -218,7 +230,7 @@ def _storagetocodimd(filemd, wopisrc, acctok):
 
   # if it's a bundled file, unzip it and push the attachments in the appropriate folder
   if wasbundle:
-    mddoc = _unzipattachments(mdfile, WB.codimdstore)
+    mddoc = _unzipattachments(mdfile)
   else:
     mddoc = mdfile
   h = hashlib.sha1()
@@ -255,8 +267,6 @@ def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
   if res.status_code != http.client.OK:
     return 'Failed to fetch document from CodiMD', res.status_code
   mddoc = res.content
-  bundlefile = _getattachments(mddoc.decode(), wopilock['filename'].replace('.zmd', '.md'))
-  wasbundle = os.path.splitext(wopilock['filename'])[1] == '.zmd'
 
   if isclose and wopilock['digest'] != 'dirty':
     # so far the file was not touched and we are about to close: before forcing a put let's validate the contents
@@ -265,6 +275,10 @@ def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
     if h.hexdigest() == wopilock['digest']:
       WB.log.info('msg="File unchanged, skipping save" token="%s"' % acctok[-20:])
       return 'OK', http.client.OK
+
+  # check if we have attachments
+  bundlefile = _getattachments(mddoc.decode(), wopilock['filename'].replace('.zmd', '.md'))
+  wasbundle = os.path.splitext(wopilock['filename'])[1] == '.zmd'
 
   # WOPI PutFile for the file or the bundle if it already existed
   if (wasbundle or not bundlefile):
@@ -283,14 +297,13 @@ def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
     WB.log.warning('msg="Calling WOPI PutFile/PutRelative failed" url="%s" response="%s"' % (wopisrc, res.status_code))
     return 'Error saving the file', res.status_code
 
-  if res.find('Url'):
+  if res.content.find('Url'):
     # PutRelative returns the new file's metadata, fetch the new wopisrc/acctok
     res = res.json()
     newwopi = res['Url']
     newwopisrc = newwopi[:newwopi.find('?')]
     newacctok = newwopi[newwopi.find('access_token=')+13:]
-    WB.openfiles[newwopisrc] = {'acctok': newacctok, 'isclose': isclose, 'tosave': False,
-                                'lastsave': int(time.time())}
+    WB.openfiles[newwopisrc] = {'acctok': newacctok, 'isclose': isclose, 'tosave': False, 'lastsave': int(time.time())}
     wopilock['filename'] = res['Name']
     lockheaders = {'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'LOCK'}
     res = _wopicall(wopisrc, acctok, 'POST', headers=lockheaders)
