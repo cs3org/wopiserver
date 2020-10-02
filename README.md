@@ -5,21 +5,23 @@ This is a proof-of-concept WOPI bridge server, currently only targeting CodiMD, 
 ## What works:
 * REST service with two endpoints:
   - `/open`   meant to be called by the EFSS with a WOPISrc and a WOPI access token, returns a file displayed in CodiMD
-  - `/close`  auto-called when browsing away from the page displayed by `/open`
+  - `/save`   auto-called by the CodiMD backend when some changes are detected on the open document
 * Stateless server, all context stored in the WOPI lock or passed through arguments
 * Readonly (publish) mode vs. read/write mode
 * Collaborative editing and locking of the file
 * Transparent handling of uploads (i.e. pictures):
   * If a note has no pictures, it is handled as a text file.
-  * Once a picture is included, the save to WOPI is executed as a zipped bundle, with a `.zmd` extension.
-  * Files ending as `.zmd` are equally treated as zipped bundles and expanded to CodiMD: this currently requires direct access to the underlying storage used by CodiMD when pushing the pictures from the EFSS storage.
+  * Once a picture is included, the save to WOPI is executed as a zipped bundle, with a `.zmd` extension, and the previous `.md` file is removed. Similarly if all pictures are removed and the file is saved back as `.md`.
+  * Files ending as `.zmd` are equally treated as zipped bundles and expanded to CodiMD
 
 ## Required CodiMD APIs
 * `/new`                    push a file to CodiMD
 * `/<noteid>`               display a file
 * `/<noteid>/publish`       display a file in readonly mode
+* `/<noteid>/slide`         display a file in slide mode
 * `/<noteid>/download`      get a raw file to push it back
-* `/uploads/upload_<hash>`  get an uploaded picture/attachment
+* `/uploadimage`            upload a new picture
+* `/uploads/upload_<hash>`  get an uploaded picture
 
 ## Required WOPI APIs
 * `GetFileInfo`: get all file metadata
@@ -29,3 +31,5 @@ This is a proof-of-concept WOPI bridge server, currently only targeting CodiMD, 
 * `PutFile`: store a file's content
 * `PutRelative`: store a file under a different name
 * `Unlock`: unlock a file on close
+* `Delete`: delete a previous edition of a file
+
