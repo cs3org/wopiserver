@@ -19,7 +19,7 @@ services:
       - "database-data:/var/lib/postgresql/data"
     restart: always
   frontend:
-    image: gitlab-registry.cern.ch/authoring/notes/codimd:cernbox-integration
+    image: gitlab-registry.cern.ch/lopresti/codimd:cernbox-integration
     container_name: codimd-web
     hostname: cbox-codimd-web
     environment:
@@ -32,6 +32,7 @@ services:
       - CMD_ALLOW_EMAIL_REGISTER=false
       - CMD_USESSL=true
       - NODE_TLS_REJECT_UNAUTHORIZED=0
+      - CMD_APPLIANCE_MODE=true
       - CMD_SAVE_WEBHOOK=https://codimd-wopi.codinet:8000/save
     depends_on:
       - database
@@ -42,8 +43,6 @@ services:
       - key.pem
       - dhparam.pem
     network_mode: codinet
-    volumes:
-      - upload-data:/home/hackmd/app/public/uploads
     restart: always
   wopibridge:
     build:
@@ -56,7 +55,6 @@ services:
       - CODIMD_INT_URL=https://codimd-web.codinet:3000
       - CODIMD_EXT_URL=${HOST}:3000
       - WOPIBRIDGE_URL=${HOST}:8000
-      - CODIMD_STORAGE_PATH=/mnt/codimd_storage
     depends_on:
       - frontend
     ports:
@@ -64,8 +62,6 @@ services:
     secrets:
       - cert.pem
       - key.pem
-    volumes:
-      - upload-data:/mnt/codimd_storage
     network_mode: codinet
     restart: always
     healthcheck:
@@ -76,7 +72,6 @@ services:
 
 volumes:
   database-data: {}
-  upload-data: {}
 
 networks:
   codinet:
