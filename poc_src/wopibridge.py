@@ -108,7 +108,7 @@ class WB:
 #############################################################################################################
 
 @WB.app.errorhandler(Exception)
-def handleException(ex):
+def handleexception(ex):
   '''Generic method to log any uncaught exception'''
   if 'favicon.ico' in flask.request.url:
     # ignore harmless favicon requests
@@ -162,8 +162,6 @@ def _refreshlock(wopisrc, acctok, isdirty, wopilock):
   res = _wopicall(wopisrc, acctok, 'POST', headers=lockheaders)
   if res.status_code != http.client.OK:
     WB.log.warning('msg="Calling WOPI RefreshLock failed" url="%s" response="%s"' % (wopisrc, res.status_code))
-    return False
-  return True
 
 
 def _getattachments(mddoc, docfilename, forcezip=False):
@@ -284,51 +282,53 @@ def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
   if (wasbundle ^ (not bundlefile)) or not isclose:
     res = _wopicall(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock)},
                     contents=(bundlefile if wasbundle else mddoc))
+    if res.status_code != http.client.OK:
+      WB.log.error('msg="Calling WOPI PutFile failed" url="%s" response="%s"' % (wopisrc, res.status_code))
+      return 'Error saving the file', res.status_code
     # and refresh the WOPI lock
     _refreshlock(wopisrc, acctok, True, wopilock)
+    WB.log.info('msg="Save completed" token="%s"' % acctok[-20:])
+    return 'OK', http.client.OK
 
   # On close, use WOPI PutRelative for either the new bundle, if this is the first time we have attachments,
-  # or the single file, if there are no more attachments.
-  else:
-    putrelheaders = {'X-WOPI-Lock': json.dumps(wopilock),
-                     'X-WOPI-Override': 'PUT_RELATIVE',
-                     # SuggestedTarget to not overwrite a possibly existing file
-                     'X-WOPI-SuggestedTarget': os.path.splitext(wopilock['filename'])[0] + ('.zmd' if bundlefile else '.md')
-                    }
-    res = _wopicall(wopisrc, acctok, 'POST', headers=putrelheaders, contents=(bundlefile if bundlefile else mddoc))
-
+  # or the single md file, if there are no more attachments.
+  putrelheaders = {'X-WOPI-Lock': json.dumps(wopilock),
+                   'X-WOPI-Override': 'PUT_RELATIVE',
+                   # SuggestedTarget to not overwrite a possibly existing file
+                   'X-WOPI-SuggestedTarget': os.path.splitext(wopilock['filename'])[0] + ('.zmd' if bundlefile else '.md')
+                  }
+  res = _wopicall(wopisrc, acctok, 'POST', headers=putrelheaders, contents=(bundlefile if bundlefile else mddoc))
   if res.status_code != http.client.OK:
-    WB.log.warning('msg="Calling WOPI PutFile/PutRelative failed" url="%s" response="%s"' % (wopisrc, res.status_code))
+    WB.log.error('msg="Calling WOPI PutRelative failed" url="%s" response="%s"' % (wopisrc, res.status_code))
     return 'Error saving the file', res.status_code
 
-  if res.content.decode().find('Url') > 0 and isclose:
-    # use the new file's metadata from PutRelative to remove the previous file: we can do that only on close
-    # because we need to keep using the current wopisrc/acctok until the session is alive in CodiMD
-    res = res.json()
-    newwopi = urllib.parse.unquote(res['Url'])
-    newwopisrc = newwopi[:newwopi.find('?')]
-    newacctok = newwopi[newwopi.find('access_token=')+13:]
-    newlock = json.loads(json.dumps(wopilock))    # this is a hack for a deep copy, to be redone in Go
-    newlock['filename'] = res['Name']
-    res = _wopicall(newwopisrc, newacctok, 'POST', headers={'X-WOPI-Lock': json.dumps(newlock), 'X-Wopi-Override': 'LOCK'})
-    if res.status_code != http.client.OK:
-      # Failed to lock the new file just written, not a big deal as we're closing
-      WB.log.warning('msg="Failed to lock the new file" token="%s" response="%d"' % (newacctok[-20:], res.status_code))
-    
-    # unlock and delete original file
-    res = _wopicall(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
-    if res.status_code != http.client.OK:
-      WB.log.warning('msg="Failed to unlock the previous file" token="%s" response="%d"' % (acctok[-20:], res.status_code))
-    else:
-      res = _wopicall(wopisrc, acctok, 'POST', headers={'X-Wopi-Override': 'DELETE'})
-      if res.status_code == http.client.OK:
-        WB.log.info('msg="Previous file unlocked and removed successfully" token="%s"' % acctok[-20:])
+  # use the new file's metadata from PutRelative to remove the previous file: we can do that only on close
+  # because we need to keep using the current wopisrc/acctok until the session is alive in CodiMD
+  res = res.json()
+  newwopi = urllib.parse.unquote(res['Url'])
+  newwopisrc = newwopi[:newwopi.find('?')]
+  newacctok = newwopi[newwopi.find('access_token=')+13:]
+  newlock = json.loads(json.dumps(wopilock))    # this is a hack for a deep copy, to be redone in Go
+  newlock['filename'] = res['Name']
+  res = _wopicall(newwopisrc, newacctok, 'POST', headers={'X-WOPI-Lock': json.dumps(newlock), 'X-Wopi-Override': 'LOCK'})
+  if res.status_code != http.client.OK:
+    # Failed to lock the new file just written, not a big deal as we're closing
+    WB.log.warning('msg="Failed to lock the new file" token="%s" response="%d"' % (newacctok[-20:], res.status_code))
 
-    # update our metadata: note we already hold the condition variable as we're called within the save thread
-    WB.openfiles[newwopisrc] = {'acctok': newacctok, 'isclose': isclose, 'tosave': False, 'lastsave': int(time.time())}
-    del WB.openfiles[wopisrc]
+  # unlock and delete original file
+  res = _wopicall(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
+  if res.status_code != http.client.OK:
+    WB.log.warning('msg="Failed to unlock the previous file" token="%s" response="%d"' % (acctok[-20:], res.status_code))
+  else:
+    res = _wopicall(wopisrc, acctok, 'POST', headers={'X-Wopi-Override': 'DELETE'})
+    if res.status_code == http.client.OK:
+      WB.log.info('msg="Previous file unlocked and removed successfully" token="%s"' % acctok[-20:])
 
-  WB.log.info('msg="Save completed" token="%s"' % acctok[-20:])
+  # update our metadata: note we already hold the condition variable as we're called within the save thread
+  WB.openfiles[newwopisrc] = {'acctok': newacctok, 'isclose': isclose, 'tosave': False, 'lastsave': int(time.time())}
+  del WB.openfiles[wopisrc]
+
+  WB.log.info('msg="Final save completed" token="%s"' % acctok[-20:])
   return 'OK', http.client.OK
 
 
@@ -369,7 +369,6 @@ def appopen():
           # this lock cannot be parsed, probably got corrupted: force read-only mode
           WB.log.warning('msg="Malformed lock, forcing read-only mode" lock="%s"' % wopilock)
           filemd['UserCanWrite'] = False
-          #filemd['BreadcrumbDocName'] += ' (locked by another app)'
           wopilock = None
 
       if not wopilock:
@@ -404,7 +403,7 @@ def appopen():
 
     WB.log.info('msg="Redirecting client to CodiMD" redirecturl="%s"' % redirecturl)
     return flask.redirect(redirecturl)
- 
+
   except CodiMDFailure:
     # this can be risen by _storagetocodimd
     return 'Unable to contact CodiMD, please try again later', http.client.INTERNAL_SERVER_ERROR
@@ -428,12 +427,13 @@ def appsave():
   donotify = isclose or wopisrc not in WB.openfiles or WB.openfiles[wopisrc]['lastsave'] < time.time() - WB.saveinterval
   # enqueue the request, it will be processed asynchronously
   with WB.savecv:
-    if wopisrc not in WB.openfiles:
-      WB.log.debug('msg="Save: repopulating missing metadata" token="%s"' % acctok[-20:])
-      WB.openfiles[wopisrc] = {'acctok': acctok, 'isclose': isclose, 'tosave': True, 'lastsave': int(time.time())}
-    else:
+    if wopisrc in WB.openfiles:
       WB.openfiles[wopisrc]['tosave'] = True
       WB.openfiles[wopisrc]['isclose'] = isclose
+    else:
+      WB.log.debug('msg="Save: repopulating missing metadata" token="%s"' % acctok[-20:])
+      WB.openfiles[wopisrc] = {'acctok': acctok, 'isclose': isclose, 'tosave': True,
+                               'lastsave': int(time.time() - WB.saveinterval)}
     if donotify:
       WB.savecv.notify()   # note that the save thread stays locked until we release the context, after return!
     # return latest known state for this document
@@ -487,15 +487,14 @@ def dosavetostorage():
             WB.saveresponses[wopisrc] = _codimdtostorage(wopisrc, openfile['acctok'], openfile['isclose'], wopilock)
             openfile['lastsave'] = int(time.time())
             openfile['tosave'] = False
+
           # refresh locks of idle documents every 30 minutes
           if openfile['lastsave'] < time.time() - (1800 + WB.saveinterval):
             wopilock = _getwopilock(wopisrc, openfile['acctok']) if not wopilock else wopilock
-            if _refreshlock(wopisrc, openfile['acctok'], False, wopilock):
-              WB.log.info('msg="dosavetostorage: refreshed lock" token="%s"' % openfile['acctok'][-20:])
-            else:
-              WB.log.warning('msg="dosavetostorage: refreshing lock failed" token="%s"' % openfile['acctok'][-20:])
-            # if we get a save callback, we want to honor it immediately
+            _refreshlock(wopisrc, openfile['acctok'], False, wopilock)
+            # in case we get soon a save callback, we want to honor it immediately
             openfile['lastsave'] = int(time.time()) - WB.saveinterval
+
           # remove state for closed documents after some time
           if openfile['isclose'] and not openfile['tosave'] and (openfile['lastsave'] < time.time() - WB.saveinterval):
             # unlock document
