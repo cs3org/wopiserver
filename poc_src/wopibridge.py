@@ -321,7 +321,9 @@ def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
     WB.log.warning('msg="Failed to unlock the previous file" token="%s" response="%d"' % (acctok[-20:], res.status_code))
   else:
     res = _wopicall(wopisrc, acctok, 'POST', headers={'X-Wopi-Override': 'DELETE'})
-    if res.status_code == http.client.OK:
+    if res.status_code != http.client.OK:
+      WB.log.warning('msg="Failed to delete the previous file" token="%s" response="%d"' % (acctok[-20:], res.status_code))
+    else:
       WB.log.info('msg="Previous file unlocked and removed successfully" token="%s"' % acctok[-20:])
 
   # update our metadata: note we already hold the condition variable as we're called within the save thread
