@@ -414,7 +414,7 @@ def appsave():
   '''Save a MD doc given its WOPI context. The actual save is asynchronous.'''
   # fetch metadata from request
   try:
-    meta = urllib.parse.unquote(flask.request.headers['X-CERNBox-Metadata'])
+    meta = urllib.parse.unquote(flask.request.headers['X-EFSS-Metadata'])
     wopisrc = meta[:meta.index('?t=')]
     acctok = meta[meta.index('?t=')+3:]
     isclose = 'close' in flask.request.args and flask.request.args['close'] == 'true'
