@@ -19,7 +19,7 @@ services:
       - "database-data:/var/lib/postgresql/data"
     restart: always
   frontend:
-    image: gitlab-registry.cern.ch/lopresti/codimd:cernbox-integration
+    image: gitlab-registry.cern.ch/authoring/notes/codimd:cernbox-integration
     container_name: codimd-web
     hostname: cbox-codimd-web
     environment:
