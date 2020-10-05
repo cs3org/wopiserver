@@ -609,32 +609,35 @@ def wopiCheckFileInfo(fileid):
     if acctok['viewmode'] in (utils.ViewMode.READ_ONLY, utils.ViewMode.READ_WRITE):
       filemd['DownloadUrl'] = '%s?access_token=%s' % \
                               (Wopi.config.get('general', 'downloadurl'), flask.request.args['access_token'])
+    filemd['OwnerId'] = statInfo['userid']
+    filemd['UserId'] = acctok['userid']     # typically same as OwnerId; different when accessing shared documents
+    filemd['Size'] = statInfo['size']
+    # TODO the version is generated like this in ownCloud: 'V' . $file->getEtag() . \md5($file->getChecksum());
+    filemd['Version'] = statInfo['mtime']   # mtime is used as version here
+    filemd['SupportsExtendedLockLength'] = True
+    filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = \
+        filemd['SupportsGetLock'] = filemd['SupportsDeleteFile'] = acctok['viewmode'] = \
+        filemd['SupportsRename'] = filemd['UserCanRename'] = acctok['viewmode'] == utils.ViewMode.READ_WRITE
+
+    # populate app-specific metadata
     # the following properties are only used by MS Office Online
     if fExt in ['.docx', '.xlsx', '.pptx']:
       # TODO once the endpoints are managed by Reva, these have to be provided in the initial /open call
       filemd['HostViewUrl'] = '%s&%s' % (Wopi.ENDPOINTS[fExt]['view'], wopiSrc)
       filemd['HostEditUrl'] = '%s&%s' % (Wopi.ENDPOINTS[fExt]['edit'], wopiSrc)
+      # the following actions are broken in MS Office Online, therefore they are disabled
+      filemd['SupportsRename'] = filemd['UserCanRename'] = False
     # the following is to enable the 'Edit in Word/Excel/PowerPoint' (desktop) action (probably broken)
     try:
       filemd['ClientUrl'] = Wopi.config.get('general', 'webdavurl') + '/' + acctok['filename']
     except configparser.NoOptionError:
       # if no WebDAV URL is provided, ignore this setting
       pass
-    filemd['OwnerId'] = statInfo['userid']
-    filemd['UserId'] = acctok['userid']     # typically same as OwnerId; different when accessing shared documents
-    filemd['Size'] = statInfo['size']
-    # TODO the version is generated like this in ownCloud: 'V' . $file->getEtag() . \md5($file->getChecksum());
-    filemd['Version'] = statInfo['mtime']   # mtime is used as version here
-    filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = \
-        filemd['SupportsGetLock'] = filemd['SupportsDeleteFile'] = acctok['viewmode'] == utils.ViewMode.READ_WRITE
-        # XXX broken in MS Office Online
-        #filemd['SupportsRename'] = filemd['UserCanRename'] = acctok['viewmode'] == utils.ViewMode.READ_WRITE
-    filemd['SupportsExtendedLockLength'] = True
-    #filemd['UserCanPresent'] = True   # what about the broadcasting feature in Office Online?
     # extensions for Collabora Online
     filemd['EnableOwnerTermination'] = True
     filemd['DisableExport'] = filemd['DisableCopy'] = filemd['DisablePrint'] = acctok['viewmode'] == utils.ViewMode.VIEW_ONLY
     #filemd['LastModifiedTime'] = datetime.fromtimestamp(int(statInfo['mtime'])).isoformat()   # this currently breaks
+
     Wopi.log.info('msg="File metadata response" token="%s" metadata="%s"' % (flask.request.args['access_token'][-20:], filemd))
     return flask.Response(json.dumps(filemd), mimetype='application/json')
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:

@@ -47,7 +47,7 @@ def logGeneralExceptionAndReturn(ex, req):
                     'requestedUrl="%s" token="%s"' % \
                     (ex, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback), req.remote_addr,
                      req.url, req.args['access_token'][-20:] if 'access_token' in req.args else 'N/A'))
-  return 'Internal error', http.client.INTERNAL_SERVER_ERROR
+  return 'Internal error, please contact support', http.client.INTERNAL_SERVER_ERROR
 
 
 def generateWopiSrc(fileid):
