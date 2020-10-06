@@ -70,6 +70,9 @@ class WB:
       cls.log.setLevel(cls.loglevels['Debug'])
       cls.codimdexturl = os.environ.get('CODIMD_EXT_URL')    # this is the external-facing URL
       cls.codimdurl = os.environ.get('CODIMD_INT_URL')       # this is the internal URL (e.g. as visible in docker/K8s)
+      if not cls.codimdurl:
+        # defaults to the external
+        cls.codimdurl = cls.codimdexturl
       try:
         cls.saveinterval = int(os.environ.get('APP_SAVE_INTERVAL'))
       except TypeError:
