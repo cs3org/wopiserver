@@ -60,3 +60,32 @@ steps:
       from_secret: dockerhub_password
     build_args:
       - VERSION=${DRONE_TAG}
+
+---
+kind: pipeline
+type: docker
+name: release-xrootd
+
+platform:
+  os: linux
+  arch: amd64
+
+trigger:
+  event:
+    include:
+    - tag
+
+steps:
+- name: publish-docker-wopi-tag
+  pull: always
+  image: plugins/docker
+  settings:
+    repo: cs3org/wopiserver
+    tags: ${DRONE_TAG}-xrootd
+    dockerfile: wopiserver-xrootd.Dockerfile
+    username:
+      from_secret: dockerhub_username
+    password:
+      from_secret: dockerhub_password
+    build_args:
+      - VERSION=${DRONE_TAG}
