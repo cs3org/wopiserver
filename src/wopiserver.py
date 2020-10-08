@@ -24,6 +24,7 @@ import json
 import wopiutils as utils
 try:
   import flask                   # Flask app server, python3-flask-0.12.2 + python3-pyOpenSSL-17.3.0
+  from werkzeug.exceptions import NotFound as Flask_NotFound
   import jwt                     # PyJWT JSON Web Token, python3-jwt-1.6.1 or above
 except ImportError:
   print("Missing modules, please install Flask and JWT with `pip3 install flask PyJWT pyOpenSSL`")
@@ -127,7 +128,7 @@ class Wopi:
       cls.ENDPOINTS['.pptx']['view'] = oos + '/p/PowerPointFrame.aspx?PowerPointView=ReadingView'
       cls.ENDPOINTS['.pptx']['edit'] = oos + '/p/PowerPointFrame.aspx?PowerPointView=EditView'
       cls.ENDPOINTS['.pptx']['new']  = oos + '/p/PowerPointFrame.aspx?PowerPointView=EditView&New=1'   # pylint: disable=bad-whitespace
-      cls.log.info('msg="Microsoft Office Online endpoints successfully configured"')
+      cls.log.info('msg="Microsoft Office Online endpoints successfully configured" OfficeURL="%s"' % cls.ENDPOINTS['.docx']['edit'])
 
     code = cls.config.get('general', 'codeurl', fallback=None)
     if code:
@@ -159,24 +160,21 @@ class Wopi:
       except IOError as e:
         cls.log.warning('msg="Failed to initialize Collabora Online endpoints" error="%s"' % e)
 
-    # The CodiMD end-point
-    codimd = cls.config.get('general', 'codimdurl', fallback=None)
-    if codimd:
-      cls.ENDPOINTS['.md'] = {}
-      cls.ENDPOINTS['.md']['view'] = cls.ENDPOINTS['.md']['edit'] = codimd + '/open'
-      cls.ENDPOINTS['.md']['new'] = codimd + '/new'
-      cls.ENDPOINTS['.zmd'] = {}
-      cls.ENDPOINTS['.zmd']['view'] = cls.ENDPOINTS['.zmd']['edit'] = codimd + '/open'
-      cls.ENDPOINTS['.zmd']['new'] = codimd + '/new'
-      cls.ENDPOINTS['.txt'] = {}
-      cls.ENDPOINTS['.txt']['view'] = cls.ENDPOINTS['.txt']['edit'] = codimd + '/open'
-      cls.ENDPOINTS['.txt']['new'] = codimd + '/new'
-      cls.log.info('msg="CodiMD endpoints successfully configured"')
-
-    # backstop if no app got registered
-    if not cls.ENDPOINTS:
-      cls.log.fatal('msg="No office app got registered, aborting"')
-      sys.exit(-22)
+    # The WOPI Bridge end-point
+    bridge = cls.config.get('general', 'bridgeurl', fallback=None)
+    if not bridge:
+      # fallback to the same WOPI url but on default port 8000
+      bridge = urllib.parse.urlsplit(cls.wopiurl)
+      bridge = '%s://%s:8000/wopib' % (bridge.scheme, bridge.netloc[:bridge.netloc.find(':')])
+    # The bridge only supports CodiMD for now, therefore this is hardcoded:
+    # once we move to the Apps Registry microservice, we can make it dynamic
+    cls.ENDPOINTS['.md'] = {}
+    cls.ENDPOINTS['.md']['view'] = cls.ENDPOINTS['.md']['edit'] = bridge + '/open'
+    cls.ENDPOINTS['.zmd'] = {}
+    cls.ENDPOINTS['.zmd']['view'] = cls.ENDPOINTS['.zmd']['edit'] = bridge + '/open'
+    cls.ENDPOINTS['.txt'] = {}
+    cls.ENDPOINTS['.txt']['view'] = cls.ENDPOINTS['.txt']['edit'] = bridge + '/open'
+    cls.log.info('msg="WOPI Bridge endpoints successfully configured" BridgeURL="%s"' % bridge)
 
 
   @classmethod
@@ -208,9 +206,8 @@ class Wopi:
 @Wopi.app.errorhandler(Exception)
 def handleException(ex):
   '''Generic method to log any uncaught exception'''
-  if 'favicon.ico' in flask.request.url:
-    # ignore harmless favicon requests
-    return 'Not exist', http.client.NOT_FOUND
+  if isinstance(ex, Flask_NotFound):
+    return ex
   return utils.logGeneralExceptionAndReturn(ex, flask.request)
 
 
@@ -953,15 +950,15 @@ def wopiFilesPost(fileid):
       return 'Attempting to perform a write operation using a read-only token', http.client.UNAUTHORIZED
     if op in ('LOCK', 'REFRESH_LOCK'):
       return wopiLock(fileid, headers, acctok)
-    elif op == 'UNLOCK':
+    if op == 'UNLOCK':
       return wopiUnlock(fileid, headers, acctok)
-    elif op == 'GET_LOCK':
+    if op == 'GET_LOCK':
       return wopiGetLock(fileid, headers, acctok)
-    elif op == 'PUT_RELATIVE':
+    if op == 'PUT_RELATIVE':
       return wopiPutRelative(fileid, headers, acctok)
-    elif op == 'DELETE':
+    if op == 'DELETE':
       return wopiDeleteFile(fileid, headers, acctok)
-    elif op == 'RENAME_FILE':
+    if op == 'RENAME_FILE':
       return wopiRenameFile(fileid, headers, acctok)
     #elif op == 'PUT_USER_INFO':   https://wopirest.readthedocs.io/en/latest/files/PutUserInfo.html
     # Any other op is unsupported
