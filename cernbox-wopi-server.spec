@@ -79,6 +79,10 @@ touch /etc/wopi/iopsecret
 %_python_lib/*
 
 %changelog
+* Fri Oct  8 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.6.0
+- Renamed codimdurl to bridgeurl
+- Improved logging and exception handling
+- Minor fix on PutFile
 * Tue Sep 22 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.5.0
 - Moved to 3-digit releases to help drone-based automatic builds
 - Minor fixes in cboxLock and CheckFileInfo
@@ -93,7 +97,7 @@ touch /etc/wopi/iopsecret
   open-file-in-app-provider reva command both support
   generic storage ids and have been tested with Collabora
 - Fixed wopiurl config parameter
-* Fri Jul  2 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.2
+* Thu Jul  2 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.2
 - Fixed xrootd encoding of file names with special chars
 - Incorporated unit test suite in the docker images
 * Fri Jun 26 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.1
@@ -108,7 +112,7 @@ touch /etc/wopi/iopsecret
 - Included a pure python-based docker image
 - Ported to xrootd 4.12 and python 3.8
 - Moved to the CS3 Organisation
-* Wed May 14 2020 Giuseppe Lo Presti <lopresti@cern.ch> 4.3
+* Thu May 14 2020 Giuseppe Lo Presti <lopresti@cern.ch> 4.3
 - Included some fixes around locking; this is hopefully the last release
   before the ScienceMesh integration
 * Wed Apr 08 2020 Giuseppe Lo Presti <lopresti@cern.ch> 4.2
