@@ -28,6 +28,7 @@ import atexit
 try:
   import requests
   import flask                   # Flask app server
+  from werkzeug.exceptions import NotFound as Flask_NotFound
 except ImportError:
   print("Missing modules, please install with `pip3 install flask requests`")
   raise
@@ -77,7 +78,8 @@ class WB:
         cls.saveinterval = int(os.environ.get('APP_SAVE_INTERVAL'))
       except TypeError:
         cls.saveinterval = 300                               # defaults to 5 minutes
-      _autodetected_server = 'http://%s:%d' % (socket.getfqdn(), cls.port)
+      _autodetected_server = '%s://%s:%d' % \
+          ('https' if os.path.isfile('/var/run/secrets/cert.pem') else 'http', socket.getfqdn(), cls.port)
       cls.wopibridgeurl = os.environ.get('WOPIBRIDGE_URL')
       if not cls.wopibridgeurl:
         cls.wopibridgeurl = _autodetected_server
@@ -99,43 +101,12 @@ class WB:
     '''Runs the Flask app in secure (standalone) or unsecure mode depending on the context.
        Secure https mode typically is to be provided by the infrastructure (k8s ingress, nginx...)'''
     if os.path.isfile('/var/run/secrets/cert.pem'):
-      cls.log.info('msg="WOPI Bridge starting in secure mode" url="%s" proxied="%s"' % (cls.wopibridgeurl, cls.proxied))
+      cls.log.info('msg="WOPI Bridge starting in secure mode" url="%s/wopib" proxied="%s"' % (cls.wopibridgeurl, cls.proxied))
       cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=True,
                   ssl_context=('/var/run/secrets/cert.pem', '/var/run/secrets/key.pem'))
     else:
-      cls.log.info('msg="WOPI Bridge starting in unsecure mode" url="%s" proxied="%s"' % (cls.wopibridgeurl, cls.proxied))
+      cls.log.info('msg="WOPI Bridge starting in unsecure mode" url="%s/wopib" proxied="%s"' % (cls.wopibridgeurl, cls.proxied))
       cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=True)
-
-
-# The Web Application starts here
-#############################################################################################################
-
-@WB.app.errorhandler(Exception)
-def handleexception(ex):
-  '''Generic method to log any uncaught exception'''
-  if 'favicon.ico' in flask.request.url:
-    # ignore harmless favicon requests
-    return 'Not exist', http.client.NOT_FOUND
-  ex_type, ex_value, ex_traceback = sys.exc_info()
-  WB.log.error('msg="Unexpected exception caught" exception="%s" type="%s" traceback="%s"' % \
-               (ex, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback)))
-  return 'Internal error, please contact support', http.client.INTERNAL_SERVER_ERROR
-
-
-@WB.app.route("/", methods=['GET'])
-def index():
-  '''Return a default index page with some user-friendly information about this service'''
-  #WB.log.debug('msg="Accessed index page" client="%s"' % flask.request.remote_addr)
-  return """
-    <html><head><title>ScienceMesh WOPI Bridge</title></head>
-    <body>
-    <div align="center" style="color:#000080; padding-top:50px; font-family:Verdana; size:11">
-    This is a WOPI HTTP bridge, to be used in conjunction with a WOPI-enabled EFSS.<br>This proof-of-concept supports CodiMD for now.</div>
-    <div style="position: absolute; bottom: 10px; left: 10px; width: 99%%;"><hr>
-    <i>ScienceMesh WOPI Bridge %s at %s. Powered by Flask %s for Python %s</i>.</div>
-    </body>
-    </html>
-    """ % (WBVERSION, socket.getfqdn(), flask.__version__, python_version())
 
 
 def _wopicall(wopisrc, acctok, method, contents=False, headers=None):
@@ -337,10 +308,44 @@ def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
   return 'OK', http.client.OK
 
 
-#
-# The REST methods start here
-#
-@WB.app.route("/open", methods=['GET'])
+
+# The Web Application starts here
+#############################################################################################################
+
+@WB.app.errorhandler(Exception)
+def handleexception(ex):
+  '''Generic method to log any uncaught exception'''
+  if isinstance(ex, Flask_NotFound):
+    return ex
+  ex_type, ex_value, ex_traceback = sys.exc_info()
+  WB.log.error('msg="Unexpected exception caught" exception="%s" type="%s" traceback="%s"' % \
+               (ex, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback)))
+  return 'Internal error, please contact support', http.client.INTERNAL_SERVER_ERROR
+
+
+@WB.app.route("/", methods=['GET'])
+def redir():
+  '''A simple redirect to the page below'''
+  return flask.redirect("/wopib")
+
+@WB.app.route("/wopib", methods=['GET'])
+def index():
+  '''Return a default index page with some user-friendly information about this service'''
+  #WB.log.debug('msg="Accessed index page" client="%s"' % flask.request.remote_addr)
+  return """
+    <html><head><title>ScienceMesh WOPI Bridge</title></head>
+    <body>
+    <div align="center" style="color:#000080; padding-top:50px; font-family:Verdana; size:11">
+    This is a WOPI HTTP bridge, to be used in conjunction with a WOPI-enabled EFSS.<br>Only CodiMD is supported for now.<br>
+    To use this service, please log in to your EFSS Storage and click on a supported document.</div>
+    <div style="position: absolute; bottom: 10px; left: 10px; width: 99%%;"><hr>
+    <i>ScienceMesh WOPI Bridge %s at %s. Powered by Flask %s for Python %s</i>.</div>
+    </body>
+    </html>
+    """ % (WBVERSION, socket.getfqdn(), flask.__version__, python_version())
+
+
+@WB.app.route("/wopib/open", methods=['GET'])
 def appopen():
   '''Open a MD doc by contacting the provided WOPISrc with the given access_token'''
   try:
@@ -349,7 +354,7 @@ def appopen():
     WB.log.info('msg="Open called" client="%s" token="%s"' % (flask.request.remote_addr, acctok[-20:]))
   except KeyError as e:
     WB.log.error('msg="Open: unable to open the file, missing WOPI context" error="%s"' % e)
-    return 'Missing arguments', http.client.BAD_REQUEST
+    return 'Missing arguments. ', http.client.BAD_REQUEST
 
   # WOPI GetFileInfo
   try:
@@ -414,7 +419,7 @@ def appopen():
     return 'Unable to contact CodiMD, please try again later', http.client.INTERNAL_SERVER_ERROR
 
 
-@WB.app.route("/save", methods=['POST'])
+@WB.app.route("/wopib/save", methods=['POST'])
 def appsave():
   '''Save a MD doc given its WOPI context. The actual save is asynchronous.'''
   # fetch metadata from request
@@ -452,7 +457,7 @@ def appsave():
     return 'Enqueued', http.client.ACCEPTED
 
 
-@WB.app.route("/list", methods=['GET'])
+@WB.app.route("/wopib/list", methods=['GET'])
 def applist():
   '''Return a list of all currently opened files'''
   # TODO this API should be protected
@@ -477,6 +482,7 @@ def _getwopilock(wopisrc, acctok):
 
 def dosavetostorage():
   '''Perform the pending save to storage operations'''
+  WB.log.info('msg="Savethread starting"')
   while WB.active:
     with WB.savecv:
       # sleep for one minute or until awaken
@@ -507,10 +513,10 @@ def dosavetostorage():
             res = _wopicall(wopisrc, openfile['acctok'], 'POST',
                             headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
             if res.status_code != http.client.OK:
-              WB.log.warning('msg="dosavetostorage: calling WOPI Unlock failed" url="%s" response="%s"' % \
+              WB.log.warning('msg="Savethread: calling WOPI Unlock failed" url="%s" response="%s"' % \
                              (wopisrc, res.status_code))
             else:
-              WB.log.info('msg="dosavetostorage: unlocked document" metadata="%s"' % openfile)
+              WB.log.info('msg="Savethread: unlocked document" metadata="%s"' % openfile)
             del WB.openfiles[wopisrc]
 
         except InvalidLock as e:
@@ -520,21 +526,20 @@ def dosavetostorage():
 
         except Exception as e:    # pylint: disable=broad-except
           ex_type, ex_value, ex_traceback = sys.exc_info()
-          WB.log.error('msg="dosyncstorage: unexpected exception caught" exception="%s" type="%s" traceback="%s"' % \
+          WB.log.error('msg="Savethread: unexpected exception caught" exception="%s" type="%s" traceback="%s"' % \
                        (e, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback)))
 
 
 @atexit.register
 def stopsavethread():
   '''Exit handler to cleanly stop the storage sync thread'''
-  WB.log.info('msg="Waiting for storage sync thread to complete"')
-  print('msg="Waiting for storage sync thread to complete"\n')
+  WB.log.info('msg="Waiting for Savethread to complete"')
   WB.savecv.acquire()
   WB.active = False
   WB.savecv.notify()
   WB.savecv.release()
   WB.savethread.join()
-  WB.log.info('msg="Terminating WOPI Bridge service"')
+  WB.log.info('msg="Savethread terminated, shutting down"')
 
 
 #
