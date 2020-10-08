@@ -212,6 +212,10 @@ def handleException(ex):
 
 
 @Wopi.app.route("/", methods=['GET'])
+def redir():
+  '''A simple redirect to the page below'''
+  return flask.redirect("/wopi")
+
 @Wopi.app.route("/wopi", methods=['GET'])
 def index():
   '''Return a default index page with some user-friendly information about this service'''
@@ -220,8 +224,8 @@ def index():
     <html><head><title>ScienceMesh WOPI Server</title></head>
     <body>
     <div align="center" style="color:#000080; padding-top:50px; font-family:Verdana; size:11">
-    This is the ScienceMesh IOP <a href=http://wopi.readthedocs.io>WOPI</a> server to support online office platforms.<br>
-    To use this service, please log in to your EFSS Storage and click on your office documents.</div>
+    This is the ScienceMesh IOP <a href=http://wopi.readthedocs.io>WOPI</a> server to support online office-like editors.<br>
+    To use this service, please log in to your EFSS Storage and click on a supported document.</div>
     <div style="position: absolute; bottom: 10px; left: 10px; width: 99%%;"><hr>
     <i>ScienceMesh WOPI Server %s at %s. Powered by Flask %s for Python %s</i>.
     </body>
