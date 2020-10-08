@@ -10,7 +10,7 @@ import time
 import traceback
 import hashlib
 import json
-import urllib.parse
+from urllib.parse import quote_plus as url_quote_plus
 from enum import Enum
 import http.client
 import flask
@@ -51,8 +51,8 @@ def logGeneralExceptionAndReturn(ex, req):
 
 
 def generateWopiSrc(fileid):
-  '''Returns a valid WOPISrc for the given fileid'''
-  return urllib.parse.quote_plus('%s/wopi/files/%s' % (_ctx['wopi'].wopiurl, fileid))
+  '''Returns a valid URL-encoded WOPISrc for the given fileid'''
+  return url_quote_plus('%s/wopi/files/%s' % (_ctx['wopi'].wopiurl, fileid))
 
 
 def getLibreOfficeLockName(filename):
