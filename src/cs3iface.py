@@ -82,7 +82,7 @@ def stat(endpoint, fileid, userid, versioninv=0):
         'mtime': statInfo.info.mtime.seconds
         }
   ctx['log'].info('msg="Failed stat" fileid="%s" reason="%s"' % (fileid, statInfo.status.message))
-  raise IOError(statInfo.status.message if 'file not found' not in statInfo.status.message else 'No such file or directory')
+  raise IOError('No such file or directory' if statInfo.status.code == cs3code.CODE_NOT_FOUND else statInfo.status.message)
 
 
 def statx(endpoint, fileid, userid, versioninv=0):
