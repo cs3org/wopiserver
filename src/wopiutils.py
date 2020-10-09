@@ -149,47 +149,50 @@ def retrieveWopiLock(fileid, operation, lock, acctok):
   return retrievedLock['wopilock']
 
 
-def storeWopiLock(operation, lock, acctok):
+def storeWopiLock(operation, lock, acctok, isnotoffice):
   '''Stores the lock for a given file in the form of an encoded JSON string (cf. the access token)'''
-  try:
-    # first try to look for a MS Office lock
-    lockInfo = _ctx['st'].stat(acctok['endpoint'], getMicrosoftOfficeLockName(acctok['filename']), acctok['userid'])
-    _ctx['log'].info('msg="WOPI lock denied because of an existing Microsoft Office lock" filename="%s" mtime="%ld"' % \
-                     (acctok['filename'], lockInfo['mtime']))
-    raise IOError('File exists and islock flag requested')
-  except IOError as e:
-    if 'File exists and islock flag requested' in str(e):
-      raise
-    #else any other error is ignored here, move on
-  try:
-    # then create a LibreOffice-compatible lock file for interoperability purposes, making sure to
-    # not overwrite any existing or being created lock
-    lockcontent = ',Collaborative Online Editor,%s,%s,WOPIServer;' % \
-                  (_ctx['wopi'].wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())))
-    _ctx['st'].writefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], \
-                         lockcontent, islock=True)
-  except IOError as e:
-    if 'File exists and islock flag requested' in str(e):
-      # retrieve the LibreOffice-compatible lock just found
-      try:
-        retrievedlock = next(_ctx['st'].readfile(acctok['endpoint'], \
-                                                 getLibreOfficeLockName(acctok['filename']), acctok['userid']))
-        if isinstance(retrievedlock, IOError):
-          raise retrievedlock
-        retrievedlock = retrievedlock.decode('utf-8')
-      except (IOError, StopIteration) as e:
-        retrievedlock = ''   # could not read the lock, maybe it's empty: still, deny WOPI lock
-      if 'WOPIServer' not in retrievedlock:
-        # the file was externally locked, make this call fail
-        _ctx['log'].info('msg="WOPI lock denied because of an existing LibreOffice lock" filename="%s" holder="%s"' % \
-                         (acctok['filename'], retrievedlock.split(',')[1] if ',' in retrievedlock else retrievedlock))
+  if not isnotoffice:
+    try:
+      # first try to look for a MS Office lock
+      lockInfo = _ctx['st'].stat(acctok['endpoint'], getMicrosoftOfficeLockName(acctok['filename']), acctok['userid'])
+      _ctx['log'].info('msg="WOPI lock denied because of an existing Microsoft Office lock" filename="%s" mtime="%ld"' % \
+                      (acctok['filename'], lockInfo['mtime']))
+      raise IOError('File exists and islock flag requested')
+    except IOError as e:
+      if 'File exists and islock flag requested' in str(e):
         raise
-      #else it's our previous lock: all right, move on
-    else:
-      # any other error is logged and raised
-      _ctx['log'].error('msg="%s: unable to store LibreOffice-compatible lock" filename="%s" token="%s" lock="%s" reason="%s"' % \
-                        (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
-      raise
+      #else any other error is ignored here, move on
+
+    try:
+      # then create a LibreOffice-compatible lock file for interoperability purposes, making sure to
+      # not overwrite any existing or being created lock
+      lockcontent = ',Collaborative Online Editor,%s,%s,WOPIServer;' % \
+                    (_ctx['wopi'].wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())))
+      _ctx['st'].writefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], \
+                          lockcontent, islock=True)
+    except IOError as e:
+      if 'File exists and islock flag requested' in str(e):
+        # retrieve the LibreOffice-compatible lock just found
+        try:
+          retrievedlock = next(_ctx['st'].readfile(acctok['endpoint'], \
+                                                  getLibreOfficeLockName(acctok['filename']), acctok['userid']))
+          if isinstance(retrievedlock, IOError):
+            raise retrievedlock
+          retrievedlock = retrievedlock.decode('utf-8')
+        except (IOError, StopIteration) as e:
+          retrievedlock = ''   # could not read the lock, maybe it's empty: still, deny WOPI lock
+        if 'WOPIServer' not in retrievedlock:
+          # the file was externally locked, make this call fail
+          _ctx['log'].info('msg="WOPI lock denied because of an existing LibreOffice lock" filename="%s" holder="%s"' % \
+                          (acctok['filename'], retrievedlock.split(',')[1] if ',' in retrievedlock else retrievedlock))
+          raise
+        #else it's our previous lock: all right, move on
+      else:
+        # any other error is logged and raised
+        _ctx['log'].error('msg="%s: unable to store LibreOffice-compatible lock" filename="%s" token="%s" lock="%s" reason="%s"' % \
+                          (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
+        raise
+
   try:
     # now store the lock as encoded JWT: note that we do not use islock=True, because the WOPI specs require
     # this operation to be essentially idempotent, so it should not fail if the lock was there or is being

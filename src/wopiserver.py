@@ -86,6 +86,10 @@ class Wopi:
       # prepare the Flask web app
       cls.port = int(cls.config.get('general', 'port'))
       cls.log.setLevel(cls.loglevels[cls.config.get('general', 'loglevel')])
+      try:
+        cls.nonofficetypes = cls.config.get('general', 'nonofficetypes').split()
+      except (TypeError, configparser.NoOptionError) as e:
+        cls.nonofficetypes = []
       with open(cls.config.get('security', 'wopisecretfile')) as s:
         cls.wopisecret = s.read().strip('\n')
       with open(cls.config.get('security', 'iopsecretfile')) as s:
@@ -737,7 +741,7 @@ def wopiLock(fileid, reqheaders, acctok):
                       flask.request.args['access_token'][-20:]))
   # LOCK or REFRESH_LOCK: set the lock to the given one, including the expiration time
   try:
-    utils.storeWopiLock(op, lock, acctok)
+    utils.storeWopiLock(op, lock, acctok, os.path.splitext(acctok['filename'])[1] in Wopi.nonofficetypes)
   except IOError as e:
     if 'File exists and islock flag requested' in str(e):
       # this file was already locked externally: storeWopiLock looks at LibreOffice-compatible locks
