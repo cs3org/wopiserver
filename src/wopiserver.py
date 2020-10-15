@@ -165,11 +165,11 @@ class Wopi:
         cls.log.warning('msg="Failed to initialize Collabora Online endpoints" error="%s"' % e)
 
     # The WOPI Bridge end-point
-    bridge = cls.config.get('general', 'bridgeurl', fallback=None)
+    bridge = cls.config.get('general', 'wopibridgeurl', fallback=None)
     if not bridge:
       # fallback to the same WOPI url but on default port 8000
       bridge = urllib.parse.urlsplit(cls.wopiurl)
-      bridge = '%s://%s:8000/wopib' % (bridge.scheme, bridge.netloc[:bridge.netloc.find(':')])
+      bridge = '%s://%s:8000/wopib' % (bridge.scheme, bridge.netloc[:bridge.netloc.find(':')+1])
     # The bridge only supports CodiMD for now, therefore this is hardcoded:
     # once we move to the Apps Registry microservice, we can make it dynamic
     cls.ENDPOINTS['.md'] = {}
