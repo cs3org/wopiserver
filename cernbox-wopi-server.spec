@@ -79,10 +79,11 @@ touch /etc/wopi/iopsecret
 %_python_lib/*
 
 %changelog
-* Fri Oct  8 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.6.0
-- Renamed codimdurl to bridgeurl
+* Mon Oct 19 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.6.0
+- Renamed codimdurl to wopibridgeurl
 - Improved logging and exception handling
 - Minor fix on PutFile
+- Improved locking for non-office files
 * Tue Sep 22 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.5.0
 - Moved to 3-digit releases to help drone-based automatic builds
 - Minor fixes in cboxLock and CheckFileInfo
