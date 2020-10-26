@@ -35,7 +35,7 @@ except ImportError:
 
 WBVERSION = '1.0'
 CERTPATH = '/var/run/secrets/cert.pem'
-
+RECOVER_MSG = 'Please copy the content in a safe place and reopen the document afresh to paste it back'
 
 class InvalidLock(Exception):
   '''A custom exception to represent an invalid or missing WOPI lock'''
@@ -201,6 +201,10 @@ def _unzipattachments(inputbuf):
   return mddoc
 
 
+def _jsonify(msg):
+  '''One-liner to consistently json-ify responses to CodiMD'''
+  return "{'message': '%s'}" % msg
+
 def _storagetocodimd(filemd, wopisrc, acctok):
   '''Copy document from storage to CodiMD'''
   # WOPI GetFile
@@ -247,7 +251,7 @@ def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
               (isclose, WB.codimdurl + wopilock['docid'], acctok[-20:]))
   res = requests.get(WB.codimdurl + wopilock['docid'] + '/download', verify=False)
   if res.status_code != http.client.OK:
-    return 'Failed to fetch document from CodiMD', res.status_code
+    return _jsonify('Failed to fetch document from CodiMD: got HTTP %d' % res.status_code), res.status_code
   mddoc = res.content
 
   if isclose and wopilock['digest'] != 'dirty':
@@ -256,7 +260,7 @@ def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
     h.update(mddoc)
     if h.hexdigest() == wopilock['digest']:
       WB.log.info('msg="File unchanged, skipping save" token="%s"' % acctok[-20:])
-      return 'OK', http.client.OK
+      return _jsonify('OK'), http.client.OK
 
   # check if we have attachments
   wasbundle = os.path.splitext(wopilock['filename'])[1] == '.zmd'
@@ -268,11 +272,11 @@ def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
                     contents=(bundlefile if wasbundle else mddoc))
     if res.status_code != http.client.OK:
       WB.log.error('msg="Calling WOPI PutFile failed" url="%s" response="%s"' % (wopisrc, res.status_code))
-      return 'Error saving the file', res.status_code
+      return _jsonify('Error saving the file (HTTP %d). %s' % res.status_code), res.status_code
     # and refresh the WOPI lock
     _refreshlock(wopisrc, acctok, True, wopilock)
     WB.log.info('msg="Save completed" token="%s"' % acctok[-20:])
-    return 'OK', http.client.OK
+    return _jsonify('File saved successfully'), http.client.OK
 
   # On close, use WOPI PutRelative for either the new bundle, if this is the first time we have attachments,
   # or the single md file, if there are no more attachments.
@@ -284,7 +288,7 @@ def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
   res = _wopicall(wopisrc, acctok, 'POST', headers=putrelheaders, contents=(bundlefile if bundlefile else mddoc))
   if res.status_code != http.client.OK:
     WB.log.error('msg="Calling WOPI PutRelative failed" url="%s" response="%s"' % (wopisrc, res.status_code))
-    return 'Error saving the file', res.status_code
+    return _jsonify('Error saving the file (HTTP %d). %s' % (res.status_code, RECOVER_MSG), res.status_code
 
   # use the new file's metadata from PutRelative to remove the previous file: we can do that only on close
   # because we need to keep using the current wopisrc/acctok until the session is alive in CodiMD
@@ -315,7 +319,7 @@ def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
   del WB.openfiles[wopisrc]
 
   WB.log.info('msg="Final save completed" token="%s"' % acctok[-20:])
-  return 'OK', http.client.OK
+  return _jsonify('File saved successfully'), http.client.OK
 
 
 
@@ -330,7 +334,7 @@ def handleexception(ex):
   ex_type, ex_value, ex_traceback = sys.exc_info()
   WB.log.error('msg="Unexpected exception caught" exception="%s" type="%s" traceback="%s"' % \
                (ex, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback)))
-  return 'Internal error, please contact support', http.client.INTERNAL_SERVER_ERROR
+  return _jsonify('Internal error, please contact support'), http.client.INTERNAL_SERVER_ERROR
 
 
 @WB.app.route("/", methods=['GET'])
@@ -364,7 +368,7 @@ def appopen():
     WB.log.info('msg="Open called" client="%s" token="%s"' % (flask.request.remote_addr, acctok[-20:]))
   except KeyError as e:
     WB.log.error('msg="Open: unable to open the file, missing WOPI context" error="%s"' % e)
-    return 'Missing arguments. ', http.client.BAD_REQUEST
+    return 'Missing arguments', http.client.BAD_REQUEST
 
   # WOPI GetFileInfo
   try:
@@ -431,7 +435,7 @@ def appopen():
 
 @WB.bpr.route("/save", methods=['POST'])
 def appsave():
-  '''Save a MD doc given its WOPI context. The actual save is asynchronous.'''
+  '''Save a MD doc given its WOPI context, and return a JSON-formatted message. The actual save is asynchronous.'''
   # fetch metadata from request
   try:
     meta = urllib.parse.unquote(flask.request.headers['X-EFSS-Metadata'])
@@ -441,7 +445,7 @@ def appsave():
   except (KeyError, ValueError) as e:
     WB.log.error('msg="Save: malformed or missing metadata" client="%s" headers="%s" exception="%s" error="%s"' % \
       (flask.request.remote_addr, flask.request.headers, type(e), e))
-    return 'Malformed or missing metadata', http.client.BAD_REQUEST
+    return _jsonify('Malformed or missing metadata, could not save. %s' % RECOVER_MSG), http.client.BAD_REQUEST
 
   # decide whether to notify the save thread
   donotify = isclose or wopisrc not in WB.openfiles or WB.openfiles[wopisrc]['lastsave'] < time.time() - WB.saveinterval
@@ -533,7 +537,7 @@ def savethread_do():
 
         except InvalidLock as e:
           # WOPI lock got lost
-          WB.saveresponses[wopisrc] = 'Failed to save document, malformed or missing lock', http.client.NOT_FOUND
+          WB.saveresponses[wopisrc] = _jsonify('Failed to save document, malformed or missing lock. %s' % RECOVER_MSG), http.client.NOT_FOUND
           del WB.openfiles[wopisrc]
 
         except Exception as e:    # pylint: disable=broad-except
