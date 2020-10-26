@@ -49,7 +49,7 @@ class WB:
   bpr = flask.Blueprint('WOPIBridge', __name__, url_prefix=approot)
   app = flask.Flask('WOPIBridge')
   log = app.logger
-  port = 0
+  port = 8000
   loglevels = {"Critical": logging.CRITICAL,  # 50
                "Error":    logging.ERROR,     # 40
                "Warning":  logging.WARNING,   # 30
@@ -71,7 +71,6 @@ class WB:
       loghandler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)s[%(process)d] %(levelname)-8s %(message)s',
                                                 datefmt='%Y-%m-%dT%H:%M:%S'))
       cls.log.addHandler(loghandler)
-      cls.port = 8000
       cls.log.setLevel(cls.loglevels['Debug'])
       cls.codimdexturl = os.environ.get('CODIMD_EXT_URL')    # this is the external-facing URL
       cls.codimdurl = os.environ.get('CODIMD_INT_URL')       # this is the internal URL (e.g. as visible in docker/K8s)
@@ -288,7 +287,7 @@ def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
   res = _wopicall(wopisrc, acctok, 'POST', headers=putrelheaders, contents=(bundlefile if bundlefile else mddoc))
   if res.status_code != http.client.OK:
     WB.log.error('msg="Calling WOPI PutRelative failed" url="%s" response="%s"' % (wopisrc, res.status_code))
-    return _jsonify('Error saving the file (HTTP %d). %s' % (res.status_code, RECOVER_MSG), res.status_code
+    return _jsonify('Error saving the file (HTTP %d). %s' % (res.status_code, RECOVER_MSG)), res.status_code
 
   # use the new file's metadata from PutRelative to remove the previous file: we can do that only on close
   # because we need to keep using the current wopisrc/acctok until the session is alive in CodiMD
@@ -537,7 +536,8 @@ def savethread_do():
 
         except InvalidLock as e:
           # WOPI lock got lost
-          WB.saveresponses[wopisrc] = _jsonify('Failed to save document, malformed or missing lock. %s' % RECOVER_MSG), http.client.NOT_FOUND
+          WB.saveresponses[wopisrc] = _jsonify('Failed to save document, malformed or missing lock. %s' % RECOVER_MSG), \
+                                      http.client.NOT_FOUND
           del WB.openfiles[wopisrc]
 
         except Exception as e:    # pylint: disable=broad-except
