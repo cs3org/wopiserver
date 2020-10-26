@@ -1,6 +1,6 @@
 # docker-compose configuration file for CodiMD + Postgres + WOPI bridge
 #
-# Build with:   docker-compose -f codimd.yaml build
+# Build with:   docker-compose -f codinet.yaml build
 # Run with:     DBPWD='yourdbpassword' HOST='https://yourserver' docker-compose -f codimd.yaml up -d
 #
 
