@@ -32,7 +32,7 @@ services:
       - CMD_USESSL=true
       - NODE_TLS_REJECT_UNAUTHORIZED=0
       - CMD_APPLIANCE_MODE=true
-      - CMD_SAVE_WEBHOOK=https://${WOPIBRIDGE_HOST}:8000/wopib/save
+      - CMD_SAVE_WEBHOOK=${WOPIBRIDGE_HOST}:8000/wopib/save
     depends_on:
       - database
     ports:
