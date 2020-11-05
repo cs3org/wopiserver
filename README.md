@@ -7,11 +7,11 @@ This is a proof-of-concept WOPI bridge server, currently only targeting CodiMD, 
   - `/open`   meant to be called by the EFSS with a WOPISrc and a WOPI access token, returns a file displayed in CodiMD
   - `/save`   auto-called by the CodiMD backend when some changes are detected on the open document
 * Stateless server, all context stored in the WOPI lock or passed through arguments
-* Readonly (publish) mode vs. read/write mode
+* Readonly (publish or slide) mode vs. read/write mode
 * Collaborative editing and locking of the file
 * Transparent handling of uploads (i.e. pictures):
-  * If a note has no pictures, it is handled as a text file.
-  * Once a picture is included, the save to WOPI is executed as a zipped bundle, with a `.zmd` extension, and the previous `.md` file is removed. Similarly if all pictures are removed and the file is saved back as `.md`.
+  * If a note has no pictures, it is handled as a `.md` text file
+  * Once a picture is included, on close the save to WOPI is executed as a zipped bundle, with a `.zmd` extension, and the previous `.md` file is removed; similarly if all pictures are removed and the file is saved back as `.md`
   * Files ending as `.zmd` are equally treated as zipped bundles and expanded to CodiMD
 
 ## Required CodiMD APIs
