@@ -138,13 +138,15 @@ def _wopicall(wopisrc, acctok, method, contents=False, headers=None):
   return None
 
 
-def _refreshlock(wopisrc, acctok, isdirty, wopilock):
+def _refreshlock(wopisrc, acctok, wopilock, isdirty=False, isclose=False):
   '''Refresh an existing WOPI lock. Returns True if successful, False otherwise'''
+  newlock = json.loads(json.dumps(wopilock))    # this is a hack for a deep copy, to be redone in Go
   if isdirty and wopilock['digest'] != 'dirty':
-    newlock = json.loads(json.dumps(wopilock))    # this is a hack for a deep copy, to be redone in Go
     newlock['digest'] = 'dirty'
-  else:
-    newlock = wopilock
+  if isclose:
+    newlock['isclose'] = True
+  elif 'isclose' in newlock:
+    del newlock['isclose']
   lockheaders = {'X-Wopi-Override': 'REFRESH_LOCK',
                  'X-WOPI-OldLock': json.dumps(wopilock),
                  'X-WOPI-Lock': json.dumps(newlock)
@@ -283,7 +285,7 @@ def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
       WB.log.error('msg="Calling WOPI PutFile failed" url="%s" response="%s"' % (wopisrc, res.status_code))
       return _jsonify('Error saving the file (HTTP %d). %s' % (res.status_code, RECOVER_MSG)), res.status_code
     # and refresh the WOPI lock
-    _refreshlock(wopisrc, acctok, True, wopilock)
+    _refreshlock(wopisrc, acctok, wopilock, isdirty=True, isclose=isclose)
     WB.log.info('msg="Save completed" token="%s"' % acctok[-20:])
     return _jsonify('File saved successfully'), http.client.OK
 
@@ -307,6 +309,7 @@ def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
   newacctok = newwopi[newwopi.find('access_token=')+13:]
   newlock = json.loads(json.dumps(wopilock))    # this is a hack for a deep copy, to be redone in Go
   newlock['filename'] = res['Name']
+  newlock['isclose'] = True
   res = _wopicall(newwopisrc, newacctok, 'POST', headers={'X-WOPI-Lock': json.dumps(newlock), 'X-Wopi-Override': 'LOCK'})
   if res.status_code != http.client.OK:
     # Failed to lock the new file just written, not a big deal as we're closing
@@ -324,7 +327,7 @@ def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
       WB.log.info('msg="Previous file unlocked and removed successfully" token="%s"' % acctok[-20:])
 
   # update our metadata: note we already hold the condition variable as we're called within the save thread
-  WB.openfiles[newwopisrc] = {'acctok': newacctok, 'isclose': isclose, 'tosave': False, 'lastsave': int(time.time())}
+  WB.openfiles[newwopisrc] = {'acctok': newacctok, 'isclose': True, 'tosave': False, 'lastsave': int(time.time())}
   del WB.openfiles[wopisrc]
 
   WB.log.info('msg="Final save completed" token="%s"' % acctok[-20:])
@@ -408,8 +411,7 @@ def appopen():
         # file is not locked or lock is unreadable, fetch the file from storage and populate wopilock
         wopilock = _storagetocodimd(filemd, wopisrc, acctok)
       # WOPI Lock
-      lockheaders = {'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'LOCK'}
-      res = _wopicall(wopisrc, acctok, 'POST', headers=lockheaders)
+      res = _wopicall(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'LOCK'})
       if res.status_code != http.client.OK:
         # Failed to lock the file: open in read-only mode
         WB.log.warning('msg="Failed to lock the file" token="%s" response="%d"' % (acctok[-20:], res.status_code))
@@ -420,8 +422,8 @@ def appopen():
       wopilock = _storagetocodimd(filemd, wopisrc, acctok)
 
     if filemd['UserCanWrite']:
-      # keep track of this open document for the save thread and statistical purposes
-      # if it was already opened, this will overwrite the previous metadata: that's fine
+      # keep track of this open document for the save thread and statistical purposes;
+      # if it was already opened, this will overwrite the previous metadata, which is fine
       WB.openfiles[wopisrc] = {'acctok': acctok, 'isclose': False, 'tosave': False,
                                'lastsave': int(time.time()) - WB.saveinterval}
       # create the external redirect URL to be returned to the client:
@@ -527,26 +529,31 @@ def savethread_do():
           # refresh locks of idle documents every 30 minutes
           if openfile['lastsave'] < time.time() - (1800 + WB.saveinterval):
             wopilock = _getwopilock(wopisrc, openfile['acctok']) if not wopilock else wopilock
-            _refreshlock(wopisrc, openfile['acctok'], False, wopilock)
+            _refreshlock(wopisrc, openfile['acctok'], wopilock)
             # in case we get soon a save callback, we want to honor it immediately
             openfile['lastsave'] = int(time.time()) - WB.saveinterval
 
           # remove state for closed documents after some time
           if openfile['isclose'] and not openfile['tosave'] and (openfile['lastsave'] < time.time() - WB.saveinterval):
-            # unlock document
+            # check lock
             wopilock = _getwopilock(wopisrc, openfile['acctok']) if not wopilock else wopilock
-            res = _wopicall(wopisrc, openfile['acctok'], 'POST',
-                            headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
-            if res.status_code != http.client.OK:
-              WB.log.warning('msg="Savethread: calling WOPI Unlock failed" url="%s" response="%s"' % \
-                             (wopisrc, res.status_code))
+            # if really untouched for a long time, unlock
+            if 'isclose' in wopilock:
+              res = _wopicall(wopisrc, openfile['acctok'], 'POST',
+                              headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
+              if res.status_code != http.client.OK:
+                WB.log.warning('msg="Savethread: calling WOPI Unlock failed" url="%s" response="%s"' % \
+                              (wopisrc, res.status_code))
+              else:
+                WB.log.info('msg="Savethread: unlocked document" url="%s" lastsave="%s"' % (wopisrc, openfile['lastsave']))
             else:
-              WB.log.info('msg="Savethread: unlocked document" metadata="%s"' % openfile)
+              # this document was "taken over" by another bridge, don't unlock
+              WB.log.info('msg="Savethread: document taken over by another wopibridge instance" url="%s"' % wopisrc)
             del WB.openfiles[wopisrc]
 
         except InvalidLock as e:
           # WOPI lock got lost
-          WB.saveresponses[wopisrc] = _jsonify('Failed to save document, malformed or missing lock. %s' % RECOVER_MSG), \
+          WB.saveresponses[wopisrc] = _jsonify('Failed to save document, missing/expired lock. %s' % RECOVER_MSG), \
                                       http.client.NOT_FOUND
           del WB.openfiles[wopisrc]
 
