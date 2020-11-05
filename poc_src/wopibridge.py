@@ -124,9 +124,9 @@ class WB:
       cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=True)
 
 
-def _wopicall(wopisrc, acctok, method, contents=False, headers=None):
+def _wopicall(wopisrc, acctok, method, contents=None, headers=None):
   '''Execute a WOPI call with the given parameters and headers'''
-  wopiurl = '%s%s' % (wopisrc, ('/contents' if contents and \
+  wopiurl = '%s%s' % (wopisrc, ('/contents' if contents is not None and \
             (not headers or 'X-WOPI-Override' not in headers or headers['X-WOPI-Override'] != 'PUT_RELATIVE') else ''))
   WB.log.debug('msg="Calling WOPI" url="%s" headers="%s" acctok="%s"' % \
                (wopiurl, headers, acctok[-20:]))
