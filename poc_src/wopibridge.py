@@ -33,7 +33,7 @@ except ImportError:
   print("Missing modules, please install with `pip3 install flask requests`")
   raise
 
-WBVERSION = '1.0'
+WBVERSION = 'latest'
 CERTPATH = '/var/run/secrets/cert.pem'
 RECOVER_MSG = 'Please copy the content in a safe place and reopen the document afresh to paste it back'
 
@@ -50,6 +50,7 @@ class WB:
   app = flask.Flask('WOPIBridge')
   log = app.logger
   port = 8000
+  skipsslverify = False
   loglevels = {"Critical": logging.CRITICAL,  # 50
                "Error":    logging.ERROR,     # 40
                "Warning":  logging.WARNING,   # 30
@@ -74,6 +75,11 @@ class WB:
       cls.log.setLevel(cls.loglevels['Debug'])
       cls.codimdexturl = os.environ.get('CODIMD_EXT_URL')    # this is the external-facing URL
       cls.codimdurl = os.environ.get('CODIMD_INT_URL')       # this is the internal URL (e.g. as visible in docker/K8s)
+      skipsslverify = os.environ.get('SKIP_SSL_VERIFY')
+      if isinstance(skipsslverify, str):
+        cls.skipsslverify = skipsslverify.upper() in ('TRUE', 'YES')
+      else:
+        cls.skipsslverify = False
       if not cls.codimdurl:
         # defaults to the external
         cls.codimdurl = cls.codimdexturl
@@ -125,9 +131,10 @@ def _wopicall(wopisrc, acctok, method, contents=False, headers=None):
   WB.log.debug('msg="Calling WOPI" url="%s" headers="%s" acctok="%s"' % \
                (wopiurl, headers, acctok[-20:]))
   if method == 'GET':
-    return requests.get('%s?access_token=%s' % (wopiurl, acctok), verify=False)
+    return requests.get('%s?access_token=%s' % (wopiurl, acctok), verify=not WB.skipsslverify)
   if method == 'POST':
-    return requests.post('%s?access_token=%s' % (wopiurl, acctok), verify=False, headers=headers, data=contents)
+    return requests.post('%s?access_token=%s' % (wopiurl, acctok), verify=not WB.skipsslverify, \
+                         headers=headers, data=contents)
   return None
 
 
@@ -147,6 +154,13 @@ def _refreshlock(wopisrc, acctok, isdirty, wopilock):
     WB.log.warning('msg="Calling WOPI RefreshLock failed" url="%s" response="%s"' % (wopisrc, res.status_code))
 
 
+def _jsonify(msg):
+  '''One-liner to consistently json-ify a given message'''
+  return "{'message': '%s'}" % msg
+
+
+# CodiMD-specific functions
+
 def _getattachments(mddoc, docfilename, forcezip=False):
   '''Parse a markdown file and generate a zip file containing all included files'''
   if not forcezip and WB.upload_re.search(mddoc) is None:
@@ -155,7 +169,7 @@ def _getattachments(mddoc, docfilename, forcezip=False):
   zip_buffer = io.BytesIO()
   for attachment in WB.upload_re.findall(mddoc):
     WB.log.debug('msg="Fetching attachment" url="%s"' % attachment)
-    res = requests.get(WB.codimdurl + attachment, verify=False)
+    res = requests.get(WB.codimdurl + attachment, verify=not WB.skipsslverify)
     if res.status_code != http.client.OK:
       WB.log.error('msg="Failed to fetch included file" path="%s" response="%d"' % (attachment, res.status_code))
       continue
@@ -178,7 +192,7 @@ def _unzipattachments(inputbuf):
       mddoc = inputzip.read(zipinfo)
     else:
       # first check if the file already exists in CodiMD:
-      res = requests.head(WB.codimdurl + '/uploads/' + fname, verify=False)
+      res = requests.head(WB.codimdurl + '/uploads/' + fname, verify=not WB.skipsslverify)
       if res.status_code == http.client.OK and int(res.headers['Content-Length']) == zipinfo.file_size:
         # yes (assume that hashed filename AND size matching is a good enough content match!)
         WB.log.debug('msg="Skipped existing attachment" filename="%s"' % fname)
@@ -194,15 +208,11 @@ def _unzipattachments(inputbuf):
       # OK, let's upload
       WB.log.debug('msg="Pushing attachment" filename="%s"' % fname)
       res = requests.post(WB.codimdurl + '/uploadimage', params={'generateFilename': 'false'},
-                          files={'image': (fname, inputzip.read(zipinfo))}, verify=False)
+                          files={'image': (fname, inputzip.read(zipinfo))}, verify=not WB.skipsslverify)
       if res.status_code != http.client.OK:
         WB.log.error('msg="Failed to push included file" filename="%s" httpcode="%d"' % (fname, res.status_code))
   return mddoc
 
-
-def _jsonify(msg):
-  '''One-liner to consistently json-ify responses to CodiMD'''
-  return "{'message': '%s'}" % msg
 
 def _storagetocodimd(filemd, wopisrc, acctok):
   '''Copy document from storage to CodiMD'''
@@ -226,7 +236,7 @@ def _storagetocodimd(filemd, wopisrc, acctok):
 
   # push the document to CodiMD
   res = requests.post(WB.codimdurl + '/new', data=mddoc, allow_redirects=False, params=newparams,
-                      headers={'Content-Type': 'text/markdown'}, verify=False)
+                      headers={'Content-Type': 'text/markdown'}, verify=not WB.skipsslverify)
   if res.status_code != http.client.FOUND:
     WB.log.error('msg="Unable to push document to CodiMD" token="%s" response="%s: %s"' % \
                  (acctok[-20:], res.status_code, res.content))
@@ -248,7 +258,7 @@ def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
   # get document from CodiMD
   WB.log.info('msg="Fetching file from CodiMD" isclose="%s" codimdurl="%s" token="%s"' % \
               (isclose, WB.codimdurl + wopilock['docid'], acctok[-20:]))
-  res = requests.get(WB.codimdurl + wopilock['docid'] + '/download', verify=False)
+  res = requests.get(WB.codimdurl + wopilock['docid'] + '/download', verify=not WB.skipsslverify)
   if res.status_code != http.client.OK:
     return _jsonify('Failed to fetch document from CodiMD: got HTTP %d' % res.status_code), res.status_code
   mddoc = res.content
@@ -271,7 +281,7 @@ def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
                     contents=(bundlefile if wasbundle else mddoc))
     if res.status_code != http.client.OK:
       WB.log.error('msg="Calling WOPI PutFile failed" url="%s" response="%s"' % (wopisrc, res.status_code))
-      return _jsonify('Error saving the file (HTTP %d). %s' % res.status_code), res.status_code
+      return _jsonify('Error saving the file (HTTP %d). %s' % (res.status_code, RECOVER_MSG)), res.status_code
     # and refresh the WOPI lock
     _refreshlock(wopisrc, acctok, True, wopilock)
     WB.log.info('msg="Save completed" token="%s"' % acctok[-20:])
