@@ -90,12 +90,6 @@ class WB:
         cls.saveinterval = int(os.environ.get('APP_SAVE_INTERVAL'))
       except TypeError:
         cls.saveinterval = 300                               # defaults to 5 minutes
-      _autodetected_server = '%s://%s:%d' % \
-          ('https' if os.path.isfile(CERTPATH) else 'http', socket.getfqdn(), cls.port)
-      cls.wopibridgeurl = os.environ.get('WOPIBRIDGE_URL')
-      if not cls.wopibridgeurl:
-        cls.wopibridgeurl = _autodetected_server
-      cls.proxied = _autodetected_server != cls.wopibridgeurl
       # a regexp for uploads, that have links like '/uploads/upload_542a360ddefe1e21ad1b8c85207d9365.*'
       cls.upload_re = re.compile(r'\/uploads\/upload_\w{32}\.\w+')
 
@@ -114,13 +108,11 @@ class WB:
     '''Runs the Flask app in secure (standalone) or unsecure mode depending on the context.
        Secure https mode typically is to be provided by the infrastructure (k8s ingress, nginx...)'''
     if os.path.isfile(CERTPATH):
-      cls.log.info('msg="WOPI Bridge starting in secure mode" url="%s" proxied="%s"' % \
-                   (cls.wopibridgeurl + cls.approot, cls.proxied))
+      cls.log.info('msg="WOPI Bridge starting in secure mode" baseUrl="%s"' % cls.approot)
       cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=True,
                   ssl_context=(CERTPATH, CERTPATH.replace('cert', 'key')))
     else:
-      cls.log.info('msg="WOPI Bridge starting in unsecure mode" url="%s" proxied="%s"' % \
-                   (cls.wopibridgeurl + cls.approot, cls.proxied))
+      cls.log.info('msg="WOPI Bridge starting in unsecure mode" baseUrl="%s"' % cls.approot)
       cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=True)
 
 

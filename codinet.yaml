@@ -54,7 +54,6 @@ services:
     environment:
       - CODIMD_INT_URL=https://codimd-web.codinet:3000
       - CODIMD_EXT_URL=${HOST}:3000
-      - WOPIBRIDGE_URL=${HOST}:8000
     depends_on:
       - frontend
     ports:
