@@ -545,7 +545,7 @@ def savethread_do():
 
         except InvalidLock as e:
           # WOPI lock got lost
-          WB.saveresponses[wopisrc] = _jsonify('Failed to save document, missing/expired lock. %s' % RECOVER_MSG), \
+          WB.saveresponses[wopisrc] = _jsonify('Lock error in saving the file. %s' % RECOVER_MSG), \
                                       http.client.NOT_FOUND
           del WB.openfiles[wopisrc]
 
