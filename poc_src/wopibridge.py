@@ -150,7 +150,7 @@ def _refreshlock(wopisrc, acctok, wopilock, isdirty=False, isclose=False):
 
 def _jsonify(msg):
   '''One-liner to consistently json-ify a given message'''
-  return "{'message': '%s'}" % msg
+  return '{"message": "%s"}' % msg
 
 
 # CodiMD-specific functions
