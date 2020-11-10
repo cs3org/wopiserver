@@ -471,7 +471,7 @@ def appsave():
       del WB.saveresponses[wopisrc]
       return resp
     WB.log.info('msg="Save: enqueued action" wopisrc="%s" isclose="%s"' % (wopisrc, isclose))
-    return 'Enqueued', http.client.ACCEPTED
+    return '{}', http.client.ACCEPTED
 
 
 @WB.bpr.route("/list", methods=['GET'])
