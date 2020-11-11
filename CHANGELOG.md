@@ -1,5 +1,10 @@
 # Changelog for wopibridge
 
+## wopibridge 1.1.0 (2020-11-11)
+
+* Several fixes around saving and feedback to UI
+* First version fully integrated in CERNBox (Canary mode)
+
 ## wopibridge 1.0.0 (2020-10-13)
 
 * Full refactoring to achieve a MVP
