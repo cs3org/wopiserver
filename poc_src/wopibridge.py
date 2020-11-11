@@ -136,7 +136,7 @@ def _refreshlock(wopisrc, acctok, wopilock, isdirty=False, isclose=False):
   if isdirty and wopilock['digest'] != 'dirty':
     newlock['digest'] = 'dirty'
   if isclose:
-    newlock['isclose'] = True
+    newlock['isclose'] = 'true'
   elif 'isclose' in newlock:
     del newlock['isclose']
   lockheaders = {'X-Wopi-Override': 'REFRESH_LOCK',
@@ -269,6 +269,7 @@ def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
   wasbundle = os.path.splitext(wopilock['filename'])[1] == '.zmd'
   bundlefile = _getattachments(mddoc.decode(), wopilock['filename'].replace('.zmd', '.md'), (wasbundle and not isclose))
 
+  WB.log.debug('msg="Before Put/PutRelative" notbundlefile="%s" wasbundle="%s" isclose="%s"' % (not bundlefile, wasbundle, isclose))
   # WOPI PutFile for the file or the bundle if it already existed
   if (wasbundle ^ (not bundlefile)) or not isclose:
     res = _wopicall(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock)},
@@ -278,7 +279,7 @@ def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
       return _jsonify('Error saving the file (HTTP %d). %s' % (res.status_code, RECOVER_MSG)), res.status_code
     # and refresh the WOPI lock
     _refreshlock(wopisrc, acctok, wopilock, isdirty=True, isclose=isclose)
-    WB.log.info('msg="Save completed" token="%s"' % acctok[-20:])
+    WB.log.info('msg="Save completed" filename="%s" token="%s"' % (wopilock['filename'], acctok[-20:]))
     return _jsonify('File saved successfully'), http.client.OK
 
   # On close, use WOPI PutRelative for either the new bundle, if this is the first time we have attachments,
@@ -301,7 +302,7 @@ def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
   newacctok = newwopi[newwopi.find('access_token=')+13:]
   newlock = json.loads(json.dumps(wopilock))    # this is a hack for a deep copy, to be redone in Go
   newlock['filename'] = res['Name']
-  newlock['isclose'] = True
+  newlock['isclose'] = 'true'
   res = _wopicall(newwopisrc, newacctok, 'POST', headers={'X-WOPI-Lock': json.dumps(newlock), 'X-Wopi-Override': 'LOCK'})
   if res.status_code != http.client.OK:
     # Failed to lock the new file just written, not a big deal as we're closing
@@ -322,7 +323,7 @@ def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
   WB.openfiles[newwopisrc] = {'acctok': newacctok, 'isclose': True, 'tosave': False, 'lastsave': int(time.time())}
   del WB.openfiles[wopisrc]
 
-  WB.log.info('msg="Final save completed" token="%s"' % acctok[-20:])
+  WB.log.info('msg="Final save completed" filename"%s" token="%s"' % (newlock['filename'], acctok[-20:]))
   return _jsonify('File saved successfully'), http.client.OK
 
 
