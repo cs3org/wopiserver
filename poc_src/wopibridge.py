@@ -157,18 +157,19 @@ def _jsonify(msg):
 
 def _getattachments(mddoc, docfilename, forcezip=False):
   '''Parse a markdown file and generate a zip file containing all included files'''
-  if not forcezip and WB.upload_re.search(mddoc) is None:
-    # no attachments
-    return None
   zip_buffer = io.BytesIO()
   for attachment in WB.upload_re.findall(mddoc):
     WB.log.debug('msg="Fetching attachment" url="%s"' % attachment)
     res = requests.get(WB.codimdurl + attachment, verify=not WB.skipsslverify)
     if res.status_code != http.client.OK:
-      WB.log.error('msg="Failed to fetch included file" path="%s" response="%d"' % (attachment, res.status_code))
+      # file was not found: we should notify the user (TODO), though it could be a false positive
+      WB.log.error('msg="Failed to fetch included file, skipping" path="%s" response="%d"' % (attachment, res.status_code))
       continue
     with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_STORED, allowZip64=False) as zip_file:
       zip_file.writestr(attachment.split('/')[-1], res.content)
+  if not forcezip and zip_buffer.getbuffer().nbytes == 0:
+    # no attachments actually found
+    return None
   # also include the markdown file itself
   with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_STORED, allowZip64=False) as zip_file:
     zip_file.writestr(docfilename, mddoc)
