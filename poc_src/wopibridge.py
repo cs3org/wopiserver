@@ -263,7 +263,7 @@ def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
     h.update(mddoc)
     if h.hexdigest() == wopilock['digest']:
       WB.log.info('msg="File unchanged, skipping save" token="%s"' % acctok[-20:])
-      return _jsonify('OK'), http.client.OK
+      return '{}', http.client.ACCEPTED
 
   # check if we have attachments
   wasbundle = os.path.splitext(wopilock['filename'])[1] == '.zmd'
