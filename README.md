@@ -2,7 +2,7 @@
 
 This is a proof-of-concept WOPI bridge server, currently only targeting CodiMD, to allow bridging it to a WOPI-enabled EFSS service like ownCloud or CERNBox. It uses the private REST API of CodiMD, which will be hopefully made public and complete in the future. The approach is generic to allow for extending the concept to other Office-like applications exposing a minimal load/save REST API.
 
-## What works:
+## What works
 * REST service with two endpoints:
   - `/open`   meant to be called by the EFSS with a WOPISrc and a WOPI access token, returns a file displayed in CodiMD
   - `/save`   auto-called by the CodiMD backend when some changes are detected on the open document
@@ -14,7 +14,7 @@ This is a proof-of-concept WOPI bridge server, currently only targeting CodiMD, 
   * Once a picture is included, on close the save to WOPI is executed as a zipped bundle, with a `.zmd` extension, and the previous `.md` file is removed; similarly if all pictures are removed and the file is saved back as `.md`
   * Files ending as `.zmd` are equally treated as zipped bundles and expanded to CodiMD
 
-## Required CodiMD APIs
+### Required CodiMD APIs
 * `/new`                    push a file to CodiMD
 * `/<noteid>`               display a file
 * `/<noteid>/publish`       display a file in readonly mode
@@ -23,7 +23,7 @@ This is a proof-of-concept WOPI bridge server, currently only targeting CodiMD, 
 * `/uploadimage`            upload a new picture
 * `/uploads/upload_<hash>`  get an uploaded picture
 
-## Required WOPI APIs
+### Required WOPI APIs
 * `GetFileInfo`: get all file metadata
 * `GetFile`: get the file content
 * `GetLock`: check if the file is locked
@@ -33,3 +33,6 @@ This is a proof-of-concept WOPI bridge server, currently only targeting CodiMD, 
 * `Unlock`: unlock a file on close
 * `Delete`: delete a previous edition of a file
 
+## Changelog
+
+[Available here](CHANGELOG.md)
