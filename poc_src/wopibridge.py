@@ -35,7 +35,7 @@ except ImportError:
 
 WBVERSION = 'latest'
 CERTPATH = '/var/run/secrets/cert.pem'
-RECOVER_MSG = 'Please copy the content in a safe place and reopen the document afresh to paste it back'
+RECOVER_MSG = 'Please copy the content in a safe place and reopen the document afresh to paste it back.'
 
 class InvalidLock(Exception):
   '''A custom exception to represent an invalid or missing WOPI lock'''
@@ -547,7 +547,7 @@ def savethread_do():
 
         except InvalidLock as e:
           # WOPI lock got lost
-          WB.saveresponses[wopisrc] = _jsonify('Lock error in saving the file. %s' % RECOVER_MSG), \
+          WB.saveresponses[wopisrc] = _jsonify('Missing or malformed lock when saving the file. %s' % RECOVER_MSG), \
                                       http.client.NOT_FOUND
           del WB.openfiles[wopisrc]
 
