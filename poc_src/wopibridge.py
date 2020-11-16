@@ -89,7 +89,7 @@ class WB:
       try:
         cls.saveinterval = int(os.environ.get('APP_SAVE_INTERVAL'))
       except TypeError:
-        cls.saveinterval = 300                               # defaults to 5 minutes
+        cls.saveinterval = 100                               # defaults to 100 seconds
       # a regexp for uploads, that have links like '/uploads/upload_542a360ddefe1e21ad1b8c85207d9365.*'
       cls.upload_re = re.compile(r'\/uploads\/upload_\w{32}\.\w+')
 
