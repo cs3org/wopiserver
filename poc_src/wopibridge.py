@@ -269,6 +269,7 @@ def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
     h.update(mddoc)
     if h.hexdigest() == wopilock['digest']:
       WB.log.info('msg="File unchanged, skipping save" token="%s"' % acctok[-20:])
+      _refreshlock(wopisrc, acctok, wopilock, isdirty=False, isclose=True)
       return '{}', http.client.ACCEPTED
 
   # check if we have attachments
