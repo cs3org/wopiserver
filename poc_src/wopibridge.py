@@ -209,6 +209,11 @@ def _unzipattachments(inputbuf):
   return mddoc
 
 
+def _isslides(md):
+  '''Heuristically look for signatures of slides inside a md document'''
+  return md[:9].decode() == '---\ntitle' or md[:8].decode() == '---\ntype' or md[:16].decode() == '---\nslideOptions'
+
+
 def _storagetocodimd(filemd, wopisrc, acctok):
   '''Copy document from storage to CodiMD'''
   # WOPI GetFile
@@ -242,7 +247,7 @@ def _storagetocodimd(filemd, wopisrc, acctok):
   wopilock = {'docid': '/' + urllib.parse.urlsplit(res.next.url).path.split('/')[-1],
               'filename': filemd['BaseFileName'],
               'digest': h.hexdigest(),
-              'app': 'slide' if mddoc[:10].decode() == '---\ntitle:' else 'md',
+              'app': 'slide' if _isslides(mddoc) else 'md',
               }
   WB.log.info('msg="Pushed document to CodiMD" url="%s" token="%s"' % (wopilock['docid'], acctok[-20:]))
   return wopilock
@@ -425,8 +430,8 @@ def appopen():
       redirecturl = WB.codimdexturl + wopilock['docid'] + \
                     '?metadata=' + urllib.parse.quote_plus('%s?t=%s' % (wopisrc, acctok)) + '&'
     else:
-      # read-only mode: in this case redirect to publish mode or slide mode depending on the content
-      redirecturl = WB.codimdexturl + wopilock['docid'] + ('/slide?' if wopilock['app'] == 'slide' else '/publish?')
+      # read-only mode: in this case redirect to publish mode or normal view to quickly jump in slide mode depending on the content
+      redirecturl = WB.codimdexturl + wopilock['docid'] + ('/publish?' if wopilock['app'] != 'slide' else '?')
     # append displayName (again this is an extended feature of CodiMD)
     redirecturl += 'displayName=' + urllib.parse.quote_plus(filemd['UserFriendlyName'])
 
