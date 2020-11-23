@@ -12,6 +12,8 @@ import hashlib
 import json
 from urllib.parse import quote_plus as url_quote_plus
 from enum import Enum
+from random import choice
+from string import ascii_lowercase
 import http.client
 import flask
 import jwt
@@ -71,6 +73,10 @@ def getMicrosoftOfficeLockName(filename):
   #elif len(os.path.basename(filename)) == 7+1+4:
   return os.path.dirname(filename) + os.path.sep + '~$' + os.path.basename(filename)[1:]
 
+
+def randomString(len):
+  '''One liner to get a random string of letters'''
+  return ''.join([choice(ascii_lowercase) for _ in range(len)])
 
 
 def generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint):
