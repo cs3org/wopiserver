@@ -3,8 +3,8 @@
 A Vendor-neutral Web-application Open Platform Interface (WOPI) gateway for EFSS systems,
 to integrate several Office Online platforms including Microsoft Office Online and Collabora Online.
 
-Author: Giuseppe.LoPresti@cern.ch (@glpatcern) <br/>
-Contributions: Michael.DSilva@aarnet.edu.au (@madsi1m), Lovisa.Lugnegaard@cern.ch (@LovisaLugnegard), Samuel.Alfageme@cern.ch (@SamuAlfageme), Ishank Arora (@ishank011)
+Author: Giuseppe Lo Presti (@glpatcern) <br/>
+Contributions: Michael DSilva (@madsi1m), Lovisa Lugnegaard (@LovisaLugnegard), Samuel Alfageme (@SamuAlfageme), Ishank Arora (@ishank011)
 
 Initial revision: December 2016 <br/>
 First production version for CERNBox: September 2017 <br/>
