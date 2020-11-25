@@ -149,15 +149,16 @@ def readfile(_endpoint, filepath, userid):
     ctx['log'].debug('msg="Failed to initiateFileDownload on read" filepath="%s" reason="%s"' % \
                      (filepath, initfiledownloadres.status.message))
     yield IOError(initfiledownloadres.status.message)
-  ctx['log'].debug('msg="readfile: InitiateFileDownloadRes returned" endpoint="%s"' % initfiledownloadres.download_endpoint)
+  ctx['log'].debug('msg="readfile: InitiateFileDownloadRes returned" protocols="%s"' % initfiledownloadres.protocols)
 
   # Download
   try:
+    protocol = [p for p in initfiledownloadres.protocols if p.protocol == "simple"][0]
     headers = {
         'x-access-token': userid,
-        'X-Reva-Transfer': initfiledownloadres.token    # needed if the downloads pass through the data gateway in reva
+        'X-Reva-Transfer': protocol.token    # needed if the downloads pass through the data gateway in reva
     }
-    fileget = requests.get(url=initfiledownloadres.download_endpoint, headers=headers)
+    fileget = requests.get(url=protocol.download_endpoint, headers=headers)
   except requests.exceptions.RequestException as e:
     ctx['log'].error('msg="Exception when downloading file from Reva" reason="%s"' % e)
     yield IOError(e)
@@ -191,18 +192,19 @@ def writefile(_endpoint, filepath, userid, content, islock=False):
     ctx['log'].debug('msg="Failed to initiateFileUpload on write" filepath="%s" reason="%s"' % \
                      (filepath, initfileuploadres.status.message))
     raise IOError(initfileuploadres.status.message)
-  ctx['log'].debug('msg="writefile: InitiateFileUploadRes returned" endpoint="%s"' % initfileuploadres.upload_endpoint)
+  ctx['log'].debug('msg="writefile: InitiateFileUploadRes returned" protocols="%s"' % initfileuploadres.protocols)
 
   # Upload
   try:
+    # Get the endpoint for simple protocol
+    # TODO: configure TUS client
+    protocol = [p for p in initfileuploadres.protocols if p.protocol == "simple"][0]
     headers = {
-        'Tus-Resumable': '1.0.0',
         'x-access-token': userid,
-        'File-Path': filepath,
         'Upload-Length': size,
-        'X-Reva-Transfer': initfileuploadres.token    # needed if the uploads pass through the data gateway in reva
+        'X-Reva-Transfer': protocol.token    # needed if the uploads pass through the data gateway in reva
     }
-    putres = requests.put(url=initfileuploadres.upload_endpoint, data=content, headers=headers)
+    putres = requests.put(url=protocol.upload_endpoint, data=content, headers=headers)
   except requests.exceptions.RequestException as e:
     ctx['log'].error('msg="Exception when uploading file to Reva" reason="%s"' % e)
     raise IOError(e)
