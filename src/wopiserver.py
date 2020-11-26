@@ -54,7 +54,9 @@ def storage_layer_import(storagetype):
 
 
 class JsonLogger:
+  '''A wrapper class in front of a logger, based on the facade pattern'''
   def __init__(self, logger):
+    '''Initialization'''
     self.logger = logger
 
   def __getattr__(self, name):
@@ -64,16 +66,17 @@ class JsonLogger:
         if name in ['debug', 'info', 'warning', 'error', 'fatal']:
           # as we use a `key="value" ...` format in all logs, we only have args[0]
           msg = args[0] + ' '
-          # now convert that to a dictionary assuming no `="` nor `" ` is present in any key or value!
-          # the added trailing space matches the `" ` split, so we remove the last element of that list
           try:
+            # now convert that to a dictionary assuming no `="` nor `" ` is present inside any key or value!
+            # the added trailing space matches the `" ` split, so we remove the last element of that list
             msg = dict([tuple(kv.split('="')) for kv in msg.split('" ')[:-1]])
-            return getattr(self.logger, name)(str(json.dumps(msg))[1:-1], **kwargs)   # dict -> json -> str + strip `{` and `}`
+            # then convert dict -> json -> str + strip `{` and `}`
+            return getattr(self.logger, name)(str(json.dumps(msg))[1:-1], **kwargs)
           except Exception:
             # if the above assumptions do not hold, keep the log in its original format
             return getattr(self.logger, name)(*args, **kwargs)
         elif hasattr(self.logger, name):
-          # standard facade
+          # pass-through facade
           return getattr(self.logger, name)(*args, **kwargs)
         else:
           return lambda: NotImplemented()
