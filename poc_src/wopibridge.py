@@ -289,7 +289,10 @@ def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
                     contents=(bundlefile if wasbundle else mddoc))
     if res.status_code != http.client.OK:
       WB.log.error('msg="Calling WOPI PutFile failed" url="%s" response="%s"' % (wopisrc, res.status_code))
-      return _jsonify('Error saving the file (HTTP %d). %s' % (res.status_code, RECOVER_MSG)), res.status_code
+      # in case of conflict do not show the "recover" message as a conflict file has been saved anyway
+      details = '. %s' % res.content.decode() if res.status_code == http.client.CONFLICT \
+                else ' (%s). %s' % (res.content.decode(), RECOVER_MSG)
+      return _jsonify('Error saving the file' + details), res.status_code
     # and refresh the WOPI lock
     _refreshlock(wopisrc, acctok, wopilock, isdirty=True, isclose=isclose)
     WB.log.info('msg="Save completed" filename="%s" token="%s"' % (wopilock['filename'], acctok[-20:]))
@@ -305,7 +308,7 @@ def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
   res = _wopicall(wopisrc, acctok, 'POST', headers=putrelheaders, contents=(bundlefile if bundlefile else mddoc))
   if res.status_code != http.client.OK:
     WB.log.error('msg="Calling WOPI PutRelative failed" url="%s" response="%s"' % (wopisrc, res.status_code))
-    return _jsonify('Error saving the file (HTTP %d). %s' % (res.status_code, RECOVER_MSG)), res.status_code
+    return _jsonify('Error saving the file: %s. %s' % (res.content.decode(), RECOVER_MSG)), res.status_code
 
   # use the new file's metadata from PutRelative to remove the previous file: we can do that only on close
   # because we need to keep using the current wopisrc/acctok until the session is alive in CodiMD
@@ -352,7 +355,7 @@ def handleexception(ex):
   ex_type, ex_value, ex_traceback = sys.exc_info()
   WB.log.error('msg="Unexpected exception caught" exception="%s" type="%s" traceback="%s"' % \
                (ex, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback)))
-  return _jsonify('Internal error, please contact support'), http.client.INTERNAL_SERVER_ERROR
+  return _jsonify('Internal error, please contact support. %s' % RECOVER_MSG), http.client.INTERNAL_SERVER_ERROR
 
 
 @WB.app.route("/", methods=['GET'])
@@ -432,6 +435,11 @@ def appopen():
       # if it was already opened, this will overwrite the previous metadata, which is fine
       WB.openfiles[wopisrc] = {'acctok': acctok, 'isclose': False, 'tosave': False,
                                'lastsave': int(time.time()) - WB.saveinterval}
+      # also clear any potential stale response for this document
+      try:
+        del WB.saveresponses[wopisrc]
+      except KeyError:
+        pass
       # create the external redirect URL to be returned to the client:
       # metadata will be used for autosave (this is an extended feature of CodiMD)
       redirecturl = WB.codimdexturl + wopilock['docid'] + \
