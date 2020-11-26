@@ -1002,18 +1002,19 @@ def wopiPutFile(fileid):
     try:
       # check now the destination file against conflicts
       savetime = storage.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], LASTSAVETIMEKEY)
+      mtime = None
       mtime = storage.stat(acctok['endpoint'], acctok['filename'], acctok['userid'])['mtime']
       if savetime is None or int(mtime) > int(savetime):
         # no xattr was there or we got our xattr but mtime is more recent: someone may have updated the file
         # from a different source (e.g. FUSE or SMB mount), therefore force conflict.
         # Note we can't get a time resolution better than one second!
-        Wopi.log.info('msg="Forcing conflict based on lastWopiSaveTime" user="%s" filename="%s" token="%s" ' \
-                      'savetime="%s" lastmtime="%s"' % \
+        Wopi.log.info('msg="Forcing conflict based on lastWopiSaveTime" user="%s" filename="%s" ' \
+                      'savetime="%s" lastmtime="%s" token="%s"' % \
                       (acctok['userid'], acctok['filename'], \
-                       flask.request.args['access_token'][-20:], savetime, mtime))
+                       savetime, mtime, flask.request.args['access_token'][-20:]))
         raise IOError
-      Wopi.log.debug('msg="Got lastWopiSaveTime" user="%s" filename="%s" token="%s" savetime="%s" lastmtime="%s"' % \
-                     (acctok['userid'], acctok['filename'], flask.request.args['access_token'][-20:], savetime, mtime))
+      Wopi.log.debug('msg="Got lastWopiSaveTime" user="%s" filename="%s" savetime="%s" lastmtime="%s" token="%s"' % \
+                     (acctok['userid'], acctok['filename'], savetime, mtime, flask.request.args['access_token'][-20:]))
     except IOError:
       # either the file was deleted or it was updated/overwritten by others: force conflict
       newname, ext = os.path.splitext(acctok['filename'])
@@ -1022,17 +1023,17 @@ def wopiPutFile(fileid):
       utils.storeWopiFile(flask.request, acctok, LASTSAVETIMEKEY, newname)
       # keep track of this action in the original file's xattr, to avoid looping (see below)
       storage.setxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], LASTSAVETIMEKEY, 'conflict')
-      Wopi.log.info('msg="Conflicting copy created" user="%s" token="%s" newFilename="%s"' % \
-                    (acctok['userid'], flask.request.args['access_token'], newname))
+      Wopi.log.info('msg="Conflicting copy created" user="%s" savetime="%s" lastmtime="%s" newfilename="%s" token="%s"' % \
+                    (acctok['userid'], savetime, mtime, newname, flask.request.args['access_token'][-20:]))
       # and report failure to Office Online: it will retry a couple of times and eventually it will notify the user
-      return 'Conflicting copy created', http.client.INTERNAL_SERVER_ERROR
+      return 'File being edited got moved or overwritten, conflict copy created', http.client.INTERNAL_SERVER_ERROR
     except (ValueError, TypeError) as e:
       # the xattr was not an integer: assume Office Online is looping on an already conflicting file,
       # therefore do nothing and keep reporting internal error. Of course if the attribute was modified by hand,
       # this mechanism fails.
-      Wopi.log.info('msg="Conflicting copy already created" user="%s" filename="%s" error="%s" token="%s"' % \
-                    (acctok['userid'], acctok['filename'], e, flask.request.args['access_token'][-20:]))
-      return 'Conflicting copy already created', http.client.INTERNAL_SERVER_ERROR
+      Wopi.log.info('msg="Conflicting copy already created" filename="%s" savetime="%s" lastmtime="%s" error="%s" token="%s"' % \
+                    (acctok['filename'], savetime, mtime, e, flask.request.args['access_token'][-20:]))
+      return 'Conflict copy already created', http.client.INTERNAL_SERVER_ERROR
     # Go for overwriting the file. Note that the entire check+write operation should be atomic,
     # but the previous check still gives the opportunity of a race condition. We just live with it.
     # Anyhow, the EFSS should support versioning for such cases.
