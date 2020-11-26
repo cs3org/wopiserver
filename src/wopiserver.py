@@ -53,36 +53,6 @@ def storage_layer_import(storagetype):
     raise
 
 
-class JsonLogger:
-  '''A wrapper class in front of a logger, based on the facade pattern'''
-  def __init__(self, logger):
-    '''Initialization'''
-    self.logger = logger
-
-  def __getattr__(self, name):
-    '''Facade method'''
-    def facade(*args, **kwargs):
-        '''internal method returned by getattr and wrapping the original one'''
-        if name in ['debug', 'info', 'warning', 'error', 'fatal']:
-          # as we use a `key="value" ...` format in all logs, we only have args[0]
-          msg = args[0] + ' '
-          try:
-            # now convert that to a dictionary assuming no `="` nor `" ` is present inside any key or value!
-            # the added trailing space matches the `" ` split, so we remove the last element of that list
-            msg = dict([tuple(kv.split('="')) for kv in msg.split('" ')[:-1]])
-            # then convert dict -> json -> str + strip `{` and `}`
-            return getattr(self.logger, name)(str(json.dumps(msg))[1:-1], **kwargs)
-          except Exception:
-            # if the above assumptions do not hold, keep the log in its original format
-            return getattr(self.logger, name)(*args, **kwargs)
-        elif hasattr(self.logger, name):
-          # pass-through facade
-          return getattr(self.logger, name)(*args, **kwargs)
-        else:
-          return lambda: NotImplemented()
-    return facade
-
-
 class Wopi:
   '''A singleton container for all state information of the WOPI server'''
   app = flask.Flask("WOPIServer")
@@ -94,7 +64,7 @@ class Wopi:
                "Info":     logging.INFO,      # 20
                "Debug":    logging.DEBUG      # 10
               }
-  log = JsonLogger(app.logger)
+  log = utils.JsonLogger(app.logger)
   openfiles = {}
 
   @classmethod

@@ -23,6 +23,13 @@ import jwt
 _ctx = {}
 
 
+def init(storage, wopiserver):
+  '''Convenience method to initialise this module'''
+  _ctx['st'] = storage
+  _ctx['wopi'] = wopiserver
+  _ctx['log'] = wopiserver.log
+
+
 class ViewMode(Enum):
   '''File view mode: reference is
   https://github.com/cs3org/cs3apis/blob/master/cs3/app/provider/v1beta1/provider_api.proto#L79
@@ -35,11 +42,34 @@ class ViewMode(Enum):
   READ_WRITE = "VIEW_MODE_READ_WRITE"
 
 
-def init(storage, wopiserver):
-  '''Convenience method to iniialise this module'''
-  _ctx['st'] = storage
-  _ctx['wopi'] = wopiserver
-  _ctx['log'] = wopiserver.log
+class JsonLogger:
+  '''A wrapper class in front of a logger, based on the facade pattern'''
+  def __init__(self, logger):
+    '''Initialization'''
+    self.logger = logger
+
+  def __getattr__(self, name):
+    '''Facade method'''
+    def facade(*args, **kwargs):
+      '''internal method returned by getattr and wrapping the original one'''
+      if name in ['debug', 'info', 'warning', 'error', 'fatal']:
+        # as we use a `key="value" ...` format in all logs, we only have args[0]
+        msg = args[0] + ' '
+        try:
+          # now convert that to a dictionary assuming no `="` nor `" ` is present inside any key or value!
+          # the added trailing space matches the `" ` split, so we remove the last element of that list
+          msg = dict([tuple(kv.split('="')) for kv in msg.split('" ')[:-1]])
+          # then convert dict -> json -> str + strip `{` and `}`
+          return getattr(self.logger, name)(str(json.dumps(msg))[1:-1], **kwargs)
+        except Exception:
+          # if the above assumptions do not hold, keep the log in its original format
+          return getattr(self.logger, name)(*args, **kwargs)
+      elif hasattr(self.logger, name):
+        # pass-through facade
+        return getattr(self.logger, name)(*args, **kwargs)
+      else:
+        return lambda: NotImplemented
+    return facade
 
 
 def logGeneralExceptionAndReturn(ex, req):
@@ -74,9 +104,9 @@ def getMicrosoftOfficeLockName(filename):
   return os.path.dirname(filename) + os.path.sep + '~$' + os.path.basename(filename)[1:]
 
 
-def randomString(len):
+def randomString(size):
   '''One liner to get a random string of letters'''
-  return ''.join([choice(ascii_lowercase) for _ in range(len)])
+  return ''.join([choice(ascii_lowercase) for _ in range(size)])
 
 
 def generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint):
