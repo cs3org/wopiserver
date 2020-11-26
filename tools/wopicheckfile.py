@@ -75,12 +75,12 @@ try:
   instance = 'default'
   if filename.find('/eos/user/') == 0:
     instance = 'eoshome-' + filename[10] + '.cern.ch'
-  statInfo = storage.statx(instance, filename, '0', '0')
+  statInfo = storage.statx(instance, filename, '0:0')
   try:
-    wopiTime = storage.getxattr(instance, filename, '0', '0', 'oc.wopi.lastwritetime')
+    wopiTime = storage.getxattr(instance, filename, '0:0', 'oc.wopi.lastwritetime')
     try:
       l = ''
-      for line in storage.readfile(instance, _getLockName(filename), '0', '0'):
+      for line in storage.readfile(instance, _getLockName(filename), '0:0'):
         l += str(line)
       wopiLock = jwt.decode(l, wopisecret, algorithms=['HS256'])
       print('%s: inode = %s, mtime = %s, last WOPI write time = %s, locked: %s' % (filename, statInfo['inode'], statInfo['mtime'], wopiTime, wopiLock))
