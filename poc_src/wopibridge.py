@@ -37,6 +37,7 @@ WBVERSION = 'latest'
 CERTPATH = '/var/run/secrets/cert.pem'
 RECOVER_MSG = 'Please copy the content in a safe place and reopen the document afresh to paste it back.'
 
+
 class InvalidLock(Exception):
   '''A custom exception to represent an invalid or missing WOPI lock'''
 
@@ -151,6 +152,11 @@ def _refreshlock(wopisrc, acctok, wopilock, isdirty=False, isclose=False):
 def _jsonify(msg):
   '''One-liner to consistently json-ify a given message'''
   return '{"message": "%s"}' % msg
+
+
+def _guireturn(msg):
+  '''One-liner to better render messages that may be visible in the user UI'''
+  return '<div align="center" style="color:#A0A0A0; padding-top:50px; font-family:Verdana">%s</div>' % msg
 
 
 # CodiMD-specific functions
@@ -380,7 +386,7 @@ def appopen():
     WB.log.info('msg="Open called" client="%s" token="%s"' % (flask.request.remote_addr, acctok[-20:]))
   except KeyError as e:
     WB.log.error('msg="Open: unable to open the file, missing WOPI context" error="%s"' % e)
-    return 'Missing arguments', http.client.BAD_REQUEST
+    return _guireturn('Missing arguments'), http.client.BAD_REQUEST
 
   # WOPI GetFileInfo
   try:
@@ -388,7 +394,7 @@ def appopen():
     filemd = res.json()
   except json.decoder.JSONDecodeError as e:
     WB.log.warning('msg="Malformed JSON from WOPI" error="%s" response="%d"' % (e, res.status_code))
-    return 'Invalid WOPI context', http.client.NOT_FOUND
+    return _guireturn('Invalid WOPI context'), http.client.NOT_FOUND
 
   try:
     # use the 'UserCanWrite' attribute to decide whether the file is to be opened in read-only mode
@@ -441,7 +447,7 @@ def appopen():
 
   except CodiMDFailure:
     # this can be risen by _storagetocodimd
-    return 'Unable to contact CodiMD, please try again later', http.client.INTERNAL_SERVER_ERROR
+    return _guireturn('Unable to contact CodiMD, please try again later'), http.client.INTERNAL_SERVER_ERROR
 
 
 @WB.bpr.route("/save", methods=['POST'])
@@ -548,7 +554,7 @@ def savethread_do():
                 WB.log.info('msg="Savethread: unlocked document" url="%s" lastsave="%s"' % (wopisrc, openfile['lastsave']))
             else:
               # this document was "taken over" by another bridge, don't unlock
-              WB.log.info('msg="Savethread: document taken over by another wopibridge instance" url="%s"' % wopisrc)
+              WB.log.debug('msg="Savethread: document taken over by another wopibridge instance" url="%s"' % wopisrc)
             del WB.openfiles[wopisrc]
 
         except InvalidLock as e:
