@@ -744,10 +744,14 @@ def wopiLock(fileid, reqheaders, acctok):
   try:
     utils.storeWopiLock(op, lock, acctok, os.path.splitext(acctok['filename'])[1] in Wopi.nonofficetypes)
   except IOError as e:
-    if 'File exists and islock flag requested' in str(e):
+    if utils.EXCL_ERROR in str(e):
       # this file was already locked externally: storeWopiLock looks at LibreOffice-compatible locks
       return utils.makeConflictResponse(op, 'External App', lock, oldLock, acctok['filename'], \
                                         'The file was locked by another application')
+    elif 'No such file or directory' in str(e):
+      # the file got renamed/deleted: this is equivalent to a conflict
+      return utils.makeConflictResponse(op, 'External App', lock, oldLock, acctok['filename'], \
+                                        'The file got moved or deleted')
     # any other failure
     return str(e), http.client.INTERNAL_SERVER_ERROR
   if not retrievedLock:
@@ -1025,11 +1029,12 @@ def wopiPutFile(fileid):
       storage.setxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], LASTSAVETIMEKEY, 'conflict')
       Wopi.log.info('msg="Conflicting copy created" user="%s" savetime="%s" lastmtime="%s" newfilename="%s" token="%s"' % \
                     (acctok['userid'], savetime, mtime, newname, flask.request.args['access_token'][-20:]))
-      # and report failure to Office Online: it will retry a couple of times and eventually it will notify the user
-      return 'File being edited got moved or overwritten, conflict copy created', http.client.INTERNAL_SERVER_ERROR
+      # and report failure to the application: note we use a CONFLICT response as it is better handled by the app
+      return utils.makeConflictResponse('PUTFILE', 'External App', lock, '', acctok['filename'], \
+                                        'The file being edited got moved or overwritten, conflict copy created')
     except (ValueError, TypeError) as e:
-      # the xattr was not an integer: assume Office Online is looping on an already conflicting file,
-      # therefore do nothing and keep reporting internal error. Of course if the attribute was modified by hand,
+      # the xattr was not an integer: assume the app is looping on an already conflicting file,
+      # therefore do nothing and report internal error. Of course if the attribute was modified by hand,
       # this mechanism fails.
       Wopi.log.info('msg="Conflicting copy already created" filename="%s" savetime="%s" lastmtime="%s" error="%s" token="%s"' % \
                     (acctok['filename'], savetime, mtime, e, flask.request.args['access_token'][-20:]))

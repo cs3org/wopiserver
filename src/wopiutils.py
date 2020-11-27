@@ -19,6 +19,9 @@ import flask
 import jwt
 
 
+# Standard error thrown when attemtping to overwrite a file in O_EXCL mode
+EXCL_ERROR = 'File exists and islock flag requested'
+
 # Convenience dictionary to store some context and avoid globals
 _ctx = {}
 
@@ -187,15 +190,23 @@ def retrieveWopiLock(fileid, operation, lock, acctok):
 
 def storeWopiLock(operation, lock, acctok, isnotoffice):
   '''Stores the lock for a given file in the form of an encoded JSON string (cf. the access token)'''
+  try:
+    # validate that the underlying file is still there (it might have been moved/deleted)
+    _ctx['st'].stat(acctok['endpoint'], acctok['filename'], acctok['userid'])
+  except IOError as e:
+    _ctx['log'].log.warning('msg="%s: target file not found any longer" filename="%s" token="%s" reason="%s"' % \
+                            (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], e))
+    raise
+
   if not isnotoffice:
     try:
       # first try to look for a MS Office lock
       lockInfo = _ctx['st'].stat(acctok['endpoint'], getMicrosoftOfficeLockName(acctok['filename']), acctok['userid'])
       _ctx['log'].info('msg="WOPI lock denied because of an existing Microsoft Office lock" filename="%s" mtime="%ld"' % \
                       (acctok['filename'], lockInfo['mtime']))
-      raise IOError('File exists and islock flag requested')
+      raise IOError(EXCL_ERROR)
     except IOError as e:
-      if 'File exists and islock flag requested' in str(e):
+      if EXCL_ERROR in str(e):
         raise
       #else any other error is ignored here, move on
 
@@ -205,13 +216,13 @@ def storeWopiLock(operation, lock, acctok, isnotoffice):
       lockcontent = ',Collaborative Online Editor,%s,%s,WOPIServer;' % \
                     (_ctx['wopi'].wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())))
       _ctx['st'].writefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], \
-                          lockcontent, islock=True)
+                           lockcontent, islock=True)
     except IOError as e:
-      if 'File exists and islock flag requested' in str(e):
+      if EXCL_ERROR in str(e):
         # retrieve the LibreOffice-compatible lock just found
         try:
           retrievedlock = next(_ctx['st'].readfile(acctok['endpoint'], \
-                                                  getLibreOfficeLockName(acctok['filename']), acctok['userid']))
+                                                   getLibreOfficeLockName(acctok['filename']), acctok['userid']))
           if isinstance(retrievedlock, IOError):
             raise retrievedlock
           retrievedlock = retrievedlock.decode('utf-8')
@@ -282,7 +293,7 @@ def makeConflictResponse(operation, retrievedlock, lock, oldlock, filename, reas
   resp = flask.Response()
   resp.headers['X-WOPI-Lock'] = retrievedlock if retrievedlock else ''
   if reason:
-    resp.headers['X-WOPI-LockFailureReason'] = reason
+    resp.headers['X-WOPI-LockFailureReason'] = resp.data = reason
   resp.status_code = http.client.CONFLICT
   _ctx['log'].info('msg="%s" filename="%s" token="%s" lock="%s" oldLock="%s" retrievedLock="%s" %s' % \
                    (operation.title(), filename, flask.request.args['access_token'][-20:], \
