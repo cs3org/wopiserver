@@ -79,9 +79,10 @@ touch /etc/wopi/iopsecret
 %_python_lib/*
 
 %changelog
-* Thu Nov 26 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.7.0
+* Fri Nov 27 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.7.0
 - Log is now in JSON format as opposed to syslog-like
 - Use direct data transfers (non-TUS-based) with CS3 storages
+- Improved locks handling and responses
 * Mon Oct 19 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.6.0
 - Renamed codimdurl to wopibridgeurl
 - Improved logging and exception handling
