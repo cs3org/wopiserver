@@ -29,6 +29,7 @@ try:
   import requests
   import flask                   # Flask app server
   from werkzeug.exceptions import NotFound as Flask_NotFound
+  from werkzeug.exceptions import MethodNotAllowed as Flask_MethodNotAllowed
 except ImportError:
   print("Missing modules, please install with `pip3 install flask requests`")
   raise
@@ -354,7 +355,7 @@ def _codimdtostorage(wopisrc, acctok, isclose, wopilock):
 @WB.app.errorhandler(Exception)
 def handleexception(ex):
   '''Generic method to log any uncaught exception'''
-  if isinstance(ex, Flask_NotFound):
+  if isinstance(ex, Flask_NotFound) or isinstance(ex, Flask_MethodNotAllowed):
     return ex
   ex_type, ex_value, ex_traceback = sys.exc_info()
   WB.log.error('msg="Unexpected exception caught" exception="%s" type="%s" traceback="%s"' % \
