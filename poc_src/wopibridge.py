@@ -241,11 +241,15 @@ def _storagetocodimd(filemd, wopisrc, acctok):
     newparams = {'mode': 'locked'}     # this is an extended feature in CodiMD
 
   # push the document to CodiMD
-  res = requests.post(WB.codimdurl + '/new', data=mddoc, allow_redirects=False, params=newparams,
+  try:
+    res = requests.post(WB.codimdurl + '/new', data=mddoc, allow_redirects=False, params=newparams,
                       headers={'Content-Type': 'text/markdown'}, verify=not WB.skipsslverify)
-  if res.status_code != http.client.FOUND:
-    WB.log.error('msg="Unable to push document to CodiMD" token="%s" response="%s: %s"' % \
-                 (acctok[-20:], res.status_code, res.content))
+    if res.status_code != http.client.FOUND:
+      WB.log.error('msg="Unable to push document to CodiMD" token="%s" response="%s: %s"' % \
+                   (acctok[-20:], res.status_code, res.content))
+      raise CodiMDFailure
+  except requests.exceptions.ConnectionError as e:
+    WB.log.error('msg="Exception raised attempting to connect to CodiMD" exception="%s"' % e)
     raise CodiMDFailure
   WB.log.debug('msg="Got redirect from CodiMD" url="%s"' % res.next.url)
   # we got the hash of the document just created as a redirected URL, store it in our WOPI lock structure
