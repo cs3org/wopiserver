@@ -412,7 +412,7 @@ def appopen():
           WB.log.info('msg="Lock already held" lock="%s"' % wopilock)
         except json.decoder.JSONDecodeError:
           # this lock cannot be parsed, probably got corrupted: force read-only mode
-          WB.log.warning('msg="Malformed lock, forcing read-only mode" lock="%s"' % wopilock)
+          WB.log.warning('msg="Malformed lock, forcing read-only mode" lock="%s" token="%s"' % (wopilock, acctok[-20:]))
           filemd['UserCanWrite'] = False
           wopilock = None
 
@@ -423,7 +423,7 @@ def appopen():
       res = _wopicall(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'LOCK'})
       if res.status_code != http.client.OK:
         # Failed to lock the file: open in read-only mode
-        WB.log.warning('msg="Failed to lock the file" token="%s" response="%d"' % (acctok[-20:], res.status_code))
+        WB.log.warning('msg="Failed to lock the file" response="%d" token="%s"' % (res.status_code, acctok[-20:]))
         filemd['UserCanWrite'] = False
 
     else:
@@ -488,11 +488,11 @@ def appsave():
     # return latest known state for this document
     if wopisrc in WB.saveresponses:
       resp = WB.saveresponses[wopisrc]
-      WB.log.info('msg="Save: returned response" client="%s" isclose="%s" response="%s"' % \
-                  (flask.request.remote_addr, isclose, resp))
+      WB.log.info('msg="Save: returned response" isclose="%s" response="%s" token="%s"' % \
+                  (isclose, resp, acctok[-20:]))
       del WB.saveresponses[wopisrc]
       return resp
-    WB.log.info('msg="Save: enqueued action" wopisrc="%s" isclose="%s"' % (wopisrc, isclose))
+    WB.log.info('msg="Save: enqueued action" isclose="%s" token="%s"' % (isclose, acctok[-20:]))
     return '{}', http.client.ACCEPTED
 
 
@@ -559,7 +559,7 @@ def savethread_do():
                 WB.log.warning('msg="Savethread: calling WOPI Unlock failed" url="%s" response="%s"' % \
                               (wopisrc, res.status_code))
               else:
-                WB.log.info('msg="Savethread: unlocked document" url="%s" lastsave="%s"' % (wopisrc, openfile['lastsave']))
+                WB.log.info('msg="Savethread: unlocked document" lastsave="%s" token="%s"' % (openfile['lastsave'], openfile['acctok']))
             else:
               # this document was "taken over" by another bridge, don't unlock
               WB.log.debug('msg="Savethread: document taken over by another wopibridge instance" url="%s"' % wopisrc)
