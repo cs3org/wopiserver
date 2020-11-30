@@ -431,13 +431,13 @@ def cboxLock():
       lock = next(storage.readfile(endpoint, utils.getLibreOfficeLockName(filename), userid))
       if isinstance(lock, IOError):
         raise lock
+      # lock is there, check last mtime
+      lockstat = storage.stat(endpoint, utils.getLibreOfficeLockName(filename), userid)
     except (IOError, StopIteration) as e:
       # be optimistic, any error here (including no content in the lock file) is like ENOENT
       Wopi.log.info('msg="cboxLock: lock to be queried not found" filename="%s" reason="%s"' % \
                     (filename, 'empty lock' if isinstance(e, StopIteration) else str(e)))
       return 'Previous lock not found', http.client.NOT_FOUND
-    # lock is there, check last mtime
-    lockstat = storage.stat(endpoint, utils.getLibreOfficeLockName(filename), userid)
     if filestat['mtime'] > lockstat['mtime']:
       # we were asked to query an existing lock, but the file was modified in between (e.g. by a sync client):
       # notify potential conflict
@@ -517,6 +517,9 @@ def cboxLock():
       storage.writefile(endpoint, utils.getLibreOfficeLockName(filename), userid, lolockcontent, islock=False)
       Wopi.log.info('msg="cboxLock: refreshed LibreOffice-compatible lock file" filename="%s" id="%d"' % (filename, lockid))
       return str(lockid), http.client.OK
+    except IndexError as e:
+      Wopi.log.error('msg="cboxLock: unable to refresh LibreOffice-compatible lock file" filename="%s" lock="%s" reason="%s"' % \
+                     (filename, lock, e))
     except IOError as e:
       # this is unexpected, return failure
       Wopi.log.error('msg="cboxLock: unable to refresh LibreOffice-compatible lock file" filename="%s" reason="%s"' % \
