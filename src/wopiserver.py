@@ -72,7 +72,7 @@ class Wopi:
     '''Initialises the application, bails out in case of failures. Note this is not a __init__ method'''
     try:
       # configure the logging
-      loghandler = logging.StreamHandler(stream=sys.stdout)
+      loghandler = logging.FileHandler('/var/log/wopi/wopiserver.log')
       loghandler.setFormatter(logging.Formatter(
           fmt='{"time": "%(asctime)s", "process": "%(name)s", "level": "%(levelname)s", %(message)s}',
           datefmt='%Y-%m-%dT%H:%M:%S'))
