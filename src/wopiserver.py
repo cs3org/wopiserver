@@ -240,6 +240,9 @@ def index():
 
 
 @Wopi.app.route("/wopi/iop/open", methods=['GET'])
+@Wopi.metrics.do_not_track()
+@Wopi.metrics.counter('open_by_ext', 'Number of /open calls by file extension',
+  labels={'open_type': lambda: flask.request.args['filename'].split('.')[-1] if 'filename' in flask.request.args else 'id'})
 def iopOpen():
   '''Generates a WOPISrc target and an access token to be passed to a WOPI-compatible Office-like app
   for accessing a given file for a given user.
