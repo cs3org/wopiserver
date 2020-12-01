@@ -21,7 +21,7 @@ RUN yum -y install \
         xrootd-client \
         python3-xrootd
 
-RUN pip3 install flask pyOpenSSL PyJWT requests
+RUN pip3 install flask pyOpenSSL PyJWT requests prometheus-flask-exporter
 
 # install software
 RUN mkdir -p /app /test /etc/wopi /var/log/wopi
