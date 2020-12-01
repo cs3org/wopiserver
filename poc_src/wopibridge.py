@@ -34,7 +34,7 @@ except ImportError:
   print("Missing modules, please install with `pip3 install flask requests`")
   raise
 
-WBVERSION = 'latest'
+WBVERSION = 'git'
 CERTPATH = '/var/run/secrets/cert.pem'
 RECOVER_MSG = 'Please copy the content in a safe place and reopen the document afresh to paste it back.'
 
