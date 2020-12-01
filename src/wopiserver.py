@@ -145,8 +145,6 @@ class Wopi:
         from xml.etree import ElementTree as ET
         discData = requests.get(url=(code + '/hosting/discovery'), verify=False).content
         discXml = ET.fromstring(discData)
-        if discXml is None:
-          raise IOError('Failed to parse XML: %s' % discData)
         # extract urlsrc from first <app> node inside <net-zone>
         urlsrc = discXml.find('net-zone/app')[0].attrib['urlsrc']
 
@@ -165,7 +163,7 @@ class Wopi:
         cls.ENDPOINTS['.odp']['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace
         cls.log.info('msg="Collabora Online endpoints successfully configured" CODEURL="%s"' % cls.ENDPOINTS['.odt']['edit'])
 
-      except IOError as e:
+      except (IOError, ET.ParseError) as e:
         cls.log.warning('msg="Failed to initialize Collabora Online endpoints" error="%s"' % e)
 
     # The WOPI Bridge end-point
