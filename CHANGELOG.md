@@ -1,5 +1,11 @@
 # Changelog for wopibridge
 
+## wopibridge 1.2.0 (2020-12-01)
+
+* Better support for slides
+* Improved logging and UI responses
+* Added versioning
+
 ## wopibridge 1.1.0 (2020-11-11)
 
 * Several fixes around saving and feedback to UI
