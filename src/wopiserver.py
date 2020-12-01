@@ -606,7 +606,7 @@ def wopiCheckFileInfo(fileid):
     filemd['BreadcrumbFolderUrl'] = furl[:furl.find('=')+1] + urllib.parse.quote_plus(furl[furl.find('=')+1:])
     if acctok['username'] == '':
       filemd['UserFriendlyName'] = 'Guest ' + utils.randomString(3)
-      if '?path' in furl and furl[-2:] != '=/':
+      if '?path' in furl and furl[-1] != '=':
         # this is a subfolder of a public share, show it
         filemd['BreadcrumbFolderName'] = 'Back to ' + furl[furl.find('?path'):].split('/')[-1]
       else:
