@@ -6,4 +6,5 @@ pyOpenSSL
 PyJWT
 requests
 tuspy
+prometheus-flask-exporter
 cs3apis

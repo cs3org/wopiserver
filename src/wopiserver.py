@@ -4,8 +4,8 @@ wopiserver.py
 
 The Web-application Open Platform Interface (WOPI) gateway for the ScienceMesh IOP
 
-Author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
-Contributions: Michael.DSilva@aarnet.edu.au
+Author: Giuseppe Lo Presti (@glpatcern), CERN/IT-ST
+Contributions: see README.md
 '''
 
 import sys
@@ -23,9 +23,11 @@ import http.client
 import json
 import wopiutils as utils
 try:
-  import flask                   # Flask app server, python3-flask-0.12.2 + python3-pyOpenSSL-17.3.0
+  import flask                   # Flask app server
   from werkzeug.exceptions import NotFound as Flask_NotFound
-  import jwt                     # PyJWT JSON Web Token, python3-jwt-1.6.1 or above
+  from werkzeug.exceptions import MethodNotAllowed as Flask_MethodNotAllowed
+  import jwt                     # JSON Web Tokens support
+  from prometheus_flask_exporter import PrometheusMetrics    # Prometheus support
 except ImportError:
   print("Missing modules, please install Flask and JWT with `pip3 install flask PyJWT pyOpenSSL`")
   raise
@@ -56,6 +58,7 @@ def storage_layer_import(storagetype):
 class Wopi:
   '''A singleton container for all state information of the WOPI server'''
   app = flask.Flask("WOPIServer")
+  metrics = PrometheusMetrics(app, group_by='endpoint')
   port = 0
   lastConfigReadTime = time.time()
   loglevels = {"Critical": logging.CRITICAL,  # 50
@@ -211,7 +214,7 @@ class Wopi:
 @Wopi.app.errorhandler(Exception)
 def handleException(ex):
   '''Generic method to log any uncaught exception'''
-  if isinstance(ex, Flask_NotFound):
+  if isinstance(ex, Flask_NotFound) or isinstance(ex, Flask_MethodNotAllowed):
     return ex
   return utils.logGeneralExceptionAndReturn(ex, flask.request)
 
@@ -358,6 +361,7 @@ def cboxDownload():
 
 
 @Wopi.app.route("/wopi/cbox/endpoints", methods=['GET'])
+@Wopi.metrics.do_not_track()
 def cboxEndPoints():
   '''Returns the office apps end-points registered with this WOPI server. This is used by the EFSS
   client to discover which Apps frontends can be used with this WOPI server.
