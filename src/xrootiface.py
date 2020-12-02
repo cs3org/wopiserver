@@ -9,8 +9,9 @@ Contributions: Michael.DSilva@aarnet.edu.au
 
 import time
 import os
+from stat import S_ISDIR
 from XRootD import client as XrdClient
-from XRootD.client.flags import OpenFlags, QueryCode, MkDirFlags
+from XRootD.client.flags import OpenFlags, QueryCode, MkDirFlags, StatInfoFlags
 
 EOSVERSIONPREFIX = '.sys.v#.'
 
@@ -108,13 +109,15 @@ def init(inconfig, inlog):
 
 def stat(endpoint, filepath, userid):
   '''Stat a file via xroot on behalf of the given userid, and returns (size, mtime). Uses the default xroot API.'''
-  filepath = _getfilepath(filepath)
+  filepath = _getfilepath(filepath, encodeamp=True)
   tstart = time.time()
   rc, statInfo = _getxrdfor(endpoint).stat(filepath + _eosargs(userid))
   tend = time.time()
   log.info('msg="Invoked stat" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
   if statInfo is None:
     raise IOError(rc.message.strip('\n'))
+  if statInfo.flags & StatInfoFlags.IS_DIR > 0:
+    raise IOError('Is a directory')
   return {'size': statInfo.size, 'mtime': statInfo.modtime}
 
 
@@ -122,16 +125,19 @@ def statx(endpoint, filepath, userid, versioninv=0):
   '''Get extended stat info (inode, filepath, userid, size, mtime) via an xroot opaque query on behalf of the given userid.
   If versioninv=1, the logic to support the version folder is not triggered.'''
   tstart = time.time()
-  rc, info = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(filepath) + _eosargs(userid) + '&mgm.pcmd=stat')
+  rc, info = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(filepath, encodeamp=True) + _eosargs(userid) + '&mgm.pcmd=stat')
   info = str(info)
   log.info('msg="Invoked stat" filepath="%s"' % _getfilepath(filepath))
   if '[SUCCESS]' not in str(rc):
     raise IOError(str(rc).strip('\n'))
   if 'retc=2\\x00' in info:
     raise IOError('No such file or directory')   # convert ENOENT
-  elif 'retc=' in info:
+  if 'retc=' in info:
     raise IOError(info.strip('\n'))
   statxdata = info.split()
+  # we got now a full record according to https://gitlab.cern.ch/dss/eos/-/blob/master/mgm/XrdMgmOfs/fsctl/Stat.cc#L53
+  if S_ISDIR(int(statxdata[3])):
+    raise IOError('Is a directory')      # EISDIR
   if versioninv == 0:
     # classic statx info of the given file
     return {'inode': str(statxdata[2]),
@@ -143,9 +149,9 @@ def statx(endpoint, filepath, userid, versioninv=0):
   verFolder = os.path.dirname(filepath) + os.path.sep + EOSVERSIONPREFIX + os.path.basename(filepath)
   rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder) + _eosargs(userid) + '&mgm.pcmd=stat')
   tend = time.time()
-  log.debug('msg="Invoked stat on version folder" filepath="%s" elapsedTimems="%.1f"' % \
-            (_getfilepath(verFolder), (tend-tstart)*1000))
   infov = str(infov)
+  log.debug('msg="Invoked stat on version folder" filepath="%s" result="%s" elapsedTimems="%.1f"' % \
+            (_getfilepath(verFolder), infov, (tend-tstart)*1000))
   try:
     if '[SUCCESS]' not in str(rcv) or 'retc=' in infov:
       # the version folder does not exist: create it
@@ -156,7 +162,7 @@ def statx(endpoint, filepath, userid, versioninv=0):
         raise IOError
       rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder) + _eosargs(userid) + '&mgm.pcmd=stat')
       infov = str(infov)
-      log.debug('msg="Invoked stat on version folder" filepath="%s"' % _getfilepath(verFolder))
+      log.debug('msg="Invoked stat on version folder" filepath="%s" result="%s"' % (_getfilepath(verFolder), infov))
       if '[SUCCESS]' not in str(rcv) or 'retc=' in infov:
         raise IOError
     statxvdata = infov.split()
@@ -271,4 +277,4 @@ def removefile(endpoint, filepath, userid, force=0):
   if force:
     userid = '0:0'
   _xrootcmd(endpoint, 'rm', None, userid, 'mgm.path=' + _getfilepath(filepath, encodeamp=True) + \
-                                     ('&mgm.option=f' if force else ''))
+                                          ('&mgm.option=f' if force else ''))

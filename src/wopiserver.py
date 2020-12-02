@@ -242,7 +242,11 @@ def index():
 @Wopi.app.route("/wopi/iop/open", methods=['GET'])
 @Wopi.metrics.do_not_track()
 @Wopi.metrics.counter('open_by_ext', 'Number of /open calls by file extension',
-  labels={'open_type': lambda: flask.request.args['filename'].split('.')[-1] if 'filename' in flask.request.args else 'id'})
+  labels={'open_type': lambda:
+    flask.request.args['filename'].split('.')[-1] \
+    if 'filename' in flask.request.args and '.' in flask.request.args['filename'] \
+    else ('noext' if 'filename' in flask.request.args else 'fileid')
+    })
 def iopOpen():
   '''Generates a WOPISrc target and an access token to be passed to a WOPI-compatible Office-like app
   for accessing a given file for a given user.
@@ -305,7 +309,7 @@ def iopOpen():
     Wopi.log.info('msg="iopOpen: remote error on generating token" client="%s" user="%s" ' \
                   'friendlyname="%s" mode="%s" endpoint="%s" reason="%s"' % \
                   (req.remote_addr, userid, username, viewmode, endpoint, e))
-    return 'Remote error or file not found', http.client.NOT_FOUND
+    return 'Remote error, file not found or file is a directory', http.client.NOT_FOUND
 
 
 @Wopi.app.route("/wopi/cbox/open", methods=['GET'])
@@ -411,7 +415,7 @@ def cboxLock():
     filestat = storage.stat(endpoint, filename, userid)
   except IOError as e:
     Wopi.log.warning('msg="cboxLock: target file not found" filename="%s"' % filename)
-    return 'File not found', http.client.NOT_FOUND
+    return 'File not found or file is a directory', http.client.NOT_FOUND
 
   # probe if a WOPI lock already exists and expire it if too old:
   # need to craft a special access token
@@ -580,7 +584,6 @@ def cboxUnlock():
   except (IOError, StopIteration) as e:
     Wopi.log.error('msg="cboxUnlock: remote error with the requested lock" filename="%s" reason="%s"' % \
                    (filename, 'empty lock' if isinstance(e, StopIteration) else str(e)))
-    # return failure
     return 'Error unlocking file', http.client.INTERNAL_SERVER_ERROR
 
 

@@ -120,7 +120,7 @@ def generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint)
     # the inode serves as fileid (and must not change across save operations), the mtime is used for version information.
     statInfo = _ctx['st'].statx(endpoint, fileid, userid, versioninv=1)
   except IOError as e:
-    _ctx['log'].info('msg="Requested file not found" fileid="%s" error="%s"' % (fileid, e))
+    _ctx['log'].info('msg="Requested file not found or not a file" fileid="%s" error="%s"' % (fileid, e))
     raise
   # if write access is requested, probe whether there's already a lock file coming from Desktop applications
   exptime = int(time.time()) + _ctx['wopi'].tokenvalidity

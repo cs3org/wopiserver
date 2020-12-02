@@ -48,6 +48,8 @@ def stat(_endpoint, filepath, _userid):
     statInfo = os.stat(_getfilepath(filepath))
     tend = time.time()
     log.info('msg="Invoked stat" filepath="%s" elapsedTimems="%.1f"' % (_getfilepath(filepath), (tend-tstart)*1000))
+    if S_ISDIR(statInfo.st_mode):
+      raise IOError('Is a directory')
     return {
         'inode': str(statInfo.st_ino),
         'filepath': filepath,
