@@ -45,6 +45,7 @@ class InvalidLock(Exception):
 class CodiMDFailure(Exception):
   '''A custom exception to represent a fatal failure when contacting CodiMD'''
 
+
 class WB:
   '''A singleton container for all state information of the server'''
   approot = os.getenv('APP_ROOT', '/wopib')               # application root path
@@ -204,8 +205,8 @@ def _unzipattachments(inputbuf):
         WB.log.warning('msg="Attachment collision detected" filename="%s"' % fname)
         # append a random letter to the filename
         name, ext = os.path.splitext(fname)
-        fname = name + chr(randint(65, 65+26)) + ext
-        # and replace its reference in the document (this creates a copy, not very efficient)
+        fname = name + '_' + chr(randint(65, 65+26)) + ext
+        # and replace its reference in the document (this creates a copy of the doc, not very efficient)
         mddoc = mddoc.replace(zipinfo.filename, fname)
       # OK, let's upload
       WB.log.debug('msg="Pushing attachment" filename="%s"' % fname)
@@ -436,7 +437,7 @@ def appopen():
       wopilock = _storagetocodimd(filemd, wopisrc, acctok)
 
     if filemd['UserCanWrite']:
-      # keep track of this open document for the save thread and statistical purposes;
+      # keep track of this open document for the save thread and for statistical purposes;
       # if it was already opened, this will overwrite the previous metadata, which is fine
       WB.openfiles[wopisrc] = {'acctok': acctok, 'isclose': False, 'tosave': False,
                                'lastsave': int(time.time()) - WB.saveinterval}
@@ -561,10 +562,11 @@ def savethread_do():
               res = _wopicall(wopisrc, openfile['acctok'], 'POST',
                               headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
               if res.status_code != http.client.OK:
-                WB.log.warning('msg="Savethread: calling WOPI Unlock failed" url="%s" response="%s"' % \
-                              (wopisrc, res.status_code))
+                WB.log.warning('msg="Savethread: calling WOPI Unlock failed" token="%s" response="%s"' % \
+                              (openfile['acctok'][-20:], res.status_code))
               else:
-                WB.log.info('msg="Savethread: unlocked document" lastsave="%s" token="%s"' % (openfile['lastsave'], openfile['acctok']))
+                WB.log.info('msg="Savethread: unlocked document" lastsavetime="%s" token="%s"' % \
+                            (openfile['lastsave'], openfile['acctok'][-20:]))
             else:
               # this document was "taken over" by another bridge, don't unlock
               WB.log.debug('msg="Savethread: document taken over by another wopibridge instance" url="%s"' % wopisrc)
