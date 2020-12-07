@@ -883,9 +883,13 @@ def wopiPutRelative(fileid, reqheaders, acctok):
   putrelmd = {}
   putrelmd['Name'] = os.path.basename(targetName)
   putrelmd['Url'] = '%s?access_token=%s' % (utils.generateWopiSrc(inode), newacctok)
-  putrelmd['HostEditUrl'] = '%s&WOPISrc=%s&access_token=%s' % \
-                            (Wopi.ENDPOINTS[os.path.splitext(targetName)[1]]['edit'], \
-                             utils.generateWopiSrc(inode), newacctok)
+  fExt = os.path.splitext(targetName)[1]
+  if fExt in Wopi.ENDPOINTS:
+    # TODO once the endpoints are managed by Reva, this metadata has to be provided in the initial /open call
+    putrelmd['HostEditUrl'] = '%s&WOPISrc=%s&access_token=%s' % \
+                              (Wopi.ENDPOINTS[fExt]['edit'], \
+                               utils.generateWopiSrc(inode), newacctok)
+  #else we don't know the app to edit this file type, therefore we do not provide the info
   Wopi.log.debug('msg="PutRelative response" token="%s" metadata="%s"' % (newacctok[-20:], putrelmd))
   return flask.Response(json.dumps(putrelmd), mimetype='application/json')
 
