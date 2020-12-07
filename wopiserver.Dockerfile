@@ -14,6 +14,7 @@ LABEL maintainer="cernbox-admins@cern.ch" \
 WORKDIR /app
 COPY requirements.txt .
 RUN pip3 install --upgrade pip && \
+    python3 -m pip install --upgrade setuptools && \
     pip3 install --no-cache-dir --upgrade -r requirements.txt
 
 # install software
@@ -28,4 +29,3 @@ ADD test/*py test/*conf /test/
 ADD ./docker/etc/*secret  ./docker/etc/wopiserver.conf /etc/wopi/
 
 ENTRYPOINT ["/app/wopiserver.py"]
-
