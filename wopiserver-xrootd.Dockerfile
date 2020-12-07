@@ -30,8 +30,9 @@ RUN yum clean all && yum -y install \
         gcc \
         gcc-c++
 
-RUN pip3 install flask pyOpenSSL PyJWT requests prometheus-flask-exporter wheel && \
-    pip3 install xrootd
+RUN python3 -m pip install --upgrade setuptools && \
+    python3 -m pip install flask pyOpenSSL PyJWT requests prometheus-flask-exporter wheel && \
+    python3 -m pip install xrootd
 
 # install software
 RUN mkdir -p /app /test /etc/wopi /var/log/wopi
