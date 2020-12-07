@@ -631,15 +631,14 @@ def wopiCheckFileInfo(fileid):
     filemd['Size'] = statInfo['size']
     # TODO the version is generated like this in ownCloud: 'V' . $file->getEtag() . \md5($file->getChecksum());
     filemd['Version'] = statInfo['mtime']   # mtime is used as version here
-    filemd['SupportsExtendedLockLength'] = True
-    filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = \
-        filemd['SupportsGetLock'] = filemd['SupportsDeleteFile'] = acctok['viewmode'] = \
-        filemd['SupportsRename'] = filemd['UserCanRename'] = acctok['viewmode'] == utils.ViewMode.READ_WRITE
-
+    filemd['SupportsExtendedLockLength'] = filemd['SupportsGetLock'] = True
+    filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = filemd['SupportsRename'] = \
+        filemd['SupportsDeleteFile'] = filemd['UserCanRename'] = acctok['viewmode'] == utils.ViewMode.READ_WRITE
+    filemd['UserCanNotWriteRelative'] = acctok['viewmode'] != utils.ViewMode.READ_WRITE
     # populate app-specific metadata
     # the following properties are only used by MS Office Online
     if fExt in ['.docx', '.xlsx', '.pptx']:
-      # TODO once the endpoints are managed by Reva, these have to be provided in the initial /open call
+      # TODO once the endpoints are managed by Reva, this metadata has to be provided in the initial /open call
       filemd['HostViewUrl'] = '%s&%s' % (Wopi.ENDPOINTS[fExt]['view'], wopiSrc)
       filemd['HostEditUrl'] = '%s&%s' % (Wopi.ENDPOINTS[fExt]['edit'], wopiSrc)
       # the following actions are broken in MS Office Online, therefore they are disabled
