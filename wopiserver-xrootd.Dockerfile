@@ -3,7 +3,7 @@
 # Build: WOPI_DOCKER_TYPE=-xrootd docker-compose -f wopiserver.yaml build --build-arg VERSION=`git describe | sed 's/^v//'` wopiserver
 # Run: docker-compose -f wopiserver.yaml up -d
 
-FROM cern/cc7-base:latest
+FROM cern/c8-base:latest
 
 ARG VERSION=latest
 
@@ -11,17 +11,27 @@ LABEL maintainer="cernbox-admins@cern.ch" \
   org.opencontainers.image.title="The CERNBox WOPI server" \
   org.opencontainers.image.version="$VERSION"
 
-# prerequisites: until we need to support xrootd, yum install is way easier than pip3 install (where xrootd would need to be compiled from sources)
-RUN yum -y install \
+ADD ./docker/etc/epel8.repo /etc/yum.repos.d/
+
+# prerequisites: until we need to support xrootd (even on C8), we have some EPEL dependencies, easier to install via yum/dnf;
+# the rest is actually installed via pip, including the xrootd python bindings
+# (note that attempting to install python38 fails here as it gets mixed with the default 3.6 version; we'd need to use
+# a pure python image and install dependencies with apt)
+RUN yum clean all && yum -y install \
         sudo \
-        python36 \
-        python36-pip \
-        python36-devel \
+        python3-pip \
+        python3-devel \
         openssl-devel \
         xrootd-client \
-        python3-xrootd
+        xrootd-devel \
+        libuuid-devel \
+        cmake3 \
+        make \
+        gcc \
+        gcc-c++
 
-RUN pip3 install flask pyOpenSSL PyJWT requests prometheus-flask-exporter
+RUN pip3 install flask pyOpenSSL PyJWT requests prometheus-flask-exporter wheel && \
+    pip3 install xrootd
 
 # install software
 RUN mkdir -p /app /test /etc/wopi /var/log/wopi
@@ -36,5 +46,5 @@ ADD ./docker/etc/*secret  ./docker/etc/wopiserver.conf /etc/wopi/
 #RUN mkdir /etc/certs
 #ADD ./etc/*.pem /etc/certs/   if certificates shall be added
 
-#CMD /app/entrypoint
 CMD ["python3", "/app/wopiserver.py"]
+
