@@ -79,6 +79,16 @@ touch /etc/wopi/iopsecret
 %_python_lib/*
 
 %changelog
+* Tue Dec  8 2020 Giuseppe Lo Presti <lopresti@cern.ch> 6.0.0
+- Migrated the xrootd-based docker image to xrootd 5.0 and CentOS 8.2
+  (with crypto legacy mode enabled to keep TLS 1.1 support)
+- Migrated the default image to python 3.9 and fixed requirements
+  accordingly (will revert to latest grpcio once it is fixed)
+- Introduced a check on /open and /lock in case the file is
+  a directory: now an error is returned as opposed to let such
+  operations succeed
+- Added a /metrics endpoint for Prometheus integration
+- Several minor fixes as hinted by the MS WOPI validator tests
 * Mon Nov 30 2020 Giuseppe Lo Presti <lopresti@cern.ch> 5.7.0
 - Log is now in JSON format as opposed to syslog-like
 - Use direct data transfers (non-TUS-based) with CS3 storages
