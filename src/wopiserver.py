@@ -882,7 +882,7 @@ def wopiPutRelative(fileid, reqheaders, acctok):
   # prepare and send the response as JSON
   putrelmd = {}
   putrelmd['Name'] = os.path.basename(targetName)
-  putrelmd['Url'] = '%s?access_token=%s' % (utils.generateWopiSrc(inode), newacctok)
+  putrelmd['Url'] = '%s?access_token=%s' % (urllib.parse.unquote(utils.generateWopiSrc(inode)), newacctok)
   fExt = os.path.splitext(targetName)[1]
   if fExt in Wopi.ENDPOINTS:
     # TODO once the endpoints are managed by Reva, this metadata has to be provided in the initial /open call
