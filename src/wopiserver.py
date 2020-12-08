@@ -911,7 +911,7 @@ def wopiDeleteFile(fileid, _reqheaders_unused, acctok):
 def wopiRenameFile(fileid, reqheaders, acctok):
   '''Implements the RenameFile WOPI call.'''
   targetName = reqheaders['X-WOPI-RequestedName']
-  lock = reqheaders['X-WOPI-Lock']
+  lock = reqheaders['X-WOPI-Lock'] if 'X-WOPI-Lock' in reqheaders else None
   retrievedLock = utils.retrieveWopiLock(fileid, 'RENAMEFILE', lock, acctok)
   if retrievedLock is not None and not utils.compareWopiLocks(retrievedLock, lock):
     return utils.makeConflictResponse('RENAMEFILE', retrievedLock, lock, '', acctok['filename'])
