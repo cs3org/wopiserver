@@ -3,8 +3,7 @@
 # Build: WOPI_DOCKER_TYPE=-xrootd docker-compose -f wopiserver.yaml build --build-arg VERSION=`git describe | sed 's/^v//'` wopiserver
 # Run: docker-compose -f wopiserver.yaml up -d
 
-#FROM cern/c8-base:latest    # breaks for now with MS Office
-FROM cern/cc7-base:latest
+FROM cern/c8-base:latest
 
 ARG VERSION=latest
 
@@ -12,7 +11,10 @@ LABEL maintainer="cernbox-admins@cern.ch" \
   org.opencontainers.image.title="The CERNBox WOPI server" \
   org.opencontainers.image.version="$VERSION"
 
-#ADD ./docker/etc/epel8.repo /etc/yum.repos.d/
+# The following is needed for now to keep compatibility with MS Office Online
+RUN update-crypto-policies --set LEGACY
+
+ADD ./docker/etc/epel8.repo /etc/yum.repos.d/
 
 # prerequisites: until we need to support xrootd (even on C8), we have some EPEL dependencies, easier to install via yum/dnf;
 # the rest is actually installed via pip, including the xrootd python bindings
