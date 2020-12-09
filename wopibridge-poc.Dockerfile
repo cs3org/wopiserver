@@ -12,7 +12,7 @@ LABEL maintainer="cernbox-admins@cern.ch" \
 
 RUN pip install flask requests
 RUN mkdir -p /var/log/wopi /app
-ADD poc_src/wopibridge.py /app
+ADD poc_src/* /app/
 RUN sed -i "s/WBVERSION = 'git'/WBVERSION = '$VERSION'/" /app/wopibridge.py
 
 CMD ["python3", "/app/wopibridge.py"]
