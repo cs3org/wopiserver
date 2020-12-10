@@ -379,6 +379,12 @@ def cboxEndPoints():
 
 
 @Wopi.app.route("/wopi/cbox/lock", methods=['GET', 'POST'])
+@Wopi.metrics.counter('lock_by_ext', 'Number of /lock calls by file extension',
+  labels={'open_type': lambda:
+            (flask.request.args['filename'].split('.')[-1] \
+             if 'filename' in flask.request.args and '.' in flask.request.args['filename'] \
+             else 'noext') if flask.request.method == 'POST' else 'query'
+  })
 def cboxLock():
   '''Lock a given filename so that a later WOPI lock call would detect a conflict.
   Used for OnlyOffice as they do not use WOPI: this way better interoperability is ensured.
@@ -393,7 +399,7 @@ def cboxLock():
   The call returns:
   - HTTP UNAUTHORIZED (401) if the 'Authorization: Bearer' secret is not provided in the header (cf. /wopi/cbox/open)
   - HTTP CONFLICT (409) if a previous lock already exists, or on query, if the file got modified since the lock was created
-  - HTTP NOT_FOUND (404) if the file to be locked does not exist, or on query, if no lock exists
+  - HTTP NOT_FOUND (404) if the file to be locked does not exist or is a directory, or on query, if no lock exists
   - HTTP INTERNAL_SERVER_ERROR (500) if writing the lock file failed, though no lock existed
   - HTTP OK (200) if the operation succeeded (on query, if no file modification took place since the lock was created)
   In the latter case, a unique lock ID is returned, which is the timestamp when the lock was first created.
