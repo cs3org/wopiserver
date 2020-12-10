@@ -212,7 +212,7 @@ class Wopi:
 @Wopi.app.errorhandler(Exception)
 def handleException(ex):
   '''Generic method to log any uncaught exception'''
-  if isinstance(ex, Flask_NotFound) or isinstance(ex, Flask_MethodNotAllowed):
+  if isinstance(ex, (Flask_NotFound, Flask_MethodNotAllowed)):
     return ex
   return utils.logGeneralExceptionAndReturn(ex, flask.request)
 
