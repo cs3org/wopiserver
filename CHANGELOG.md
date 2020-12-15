@@ -1,5 +1,13 @@
 # Changelog for wopibridge
 
+## wopibridge 2.0.0 (2020-12-14)
+
+* Full refactoring of the code, to separate
+  the core server from the CodiMD-specific code
+* Fixed handling of multiple collaborating users
+  and multiple wopibridge instances by storing
+  more state in the WOPI locks
+
 ## wopibridge 1.2.0 (2020-12-01)
 
 * Better support for slides
@@ -16,7 +24,7 @@
 * Full refactoring to achieve a MVP
 * Added support for autosave
 * Removed dependency on locally mounted CodiMD storage
-* Added support for custom APP_ROOT
+* Added support for a custom `APP_ROOT`
 
 ## wopibridge 0.3 (2020-08-05)
 
@@ -34,3 +42,4 @@
 
 * First PoC of a WOPI bridge service for CodiMD,
   including collaborative editing and WOPI-compliant locking.
+
