@@ -38,11 +38,8 @@ def refreshlock(wopisrc, acctok, wopilock, isdirty=False, toclose=None):
     '''Refresh an existing WOPI lock. Returns the new lock if successful, None otherwise'''
     newlock = json.loads(json.dumps(wopilock))    # this is a hack for a deep copy, to be redone in Go
     if toclose:
-        # we got the full 'toclose' dict, push it and keep only the active tokens
-        newlock['toclose'] = {t: False for t in toclose if not toclose[t]}
-        if not newlock['toclose']:
-            # exception when no active tokens remain, i.e. everybody has closed: keep them until next round
-            newlock['toclose'] = toclose
+        # we got the full 'toclose' dict, push it as is
+        newlock['toclose'] = toclose
     elif acctok[-20:] not in wopilock['toclose']:
         # if missing, just append the short token to the 'toclose' dict, similarly to the openfiles map
         newlock['toclose'][acctok[-20:]] = False

@@ -217,9 +217,9 @@ def appopen():
         if filemd['UserCanWrite']:
             # keep track of this open document for the save thread and for statistical purposes
             if wopisrc in WB.openfiles:
-                # append the new acctok
+                # use the new acctok and the new/current wopilock content
                 WB.openfiles[wopisrc]['acctok'] = acctok
-                WB.openfiles[wopisrc]['toclose'][acctok[-20:]] = False
+                WB.openfiles[wopisrc]['toclose'] = wopilock['toclose']
             else:
                 WB.openfiles[wopisrc] = {'acctok': acctok, 'tosave': False,
                                          'lastsave': int(time.time()) - WB.saveinterval,
