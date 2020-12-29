@@ -79,10 +79,13 @@ try:
   try:
     wopiTime = storage.getxattr(instance, filename, '0:0', 'oc.wopi.lastwritetime')
     try:
-      l = ''
+      lockcontent = b''
       for line in storage.readfile(instance, _getLockName(filename), '0:0'):
-        l += str(line)
-      wopiLock = jwt.decode(l, wopisecret, algorithms=['HS256'])
+        if isinstance(line, IOError):
+          raise line     # no pre-existing lock found, or error attempting to read it: assume it does not exist
+        # the following check is necessary as it happens to get a str instead of bytes
+        lockcontent += line if isinstance(line, type(lockcontent)) else line.encode()
+      wopiLock = jwt.decode(lockcontent, wopisecret, algorithms=['HS256'])
       print('%s: inode = %s, mtime = %s, last WOPI write time = %s, locked: %s' % (filename, statInfo['inode'], statInfo['mtime'], wopiTime, wopiLock))
     except jwt.exceptions.DecodeError:
       print('%s: inode = %s, mtime = %s, last WOPI write time = %s, unreadable lock' % (filename, statInfo['inode'], statInfo['mtime'], wopiTime))
