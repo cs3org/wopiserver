@@ -31,6 +31,9 @@ steps:
       from_secret: dockerhub_password
     build_args:
       - VERSION=${DRONE_SEMVER_SHORT}-g${DRONE_COMMIT:0:7}
+    custom_dns:
+      - 128.142.17.5
+      - 128.142.16.5
 
 ---
 kind: pipeline
@@ -60,6 +63,9 @@ steps:
       from_secret: dockerhub_password
     build_args:
       - VERSION=${DRONE_TAG}
+    custom_dns:
+      - 128.142.17.5
+      - 128.142.16.5
 
 ---
 kind: pipeline
@@ -89,3 +95,6 @@ steps:
       from_secret: dockerhub_password
     build_args:
       - VERSION=${DRONE_TAG}
+    custom_dns:
+      - 128.142.17.5
+      - 128.142.16.5
