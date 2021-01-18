@@ -10,7 +10,6 @@ Lovisa.Lugnegaard@cern.ch, CERN/IT-ST
 
 import time
 import http
-from stat import S_ISDIR
 import requests
 import grpc
 
@@ -75,8 +74,11 @@ def stat(endpoint, fileid, userid, versioninv=0):
     except ValueError:
       # the storage behind Reva provided a non-int file inode: let's hash it to really have an int
       inode = hash(statInfo.info.id.opaque_id)
-    if S_ISDIR(statInfo.info.mode):
+    if statInfo.info.type == cs3spr.RESOURCE_TYPE_CONTAINER:
       raise IOError('Is a directory')
+    elif statInfo.info.type not in (cs3spr.RESOURCE_TYPE_FILE, cs3spr.RESOURCE_TYPE_SYMLINK):
+      ctx['log'].warning('msg="Stat: unexpected type" type="%d"' % statInfo.info.type)
+      raise IOError('Unexpected type %d' % statInfo.info.type)
     return {
         'inode': statInfo.info.id.storage_id + '-' + str(inode),
         'filepath': statInfo.info.path,
