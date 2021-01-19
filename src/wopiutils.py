@@ -119,8 +119,7 @@ def generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint)
   # if write access is requested, probe whether there's already a lock file coming from Desktop applications
   exptime = int(time.time()) + wopi.tokenvalidity
   acctok = jwt.encode({'userid': userid, 'filename': statInfo['filepath'], 'username': username, 'viewmode': viewmode.value,
-                       'folderurl': folderurl, 'exp': exptime, 'endpoint': endpoint}, \
-                      wopi.wopisecret, algorithm='HS256').decode('UTF-8')
+                       'folderurl': folderurl, 'exp': exptime, 'endpoint': endpoint}, wopi.wopisecret, algorithm='HS256')
   log.info('msg="Access token generated" userid="%s" mode="%s" filename="%s" inode="%s" ' \
            'mtime="%s" folderurl="%s" expiration="%d" token="%s"' % \
            (userid, viewmode, statInfo['filepath'], statInfo['inode'], statInfo['mtime'], \
