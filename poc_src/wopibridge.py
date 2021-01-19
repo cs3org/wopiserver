@@ -277,6 +277,11 @@ def appsave():
                                      'lastsave': int(time.time() - WB.saveinterval),
                                      'toclose': {acctok[-20:]: isclose},
                                      }
+            # if it's the first time we heard about this wopisrc, remove any potential stale response
+            try:
+                del WB.saveresponses[wopisrc]
+            except KeyError:
+                pass
         if donotify:
             # note that the save thread stays locked until we release the context, after return!
             WB.savecv.notify()
