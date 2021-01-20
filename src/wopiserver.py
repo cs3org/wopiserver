@@ -528,6 +528,10 @@ def cboxLock():
       return 'Previous lock exists', http.client.CONFLICT
     # otherwise, extract the previous timestamp and refresh the lock itself
     # (this is equivalent to a touch, needed to make the mtime check on query valid, see above)
+    # XXX note that here we can't tell if the file was externally modified in between and the lock is actually stale,
+    # because by construction the file's mtime is more recent also when being saved by OnlyOffice just before
+    # refreshing the lock! To solve this, we'd need to check an xattr set by OnlyOffice/ocproxy on save (and deleted by
+    # the sync client), similarly to the WOPI lock logic below.
     try:
       lockid = int(lock.split(';\n')[1].strip(';'))
       lolockcontent = ',OnlyOffice Online Editor,%s,%s,ExtWebApp;\n%d;' % \
