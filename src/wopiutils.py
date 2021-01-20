@@ -168,7 +168,7 @@ def retrieveWopiLock(fileid, operation, lock, acctok):
       lolock = next(st.readfile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid']))
       if isinstance(lolock, IOError):
         raise lolock
-      if 'WOPIServer' in lolock.decode('utf-8'):
+      if 'WOPIServer' in lolock.decode('UTF-8'):
         st.removefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], 1)
     except (IOError, StopIteration) as e:
       log.warning('msg="Unable to delete the LibreOffice-compatible lock file" error="%s"' % \
@@ -217,7 +217,7 @@ def storeWopiLock(operation, lock, acctok, isnotoffice):
                                            getLibreOfficeLockName(acctok['filename']), acctok['userid']))
           if isinstance(retrievedlock, IOError):
             raise retrievedlock
-          retrievedlock = retrievedlock.decode('utf-8')
+          retrievedlock = retrievedlock.decode('UTF-8')
         except (IOError, StopIteration) as e:
           retrievedlock = ''   # could not read the lock, maybe it's empty: still, deny WOPI lock
         if 'WOPIServer' not in retrievedlock:

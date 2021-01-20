@@ -268,7 +268,7 @@ def iopOpen():
   Wopi.refreshconfig()
   req = flask.request
   # if running in https mode, first check if the shared secret matches ours
-  if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.iopsecret:
+  if req.headers.get('Authorization') != 'Bearer ' + Wopi.iopsecret:
     Wopi.log.warning('msg="iopOpen: unauthorized access attempt, missing authorization token" ' \
                      'client="%s" clientAuth="%s"' % (req.remote_addr, req.headers.get('Authorization')))
     return 'Client not authorized', http.client.UNAUTHORIZED
@@ -325,7 +325,7 @@ def iopGetOpenFiles():
   '''Returns a list of all currently opened files, for operations purposes only.
   This call is protected by the same shared secret as the /wopi/iop/open call.'''
   req = flask.request
-  if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.iopsecret:
+  if req.headers.get('Authorization') != 'Bearer ' + Wopi.iopsecret:
     Wopi.log.warning('msg="iopGetOpenFiles: unauthorized access attempt, missing authorization token" ' \
                      'client="%s"' % req.remote_addr)
     return 'Client not authorized', http.client.UNAUTHORIZED
@@ -408,7 +408,7 @@ def cboxLock():
   '''
   req = flask.request
   # first check if the shared secret matches ours
-  if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.iopsecret:
+  if req.headers.get('Authorization') != 'Bearer ' + Wopi.iopsecret:
     Wopi.log.warning('msg="cboxLock: unauthorized access attempt, missing authorization token" '
                      'client="%s"' % req.remote_addr)
     return 'Client not authorized', http.client.UNAUTHORIZED
@@ -463,7 +463,7 @@ def cboxLock():
                     'filename="%s" request="query"' % filename)
       return 'File modified since open time', http.client.CONFLICT
     # now check content
-    lock = lock.decode('utf-8')
+    lock = lock.decode('UTF-8')
     if 'OnlyOffice Online Editor' not in lock:
       Wopi.log.info('msg="cboxLock: found existing LibreOffice lock" filename="%s" holder="%s" lockmtime="%ld" request="query"' % \
                     (filename, lock.split(',')[1] if ',' in lock else lock, lockstat['mtime']))
@@ -520,7 +520,7 @@ def cboxLock():
         Wopi.log.warning('msg="cboxLock: unable to read existing LibreOffice lock" filename="%s" reason="%s"' % \
                          (filename, 'empty lock' if isinstance(e, StopIteration) else str(e)))
         return 'Previous lock exists', http.client.CONFLICT
-    lock = lock.decode('utf-8')
+    lock = lock.decode('UTF-8')
     if 'OnlyOffice Online Editor' not in lock:
       # a previous lock existed and it's not held by us, fail with conflict
       Wopi.log.info('msg="cboxLock: found existing LibreOffice lock" filename="%s" holder="%s" request="create"' % \
@@ -567,7 +567,7 @@ def cboxUnlock():
   '''
   req = flask.request
   # first check if the shared secret matches ours
-  if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.iopsecret:
+  if req.headers.get('Authorization') != 'Bearer ' + Wopi.iopsecret:
     Wopi.log.warning('msg="cboxUnlock: unauthorized access attempt, missing authorization token" ' \
                      'client="%s"' % req.remote_addr)
     return 'Client not authorized', http.client.UNAUTHORIZED
@@ -582,7 +582,7 @@ def cboxUnlock():
       # typically ENOENT, any other error is grouped here
       Wopi.log.warning('msg="cboxUnlock: lock file not found" filename="%s"' % filename)
       return 'Lock not found', http.client.NOT_FOUND
-    lock = lock.decode('utf-8')
+    lock = lock.decode('UTF-8')
     if 'OnlyOffice Online Editor' in lock:
       # remove the LibreOffice-compatible lock file
       storage.removefile(endpoint, utils.getLibreOfficeLockName(filename), userid, 1)

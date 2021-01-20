@@ -71,7 +71,7 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args):
     tend = time.time()
     log.info('msg="Invoked _xrootcmd" cmd="%s%s" url="%s" elapsedTimems="%.1f"' %
              (cmd, ('/' + subcmd if subcmd else ''), url, (tend-tstart)*1000))
-    res = f.readline().decode('utf-8').strip('\n').split('&')
+    res = f.readline().decode('UTF-8').strip('\n').split('&')
     if len(res) == 3:    # we may only just get stdout: in that case, assume it's all OK
       rc = res[2]
       rc = rc[rc.find('=')+1:]
