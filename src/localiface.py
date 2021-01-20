@@ -8,10 +8,8 @@ Author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 
 import time
 import os
+import warnings
 from stat import S_ISDIR
-import sys
-import traceback
-
 
 # module-wide state
 config = None
@@ -129,35 +127,35 @@ def writefile(_endpoint, filepath, _userid, content, islock=False):
   filepath = _getfilepath(filepath)
   log.debug('msg="Invoking writeFile" filepath="%s" size="%d"' % (filepath, size))
   tstart = time.time()
-  fd = 0
   if islock:
-    # apparently there's no way to pass the O_CREAT without O_TRUNC to the python f.open()!
-    # cf. https://stackoverflow.com/questions/38530910/python-open-flags-for-open-or-create
+    warnings.simplefilter("ignore", ResourceWarning)
     try:
-      fd = os.open(filepath, os.O_CREAT | os.O_EXCL)   # no O_BINARY in Linux
+      # apparently there's no way to pass the O_CREAT without O_TRUNC to the python f.open()!
+      # cf. https://stackoverflow.com/questions/38530910/python-open-flags-for-open-or-create
+      # so we resort to the os-level open(), with some caveats
+      fd = os.open(filepath, os.O_CREAT | os.O_EXCL)
       f = os.fdopen(fd, mode='wb')
+      written = f.write(content)    # os.write(fd, ...) raises EBADF?
+      os.close(fd)   # f.close() raises EBADF! while this works
+      # as f goes out of scope here, we'd get a false ResourceWarning, which is ignored by the above filter
     except FileExistsError:
       log.info('msg="File exists on write but islock flag requested" filepath="%s"' % filepath)
       raise IOError('File exists and islock flag requested')
+    except OSError as e:
+      log.warning('msg="Error writing file in O_EXCL mode" filepath="%s" error="%s"' % (filepath, e))
+      raise IOError(e)
   else:
     try:
-      f = open(filepath, mode='wb')
+      with open(filepath, mode='wb') as f:
+        written = f.write(content)
     except OSError as e:
-      log.warning('msg="Error opening file for write" filepath="%s" error="%s"' % (filepath, e))
+      log.warning('msg="Error writing file" filepath="%s" error="%s"' % (filepath, e))
       raise IOError(e)
   tend = time.time()
-  try:
-    written = f.write(content)
-    if fd == 0:
-      f.close()
-    # else for some reason we get a EBADF if we close a file opened with os.open, though it should be closed!
-    if written != size:
-      raise IOError('Written %d bytes but content is %d bytes' % (written, size))
-    log.info('msg="File written successfully" filepath="%s" elapsedTimems="%.1f" islock="%s"' % \
-             (filepath, (tend-tstart)*1000, islock))
-  except OSError as e:
-    log.warning('msg="Error writing to file" filepath="%s" error="%s"' % (filepath, e))
-    raise IOError(e)
+  if written != size:
+    raise IOError('Written %d bytes but content is %d bytes' % (written, size))
+  log.info('msg="File written successfully" filepath="%s" elapsedTimems="%.1f" islock="%s"' % \
+           (filepath, (tend-tstart)*1000, islock))
 
 
 def renamefile(_endpoint, origfilepath, newfilepath, _userid):
