@@ -2,7 +2,7 @@
 #
 # Build: make docker or docker-compose -f wopiserver.yaml build --build-arg VERSION=`git describe | sed 's/^v//'` wopiserver
 
-FROM python:3
+FROM python:3.8
 
 ARG VERSION=latest
 
