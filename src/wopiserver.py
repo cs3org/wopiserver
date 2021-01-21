@@ -270,7 +270,7 @@ def iopOpen():
   # if running in https mode, first check if the shared secret matches ours
   if 'Authorization' not in req.headers or req.headers['Authorization'] != 'Bearer ' + Wopi.iopsecret:
     Wopi.log.warning('msg="iopOpen: unauthorized access attempt, missing authorization token" ' \
-                     'client="%s"' % req.remote_addr)
+                     'client="%s" clientAuth="%s"' % (req.remote_addr, req.headers.get('Authorization')))
     return 'Client not authorized', http.client.UNAUTHORIZED
   # now validate the user identity and deny root access
   try:
