@@ -186,8 +186,8 @@ def storeWopiLock(operation, lock, acctok, isnotoffice):
     # validate that the underlying file is still there (it might have been moved/deleted)
     st.stat(acctok['endpoint'], acctok['filename'], acctok['userid'])
   except IOError as e:
-    log.log.warning('msg="%s: target file not found any longer" filename="%s" token="%s" reason="%s"' % \
-                    (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], e))
+    log.warning('msg="%s: target file not found any longer" filename="%s" token="%s" reason="%s"' % \
+                (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], e))
     raise
 
   if not isnotoffice:

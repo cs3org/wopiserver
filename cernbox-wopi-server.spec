@@ -79,7 +79,7 @@ touch /etc/wopi/iopsecret
 %_python_lib/*
 
 %changelog
-* Fri Jan 22 2021 Giuseppe Lo Presti <lopresti@cern.ch> 6.1.0
+* Mon Jan 25 2021 Giuseppe Lo Presti <lopresti@cern.ch> 6.1.0
 - Fixed JWT generation following latest pyjwt package
 - Improved prometheus monitoring to cover /cbox/lock calls
 - Improved logging
