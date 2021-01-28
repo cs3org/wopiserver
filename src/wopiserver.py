@@ -74,11 +74,14 @@ class Wopi:
   def init(cls):
     '''Initialises the application, bails out in case of failures. Note this is not a __init__ method'''
     try:
+      # detect hostname, or take it from the environment if set e.g. by docker
+      hostname = os.environ.get('HOST_HOSTNAME')
+      if not hostname:
+        hostname = socket.gethostname()
       # configure the logging
       loghandler = logging.FileHandler('/var/log/wopi/wopiserver.log')
-
       loghandler.setFormatter(logging.Formatter(
-          fmt='{"time": "%(asctime)s", "host": "' + socket.gethostname() + \
+          fmt='{"time": "%(asctime)s", "host": "' + hostname + \
               '", process": "%(name)s", "level": "%(levelname)s", %(message)s}',
           datefmt='%Y-%m-%dT%H:%M:%S'))
       cls.app.logger.handlers = [loghandler]
