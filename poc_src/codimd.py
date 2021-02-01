@@ -26,9 +26,6 @@ class CodiMDFailure(Exception):
 # a regexp for uploads, that have links like '/uploads/upload_542a360ddefe1e21ad1b8c85207d9365.*'
 upload_re = re.compile(r'\/uploads\/upload_\w{32}\.\w+')
 
-# a standard message displayed by CodiMD when some content content gets lost
-RECOVER_MSG = 'Please copy the content in a safe place and reopen the document afresh to paste it back.'
-
 # initialized by the main class
 log = None
 codimdurl = None
@@ -44,24 +41,25 @@ def jsonify(msg):
 def _getattachments(mddoc, docfilename, forcezip=False):
     '''Parse a markdown file and generate a zip file containing all included files'''
     zip_buffer = io.BytesIO()
+    response = None
     for attachment in upload_re.findall(mddoc):
         log.debug('msg="Fetching attachment" url="%s"' % attachment)
-        res = requests.get(codimdurl + attachment,
-                           verify=not skipsslverify)
+        res = requests.get(codimdurl + attachment, verify=not skipsslverify)
         if res.status_code != http.client.OK:
-            # file was not found: we should notify the user (TODO), though it could be a false positive
             log.error('msg="Failed to fetch included file, skipping" path="%s" response="%d"' % (
                 attachment, res.status_code))
+            # also notify the user
+            response = jsonify('Failed to include a referenced picture in the saved file'), http.client.NOT_FOUND
             continue
         with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_STORED, allowZip64=False) as zip_file:
             zip_file.writestr(attachment.split('/')[-1], res.content)
     if not forcezip and zip_buffer.getbuffer().nbytes == 0:
         # no attachments actually found
-        return None
+        return None, response
     # also include the markdown file itself
     with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_STORED, allowZip64=False) as zip_file:
         zip_file.writestr(docfilename, mddoc)
-    return zip_buffer.getvalue()
+    return zip_buffer.getvalue(), response
 
 
 def _unzipattachments(inputbuf):
@@ -80,13 +78,11 @@ def _unzipattachments(inputbuf):
                                 fname, verify=not skipsslverify)
             if res.status_code == http.client.OK and int(res.headers['Content-Length']) == zipinfo.file_size:
                 # yes (assume that hashed filename AND size matching is a good enough content match!)
-                log.debug(
-                    'msg="Skipped existing attachment" filename="%s"' % fname)
+                log.debug('msg="Skipped existing attachment" filename="%s"' % fname)
                 continue
             # check for collision
             if res.status_code == http.client.OK:
-                log.warning(
-                    'msg="Attachment collision detected" filename="%s"' % fname)
+                log.warning('msg="Attachment collision detected" filename="%s"' % fname)
                 # append a random letter to the filename
                 name, ext = os.path.splitext(fname)
                 fname = name + '_' + chr(randint(65, 65+26)) + ext
@@ -173,10 +169,10 @@ def codimdtostorage(wopisrc, acctok, isclose, wopilock):
 
     # check if we have attachments
     wasbundle = os.path.splitext(wopilock['filename'])[1] == '.zmd'
-    bundlefile = _getattachments(mddoc.decode(), wopilock['filename'].replace(
-        '.zmd', '.md'), (wasbundle and not isclose))
+    bundlefile, attresponse = _getattachments(mddoc.decode(), wopilock['filename'].replace('.zmd', '.md'),
+                                              (wasbundle and not isclose))
     log.debug('msg="Before Put/PutRelative" notbundlefile="%s" wasbundle="%s" isclose="%s"' %
-                 (not bundlefile, wasbundle, isclose))
+              (not bundlefile, wasbundle, isclose))
 
     # WOPI PutFile for the file or the bundle if it already existed
     if (wasbundle ^ (not bundlefile)) or not isclose:
@@ -185,28 +181,31 @@ def codimdtostorage(wopisrc, acctok, isclose, wopilock):
         if res.status_code != http.client.OK:
             log.error('msg="Calling WOPI PutFile failed" url="%s" response="%s"' % (
                 wopisrc, res.status_code))
-            # in case of conflict do not show the "recover" message as a conflict file has been saved anyway
-            details = '. %s' % res.content.decode() if res.status_code == http.client.CONFLICT \
-                      else ' (%s). %s' % (res.content.decode(), RECOVER_MSG)
-            return jsonify('Error saving the file' + details), res.status_code
+            return jsonify('Error saving the file. %s' + res.content.decode()), res.status_code
         # and refresh the WOPI lock
         wopi.refreshlock(wopisrc, acctok, wopilock, isdirty=True)
         log.info('msg="Save completed" filename="%s" token="%s"' % (wopilock['filename'], acctok[-20:]))
-        return jsonify('File saved successfully'), http.client.OK
+        return attresponse if attresponse else (jsonify('File saved successfully'), http.client.OK)
 
-    # On close, use WOPI PutRelative for either the new bundle, if this is the first time we have attachments,
+    # On close, use saveas for either the new bundle, if this is the first time we have attachments,
     # or the single md file, if there are no more attachments.
+    return saveas(wopisrc, acctok, wopilock, os.path.splitext(wopilock['filename'])[0] + ('.zmd' if bundlefile else '.md'),
+                  bundlefile if bundlefile else mddoc)
+
+
+def saveas(wopisrc, acctok, wopilock, targetname, content):
+    '''Save a given document with an alternate name by using WOPI PutRelative'''
     putrelheaders = {'X-WOPI-Lock': json.dumps(wopilock),
                      'X-WOPI-Override': 'PUT_RELATIVE',
                      # SuggestedTarget to not overwrite a possibly existing file
-                     'X-WOPI-SuggestedTarget': os.path.splitext(wopilock['filename'])[0] + ('.zmd' if bundlefile else '.md')
+                     'X-WOPI-SuggestedTarget': targetname
                      }
-    res = wopi.request(wopisrc, acctok, 'POST', headers=putrelheaders, contents=(
-        bundlefile if bundlefile else mddoc))
+    res = wopi.request(wopisrc, acctok, 'POST', headers=putrelheaders, contents=content)
     if res.status_code != http.client.OK:
         log.error('msg="Calling WOPI PutRelative failed" url="%s" response="%s"' % (
             wopisrc, res.status_code))
-        return jsonify('Error saving the file: %s. %s' % (res.content.decode(), RECOVER_MSG)), res.status_code
+        # TODO here we should save the file on a local storage to help later recovery!
+        return jsonify('Error saving the file: %s.' % res.content.decode()), res.status_code
 
     # use the new file's metadata from PutRelative to remove the previous file: we can do that only on close
     # because we need to keep using the current wopisrc/acctok until the session is alive in CodiMD

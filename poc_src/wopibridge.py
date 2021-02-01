@@ -33,7 +33,12 @@ except ImportError:
 import codimd
 
 WBVERSION = 'git'
+
+# this is the default location of secrets in docker
 CERTPATH = '/var/run/secrets/cert.pem'
+
+# a standard message to be displayed by the app when some content gets lost
+RECOVER_MSG = 'Please copy the content in a safe place and reopen the document afresh to paste it back.'
 
 
 class WB:
@@ -133,7 +138,7 @@ def handleexception(ex):
     ex_type, ex_value, ex_traceback = sys.exc_info()
     WB.log.error('msg="Unexpected exception caught" exception="%s" type="%s" traceback="%s"' %
                  (ex, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback)))
-    return codimd.jsonify('Internal error, please contact support. %s' % codimd.RECOVER_MSG), http.client.INTERNAL_SERVER_ERROR
+    return codimd.jsonify('Internal error, please contact support. %s' % RECOVER_MSG), http.client.INTERNAL_SERVER_ERROR
 
 
 @WB.app.route("/", methods=['GET'])
@@ -258,11 +263,11 @@ def appsave():
         meta = urllib.parse.unquote(flask.request.headers['X-EFSS-Metadata'])
         wopisrc = meta[:meta.index('?t=')]
         acctok = meta[meta.index('?t=')+3:]
-        isclose = 'close' in flask.request.args and flask.request.args['close'] == 'true'
+        isclose = flask.request.args.get('close') == 'true'
     except (KeyError, ValueError) as e:
         WB.log.error('msg="Save: malformed or missing metadata" client="%s" headers="%s" exception="%s" error="%s"' %
                      (flask.request.remote_addr, flask.request.headers, type(e), e))
-        return codimd.jsonify('Malformed or missing metadata, could not save. %s' % codimd.RECOVER_MSG), http.client.BAD_REQUEST
+        return codimd.jsonify('Malformed or missing metadata, could not save. %s' % RECOVER_MSG), http.client.BAD_REQUEST
 
     # decide whether to notify the save thread
     donotify = isclose or wopisrc not in WB.openfiles or WB.openfiles[wopisrc]['lastsave'] < time.time() - WB.saveinterval
@@ -377,8 +382,9 @@ def savethread_do():
                             wopi.refreshlock(wopisrc, openfile['acctok'], wopilock, toclose=openfile['toclose'])
 
                 except wopi.InvalidLock as e:
-                    # WOPI lock got lost, this is fatal
-                    WB.saveresponses[wopisrc] = codimd.jsonify('Missing or malformed lock when saving the file. %s' % codimd.RECOVER_MSG), \
+                    # WOPI lock got lost
+                    # TODO we should try and create a conflict file, and report "A conflict file was saved instead"
+                    WB.saveresponses[wopisrc] = codimd.jsonify('Missing or malformed lock when saving the file. %s' % RECOVER_MSG), \
                                                 http.client.NOT_FOUND
                     del WB.openfiles[wopisrc]
 
