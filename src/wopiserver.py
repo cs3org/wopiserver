@@ -806,7 +806,7 @@ def wopiGetLock(fileid, _reqheaders_unused, acctok):
   '''Implements the GetLock WOPI call'''
   resp = flask.Response()
   lock = utils.retrieveWopiLock(fileid, 'GETLOCK', '', acctok)
-  resp.status_code = http.client.OK
+  resp.status_code = http.client.OK if lock else http.client.NOT_FOUND
   if lock:
     resp.headers['X-WOPI-Lock'] = lock
     # for statistical purposes, check whether a lock exists and update internal bookkeeping
