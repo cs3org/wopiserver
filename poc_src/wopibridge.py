@@ -182,8 +182,7 @@ def appopen():
         res = wopi.request(wopisrc, acctok, 'GET')
         filemd = res.json()
     except json.decoder.JSONDecodeError as e:
-        WB.log.warning('msg="Malformed JSON from WOPI" error="%s" response="%d"' % (
-            e, res.status_code))
+        WB.log.warning('msg="Unexpected non-JSON response from WOPI" error="%s" response="%d"' % (e, res.status_code))
         return _guireturn('Invalid WOPI context'), http.client.NOT_FOUND
 
     try:
@@ -193,7 +192,7 @@ def appopen():
                 wopilock = wopi.getlock(wopisrc, acctok, raiseifmissing=False)
                 if not wopilock:
                     # first user opening this file, fetch it
-                    wopilock = codimd.storagetocodimd(filemd, wopisrc, acctok)
+                    wopilock = codimd.loadfromstorage(filemd, wopisrc, acctok)
                 else:
                     WB.log.info('msg="Lock already held" lock="%s"' % wopilock)
                 # add this token to the list, if not already in
@@ -204,7 +203,7 @@ def appopen():
                 WB.log.info('msg="Missing or invalid lock, forcing read-only mode" lock="%s" token="%s"' % (wopilock, acctok[-20:]))
                 filemd['UserCanWrite'] = False
                 # and fetch the file from storage
-                wopilock = codimd.storagetocodimd(filemd, wopisrc, acctok)
+                wopilock = codimd.loadfromstorage(filemd, wopisrc, acctok)
 
             # WOPI Lock
             res = wopi.request(wopisrc, acctok, 'POST', headers={
@@ -217,7 +216,7 @@ def appopen():
 
         else:
             # user has no write privileges, just fetch document and push it to CodiMD
-            wopilock = codimd.storagetocodimd(filemd, wopisrc, acctok)
+            wopilock = codimd.loadfromstorage(filemd, wopisrc, acctok)
 
         if filemd['UserCanWrite']:
             # keep track of this open document for the save thread and for statistical purposes
@@ -229,6 +228,7 @@ def appopen():
                 WB.openfiles[wopisrc] = {'acctok': acctok, 'tosave': False,
                                          'lastsave': int(time.time()) - WB.saveinterval,
                                          'toclose': {acctok[-20:]: False},
+                                         'docid': wopilock['docid'],
                                          }
             # also clear any potential stale response for this document
             try:
@@ -251,7 +251,7 @@ def appopen():
         return flask.redirect(redirecturl)
 
     except codimd.CodiMDFailure:
-        # this can be risen by storagetocodimd
+        # this can be risen by loadfromstorage
         return _guireturn('Unable to contact CodiMD, please try again later'), http.client.INTERNAL_SERVER_ERROR
 
 
@@ -264,6 +264,8 @@ def appsave():
         wopisrc = meta[:meta.index('?t=')]
         acctok = meta[meta.index('?t=')+3:]
         isclose = flask.request.args.get('close') == 'true'
+        docid = flask.request.args.get('id')
+        WB.log.info('msg="Save: requested action" isclose="%s" docid="%s" token="%s"' % (isclose, docid, acctok[-20:]))
     except (KeyError, ValueError) as e:
         WB.log.error('msg="Save: malformed or missing metadata" client="%s" headers="%s" exception="%s" error="%s"' %
                      (flask.request.remote_addr, flask.request.headers, type(e), e))
@@ -281,6 +283,7 @@ def appsave():
             WB.openfiles[wopisrc] = {'acctok': acctok, 'tosave': True,
                                      'lastsave': int(time.time() - WB.saveinterval),
                                      'toclose': {acctok[-20:]: isclose},
+                                     'docid': docid,
                                      }
             # if it's the first time we heard about this wopisrc, remove any potential stale response
             try:
@@ -293,11 +296,10 @@ def appsave():
         # return latest known state for this document
         if wopisrc in WB.saveresponses:
             resp = WB.saveresponses[wopisrc]
-            WB.log.info('msg="Save: returned response" response="%s" isclose="%s" token="%s"' %
-                        (resp, isclose, acctok[-20:]))
+            WB.log.info('msg="Save: returned response" response="%s" token="%s"' % (resp, acctok[-20:]))
             del WB.saveresponses[wopisrc]
             return resp
-        WB.log.info('msg="Save: enqueued action" isclose="%s" token="%s"' % (isclose, acctok[-20:]))
+        WB.log.info('msg="Save: enqueued action" token="%s"' % acctok[-20:])
         return '{}', http.client.ACCEPTED
 
 
@@ -305,6 +307,7 @@ def appsave():
 def applist():
     '''Return a list of all currently opened files'''
     # TODO this API should be protected
+    WB.log.info('msg="List: returned all open files metadata"')
     return flask.Response(json.dumps(WB.openfiles), mimetype='application/json')
 
 
@@ -337,11 +340,23 @@ def savethread_do():
                     wopilock = None
                     # save documents that are dirty for more than `saveinterval` or that are being closed
                     if openfile['tosave'] and (_intersection(openfile['toclose']) or (openfile['lastsave'] < time.time() - WB.saveinterval)):
-                        wopilock = wopi.getlock(wopisrc, openfile['acctok'])
-                        WB.saveresponses[wopisrc] = codimd.codimdtostorage(
-                            wopisrc, openfile['acctok'], _intersection(openfile['toclose']), wopilock)
-                        openfile['lastsave'] = int(time.time())
-                        openfile['tosave'] = False
+                        try:
+                            wopilock = wopi.getlock(wopisrc, openfile['acctok'])
+                            WB.saveresponses[wopisrc] = codimd.savetostorage(
+                                wopisrc, openfile['acctok'], _intersection(openfile['toclose']), wopilock)
+                            openfile['lastsave'] = int(time.time())
+                            openfile['tosave'] = False
+                        except wopi.InvalidLock as e:
+                            if _intersection(openfile['toclose']):
+                                # This is the last opportunity to save the file, create a conflict as we can't know if the previous one was modified
+                                WB.log.info('msg="Savethread: generating conflict file" token="%s"' % openfile['acctok'][-20:])
+                                WB.saveresponses[wopisrc] = codimd.saveconflicttostorage(wopisrc, openfile['acctok'], openfile['docid'])
+                                openfile['lastsave'] = int(time.time())
+                                openfile['tosave'] = False
+                            else:
+                                WB.saveresponses[wopisrc] = codimd.jsonify(
+                                    'Skipping autosave, lock file is missing or malformed. A conflict file will be saved on close'), \
+                                    http.client.NOT_FOUND
 
                     # refresh locks of open idle documents every 30 minutes
                     if openfile['lastsave'] < time.time() - (1800 + WB.saveinterval):
@@ -380,13 +395,6 @@ def savethread_do():
                         else:
                             # some user still on it or last operation happened not long ago, just refresh lock
                             wopi.refreshlock(wopisrc, openfile['acctok'], wopilock, toclose=openfile['toclose'])
-
-                except wopi.InvalidLock as e:
-                    # WOPI lock got lost
-                    # TODO we should try and create a conflict file, and report "A conflict file was saved instead"
-                    WB.saveresponses[wopisrc] = codimd.jsonify('Missing or malformed lock when saving the file. %s' % RECOVER_MSG), \
-                                                http.client.NOT_FOUND
-                    del WB.openfiles[wopisrc]
 
                 except Exception as e:    # pylint: disable=broad-except
                     ex_type, ex_value, ex_traceback = sys.exc_info()

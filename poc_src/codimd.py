@@ -11,6 +11,7 @@ import os
 import re
 import zipfile
 import io
+import time
 from random import randint
 import json
 import hashlib
@@ -93,8 +94,7 @@ def _unzipattachments(inputbuf):
             res = requests.post(codimdurl + '/uploadimage', params={'generateFilename': 'false'},
                                 files={'image': (fname, inputzip.read(zipinfo))}, verify=not skipsslverify)
             if res.status_code != http.client.OK:
-                log.error('msg="Failed to push included file" filename="%s" httpcode="%d"' % (
-                    fname, res.status_code))
+                log.error('msg="Failed to push included file" filename="%s" httpcode="%d"' % (fname, res.status_code))
     return mddoc
 
 
@@ -103,7 +103,62 @@ def _isslides(md):
     return md[:9].decode() == '---\ntitle' or md[:8].decode() == '---\ntype' or md[:16].decode() == '---\nslideOptions'
 
 
-def storagetocodimd(filemd, wopisrc, acctok):
+def _fetchfromcodimd(wopilock, acctok):
+    '''Fetch a given document from from CodiMD, raise CodiMDFailure in case of errors'''
+    try:
+        res = requests.get(codimdurl + wopilock['docid'] + '/download', verify=not skipsslverify)
+        if res.status_code != http.client.OK:
+            log.error('msg="Unable to fetch document from CodiMD" token="%s" response="%s: %s"' %
+                         (acctok[-20:], res.status_code, res.content))
+            raise CodiMDFailure
+        return res.content
+    except requests.exceptions.ConnectionError as e:
+        log.error('msg="Exception raised attempting to connect to CodiMD" exception="%s"' % e)
+        raise CodiMDFailure
+
+
+def _saveas(wopisrc, acctok, wopilock, targetname, content, deleteorig):
+    '''Save a given document with an alternate name by using WOPI PutRelative'''
+    putrelheaders = {'X-WOPI-Lock': json.dumps(wopilock),
+                     'X-WOPI-Override': 'PUT_RELATIVE',
+                     # SuggestedTarget to not overwrite a possibly existing file
+                     'X-WOPI-SuggestedTarget': targetname
+                     }
+    res = wopi.request(wopisrc, acctok, 'POST', headers=putrelheaders, contents=content)
+    if res.status_code != http.client.OK:
+        log.error('msg="Calling WOPI PutRelative failed" url="%s" response="%s"' % (
+            wopisrc, res.status_code))
+        # TODO here we should save the file on a local storage to help later recovery!
+        return jsonify('Error saving the file: %s.' % res.content.decode()), res.status_code
+
+    # use the new file's metadata from PutRelative to remove the previous file: we can do that only on close
+    # because we need to keep using the current wopisrc/acctok until the session is alive in CodiMD
+    newname = res.json()['Name']
+    # unlock and delete original file
+    res = wopi.request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
+    if res.status_code != http.client.OK:
+        log.warning('msg="Failed to unlock the previous file" token="%s" response="%d"' % (
+            acctok[-20:], res.status_code))
+    elif deleteorig:
+        res = wopi.request(wopisrc, acctok, 'POST', headers={'X-Wopi-Override': 'DELETE'})
+        if res.status_code != http.client.OK:
+            log.warning('msg="Failed to delete the previous file" token="%s" response="%d"' % (
+                acctok[-20:], res.status_code))
+        else:
+            log.info('msg="Previous file unlocked and removed successfully" token="%s"' % acctok[-20:])
+
+    # update our metadata: note we already hold the condition variable as we're called within the save thread
+    #WB.openfiles[newwopisrc] = {'acctok': newacctok, 'tosave': False,
+    #                            'lastsave': int(time.time()),
+    #                            'toclose': {newacctok[-20:]: True},
+    #                            }
+    #del WB.openfiles[wopisrc]
+
+    log.info('msg="Final save completed" filename"%s" token="%s"' % (newname, acctok[-20:]))
+    return jsonify('File saved successfully'), http.client.OK
+
+
+def loadfromstorage(filemd, wopisrc, acctok):
     '''Copy document from storage to CodiMD'''
     # WOPI GetFile
     res = wopi.request(wopisrc, acctok, 'GET', contents=True)
@@ -148,16 +203,15 @@ def storagetocodimd(filemd, wopisrc, acctok):
     return wopilock
 
 
-def codimdtostorage(wopisrc, acctok, isclose, wopilock):
+def savetostorage(wopisrc, acctok, isclose, wopilock):
     '''Copy document from CodiMD back to storage'''
     # get document from CodiMD
-    log.info('msg="Fetching file from CodiMD" isclose="%s" codimdurl="%s" token="%s"' %
-                (isclose, codimdurl + wopilock['docid'], acctok[-20:]))
-    res = requests.get(
-        codimdurl + wopilock['docid'] + '/download', verify=not skipsslverify)
-    if res.status_code != http.client.OK:
-        return jsonify('Failed to fetch document from CodiMD: got HTTP %d' % res.status_code), res.status_code
-    mddoc = res.content
+    try:
+        log.info('msg="Fetching file from CodiMD" isclose="%s" codimdurl="%s" token="%s"' %
+                 (isclose, codimdurl + wopilock['docid'], acctok[-20:]))
+        mddoc = _fetchfromcodimd(wopilock, acctok)
+    except CodiMDFailure:
+        return jsonify('Failed to fetch document from CodiMD'), http.client.INTERNAL_SERVER_ERROR
 
     if isclose and wopilock['digest'] != 'dirty':
         # so far the file was not touched and we are about to close: before forcing a put let's validate the contents
@@ -187,48 +241,44 @@ def codimdtostorage(wopisrc, acctok, isclose, wopilock):
         log.info('msg="Save completed" filename="%s" token="%s"' % (wopilock['filename'], acctok[-20:]))
         return attresponse if attresponse else (jsonify('File saved successfully'), http.client.OK)
 
-    # On close, use saveas for either the new bundle, if this is the first time we have attachments,
+    # on close, use saveas for either the new bundle, if this is the first time we have attachments,
     # or the single md file, if there are no more attachments.
-    return saveas(wopisrc, acctok, wopilock, os.path.splitext(wopilock['filename'])[0] + ('.zmd' if bundlefile else '.md'),
-                  bundlefile if bundlefile else mddoc)
+    return _saveas(wopisrc, acctok, wopilock, os.path.splitext(wopilock['filename'])[0] + ('.zmd' if bundlefile else '.md'),
+                   bundlefile if bundlefile else mddoc, deleteorig=True)
 
 
-def saveas(wopisrc, acctok, wopilock, targetname, content):
-    '''Save a given document with an alternate name by using WOPI PutRelative'''
-    putrelheaders = {'X-WOPI-Lock': json.dumps(wopilock),
-                     'X-WOPI-Override': 'PUT_RELATIVE',
-                     # SuggestedTarget to not overwrite a possibly existing file
-                     'X-WOPI-SuggestedTarget': targetname
-                     }
-    res = wopi.request(wopisrc, acctok, 'POST', headers=putrelheaders, contents=content)
+def saveconflicttostorage(wopisrc, acctok, docid):
+    '''Copy a given document from CodiMD to a conflict file'''
+    # first get again the file metadata
+    try:
+        res = wopi.request(wopisrc, acctok, 'GET')
+        filemd = res.json()
+    except json.decoder.JSONDecodeError as e:
+        log.warning('msg="Unexpected non-JSON response from WOPI" error="%s" response="%d"' % (e, res.status_code))
+        return jsonify('Invalid WOPI context on save'), http.client.NOT_FOUND
+
+    # lock the file again, but store a different filename in it
+    newname, ext = os.path.splitext(filemd['BaseFileName'])
+    newname = '%s-conflict-%s%s' % (newname, time.strftime('%Y%m%d-%H%M%S'), ext.strip())
+    wopilock = {'docid': docid,
+                'filename': newname,
+                'digest': 'dirty',
+                'app': 'md',
+                'toclose': {acctok[-20:]: True},
+                }
+    res = wopi.request(wopisrc, acctok, 'POST', headers={
+                       'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'LOCK'})
     if res.status_code != http.client.OK:
-        log.error('msg="Calling WOPI PutRelative failed" url="%s" response="%s"' % (
-            wopisrc, res.status_code))
-        # TODO here we should save the file on a local storage to help later recovery!
-        return jsonify('Error saving the file: %s.' % res.content.decode()), res.status_code
+        log.warning('msg="Failed to relock the file" response="%d" token="%s"' % (res.status_code, acctok[-20:]))
+        return jsonify('Failed to relock the file on save'), http.client.NOT_FOUND
 
-    # use the new file's metadata from PutRelative to remove the previous file: we can do that only on close
-    # because we need to keep using the current wopisrc/acctok until the session is alive in CodiMD
-    newname = res.json()['Name']
-    # unlock and delete original file
-    res = wopi.request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
-    if res.status_code != http.client.OK:
-        log.warning('msg="Failed to unlock the previous file" token="%s" response="%d"' % (
-            acctok[-20:], res.status_code))
-    else:
-        res = wopi.request(wopisrc, acctok, 'POST', headers={'X-Wopi-Override': 'DELETE'})
-        if res.status_code != http.client.OK:
-            log.warning('msg="Failed to delete the previous file" token="%s" response="%d"' % (
-                acctok[-20:], res.status_code))
-        else:
-            log.info('msg="Previous file unlocked and removed successfully" token="%s"' % acctok[-20:])
+    # fetch the content and its attachments if present
+    try:
+        log.info('msg="Fetching file from CodiMD" codimdurl="%s" token="%s"' % (codimdurl + docid, acctok[-20:]))
+        mddoc = _fetchfromcodimd(wopilock, acctok)
+        bundlefile, _ = _getattachments(mddoc.decode(), wopilock['filename'].replace('.zmd', '.md'))
+    except CodiMDFailure:
+        return jsonify('Failed to fetch document from CodiMD'), http.client.INTERNAL_SERVER_ERROR
 
-    # update our metadata: note we already hold the condition variable as we're called within the save thread
-    #WB.openfiles[newwopisrc] = {'acctok': newacctok, 'tosave': False,
-    #                            'lastsave': int(time.time()),
-    #                            'toclose': {newacctok[-20:]: True},
-    #                            }
-    #del WB.openfiles[wopisrc]
-
-    log.info('msg="Final save completed" filename"%s" token="%s"' % (newname, acctok[-20:]))
-    return jsonify('File saved successfully'), http.client.OK
+    # finally, force a PutRelative
+    return _saveas(wopisrc, acctok, wopilock, newname, bundlefile if bundlefile else mddoc, deleteorig=False)
