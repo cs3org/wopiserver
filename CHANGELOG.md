@@ -1,5 +1,13 @@
 # Changelog for wopibridge
 
+## wopibridge 2.1.0 (2021-02-03)
+
+* Save a conflict file when lock is missing (#4)
+* Introduced a new parameter APP_UNLOCK_INTERVAL
+  to control when a file is unlocked following
+  a close event from all concurrent sessions
+* Code further refactored and simplified
+
 ## wopibridge 2.0.0 (2020-12-14)
 
 * Full refactoring of the code, to separate
