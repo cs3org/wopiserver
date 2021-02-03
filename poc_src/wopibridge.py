@@ -94,8 +94,11 @@ class WB:
             try:
                 cls.saveinterval = int(os.environ.get('APP_SAVE_INTERVAL'))
             except TypeError:
-                cls.saveinterval = 100                               # defaults to 100 seconds
-
+                cls.saveinterval = 100
+            try:
+                cls.saveinterval = int(os.environ.get('APP_UNLOCK_INTERVAL'))
+            except TypeError:
+                cls.unlockinterval = 300
             # init modules
             codimd.log = wopi.log = cls.log
             codimd.skipsslverify = wopi.skipsslverify = cls.skipsslverify
@@ -396,7 +399,7 @@ class SaveThread(threading.Thread):
                 return
             # refresh state
             openfile['toclose'] = { t: wopilock['toclose'][t] or t not in openfile['toclose'] or openfile['toclose'][t] for t in wopilock['toclose'] }
-            if self._intersection(openfile['toclose']) and openfile['lastsave'] <= int(time.time()) - WB.saveinterval:
+            if self._intersection(openfile['toclose']) and openfile['lastsave'] <= int(time.time()) - WB.unlockinterval:
                 # nobody is still on this document and some time has passed, unlock
                 res = wopi.request(wopisrc, openfile['acctok'], 'POST',
                                 headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
