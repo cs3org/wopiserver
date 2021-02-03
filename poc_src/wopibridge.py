@@ -101,7 +101,7 @@ class WB:
             codimd.skipsslverify = wopi.skipsslverify = cls.skipsslverify
 
             # start the thread to perform async save operations
-            cls.savethread = threading.Thread(target=savethread_do)
+            cls.savethread = SaveThread()
             cls.savethread.start()
 
         except Exception as e:    # pylint: disable=broad-except
@@ -314,93 +314,102 @@ def applist():
 #
 # Code for the async thread for save operations
 #
-def _intersection(boolsd):
-    '''Given a dictionary of booleans, returns the intersection (AND) of all'''
-    return reduce(lambda x, y: x and y, list(boolsd.values()))
+class SaveThread(threading.Thread):
+
+    def _intersection(self, boolsd):
+        '''Given a dictionary of booleans, returns the intersection (AND) of all'''
+        return reduce(lambda x, y: x and y, list(boolsd.values()))
 
 
-def _union(boolsd):
-    '''Given a dictionary of booleans, returns the union (OR) of all'''
-    return reduce(lambda x, y: x or y, list(boolsd.values()))
+    def _union(self, boolsd):
+        '''Given a dictionary of booleans, returns the union (OR) of all'''
+        return reduce(lambda x, y: x or y, list(boolsd.values()))
+
+    def run(self):
+        '''Perform the pending save to storage operations'''
+        WB.log.info('msg="Savethread starting"')
+        while WB.active:
+            with WB.savecv:
+                # sleep for one minute or until awaken
+                WB.savecv.wait(60)
+                if not WB.active:
+                    break
+                # execute a round of sync to storage; list is needed as we may delete entries from the dict
+                for wopisrc, openfile in list(WB.openfiles.items()):
+                    try:
+                        wopilock = self.savedirty(openfile, wopisrc)
+                        wopilock = self.refresh(openfile, wopisrc, wopilock)
+                        self.cleanup(openfile, wopisrc,  wopilock)
+                    except Exception as e:    # pylint: disable=broad-except
+                        ex_type, ex_value, ex_traceback = sys.exc_info()
+                        WB.log.error('msg="Savethread: unexpected exception caught" exception="%s" type="%s" traceback="%s"' %
+                                     (e, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback)))
+        WB.log.info('msg="Savethread terminated, shutting down"')
 
 
-def savethread_do():
-    '''Perform the pending save to storage operations'''
-    WB.log.info('msg="Savethread starting"')
-    while WB.active:
-        with WB.savecv:
-            # sleep for one minute or until awaken
-            WB.savecv.wait(60)
-            if not WB.active:
-                break
+    def savedirty(self, openfile, wopisrc):
+        '''save documents that are dirty for more than `saveinterval` or that are being closed'''
+        wopilock = None
+        if openfile['tosave'] and (self._intersection(openfile['toclose']) or (openfile['lastsave'] < time.time() - WB.saveinterval)):
+            try:
+                wopilock = wopi.getlock(wopisrc, openfile['acctok'])
+                WB.saveresponses[wopisrc] = codimd.savetostorage(
+                    wopisrc, openfile['acctok'], self._intersection(openfile['toclose']), wopilock)
+                openfile['lastsave'] = int(time.time())
+                openfile['tosave'] = False
+            except wopi.InvalidLock as e:
+                if self._intersection(openfile['toclose']):
+                    # This is the last opportunity to save the file, create a conflict as we can't know if the previous one was modified
+                    WB.log.info('msg="Savethread: generating conflict file" token="%s"' % openfile['acctok'][-20:])
+                    WB.saveresponses[wopisrc] = codimd.saveconflicttostorage(wopisrc, openfile['acctok'], openfile['docid'])
+                    openfile['lastsave'] = int(time.time())
+                    openfile['tosave'] = False
+                else:
+                    WB.saveresponses[wopisrc] = codimd.jsonify(
+                        'Skipping autosave, lock file is missing or malformed. A conflict file will be saved on close'), \
+                        http.client.NOT_FOUND
+        return wopilock
 
-            # execute a round of sync to storage; list is needed as we may delete entries from the dict
-            for wopisrc, openfile in list(WB.openfiles.items()):
-                try:
-                    wopilock = None
-                    # save documents that are dirty for more than `saveinterval` or that are being closed
-                    if openfile['tosave'] and (_intersection(openfile['toclose']) or (openfile['lastsave'] < time.time() - WB.saveinterval)):
-                        try:
-                            wopilock = wopi.getlock(wopisrc, openfile['acctok'])
-                            WB.saveresponses[wopisrc] = codimd.savetostorage(
-                                wopisrc, openfile['acctok'], _intersection(openfile['toclose']), wopilock)
-                            openfile['lastsave'] = int(time.time())
-                            openfile['tosave'] = False
-                        except wopi.InvalidLock as e:
-                            if _intersection(openfile['toclose']):
-                                # This is the last opportunity to save the file, create a conflict as we can't know if the previous one was modified
-                                WB.log.info('msg="Savethread: generating conflict file" token="%s"' % openfile['acctok'][-20:])
-                                WB.saveresponses[wopisrc] = codimd.saveconflicttostorage(wopisrc, openfile['acctok'], openfile['docid'])
-                                openfile['lastsave'] = int(time.time())
-                                openfile['tosave'] = False
-                            else:
-                                WB.saveresponses[wopisrc] = codimd.jsonify(
-                                    'Skipping autosave, lock file is missing or malformed. A conflict file will be saved on close'), \
-                                    http.client.NOT_FOUND
+    def refresh(self, openfile, wopisrc, wopilock):
+        '''refresh locks of open idle documents every 30 minutes'''
+        if openfile['lastsave'] < time.time() - (1800 + WB.saveinterval):
+            wopilock = wopi.getlock(wopisrc, openfile['acctok'], raiseifmissing=False) if not wopilock else wopilock
+            if not wopilock:
+                # not a problem here, just forget this document (may have been closed by another wopibridge)
+                WB.log.debug('msg="Savethread: cleaning up metadata" url="%s"' % wopisrc)
+                del WB.openfiles[wopisrc]
+                return None
+            wopilock = wopi.refreshlock(wopisrc, openfile['acctok'], wopilock)
+            # in case we get soon a save callback, we want to honor it immediately
+            openfile['lastsave'] = int(time.time()) - WB.saveinterval
+        return wopilock
 
-                    # refresh locks of open idle documents every 30 minutes
-                    if openfile['lastsave'] < time.time() - (1800 + WB.saveinterval):
-                        wopilock = wopi.getlock(wopisrc, openfile['acctok'], raiseifmissing=False) if not wopilock else wopilock
-                        if not wopilock:
-                            # not a problem here, just forget this document (may have been closed by another wopibridge)
-                            WB.log.debug('msg="Savethread: cleaning up metadata" url="%s"' % wopisrc)
-                            del WB.openfiles[wopisrc]
-                            continue
-                        wopilock = wopi.refreshlock(wopisrc, openfile['acctok'], wopilock)
-                        # in case we get soon a save callback, we want to honor it immediately
-                        openfile['lastsave'] = int(time.time()) - WB.saveinterval
-
-                    # remove state for closed documents after some time
-                    if _union(openfile['toclose']) and not openfile['tosave']:
-                        # check lock
-                        wopilock = wopi.getlock(wopisrc, openfile['acctok'], raiseifmissing=False) if not wopilock else wopilock
-                        if not wopilock:
-                            # not a problem here, just forget this document like above
-                            WB.log.debug('msg="Savethread: cleaning up metadata" url="%s"' % wopisrc)
-                            del WB.openfiles[wopisrc]
-                            continue
-                        # refresh state
-                        openfile['toclose'] = { t: wopilock['toclose'][t] or t not in openfile['toclose'] or openfile['toclose'][t] for t in wopilock['toclose'] }
-                        if _intersection(openfile['toclose']) and openfile['lastsave'] <= int(time.time()) - WB.saveinterval:
-                            # nobody is still on this document and some time has passed, unlock
-                            res = wopi.request(wopisrc, openfile['acctok'], 'POST',
-                                               headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
-                            if res.status_code != http.client.OK:
-                                WB.log.warning('msg="Savethread: calling WOPI Unlock failed" lastsavetime="%s" token="%s" response="%s"' %
-                                               (openfile['lastsave'], openfile['acctok'][-20:], res.status_code))
-                            else:
-                                WB.log.info('msg="Savethread: unlocked document" lastsavetime="%s" token="%s"' %
-                                            (openfile['lastsave'], openfile['acctok'][-20:]))
-                            del WB.openfiles[wopisrc]
-                        else:
-                            # some user still on it or last operation happened not long ago, just refresh lock
-                            wopi.refreshlock(wopisrc, openfile['acctok'], wopilock, toclose=openfile['toclose'])
-
-                except Exception as e:    # pylint: disable=broad-except
-                    ex_type, ex_value, ex_traceback = sys.exc_info()
-                    WB.log.error('msg="Savethread: unexpected exception caught" exception="%s" type="%s" traceback="%s"' %
-                                 (e, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback)))
-    WB.log.info('msg="Savethread terminated, shutting down"')
+    def cleanup(self, openfile, wopisrc, wopilock):
+        '''remove state for closed documents after some time'''
+        if self._union(openfile['toclose']) and not openfile['tosave']:
+            # check lock
+            wopilock = wopi.getlock(wopisrc, openfile['acctok'], raiseifmissing=False) if not wopilock else wopilock
+            if not wopilock:
+                # not a problem here, just forget this document
+                WB.log.debug('msg="Savethread: cleaning up metadata" url="%s"' % wopisrc)
+                del WB.openfiles[wopisrc]
+                return
+            # refresh state
+            openfile['toclose'] = { t: wopilock['toclose'][t] or t not in openfile['toclose'] or openfile['toclose'][t] for t in wopilock['toclose'] }
+            if self._intersection(openfile['toclose']) and openfile['lastsave'] <= int(time.time()) - WB.saveinterval:
+                # nobody is still on this document and some time has passed, unlock
+                res = wopi.request(wopisrc, openfile['acctok'], 'POST',
+                                headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
+                if res.status_code != http.client.OK:
+                    WB.log.warning('msg="Savethread: calling WOPI Unlock failed" lastsavetime="%s" token="%s" response="%s"' %
+                                (openfile['lastsave'], openfile['acctok'][-20:], res.status_code))
+                else:
+                    WB.log.info('msg="Savethread: unlocked document" lastsavetime="%s" token="%s"' %
+                                (openfile['lastsave'], openfile['acctok'][-20:]))
+                del WB.openfiles[wopisrc]
+            else:
+                # some user still on it or last operation happened not long ago, just refresh lock
+                wopi.refreshlock(wopisrc, openfile['acctok'], wopilock, toclose=openfile['toclose'])
 
 
 @atexit.register
