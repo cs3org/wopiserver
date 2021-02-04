@@ -11,7 +11,6 @@ import os
 import re
 import zipfile
 import io
-import time
 from random import randint
 import json
 import hashlib
@@ -117,7 +116,7 @@ def _fetchfromcodimd(wopilock, acctok):
         raise CodiMDFailure
 
 
-def _saveas(wopisrc, acctok, wopilock, targetname, content, deleteorig):
+def _saveas(wopisrc, acctok, wopilock, targetname, content):
     '''Save a given document with an alternate name by using WOPI PutRelative'''
     putrelheaders = {'X-WOPI-Lock': json.dumps(wopilock),
                      'X-WOPI-Override': 'PUT_RELATIVE',
@@ -139,7 +138,7 @@ def _saveas(wopisrc, acctok, wopilock, targetname, content, deleteorig):
     if res.status_code != http.client.OK:
         log.warning('msg="Failed to unlock the previous file" token="%s" response="%d"' % (
             acctok[-20:], res.status_code))
-    elif deleteorig:
+    else:
         res = wopi.request(wopisrc, acctok, 'POST', headers={'X-Wopi-Override': 'DELETE'})
         if res.status_code != http.client.OK:
             log.warning('msg="Failed to delete the previous file" token="%s" response="%d"' % (
@@ -191,14 +190,11 @@ def loadfromstorage(filemd, wopisrc, acctok):
         log.error('msg="Exception raised attempting to connect to CodiMD" exception="%s"' % e)
         raise CodiMDFailure
     log.debug('msg="Got redirect from CodiMD" url="%s"' % res.next.url)
-    # we got the hash of the document just created as a redirected URL, store it in our WOPI lock structure
-    # the lock is a dict { docid, filename, digest, app, toclose }, where toclose is like in the openfiles map
-    wopilock = {'docid': '/' + urllib.parse.urlsplit(res.next.url).path.split('/')[-1],
-                'filename': filemd['BaseFileName'],
-                'digest': h.hexdigest(),
-                'app': 'slide' if _isslides(mddoc) else 'md',
-                'toclose': {acctok[-20:]: False},
-                }
+    # we got the hash of the document just created as a redirected URL, generate a WOPI lock structure
+    wopilock = wopi.generatelock(urllib.parse.urlsplit(res.next.url).path.split('/')[-1], \
+                                 filemd, h.hexdigest(), \
+                                 'slide' if _isslides(mddoc) else 'md', \
+                                 acctok, False)
     log.info('msg="Pushed document to CodiMD" url="%s" token="%s"' % (wopilock['docid'], acctok[-20:]))
     return wopilock
 
@@ -244,41 +240,4 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
     # on close, use saveas for either the new bundle, if this is the first time we have attachments,
     # or the single md file, if there are no more attachments.
     return _saveas(wopisrc, acctok, wopilock, os.path.splitext(wopilock['filename'])[0] + ('.zmd' if bundlefile else '.md'),
-                   bundlefile if bundlefile else mddoc, deleteorig=True)
-
-
-def saveconflicttostorage(wopisrc, acctok, docid):
-    '''Copy a given document from CodiMD to a conflict file'''
-    # first get again the file metadata
-    try:
-        res = wopi.request(wopisrc, acctok, 'GET')
-        filemd = res.json()
-    except json.decoder.JSONDecodeError as e:
-        log.warning('msg="Unexpected non-JSON response from WOPI" error="%s" response="%d"' % (e, res.status_code))
-        return jsonify('Invalid WOPI context on save'), http.client.NOT_FOUND
-
-    # lock the file again, but store a different filename in it
-    newname, ext = os.path.splitext(filemd['BaseFileName'])
-    newname = '%s-conflict-%s%s' % (newname, time.strftime('%Y%m%d-%H%M%S'), ext.strip())
-    wopilock = {'docid': docid,
-                'filename': newname,
-                'digest': 'dirty',
-                'app': 'md',
-                'toclose': {acctok[-20:]: True},
-                }
-    res = wopi.request(wopisrc, acctok, 'POST', headers={
-                       'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'LOCK'})
-    if res.status_code != http.client.OK:
-        log.warning('msg="Failed to relock the file" response="%d" token="%s"' % (res.status_code, acctok[-20:]))
-        return jsonify('Failed to relock the file on save'), http.client.NOT_FOUND
-
-    # fetch the content and its attachments if present
-    try:
-        log.info('msg="Fetching file from CodiMD" codimdurl="%s" token="%s"' % (codimdurl + docid, acctok[-20:]))
-        mddoc = _fetchfromcodimd(wopilock, acctok)
-        bundlefile, _ = _getattachments(mddoc.decode(), wopilock['filename'].replace('.zmd', '.md'))
-    except CodiMDFailure:
-        return jsonify('Failed to fetch document from CodiMD'), http.client.INTERNAL_SERVER_ERROR
-
-    # finally, force a PutRelative
-    return _saveas(wopisrc, acctok, wopilock, newname, bundlefile if bundlefile else mddoc, deleteorig=False)
+                   bundlefile if bundlefile else mddoc)

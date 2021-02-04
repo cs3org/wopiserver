@@ -10,7 +10,7 @@ Author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 import json
 import http.client
 import requests
-
+from flask import Response
 
 class InvalidLock(Exception):
     '''A custom exception to represent an invalid or missing WOPI lock'''
@@ -22,15 +22,21 @@ skipsslverify = None
 
 def request(wopisrc, acctok, method, contents=None, headers=None):
     '''Execute a WOPI request with the given parameters and headers'''
-    wopiurl = '%s%s' % (wopisrc, ('/contents' if contents is not None and
-                                  (not headers or 'X-WOPI-Override' not in headers or headers['X-WOPI-Override'] != 'PUT_RELATIVE') else ''))
-    log.debug('msg="Calling WOPI" url="%s" headers="%s" acctok="%s"' %
-                 (wopiurl, headers, acctok[-20:]))
-    if method == 'GET':
-        return requests.get('%s?access_token=%s' % (wopiurl, acctok), verify=not skipsslverify)
-    if method == 'POST':
-        return requests.post('%s?access_token=%s' % (wopiurl, acctok), verify=not skipsslverify,
-                             headers=headers, data=contents)
+    try:
+        wopiurl = '%s%s' % (wopisrc, ('/contents' if contents is not None and
+                                    (not headers or 'X-WOPI-Override' not in headers or headers['X-WOPI-Override'] != 'PUT_RELATIVE') else ''))
+        log.debug('msg="Calling WOPI" url="%s" headers="%s" acctok="%s"' %
+                    (wopiurl, headers, acctok[-20:]))
+        if method == 'GET':
+            return requests.get('%s?access_token=%s' % (wopiurl, acctok), verify=not skipsslverify)
+        if method == 'POST':
+            return requests.post('%s?access_token=%s' % (wopiurl, acctok), verify=not skipsslverify,
+                                headers=headers, data=contents)
+    except requests.exceptions.ConnectionError as e:
+        log.error('msg="Unable to contact WOPI" wopiurl="%s" acctok="%s" response="%s"' % (wopiurl, acctok, e))
+        res = Response()
+        res.status_code = http.client.INTERNAL_SERVER_ERROR
+        return res
     return None
 
 
@@ -70,13 +76,46 @@ def getlock(wopisrc, acctok, raiseifmissing=True):
     '''Return the currently held WOPI lock (None if missing and raiseifmissing is False), and raise InvalidLock otherwise'''
     try:
         res = request(wopisrc, acctok, 'POST', headers={'X-Wopi-Override': 'GET_LOCK'})
-        if res.status_code != http.client.OK and raiseifmissing:
-            # lock got lost
-            raise ValueError(res.status_code)
-        if not raiseifmissing and 'X-WOPI-Lock' not in res.headers:
+        if res.status_code == http.client.NOT_FOUND and not raiseifmissing:
             return None
+        elif res.status_code != http.client.OK:
+            # lock got lost or any other error
+            raise ValueError(res.status_code)
         # the lock is expected to be a dict { docid, filename, digest, app, toclose }
         return json.loads(res.headers.pop('X-WOPI-Lock'))
     except (ValueError, KeyError, json.decoder.JSONDecodeError) as e:
         log.warning('msg="Missing or malformed WOPI lock" exception="%s" error="%s"' % (type(e), e))
         raise InvalidLock
+
+
+def relock(wopisrc, acctok, docid, isclose):
+    '''Relock again a given document and return a WOPI lock or a UI response as a tuple (cf. SaveThread)'''
+    # first get again the file metadata
+    try:
+        res = request(wopisrc, acctok, 'GET')
+        if res.status_code in [http.client.NOT_FOUND, http.client.UNAUTHORIZED, http.client.INTERNAL_SERVER_ERROR]:
+            log.warning('msg="Expired session attempting to relock file" response="%d"' % res.status_code)
+            return None, (jsonify('Session expired, please refresh this page'), http.client.NOT_FOUND)
+        filemd = res.json()
+    except json.decoder.JSONDecodeError as e:
+        log.warning('msg="Unexpected non-JSON response from WOPI" error="%s" response="%d"' % (e, res.status_code))
+        return None, (jsonify('Invalid WOPI context on save'), http.client.NOT_FOUND)
+
+    # lock the file again: we assume we are alone as the previous lock had been released
+    wopilock = generatelock(docid, filemd, 'dirty', 'md', acctok, isclose)
+    res = request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'LOCK'})
+    if res.status_code != http.client.OK:
+        log.warning('msg="Failed to relock the file" response="%d" token="%s"' % (res.status_code, acctok[-20:]))
+        return None, (jsonify('Failed to relock the file on save'), http.client.NOT_FOUND)
+    # relock was successful, return it
+    return wopilock, None
+
+
+def generatelock(docid, filemd, digest, app, acctok, isclose):
+    '''return a dict to be used as WOPI lock, in the format { docid, filename, digest, app, toclose }, where toclose is like in the openfiles map'''
+    return {'docid': '/' + docid,
+            'filename': filemd['BaseFileName'],
+            'digest': digest,
+            'app': app,
+            'toclose': {acctok[-20:]: isclose},
+            }
