@@ -40,6 +40,16 @@ def request(wopisrc, acctok, method, contents=None, headers=None):
     return None
 
 
+def generatelock(docid, filemd, digest, app, acctok, isclose):
+    '''return a dict to be used as WOPI lock, in the format { docid, filename, digest, app, toclose }, where toclose is like in the openfiles map'''
+    return {'docid': '/' + docid.strip('/'),
+            'filename': filemd['BaseFileName'],
+            'digest': digest,
+            'app': app,
+            'toclose': {acctok[-20:]: isclose},
+            }
+
+
 def refreshlock(wopisrc, acctok, wopilock, isdirty=False, toclose=None):
     '''Refresh an existing WOPI lock. Returns the new lock if successful, None otherwise'''
     newlock = json.loads(json.dumps(wopilock))    # this is a hack for a deep copy, to be redone in Go
@@ -81,7 +91,7 @@ def getlock(wopisrc, acctok, raiseifmissing=True):
         elif res.status_code != http.client.OK:
             # lock got lost or any other error
             raise ValueError(res.status_code)
-        # the lock is expected to be a dict { docid, filename, digest, app, toclose }
+        # the lock is expected to be a JSON dict, see generatelock()
         return json.loads(res.headers.pop('X-WOPI-Lock'))
     except (ValueError, KeyError, json.decoder.JSONDecodeError) as e:
         log.warning('msg="Missing or malformed WOPI lock" exception="%s" error="%s"' % (type(e), e))
@@ -109,13 +119,3 @@ def relock(wopisrc, acctok, docid, isclose):
         return None, (jsonify('Failed to relock the file on save'), http.client.NOT_FOUND)
     # relock was successful, return it
     return wopilock, None
-
-
-def generatelock(docid, filemd, digest, app, acctok, isclose):
-    '''return a dict to be used as WOPI lock, in the format { docid, filename, digest, app, toclose }, where toclose is like in the openfiles map'''
-    return {'docid': '/' + docid,
-            'filename': filemd['BaseFileName'],
-            'digest': digest,
-            'app': app,
-            'toclose': {acctok[-20:]: isclose},
-            }

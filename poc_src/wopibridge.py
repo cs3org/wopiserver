@@ -40,6 +40,8 @@ CERTPATH = '/var/run/secrets/cert.pem'
 # a standard message to be displayed by the app when some content gets lost
 RECOVER_MSG = 'Please copy the content in a safe place and reopen the document afresh to paste it back.'
 
+# a KB link to explain what happens when a lock is lost, maybe to be passed as parameter
+KB_LINK = '<a href=https://cern.service-now.com/service-portal?id=kb_article&n=KB0007127 target=_blank>KB0007127</a>'
 
 class WB:
     '''A singleton container for all state information of the server'''
@@ -365,7 +367,7 @@ class SaveThread(threading.Thread):
                     wopisrc, openfile['acctok'], _intersection(openfile['toclose']), wopilock)
                 if relock and WB.saveresponses[wopisrc][1] == http.client.OK:
                     # amend the message as we had to relock the file
-                    WB.saveresponses[wopisrc] = codimd.jsonify('File saved successfully, but a previous version might have been overwritten (see <a href=bla>KB</a>)'), \
+                    WB.saveresponses[wopisrc] = codimd.jsonify('File saved successfully, but a previous version might have been overwritten (see %s)' % KB_LINK), \
                                                 http.client.OK
                 openfile['lastsave'] = int(time.time())
                 openfile['tosave'] = False
