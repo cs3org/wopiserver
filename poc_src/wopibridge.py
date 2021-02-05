@@ -206,7 +206,7 @@ def appopen():
                     wopilock = wopi.refreshlock(wopisrc, acctok, wopilock)
             except wopi.InvalidLock:
                 # lock is invalid/corrupted: force read-only mode
-                WB.log.info('msg="Missing or invalid lock, forcing read-only mode" lock="%s" token="%s"' % (wopilock, acctok[-20:]))
+                WB.log.info('msg="Invalid lock, forcing read-only mode" token="%s"' % acctok[-20:])
                 filemd['UserCanWrite'] = False
                 # and fetch the file from storage
                 wopilock = codimd.loadfromstorage(filemd, wopisrc, acctok)
