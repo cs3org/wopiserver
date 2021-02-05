@@ -339,10 +339,16 @@ class SaveThread(threading.Thread):
                 WB.savecv.wait(60)
                 if not WB.active:
                     break
-                # execute a round of sync to storage; list is needed as we may delete entries from the dict
+                # execute a round of sync to storage; list is needed as entries are eventually deleted from the dict
                 for wopisrc, openfile in list(WB.openfiles.items()):
                     try:
                         wopilock = self.savedirty(openfile, wopisrc)
+                        wopilock = wopi.getlock(wopisrc, openfile['acctok'], raiseifmissing=False) if not wopilock else wopilock
+                        if not wopilock:
+                            # not a problem here, just forget this document (may have been closed by another wopibridge)
+                            WB.log.debug('msg="Savethread: cleaning up metadata" url="%s"' % wopisrc)
+                            del WB.openfiles[wopisrc]
+                            continue
                         wopilock = self.refresh(openfile, wopisrc, wopilock)
                         self.cleanup(openfile, wopisrc,  wopilock)
                     except Exception as e:    # pylint: disable=broad-except
@@ -377,12 +383,6 @@ class SaveThread(threading.Thread):
     def refresh(self, openfile, wopisrc, wopilock):
         '''refresh locks of open idle documents every 30 minutes'''
         if openfile['lastsave'] < time.time() - (1800 + WB.saveinterval):
-            wopilock = wopi.getlock(wopisrc, openfile['acctok'], raiseifmissing=False) if not wopilock else wopilock
-            if not wopilock:
-                # not a problem here, just forget this document (may have been closed by another wopibridge)
-                WB.log.debug('msg="Savethread: cleaning up metadata" url="%s"' % wopisrc)
-                del WB.openfiles[wopisrc]
-                return None
             wopilock = wopi.refreshlock(wopisrc, openfile['acctok'], wopilock)
             # in case we get soon a save callback, we want to honor it immediately
             openfile['lastsave'] = int(time.time()) - WB.saveinterval
@@ -391,13 +391,6 @@ class SaveThread(threading.Thread):
     def cleanup(self, openfile, wopisrc, wopilock):
         '''remove state for closed documents after some time'''
         if _union(openfile['toclose']) and not openfile['tosave']:
-            # check lock
-            wopilock = wopi.getlock(wopisrc, openfile['acctok'], raiseifmissing=False) if not wopilock else wopilock
-            if not wopilock:
-                # not a problem here, just forget this document
-                WB.log.info('msg="Savethread: cleaning up metadata" url="%s"' % wopisrc)
-                del WB.openfiles[wopisrc]
-                return
             # refresh state
             openfile['toclose'] = { t: wopilock['toclose'][t] or t not in openfile['toclose'] or openfile['toclose'][t] for t in wopilock['toclose'] }
             if _intersection(openfile['toclose']) and openfile['lastsave'] <= int(time.time()) - WB.unlockinterval:
