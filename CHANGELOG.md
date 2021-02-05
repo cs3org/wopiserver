@@ -3,6 +3,7 @@
 ## wopibridge 2.1.0 (2021-02-05)
 
 * Reworked logic to recover when lock is missing (#4)
+* Improved UI feedback messages
 * Introduced a new parameter `APP_UNLOCK_INTERVAL`
   to control when a file is unlocked following
   a close event from all concurrent sessions
