@@ -75,7 +75,7 @@ class TestStorage(unittest.TestCase):
     buf = b'bla\n'
     self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, buf)
     statInfo = self.storage.statx(self.endpoint, self.homepath + '/test.txt', self.userid)
-    if self.endpoint in statInfo['inode']:
+    if self.endpoint in str(statInfo['inode']):
       # detected CS3 storage, test if fileid-based stat is supported
       # (notably, homepath is not part of the fileid)
       statInfoId = self.storage.stat(self.endpoint, 'fileid-' + self.username + '%2Ftest.txt', self.userid)

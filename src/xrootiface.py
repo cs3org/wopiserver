@@ -140,7 +140,7 @@ def statx(endpoint, filepath, userid, versioninv=0):
     raise IOError('Is a directory')      # EISDIR
   if versioninv == 0:
     # classic statx info of the given file
-    return {'inode': str(statxdata[2]),
+    return {'inode': abs(hash(endpoint + str(statxdata[2]))),
             'filepath': filepath,
             'userid': str(statxdata[5]) + ':' + str(statxdata[6]),
             'size': int(statxdata[8]),
@@ -170,7 +170,7 @@ def statx(endpoint, filepath, userid, versioninv=0):
     log.warn('msg="Failed to mkdir/stat version folder" rc="%s"' % rcv)
     statxvdata = statxdata
   # return the metadata of the given file, except for the inode that is taken from the version folder
-  return {'inode': str(statxvdata[2]),
+  return {'inode': abs(hash(endpoint + str(statxvdata[2]))),
           'filepath': filepath,
           'userid': str(statxdata[5]) + ':' + str(statxdata[6]),
           'size': int(statxdata[8]),
