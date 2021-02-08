@@ -753,6 +753,8 @@ def wopiLock(fileid, reqheaders, acctok):
   oldLock = reqheaders['X-WOPI-OldLock'] if 'X-WOPI-OldLock' in reqheaders else None
   retrievedLock = utils.retrieveWopiLock(fileid, op, lock, acctok)
   # perform the required checks for the validity of the new lock
+  if oldLock is not None and retrievedLock is None and op == 'REFRESH_LOCK':
+    return 'Previous lock not found', http.client.NOT_FOUND
   if (oldLock is None and retrievedLock is not None and not utils.compareWopiLocks(retrievedLock, lock)) or \
      (oldLock is not None and not utils.compareWopiLocks(retrievedLock, oldLock)):
     # XXX we got a locking conflict: as we've seen cases of looping clients attempting to restate the same
