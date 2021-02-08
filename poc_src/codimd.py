@@ -22,6 +22,12 @@ import wopiclient as wopi
 class CodiMDFailure(Exception):
     '''A custom exception to represent a fatal failure when contacting CodiMD'''
 
+# a message to explain what happens when a lock is lost (could be passed from outside);
+# note the hyperlink is deliberately unquoted, as this is to be embedded in a JSON message
+# TODO to prevent this case from happening, we'd need a mechanism to persist the wopisrc-notehash mapping in CodiMD!
+SAVE_KB_LINK = 'File saved successfully, but a newer version might have been overwritten (see %s)' % \
+               '<a href=https://cern.service-now.com/service-portal?id=kb_article&n=KB0007127 target=_blank>KB0007127</a>'
+
 # a regexp for uploads, that have links like '/uploads/upload_542a360ddefe1e21ad1b8c85207d9365.*'
 upload_re = re.compile(r'\/uploads\/upload_\w{32}\.\w+')
 
@@ -96,9 +102,9 @@ def _unzipattachments(inputbuf):
     return mddoc
 
 
-def _isslides(md):
+def _isslides(doc):
     '''Heuristically look for signatures of slides in the header of a md document'''
-    return md[:9].decode() == '---\ntitle' or md[:8].decode() == '---\ntype' or md[:16].decode() == '---\nslideOptions'
+    return doc[:9].decode() == '---\ntitle' or doc[:8].decode() == '---\ntype' or doc[:16].decode() == '---\nslideOptions'
 
 
 def _fetchfromcodimd(wopilock, acctok):
@@ -107,7 +113,7 @@ def _fetchfromcodimd(wopilock, acctok):
         res = requests.get(codimdurl + wopilock['docid'] + '/download', verify=not skipsslverify)
         if res.status_code != http.client.OK:
             log.error('msg="Unable to fetch document from CodiMD" token="%s" response="%s: %s"' %
-                         (acctok[-20:], res.status_code, res.content))
+                      (acctok[-20:], res.status_code, res.content))
             raise CodiMDFailure
         return res.content
     except requests.exceptions.ConnectionError as e:
@@ -121,7 +127,7 @@ def _saveas(wopisrc, acctok, wopilock, targetname, content):
                      'X-WOPI-Override': 'PUT_RELATIVE',
                      # SuggestedTarget to not overwrite a possibly existing file
                      'X-WOPI-SuggestedTarget': targetname
-                     }
+                    }
     res = wopi.request(wopisrc, acctok, 'POST', headers=putrelheaders, contents=content)
     if res.status_code != http.client.OK:
         log.error('msg="Calling WOPI PutRelative failed" url="%s" response="%s"' % (
@@ -183,7 +189,7 @@ def loadfromstorage(filemd, wopisrc, acctok):
                             headers={'Content-Type': 'text/markdown'}, verify=not skipsslverify)
         if res.status_code != http.client.FOUND:
             log.error('msg="Unable to push document to CodiMD" token="%s" response="%s: %s"' %
-                         (acctok[-20:], res.status_code, res.content))
+                      (acctok[-20:], res.status_code, res.content))
             raise CodiMDFailure
     except requests.exceptions.ConnectionError as e:
         log.error('msg="Exception raised attempting to connect to CodiMD" exception="%s"' % e)
@@ -208,7 +214,7 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
     except CodiMDFailure:
         return jsonify('Failed to fetch document from CodiMD'), http.client.INTERNAL_SERVER_ERROR
 
-    if isclose and wopilock['digest'] != 'dirty':
+    if isclose and wopilock['digest'] not in ['dirty', 'relock']:
         # so far the file was not touched and we are about to close: before forcing a put let's validate the contents
         h = hashlib.sha1()
         h.update(mddoc)
@@ -231,10 +237,15 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
             log.error('msg="Calling WOPI PutFile failed" url="%s" response="%s"' % (
                 wopisrc, res.status_code))
             return jsonify('Error saving the file. %s' + res.content.decode()), res.status_code
-        # and refresh the WOPI lock
-        wopi.refreshlock(wopisrc, acctok, wopilock, isdirty=True)
-        log.info('msg="Save completed" filename="%s" token="%s"' % (wopilock['filename'], acctok[-20:]))
-        return attresponse if attresponse else (jsonify('File saved successfully'), http.client.OK)
+        # and refresh the WOPI lock if the file was not just relocked
+        if wopilock['digest'] != 'relock':
+            wopi.refreshlock(wopisrc, acctok, wopilock, isdirty=True)
+        log.info('msg="Save completed" filename="%s" isclose="%s" token="%s"' % \
+                 (wopilock['filename'], isclose, acctok[-20:]))
+        # combine the responses and amend the message in case the file was relocked
+        return attresponse if attresponse else (
+            jsonify('File saved successfully' if wopilock['digest'] != 'relock' else SAVE_KB_LINK), \
+            http.client.OK)
 
     # on close, use saveas for either the new bundle, if this is the first time we have attachments,
     # or the single md file, if there are no more attachments.

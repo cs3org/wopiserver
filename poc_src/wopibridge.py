@@ -40,10 +40,6 @@ CERTPATH = '/var/run/secrets/cert.pem'
 # a standard message to be displayed by the app when some content gets lost
 RECOVER_MSG = 'Please copy the content in a safe place and reopen the document afresh to paste it back.'
 
-# a message to explain what happens when a lock is lost (could be passed from outside);
-# note the hyperlink is deliberately unquoted, as this is to be embedded in a JSON message
-SAVE_KB_LINK = 'File saved successfully, but a newer version might have been overwritten (see %s)' % \
-               '<a href=https://cern.service-now.com/service-portal?id=kb_article&n=KB0007127 target=_blank>KB0007127</a>'
 
 class WB:
     '''A singleton container for all state information of the server'''
@@ -59,7 +55,7 @@ class WB:
                  "Warning":  logging.WARNING,   # 30
                  "Info":     logging.INFO,      # 20
                  "Debug":    logging.DEBUG      # 10
-                 }
+                }
     active = True
     # a map of all open documents: wopisrc -> (acctok, tosave, lastsave, toclose)
     openfiles = {}
@@ -212,12 +208,12 @@ def appopen():
                 wopilock = codimd.loadfromstorage(filemd, wopisrc, acctok)
 
             # WOPI Lock
-            res = wopi.request(wopisrc, acctok, 'POST', headers={
-                               'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'LOCK'})
+            res = wopi.request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock),
+                                                                 'X-Wopi-Override': 'LOCK'})
             if res.status_code != http.client.OK:
                 # Failed to lock the file: open in read-only mode
-                WB.log.warning('msg="Failed to lock the file" response="%d" token="%s"' % (
-                               res.status_code, acctok[-20:]))
+                WB.log.warning('msg="Failed to lock the file" response="%d" token="%s"' %
+                               (res.status_code, acctok[-20:]))
                 filemd['UserCanWrite'] = False
 
         else:
@@ -235,7 +231,7 @@ def appopen():
                                          'lastsave': int(time.time()) - WB.saveinterval,
                                          'toclose': {acctok[-20:]: False},
                                          'docid': wopilock['docid'],
-                                         }
+                                        }
             # also clear any potential stale response for this document
             try:
                 del WB.saveresponses[wopisrc]
@@ -285,12 +281,12 @@ def appsave():
             WB.openfiles[wopisrc]['tosave'] = True
             WB.openfiles[wopisrc]['toclose'][acctok[-20:]] = isclose
         else:
-            WB.log.debug('msg="Save: repopulating missing metadata" token="%s"' % acctok[-20:])
+            WB.log.info('msg="Save: repopulating missing metadata" token="%s"' % acctok[-20:])
             WB.openfiles[wopisrc] = {'acctok': acctok, 'tosave': True,
                                      'lastsave': int(time.time() - WB.saveinterval),
                                      'toclose': {acctok[-20:]: isclose},
                                      'docid': docid,
-                                     }
+                                    }
             # if it's the first time we heard about this wopisrc, remove any potential stale response
             try:
                 del WB.saveresponses[wopisrc]
@@ -332,8 +328,8 @@ class SaveThread(threading.Thread):
 
     def run(self):
         '''Perform all pending save to storage operations'''
-        WB.log.info('msg="Savethread starting"')
-        while WB.active:
+        WB.log.info('msg="SaveThread starting"')
+        while True:
             with WB.savecv:
                 # sleep for one minute or until awaken
                 WB.savecv.wait(60)
@@ -343,46 +339,51 @@ class SaveThread(threading.Thread):
                 for wopisrc, openfile in list(WB.openfiles.items()):
                     try:
                         wopilock = self.savedirty(openfile, wopisrc)
-                        wopilock = wopi.getlock(wopisrc, openfile['acctok'], raiseifmissing=False) if not wopilock else wopilock
-                        if not wopilock:
+                        if not wopilock and openfile['lastsave'] < time.time() - WB.unlockinterval:
                             # not a problem here, just forget this document (may have been closed by another wopibridge)
-                            WB.log.debug('msg="Savethread: cleaning up metadata" url="%s"' % wopisrc)
+                            # yet keep the metadata around for the unlockinterval time, cf. the InvalidLock handling in savedirty()
+                            WB.log.info('msg="SaveThread: cleaning up metadata" url="%s"' % wopisrc)
                             del WB.openfiles[wopisrc]
                             continue
                         wopilock = self.refresh(openfile, wopisrc, wopilock)
-                        self.cleanup(openfile, wopisrc,  wopilock)
+                        self.cleanup(openfile, wopisrc, wopilock)
                     except Exception as e:    # pylint: disable=broad-except
                         ex_type, ex_value, ex_traceback = sys.exc_info()
-                        WB.log.error('msg="Savethread: unexpected exception caught" exception="%s" type="%s" traceback="%s"' %
+                        WB.log.error('msg="SaveThread: unexpected exception caught" exception="%s" type="%s" traceback="%s"' %
                                      (e, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback)))
-        WB.log.info('msg="Savethread terminated, shutting down"')
+        WB.log.info('msg="SaveThread terminated, shutting down"')
 
     def savedirty(self, openfile, wopisrc):
         '''save documents that are dirty for more than `saveinterval` or that are being closed'''
         wopilock = None
-        relock = False
-        if openfile['tosave'] and (_intersection(openfile['toclose']) or (openfile['lastsave'] < time.time() - WB.saveinterval)):
+        if openfile['tosave'] and (_intersection(openfile['toclose'])
+                                   or (openfile['lastsave'] < time.time() - WB.saveinterval)):
             try:
                 wopilock = wopi.getlock(wopisrc, openfile['acctok'])
             except wopi.InvalidLock:
-                # need to relock the file
-                WB.log.info('msg="Savethread: attempting to relock file" token="%s"' % openfile['acctok'][-20:])
-                wopilock, WB.saveresponses[wopisrc] = wopi.relock(
-                    wopisrc, openfile['acctok'], openfile['docid'], _intersection(openfile['toclose']))
-                relock = True
-            if wopilock:
-                WB.saveresponses[wopisrc] = codimd.savetostorage(
-                    wopisrc, openfile['acctok'], _intersection(openfile['toclose']), wopilock)
-                if relock and WB.saveresponses[wopisrc][1] == http.client.OK:
-                    # amend the message as we had to relock the file
-                    WB.saveresponses[wopisrc] = codimd.jsonify(SAVE_KB_LINK), http.client.OK
-                openfile['lastsave'] = int(time.time())
-                openfile['tosave'] = False
+                WB.log.info('msg="SaveThread: attempting to relock file" token="%s"' % openfile['acctok'][-20:])
+                try:
+                    wopilock = WB.saveresponses[wopisrc] = wopi.relock(
+                        wopisrc, openfile['acctok'], openfile['docid'], _intersection(openfile['toclose']))
+                except wopi.InvalidLock as ile:
+                    # even this attempt failed, give up
+                    # TODO here we should save the file on a local storage to help later recovery!
+                    WB.saveresponses[wopisrc] = codimd.jsonify(str(ile)), http.client.NOT_FOUND
+                    # set some 'fake' metadata, will be automatically cleaned up later
+                    openfile['lastsave'] = int(time.time())
+                    openfile['tosave'] = False
+                    openfile['toclose'] = {'invalid-lock': True}
+                    return None
+            WB.saveresponses[wopisrc] = codimd.savetostorage(
+                wopisrc, openfile['acctok'], _intersection(openfile['toclose']), wopilock)
+            openfile['lastsave'] = int(time.time())
+            openfile['tosave'] = False
         return wopilock
 
     def refresh(self, openfile, wopisrc, wopilock):
         '''refresh locks of open idle documents every 30 minutes'''
-        if openfile['lastsave'] < time.time() - (1800 + WB.saveinterval):
+        wopilock = wopi.getlock(wopisrc, openfile['acctok'], raiseifmissing=False) if not wopilock else wopilock
+        if wopilock and openfile['lastsave'] < time.time() - (1800 + WB.saveinterval):
             wopilock = wopi.refreshlock(wopisrc, openfile['acctok'], wopilock)
             # in case we get soon a save callback, we want to honor it immediately
             openfile['lastsave'] = int(time.time()) - WB.saveinterval
@@ -390,19 +391,20 @@ class SaveThread(threading.Thread):
 
     def cleanup(self, openfile, wopisrc, wopilock):
         '''remove state for closed documents after some time'''
-        if _union(openfile['toclose']) and not openfile['tosave']:
+        if wopilock and _union(openfile['toclose']) and not openfile['tosave']:
             # refresh state
-            openfile['toclose'] = { t: wopilock['toclose'][t] or t not in openfile['toclose'] or openfile['toclose'][t] for t in wopilock['toclose'] }
-            if _intersection(openfile['toclose']) and openfile['lastsave'] <= int(time.time()) - WB.unlockinterval:
+            openfile['toclose'] = {t: wopilock['toclose'][t] or t not in openfile['toclose'] or openfile['toclose'][t]
+                                   for t in wopilock['toclose']}
+            if _intersection(openfile['toclose']) and openfile['lastsave'] < int(time.time()) - WB.unlockinterval:
                 # nobody is still on this document and some time has passed, unlock
                 res = wopi.request(wopisrc, openfile['acctok'], 'POST',
-                                headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
+                                   headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
                 if res.status_code != http.client.OK:
-                    WB.log.warning('msg="Savethread: calling WOPI Unlock failed" lastsavetime="%s" token="%s" response="%s"' %
+                    WB.log.warning('msg="SaveThread: calling WOPI Unlock failed" lastsavetime="%s" token="%s" response="%s"' %
                                    (openfile['lastsave'], openfile['acctok'][-20:], res.status_code))
                 else:
-                    WB.log.info('msg="Savethread: unlocked document" lastsavetime="%s" token="%s"' %
-                                  (openfile['lastsave'], openfile['acctok'][-20:]))
+                    WB.log.info('msg="SaveThread: unlocked document" lastsavetime="%s" token="%s"' %
+                                (openfile['lastsave'], openfile['acctok'][-20:]))
                 del WB.openfiles[wopisrc]
             else:
                 # some user still on it or last operation happened not long ago, just refresh lock
@@ -412,7 +414,7 @@ class SaveThread(threading.Thread):
 @atexit.register
 def stopsavethread():
     '''Exit handler to cleanly stop the storage sync thread'''
-    WB.log.info('msg="Waiting for Savethread to complete"')
+    WB.log.info('msg="Waiting for SaveThread to complete"')
     with WB.savecv:
         WB.active = False
         WB.savecv.notify()
