@@ -13,8 +13,7 @@ LABEL maintainer="cernbox-admins@cern.ch" \
 # prerequisites
 WORKDIR /app
 COPY requirements.txt .
-RUN pip3 install --upgrade pip && \
-    python3 -m pip install --upgrade setuptools && \
+RUN pip3 install --upgrade pip setuptools && \
     pip3 install --no-cache-dir --upgrade -r requirements.txt
 
 # install software
