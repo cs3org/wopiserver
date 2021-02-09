@@ -1,5 +1,9 @@
 ## Changelog for the WOPI bridge
 
+### wopibridge 2.2.0 (2021-02-09)
+* Improved logic for cleaning up current sessions
+  and better handling of failure scenarios
+
 ### wopibridge 2.1.0 (2021-02-05)
 
 * Reworked logic to recover when lock is missing (#4)
