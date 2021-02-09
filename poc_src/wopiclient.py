@@ -96,7 +96,9 @@ def getlock(wopisrc, acctok, raiseifmissing=True):
         return json.loads(res.headers.get('X-WOPI-Lock'))
     except (ValueError, KeyError, json.decoder.JSONDecodeError) as e:
         log.warning('msg="Missing or malformed WOPI lock" exception="%s" error="%s"' % (type(e), e))
-        raise InvalidLock
+        if raiseifmissing:
+            raise InvalidLock
+        return None
 
 
 def relock(wopisrc, acctok, docid, isclose):
