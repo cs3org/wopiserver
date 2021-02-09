@@ -138,11 +138,12 @@ def getLockName(filename):
   return lockfile
 
 
-def retrieveWopiLock(fileid, operation, lock, acctok):
+def retrieveWopiLock(fileid, operation, lock, acctok, overridefilename=None):
   '''Retrieves and logs an existing lock for a given file'''
   encacctok = flask.request.args['access_token'][-20:] if 'access_token' in flask.request.args else 'N/A'
   lockcontent = b''
-  for line in st.readfile(acctok['endpoint'], getLockName(acctok['filename']), acctok['userid']):
+  for line in st.readfile(acctok['endpoint'], getLockName(overridefilename if overridefilename else acctok['filename']),
+                          acctok['userid']):
     if isinstance(line, IOError):
       return None     # no pre-existing lock found, or error attempting to read it: assume it does not exist
     # the following check is necessary as it happens to get a str instead of bytes
@@ -281,9 +282,9 @@ def compareWopiLocks(lock1, lock2):
 
 
 def makeConflictResponse(operation, retrievedlock, lock, oldlock, filename, reason=None):
-  '''Generates and logs an HTTP 401 response in case of locks conflict'''
+  '''Generates and logs an HTTP 409 response in case of locks conflict'''
   resp = flask.Response()
-  resp.headers['X-WOPI-Lock'] = retrievedlock if retrievedlock else ''
+  resp.headers['X-WOPI-Lock'] = retrievedlock if retrievedlock is not None else 'missing'
   if reason:
     resp.headers['X-WOPI-LockFailureReason'] = resp.data = reason
   resp.status_code = http.client.CONFLICT

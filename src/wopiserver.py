@@ -841,15 +841,15 @@ def wopiGetLock(fileid, _reqheaders_unused, acctok):
 def wopiPutRelative(fileid, reqheaders, acctok):
   '''Implements the PutRelative WOPI call. Corresponds to the 'Save as...' menu entry.'''
   # cf. http://wopi.readthedocs.io/projects/wopirest/en/latest/files/PutRelativeFile.html
-  suggTarget = reqheaders['X-WOPI-SuggestedTarget'] if 'X-WOPI-SuggestedTarget' in reqheaders else ''
-  relTarget = reqheaders['X-WOPI-RelativeTarget'] if 'X-WOPI-RelativeTarget' in reqheaders else ''
-  overwriteTarget = 'X-WOPI-OverwriteRelativeTarget' in reqheaders and bool(reqheaders['X-WOPI-OverwriteRelativeTarget'])
+  suggTarget = reqheaders.get('X-WOPI-SuggestedTarget')
+  relTarget = reqheaders.get('X-WOPI-RelativeTarget')
+  overwriteTarget = bool(reqheaders.get('X-WOPI-OverwriteRelativeTarget']))
   Wopi.log.info('msg="PutRelative" user="%s" filename="%s" fileid="%s" suggTarget="%s" relTarget="%s" '
                 'overwrite="%r" token="%s"' % \
                 (acctok['userid'], acctok['filename'], fileid, \
                  suggTarget, relTarget, overwriteTarget, flask.request.args['access_token'][-20:]))
   # either one xor the other must be present
-  if (suggTarget and relTarget) or (not suggTarget and not relTarget):
+  if suggTarget ^ relTarget:
     return 'Not supported', http.client.NOT_IMPLEMENTED
   if suggTarget:
     # the suggested target is a filename that can be changed to avoid collisions
@@ -878,13 +878,13 @@ def wopiPutRelative(fileid, reqheaders, acctok):
     relTarget = os.path.dirname(acctok['filename']) + os.path.sep + relTarget    # make full path
     try:
       # check for file existence + lock
-      fileExists = retrievedLock = False
       fileExists = storage.stat(acctok['endpoint'], relTarget, acctok['userid'])
-      retrievedLock = storage.stat(acctok['endpoint'], utils.getLockName(relTarget), acctok['userid'])
+      retrievedTargetLock = utils.retrieveWopiLock(fileid, 'PUT_RELATIVE', None, acctok, overridefilename=relTarget)
     except IOError:
-      pass
-    if fileExists and (not overwriteTarget or retrievedLock):
-      return utils.makeConflictResponse('PUTRELATIVE', retrievedLock, '', '', relTarget, 'Target file already exists')
+      fileExists = False
+      retrievedTargetLock = None
+    if fileExists and (not overwriteTarget or retrievedTargetLock):
+      return utils.makeConflictResponse('PUT_RELATIVE', retrievedTargetLock, '', '', relTarget, 'Target file already exists')
     # else we can use the relative target
     targetName = relTarget
   # either way, we now have a targetName to save the file: attempt to do so
