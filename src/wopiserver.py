@@ -848,8 +848,8 @@ def wopiPutRelative(fileid, reqheaders, acctok):
                 'overwrite="%r" token="%s"' % \
                 (acctok['userid'], acctok['filename'], fileid, \
                  suggTarget, relTarget, overwriteTarget, flask.request.args['access_token'][-20:]))
-  # either one xor the other must be present
-  if suggTarget ^ relTarget:
+  # either one xor the other must be present; note we can't use `^` as we have a mix of str and NoneType
+  if (suggTarget and relTarget) or (not suggTarget and not relTarget):
     return 'Not supported', http.client.NOT_IMPLEMENTED
   if suggTarget:
     # the suggested target is a filename that can be changed to avoid collisions
