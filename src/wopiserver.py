@@ -843,7 +843,7 @@ def wopiPutRelative(fileid, reqheaders, acctok):
   # cf. http://wopi.readthedocs.io/projects/wopirest/en/latest/files/PutRelativeFile.html
   suggTarget = reqheaders.get('X-WOPI-SuggestedTarget')
   relTarget = reqheaders.get('X-WOPI-RelativeTarget')
-  overwriteTarget = bool(reqheaders.get('X-WOPI-OverwriteRelativeTarget']))
+  overwriteTarget = bool(reqheaders.get('X-WOPI-OverwriteRelativeTarget'))
   Wopi.log.info('msg="PutRelative" user="%s" filename="%s" fileid="%s" suggTarget="%s" relTarget="%s" '
                 'overwrite="%r" token="%s"' % \
                 (acctok['userid'], acctok['filename'], fileid, \
@@ -1032,7 +1032,10 @@ def wopiPutFile(fileid):
     # otherwise, check that the caller holds the current lock on the file
     lock = flask.request.headers['X-WOPI-Lock']
     retrievedLock = utils.retrieveWopiLock(fileid, 'PUTFILE', lock, acctok)
-    if retrievedLock is not None and not utils.compareWopiLocks(retrievedLock, lock):
+    if retrievedLock is None:
+      return utils.makeConflictResponse('PUTFILE', retrievedLock, lock, '', acctok['filename'], \
+                                        'Cannot overwrite unlocked file')
+    elif not utils.compareWopiLocks(retrievedLock, lock):
       return utils.makeConflictResponse('PUTFILE', retrievedLock, lock, '', acctok['filename'], \
                                         'Cannot overwrite file locked by another application')
     # OK, we can save the file now
