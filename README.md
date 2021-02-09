@@ -13,6 +13,9 @@ Integration in the CS3 Organisation: April 2020
 This project has been presented at the [ownCloud Conference 2017](https://occon17.owncloud.org).
 Slides available at [slideshare.net](https://www.slideshare.net/giuseppelopresti/collaborative-editing-and-more-in-cernbox).
 
+## Changelog
+
+[Available here](CHANGELOG.md)
 
 ## Unit testing
 
