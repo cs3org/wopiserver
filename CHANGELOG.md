@@ -3,8 +3,10 @@
 ### Tue Feb  9 2021 - v6.2.0
 - Fixed responses of GET_LOCK and REFRESH_LOCK calls when no
   existing lock is found: 404 is now returned as opposed to 409
+- Fixed response of PUT in case of missing lock
+- Improved probing of target locks in PUT_RELATIVE
 - Make sure inodes are unique across eos instances with the
-  xrootd storage interface, similarly to the CS3-compatible case
+  xrootd storage interface, similarly to the CS3 interface
 
 ### Mon Jan 25 2021 - v6.1.0
 - Fixed JWT generation following latest pyjwt package
