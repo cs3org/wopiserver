@@ -396,22 +396,25 @@ class SaveThread(threading.Thread):
                     WB.log.info('msg="SaveThread: cleaning up metadata" url="%s"' % wopisrc)
                     del WB.openfiles[wopisrc]
                 return
-            # refresh state
-            openfile['toclose'] = {t: wopilock['toclose'][t] or t not in openfile['toclose'] or openfile['toclose'][t]
+
+            # compress list of toclose tokens and refresh state
+            openfile['toclose'] = {t: wopilock['toclose'][t] or t in openfile['toclose'] and openfile['toclose'][t]
                                    for t in wopilock['toclose']}
-            if _intersection(openfile['toclose']) and openfile['lastsave'] < int(time.time()) - WB.unlockinterval:
-                # nobody is still on this document and some time has passed, unlock
-                res = wopi.request(wopisrc, openfile['acctok'], 'POST',
-                                   headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
-                if res.status_code != http.client.OK:
-                    WB.log.warning('msg="SaveThread: calling WOPI Unlock failed" lastsavetime="%s" token="%s" response="%s"' %
-                                   (openfile['lastsave'], openfile['acctok'][-20:], res.status_code))
-                else:
-                    WB.log.info('msg="SaveThread: unlocked document" lastsavetime="%s" token="%s"' %
-                                (openfile['lastsave'], openfile['acctok'][-20:]))
-                del WB.openfiles[wopisrc]
+            if _intersection(openfile['toclose']):
+                if openfile['lastsave'] < int(time.time()) - WB.unlockinterval:
+                    # nobody is still on this document and some time has passed, unlock
+                    res = wopi.request(wopisrc, openfile['acctok'], 'POST',
+                                       headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
+                    if res.status_code != http.client.OK:
+                        WB.log.warning('msg="SaveThread: calling WOPI Unlock failed" lastsavetime="%s" token="%s" response="%s"' %
+                                    (openfile['lastsave'], openfile['acctok'][-20:], res.status_code))
+                    else:
+                        WB.log.info('msg="SaveThread: unlocked document" lastsavetime="%s" token="%s"' %
+                                    (openfile['lastsave'], openfile['acctok'][-20:]))
+                    del WB.openfiles[wopisrc]
             else:
-                # some user still on it or last operation happened not long ago, just refresh lock
+                # some user still on it or last operation happened not long ago, refresh lock
+                openfile['toclose'] = {t: False for t in openfile['toclose'] if not openfile['toclose'][t]}
                 wopi.refreshlock(wopisrc, openfile['acctok'], wopilock, toclose=openfile['toclose'])
 
 
