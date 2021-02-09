@@ -10,7 +10,8 @@ LABEL maintainer="cernbox-admins@cern.ch" \
   org.opencontainers.image.title="The ScienceMesh IOP WOPI bridge" \
   org.opencontainers.image.version="$VERSION"
 
-RUN pip install flask requests
+RUN pip install --upgrade pip setuptools && \
+    pip install flask requests
 RUN mkdir -p /var/log/wopi /app
 ADD poc_src/* /app/
 RUN sed -i "s/WBVERSION = 'git'/WBVERSION = '$VERSION'/" /app/wopibridge.py
