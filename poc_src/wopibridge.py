@@ -221,7 +221,15 @@ def appopen():
         # this can be raised by loadfromstorage
         return _guireturn('Unable to contact CodiMD, please try again later'), http.client.INTERNAL_SERVER_ERROR
 
-    if filemd['UserCanWrite']:
+    redirecturl = _redirecttocodimd(filemd['UserCanWrite'], wopisrc, acctok, wopilock) + \
+                  'displayName=' + urllib.parse.quote_plus(filemd['UserFriendlyName'])
+    WB.log.info('msg="Redirecting client to CodiMD" redirecturl="%s"' % redirecturl)
+    return flask.redirect(redirecturl)
+
+
+def _redirecttocodimd(isreadwrite, wopisrc, acctok, wopilock):
+    '''Updates internal metadata and returns the correct redirect URL to CodiMD'''
+    if isreadwrite:
         # keep track of this open document for the save thread and for statistical purposes
         if wopisrc in WB.openfiles:
             # use the new acctok and the new/current wopilock content
@@ -241,17 +249,13 @@ def appopen():
         # create the external redirect URL to be returned to the client:
         # metadata will be used for autosave (this is an extended feature of CodiMD)
         redirecturl = codimd.codimdexturl + wopilock['docid'] + '?metadata=' + \
-                        urllib.parse.quote_plus('%s?t=%s' % (wopisrc, acctok)) + '&'
+                      urllib.parse.quote_plus('%s?t=%s' % (wopisrc, acctok)) + '&'
     else:
         # read-only mode: in this case redirect to publish mode or normal view
         # to quickly jump in slide mode depending on the content
         redirecturl = codimd.codimdexturl + wopilock['docid'] + \
-                        ('/publish?' if wopilock['app'] != 'slide' else '?')
-    # append displayName (again this is an extended feature of CodiMD)
-    redirecturl += 'displayName=' + urllib.parse.quote_plus(filemd['UserFriendlyName'])
-
-    WB.log.info('msg="Redirecting client to CodiMD" redirecturl="%s"' % redirecturl)
-    return flask.redirect(redirecturl)
+                      ('/publish?' if wopilock['app'] != 'slide' else '?')
+    return redirecturl
 
 
 @WB.bpr.route("/save", methods=['POST'])
