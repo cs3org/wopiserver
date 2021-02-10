@@ -83,22 +83,18 @@ def refreshlock(wopisrc, acctok, wopilock, isdirty=False, toclose=None):
     return None
 
 
-def getlock(wopisrc, acctok, raiseifmissing=True):
-    '''Return the currently held WOPI lock (None if missing and raiseifmissing is False), and raise InvalidLock otherwise'''
+def getlock(wopisrc, acctok):
+    '''Return the currently held WOPI lock, or raise InvalidLock otherwise'''
     try:
         res = request(wopisrc, acctok, 'POST', headers={'X-Wopi-Override': 'GET_LOCK'})
-        if res.status_code == http.client.NOT_FOUND and not raiseifmissing:
-            return None
         if res.status_code != http.client.OK:
             # lock got lost or any other error
-            raise ValueError(res.status_code)
+            raise InvalidLock(res.status_code)
         # the lock is expected to be a JSON dict, see generatelock()
         return json.loads(res.headers.get('X-WOPI-Lock'))
     except (ValueError, KeyError, json.decoder.JSONDecodeError) as e:
         log.warning('msg="Missing or malformed WOPI lock" exception="%s" error="%s"' % (type(e), e))
-        if raiseifmissing:
-            raise InvalidLock
-        return None
+        raise InvalidLock(e)
 
 
 def relock(wopisrc, acctok, docid, isclose):
