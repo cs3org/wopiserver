@@ -397,7 +397,7 @@ class SaveThread(threading.Thread):
                     del WB.openfiles[wopisrc]
                 return
 
-            # compress list of toclose tokens and refresh state
+            # reconcile list of toclose tokens
             openfile['toclose'] = {t: wopilock['toclose'][t] or t in openfile['toclose'] and openfile['toclose'][t]
                                    for t in wopilock['toclose']}
             if _intersection(openfile['toclose']):
@@ -412,9 +412,8 @@ class SaveThread(threading.Thread):
                         WB.log.info('msg="SaveThread: unlocked document" lastsavetime="%s" token="%s"' %
                                     (openfile['lastsave'], openfile['acctok'][-20:]))
                     del WB.openfiles[wopisrc]
-            else:
-                # some user still on it or last operation happened not long ago, refresh lock
-                openfile['toclose'] = {t: False for t in openfile['toclose'] if not openfile['toclose'][t]}
+            elif openfile['toclose'] != wopilock['toclose']:
+                # some user still on it, refresh lock if the toclose part has changed
                 wopi.refreshlock(wopisrc, openfile['acctok'], wopilock, toclose=openfile['toclose'])
 
 
