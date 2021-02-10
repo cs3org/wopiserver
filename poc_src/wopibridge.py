@@ -191,70 +191,67 @@ def appopen():
         # use the 'UserCanWrite' attribute to decide whether the file is to be opened in read-only mode
         if filemd['UserCanWrite']:
             try:
-                wopilock = wopi.getlock(wopisrc, acctok, raiseifmissing=False)
-                if not wopilock:
-                    # first user opening this file, fetch it
-                    wopilock = codimd.loadfromstorage(filemd, wopisrc, acctok)
-                else:
-                    WB.log.info('msg="Lock already held" lock="%s"' % wopilock)
+                # was it already being worked on?
+                wopilock = wopi.getlock(wopisrc, acctok)
+                WB.log.info('msg="Lock already held" lock="%s"' % wopilock)
                 # add this token to the list, if not already in
                 if acctok[-20:] not in wopilock['toclose']:
                     wopilock = wopi.refreshlock(wopisrc, acctok, wopilock)
-            except wopi.InvalidLock:
-                # lock is invalid/corrupted: force read-only mode
-                WB.log.info('msg="Invalid lock, forcing read-only mode" token="%s"' % acctok[-20:])
-                filemd['UserCanWrite'] = False
-                # and fetch the file from storage
-                wopilock = codimd.loadfromstorage(filemd, wopisrc, acctok)
+            except wopi.InvalidLock as e:
+                if str(e) != str(http.client.NOT_FOUND):
+                    # lock is invalid/corrupted: force read-only mode
+                    WB.log.info('msg="Invalid lock, forcing read-only mode" token="%s" error="%s"' % (acctok[-20:], e))
+                    filemd['UserCanWrite'] = False
 
-            # WOPI Lock
-            res = wopi.request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock),
-                                                                 'X-Wopi-Override': 'LOCK'})
-            if res.status_code != http.client.OK:
-                # Failed to lock the file: open in read-only mode
-                WB.log.warning('msg="Failed to lock the file" response="%d" token="%s"' %
-                               (res.status_code, acctok[-20:]))
-                filemd['UserCanWrite'] = False
+                # otherwise, this is the first user opening the file; in both cases, fetch it
+                wopilock = codimd.loadfromstorage(filemd, wopisrc, acctok)
+                # and WOPI Lock it
+                res = wopi.request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock),
+                                                                     'X-Wopi-Override': 'LOCK'})
+                if res.status_code != http.client.OK:
+                    # failed to lock the file: open in read-only mode
+                    WB.log.warning('msg="Failed to lock the file" response="%d" token="%s"' %
+                                   (res.status_code, acctok[-20:]))
+                    filemd['UserCanWrite'] = False
 
         else:
             # user has no write privileges, just fetch document and push it to CodiMD
             wopilock = codimd.loadfromstorage(filemd, wopisrc, acctok)
-
-        if filemd['UserCanWrite']:
-            # keep track of this open document for the save thread and for statistical purposes
-            if wopisrc in WB.openfiles:
-                # use the new acctok and the new/current wopilock content
-                WB.openfiles[wopisrc]['acctok'] = acctok
-                WB.openfiles[wopisrc]['toclose'] = wopilock['toclose']
-            else:
-                WB.openfiles[wopisrc] = {'acctok': acctok, 'tosave': False,
-                                         'lastsave': int(time.time()) - WB.saveinterval,
-                                         'toclose': {acctok[-20:]: False},
-                                         'docid': wopilock['docid'],
-                                        }
-            # also clear any potential stale response for this document
-            try:
-                del WB.saveresponses[wopisrc]
-            except KeyError:
-                pass
-            # create the external redirect URL to be returned to the client:
-            # metadata will be used for autosave (this is an extended feature of CodiMD)
-            redirecturl = codimd.codimdexturl + wopilock['docid'] + '?metadata=' + \
-                          urllib.parse.quote_plus('%s?t=%s' % (wopisrc, acctok)) + '&'
-        else:
-            # read-only mode: in this case redirect to publish mode or normal view
-            # to quickly jump in slide mode depending on the content
-            redirecturl = codimd.codimdexturl + wopilock['docid'] + \
-                          ('/publish?' if wopilock['app'] != 'slide' else '?')
-        # append displayName (again this is an extended feature of CodiMD)
-        redirecturl += 'displayName=' + urllib.parse.quote_plus(filemd['UserFriendlyName'])
-
-        WB.log.info('msg="Redirecting client to CodiMD" redirecturl="%s"' % redirecturl)
-        return flask.redirect(redirecturl)
-
     except codimd.CodiMDFailure:
-        # this can be risen by loadfromstorage
+        # this can be raised by loadfromstorage
         return _guireturn('Unable to contact CodiMD, please try again later'), http.client.INTERNAL_SERVER_ERROR
+
+    if filemd['UserCanWrite']:
+        # keep track of this open document for the save thread and for statistical purposes
+        if wopisrc in WB.openfiles:
+            # use the new acctok and the new/current wopilock content
+            WB.openfiles[wopisrc]['acctok'] = acctok
+            WB.openfiles[wopisrc]['toclose'] = wopilock['toclose']
+        else:
+            WB.openfiles[wopisrc] = {'acctok': acctok, 'tosave': False,
+                                     'lastsave': int(time.time()) - WB.saveinterval,
+                                     'toclose': {acctok[-20:]: False},
+                                     'docid': wopilock['docid'],
+                                    }
+        # also clear any potential stale response for this document
+        try:
+            del WB.saveresponses[wopisrc]
+        except KeyError:
+            pass
+        # create the external redirect URL to be returned to the client:
+        # metadata will be used for autosave (this is an extended feature of CodiMD)
+        redirecturl = codimd.codimdexturl + wopilock['docid'] + '?metadata=' + \
+                        urllib.parse.quote_plus('%s?t=%s' % (wopisrc, acctok)) + '&'
+    else:
+        # read-only mode: in this case redirect to publish mode or normal view
+        # to quickly jump in slide mode depending on the content
+        redirecturl = codimd.codimdexturl + wopilock['docid'] + \
+                        ('/publish?' if wopilock['app'] != 'slide' else '?')
+    # append displayName (again this is an extended feature of CodiMD)
+    redirecturl += 'displayName=' + urllib.parse.quote_plus(filemd['UserFriendlyName'])
+
+    WB.log.info('msg="Redirecting client to CodiMD" redirecturl="%s"' % redirecturl)
+    return flask.redirect(redirecturl)
 
 
 @WB.bpr.route("/save", methods=['POST'])
@@ -343,7 +340,7 @@ class SaveThread(threading.Thread):
                         self.cleanup(openfile, wopisrc, wopilock)
                     except Exception as e:    # pylint: disable=broad-except
                         ex_type, ex_value, ex_traceback = sys.exc_info()
-                        WB.log.error('msg="SaveThread: unexpected exception caught" exception="%s" type="%s" traceback="%s"' %
+                        WB.log.error('msg="SaveThread: unexpected exception caught" ex="%s" type="%s" traceback="%s"' %
                                      (e, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback)))
         WB.log.info('msg="SaveThread terminated, shutting down"')
 
@@ -377,19 +374,26 @@ class SaveThread(threading.Thread):
     def refresh(self, openfile, wopisrc, wopilock):
         '''refresh locks of open idle documents every 30 minutes'''
         if openfile['lastsave'] < time.time() - (1800 + WB.saveinterval):
-            wopilock = wopi.getlock(wopisrc, openfile['acctok'], raiseifmissing=False) if not wopilock else wopilock
-            if wopilock:
+            try:
+                wopilock = wopi.getlock(wopisrc, openfile['acctok']) if not wopilock else wopilock
                 wopilock = wopi.refreshlock(wopisrc, openfile['acctok'], wopilock)
                 # in case we get soon a save callback, we want to honor it immediately
                 openfile['lastsave'] = int(time.time()) - WB.saveinterval
+                if not wopilock:
+                    # but if refreshlock failed, this was a left-over: let's clean it up
+                    WB.log.info('msg="SaveThread: refresh failed, cleaning up metadata" url="%s"' % wopisrc)
+                    del WB.openfiles[wopisrc]
+            except wopi.InvalidLock:
+                pass
         return wopilock
 
     def cleanup(self, openfile, wopisrc, wopilock):
         '''remove state for closed documents after some time'''
         if _union(openfile['toclose']) and not openfile['tosave']:
             # check lock
-            wopilock = wopi.getlock(wopisrc, openfile['acctok'], raiseifmissing=False) if not wopilock else wopilock
-            if not wopilock:
+            try:
+                wopilock = wopi.getlock(wopisrc, openfile['acctok']) if not wopilock else wopilock
+            except wopi.InvalidLock:
                 # nothing to do here, this document may have been closed by another wopibridge
                 if openfile['lastsave'] < time.time() - WB.unlockinterval:
                     # yet cleanup only after the unlockinterval time, cf. the InvalidLock handling in savedirty()
@@ -406,8 +410,8 @@ class SaveThread(threading.Thread):
                     res = wopi.request(wopisrc, openfile['acctok'], 'POST',
                                        headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
                     if res.status_code != http.client.OK:
-                        WB.log.warning('msg="SaveThread: calling WOPI Unlock failed" lastsavetime="%s" token="%s" response="%s"' %
-                                    (openfile['lastsave'], openfile['acctok'][-20:], res.status_code))
+                        WB.log.warning('msg="SaveThread: failed to unlock" lastsavetime="%s" token="%s" response="%s"' %
+                                       (openfile['lastsave'], openfile['acctok'][-20:], res.status_code))
                     else:
                         WB.log.info('msg="SaveThread: unlocked document" lastsavetime="%s" token="%s"' %
                                     (openfile['lastsave'], openfile['acctok'][-20:]))
