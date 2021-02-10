@@ -60,7 +60,7 @@ def refreshlock(wopisrc, acctok, wopilock, isdirty=False, toclose=None):
     elif acctok[-20:] not in wopilock['toclose']:
         # if missing, just append the short token to the 'toclose' dict, similarly to the openfiles map
         newlock['toclose'][acctok[-20:]] = False
-    if isdirty and wopilock['digest'] != 'dirty' or not isdirty and wopilock['digest'] == 'relock':
+    if isdirty and wopilock['digest'] != 'dirty':
         newlock['digest'] = 'dirty'
     lockheaders = {'X-Wopi-Override': 'REFRESH_LOCK',
                    'X-WOPI-OldLock': json.dumps(wopilock),
@@ -115,7 +115,7 @@ def relock(wopisrc, acctok, docid, isclose):
         raise InvalidLock('Invalid WOPI context on save')
 
     # lock the file again: we assume we are alone as the previous lock had been released
-    wopilock = generatelock(docid, filemd, 'relock', 'md', acctok, isclose)
+    wopilock = generatelock(docid, filemd, 'dirty', 'md', acctok, isclose)
     res = request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'LOCK'})
     if res.status_code != http.client.OK:
         log.warning('msg="Failed to relock the file" response="%d" token="%s"' % (res.status_code, acctok[-20:]))

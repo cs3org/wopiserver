@@ -214,7 +214,7 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
     except CodiMDFailure:
         return jsonify('Failed to fetch document from CodiMD'), http.client.INTERNAL_SERVER_ERROR
 
-    if isclose and wopilock['digest'] not in ['dirty', 'relock']:
+    if isclose and wopilock['digest'] != 'dirty':
         # so far the file was not touched and we are about to close: before forcing a put let's validate the contents
         h = hashlib.sha1()
         h.update(mddoc)
@@ -237,9 +237,8 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
             log.error('msg="Calling WOPI PutFile failed" url="%s" response="%s"' % (
                 wopisrc, res.status_code))
             return jsonify('Error saving the file. %s' + res.content.decode()), res.status_code
-        # and refresh the WOPI lock if the file was not just relocked
-        if wopilock['digest'] != 'relock':
-            wopi.refreshlock(wopisrc, acctok, wopilock, isdirty=True)
+        # and refresh the WOPI lock
+        wopi.refreshlock(wopisrc, acctok, wopilock, isdirty=True)
         log.info('msg="Save completed" filename="%s" isclose="%s" token="%s"' % \
                  (wopilock['filename'], isclose, acctok[-20:]))
         # combine the responses and amend the message in case the file was relocked
