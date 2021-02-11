@@ -1068,7 +1068,7 @@ def wopiPutFile(fileid):
       Wopi.log.info('msg="Conflicting copy created" user="%s" savetime="%s" lastmtime="%s" newfilename="%s" token="%s"' % \
                     (acctok['userid'], savetime, mtime, newname, flask.request.args['access_token'][-20:]))
       # and report failure to the application: note we use a CONFLICT response as it is better handled by the app
-      return utils.makeConflictResponse('PUTFILE', 'External App', lock, '', acctok['filename'], \
+      return utils.makeConflictResponse('PUTFILE', 'External', lock, '', acctok['filename'], \
                                         'The file being edited got moved or overwritten, conflict copy created')
     except (ValueError, TypeError) as e:
       # the xattr was not an integer: assume the app is looping on an already conflicting file,
