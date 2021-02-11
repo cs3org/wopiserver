@@ -1,8 +1,9 @@
 ## Changelog for the WOPI bridge
 
-### wopibridge 2.2.0 (2021-02-09)
+### wopibridge 2.2.0 (2021-02-11)
 * Improved logic for cleaning up current sessions
   and better handling of failure scenarios
+* Improved logging
 
 ### wopibridge 2.1.0 (2021-02-05)
 
