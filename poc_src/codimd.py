@@ -130,10 +130,10 @@ def _saveas(wopisrc, acctok, wopilock, targetname, content):
                     }
     res = wopi.request(wopisrc, acctok, 'POST', headers=putrelheaders, contents=content)
     if res.status_code != http.client.OK:
-        log.error('msg="Calling WOPI PutRelative failed" url="%s" response="%s"' % (
-            wopisrc, res.status_code))
+        log.error('msg="Calling WOPI PutRelative failed" url="%s" response="%s" reason="%s"' % (
+            wopisrc, res.status_code, res.headers.get('X-WOPI-LockFailureReason')))
         # TODO here we should save the file on a local storage to help later recovery!
-        return jsonify('Error saving the file: %s.' % res.content.decode()), res.status_code
+        return jsonify('Error saving the file. %s' % res.headers.get('X-WOPI-LockFailureReason')), res.status_code
 
     # use the new file's metadata from PutRelative to remove the previous file: we can do that only on close
     # because we need to keep using the current wopisrc/acctok until the session is alive in CodiMD
@@ -236,7 +236,7 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
         if res.status_code != http.client.OK:
             log.error('msg="Calling WOPI PutFile failed" url="%s" response="%s"' % (
                 wopisrc, res.status_code))
-            return jsonify('Error saving the file. %s' + res.content.decode()), res.status_code
+            return jsonify('Error saving the file. %s' + res.headers.get('X-WOPI-LockFailureReason')), res.status_code
         # and refresh the WOPI lock
         wopi.refreshlock(wopisrc, acctok, wopilock, isdirty=True)
         log.info('msg="Save completed" filename="%s" isclose="%s" token="%s"' % \

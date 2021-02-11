@@ -79,7 +79,8 @@ def refreshlock(wopisrc, acctok, wopilock, isdirty=False, toclose=None):
                 toclose[t] = currlock['toclose'][t] or (t in toclose and toclose[t])
         # recursively retry, the recursion is going to stop in one round
         return refreshlock(wopisrc, acctok, currlock, isdirty, toclose)
-    log.error('msg="Calling WOPI RefreshLock failed" url="%s" response="%s"' % (wopisrc, res.status_code))
+    log.error('msg="Calling WOPI RefreshLock failed" url="%s" response="%s" reason="%s"' % (
+        wopisrc, res.status_code, res.headers.get('X-WOPI-LockFailureReason')))
     return None
 
 
@@ -111,10 +112,11 @@ def relock(wopisrc, acctok, docid, isclose):
         raise InvalidLock('Invalid WOPI context on save')
 
     # lock the file again: we assume we are alone as the previous lock had been released
-    wopilock = generatelock(docid, filemd, 'dirty', 'md', acctok, isclose)
+    wopilock = generatelock(docid, filemd, 'relock', 'md', acctok, isclose)
     res = request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'LOCK'})
     if res.status_code != http.client.OK:
-        log.warning('msg="Failed to relock the file" response="%d" token="%s"' % (res.status_code, acctok[-20:]))
+        log.warning('msg="Failed to relock the file" response="%d" token="%s" reason="%s"' % (
+            res.status_code, acctok[-20:], res.headers.get('X-WOPI-LockFailureReason')))
         raise InvalidLock('Failed to relock the file on save')
     # relock was successful, return it
     return wopilock
