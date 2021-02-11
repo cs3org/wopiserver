@@ -198,7 +198,7 @@ def appopen():
                 if acctok[-20:] not in wopilock['toclose']:
                     wopilock = wopi.refreshlock(wopisrc, acctok, wopilock)
             except wopi.InvalidLock as e:
-                if str(e) != str(http.client.NOT_FOUND):
+                if str(e) != str(int(http.client.NOT_FOUND)):
                     # lock is invalid/corrupted: force read-only mode
                     WB.log.info('msg="Invalid lock, forcing read-only mode" token="%s" error="%s"' % (acctok[-20:], e))
                     filemd['UserCanWrite'] = False
