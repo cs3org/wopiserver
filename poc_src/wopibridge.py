@@ -37,7 +37,8 @@ WBVERSION = 'git'
 # this is the default location of secrets in docker
 CERTPATH = '/var/run/secrets/cert.pem'
 
-# a standard message to be displayed by the app when some content gets lost
+# a standard message to be displayed by the app when some content might be lost: this would only
+# appear in case of uncaught exceptions or bugs introduced in the CodiMD webhook
 RECOVER_MSG = 'Please copy the content in a safe place and reopen the document afresh to paste it back.'
 
 
@@ -180,12 +181,12 @@ def appopen():
         return _guireturn('Missing arguments'), http.client.BAD_REQUEST
 
     # WOPI GetFileInfo
-    try:
-        res = wopi.request(wopisrc, acctok, 'GET')
-        filemd = res.json()
-    except json.decoder.JSONDecodeError as e:
-        WB.log.warning('msg="Unexpected non-JSON response from WOPI" error="%s" response="%d"' % (e, res.status_code))
+    res = wopi.request(wopisrc, acctok, 'GET')
+    if res.status_code != http.client.OK:
+        WB.log.warning('msg="Open: unable to fetch file WOPI metadata" error="%s" response="%d"' % \
+                       (res.content, res.status_code))
         return _guireturn('Invalid WOPI context'), http.client.NOT_FOUND
+    filemd = res.json()
 
     try:
         # use the 'UserCanWrite' attribute to decide whether the file is to be opened in read-only mode
@@ -356,19 +357,22 @@ class SaveThread(threading.Thread):
             try:
                 wopilock = wopi.getlock(wopisrc, openfile['acctok'])
             except wopi.InvalidLock:
-                WB.log.info('msg="SaveThread: attempting to relock file" token="%s"' % openfile['acctok'][-20:])
+                WB.log.info('msg="SaveThread: attempting to relock file" token="%s" docid="%s"' % \
+                            (openfile['acctok'][-20:], openfile['docid']))
                 try:
                     wopilock = WB.saveresponses[wopisrc] = wopi.relock(
                         wopisrc, openfile['acctok'], openfile['docid'], _intersection(openfile['toclose']))
                 except wopi.InvalidLock as ile:
                     # even this attempt failed, give up
-                    # TODO here we should save the file on a local storage to help later recovery!
+                    # TODO here we should save the file on a local storage to help later recovery
                     WB.saveresponses[wopisrc] = codimd.jsonify(str(ile)), http.client.NOT_FOUND
                     # set some 'fake' metadata, will be automatically cleaned up later
                     openfile['lastsave'] = int(time.time())
                     openfile['tosave'] = False
                     openfile['toclose'] = {'invalid-lock': True}
                     return None
+            WB.log.info('msg="SaveThread: saving file" token="%s" docid="%s"' % \
+                        (openfile['acctok'][-20:], openfile['docid']))
             WB.saveresponses[wopisrc] = codimd.savetostorage(
                 wopisrc, openfile['acctok'], _intersection(openfile['toclose']), wopilock)
             openfile['lastsave'] = int(time.time())

@@ -40,7 +40,8 @@ skipsslverify = None
 
 def jsonify(msg):
     '''One-liner to consistently json-ify a given message'''
-    return '{"message": "%s", "delay": "%.1f"}' % (msg, 0 if len(msg) > 90 else 0.8 + ((len(msg) - 20) * 1.3 / 70))
+    # a delay = 0 means the user has to click on it to dismiss it, good for longer messages
+    return '{"message": "%s", "delay": "%.1f"}' % (msg, 0 if len(msg) > 90 else 1 + len(msg) * 3.0 / 70)
 
 
 def _getattachments(mddoc, docfilename, forcezip=False):
@@ -112,7 +113,7 @@ def _fetchfromcodimd(wopilock, acctok):
     try:
         res = requests.get(codimdurl + wopilock['docid'] + '/download', verify=not skipsslverify)
         if res.status_code != http.client.OK:
-            log.error('msg="Unable to fetch document from CodiMD" token="%s" response="%s: %s"' %
+            log.error('msg="Unable to fetch document from CodiMD" token="%s" response="%d: %s"' % \
                       (acctok[-20:], res.status_code, res.content))
             raise CodiMDFailure
         return res.content
@@ -130,9 +131,9 @@ def _saveas(wopisrc, acctok, wopilock, targetname, content):
                     }
     res = wopi.request(wopisrc, acctok, 'POST', headers=putrelheaders, contents=content)
     if res.status_code != http.client.OK:
-        log.error('msg="Calling WOPI PutRelative failed" url="%s" response="%s" reason="%s"' % (
-            wopisrc, res.status_code, res.headers.get('X-WOPI-LockFailureReason')))
-        # TODO here we should save the file on a local storage to help later recovery!
+        log.warning('msg="Calling WOPI PutRelative failed" url="%s" response="%s" reason="%s"' % \
+                    (wopisrc, res.status_code, res.headers.get('X-WOPI-LockFailureReason')))
+        # if res.status_code != http.client.CONFLICT: TODO need to save the file on a local storage for later recovery
         return jsonify('Error saving the file. %s' % res.headers.get('X-WOPI-LockFailureReason')), res.status_code
 
     # use the new file's metadata from PutRelative to remove the previous file: we can do that only on close
@@ -141,13 +142,13 @@ def _saveas(wopisrc, acctok, wopilock, targetname, content):
     # unlock and delete original file
     res = wopi.request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
     if res.status_code != http.client.OK:
-        log.warning('msg="Failed to unlock the previous file" token="%s" response="%d"' % (
-            acctok[-20:], res.status_code))
+        log.warning('msg="Failed to unlock the previous file" token="%s" response="%d"' % \
+                    (acctok[-20:], res.status_code))
     else:
         res = wopi.request(wopisrc, acctok, 'POST', headers={'X-Wopi-Override': 'DELETE'})
         if res.status_code != http.client.OK:
-            log.warning('msg="Failed to delete the previous file" token="%s" response="%d"' % (
-                acctok[-20:], res.status_code))
+            log.warning('msg="Failed to delete the previous file" token="%s" response="%d"' % \
+                        (acctok[-20:], res.status_code))
         else:
             log.info('msg="Previous file unlocked and removed successfully" token="%s"' % acctok[-20:])
 
@@ -188,7 +189,7 @@ def loadfromstorage(filemd, wopisrc, acctok):
         res = requests.post(codimdurl + '/new', data=mddoc, allow_redirects=False, params=newparams,
                             headers={'Content-Type': 'text/markdown'}, verify=not skipsslverify)
         if res.status_code != http.client.FOUND:
-            log.error('msg="Unable to push document to CodiMD" token="%s" response="%s: %s"' %
+            log.error('msg="Unable to push document to CodiMD" token="%s" response="%d: %s"' % \
                       (acctok[-20:], res.status_code, res.content))
             raise CodiMDFailure
     except requests.exceptions.ConnectionError as e:
@@ -226,17 +227,15 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
     wasbundle = os.path.splitext(wopilock['filename'])[1] == '.zmd'
     bundlefile, attresponse = _getattachments(mddoc.decode(), wopilock['filename'].replace('.zmd', '.md'),
                                               (wasbundle and not isclose))
-    log.debug('msg="Before Put/PutRelative" notbundlefile="%s" wasbundle="%s" isclose="%s"' %
-              (not bundlefile, wasbundle, isclose))
 
     # WOPI PutFile for the file or the bundle if it already existed
     if (wasbundle ^ (not bundlefile)) or not isclose:
         res = wopi.request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock)},
                            contents=(bundlefile if wasbundle else mddoc))
         if res.status_code != http.client.OK:
-            log.error('msg="Calling WOPI PutFile failed" url="%s" response="%s"' % (
-                wopisrc, res.status_code))
-            return jsonify('Error saving the file. %s' + res.headers.get('X-WOPI-LockFailureReason')), res.status_code
+            log.warning('msg="Calling WOPI PutFile failed" url="%s" response="%s"' % (wopisrc, res.status_code))
+            # if res.status_code != http.client.CONFLICT: TODO need to save the file on a local storage for later recovery
+            return jsonify('Error saving the file. %s' % res.headers.get('X-WOPI-LockFailureReason')), res.status_code
         # and refresh the WOPI lock
         wopi.refreshlock(wopisrc, acctok, wopilock, isdirty=True)
         log.info('msg="Save completed" filename="%s" isclose="%s" token="%s"' % \

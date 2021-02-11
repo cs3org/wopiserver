@@ -79,7 +79,7 @@ def refreshlock(wopisrc, acctok, wopilock, isdirty=False, toclose=None):
                 toclose[t] = currlock['toclose'][t] or (t in toclose and toclose[t])
         # recursively retry, the recursion is going to stop in one round
         return refreshlock(wopisrc, acctok, currlock, isdirty, toclose)
-    log.error('msg="Calling WOPI RefreshLock failed" url="%s" response="%s" reason="%s"' % (
+    log.error('msg="Calling WOPI RefreshLock failed" url="%s" response="%d" reason="%s"' % (
         wopisrc, res.status_code, res.headers.get('X-WOPI-LockFailureReason')))
     return None
 
@@ -101,15 +101,12 @@ def getlock(wopisrc, acctok):
 def relock(wopisrc, acctok, docid, isclose):
     '''Relock again a given document and return a valid WOPI lock, or raise InvalidLock otherwise (cf. SaveThread)'''
     # first get again the file metadata
-    try:
-        res = request(wopisrc, acctok, 'GET')
-        if res.status_code in [http.client.NOT_FOUND, http.client.UNAUTHORIZED, http.client.INTERNAL_SERVER_ERROR]:
-            log.warning('msg="Expired session attempting to relock file" response="%d"' % res.status_code)
-            raise InvalidLock('Session expired, please refresh this page')
-        filemd = res.json()
-    except json.decoder.JSONDecodeError as e:
-        log.warning('msg="Unexpected non-JSON response from WOPI" error="%s" response="%d"' % (e, res.status_code))
-        raise InvalidLock('Invalid WOPI context on save')
+    res = request(wopisrc, acctok, 'GET')
+    if res.status_code != http.client.OK:
+        log.warning('msg="Session expired or file renamed when attempting to relock it" error="%s" response="%d"' % \
+                    (res.content, res.status_code))
+        raise InvalidLock('Session expired, please refresh this page')
+    filemd = res.json()
 
     # lock the file again: we assume we are alone as the previous lock had been released
     wopilock = generatelock(docid, filemd, 'relock', 'md', acctok, isclose)
@@ -117,6 +114,6 @@ def relock(wopisrc, acctok, docid, isclose):
     if res.status_code != http.client.OK:
         log.warning('msg="Failed to relock the file" response="%d" token="%s" reason="%s"' % (
             res.status_code, acctok[-20:], res.headers.get('X-WOPI-LockFailureReason')))
-        raise InvalidLock('Failed to relock the file on save')
+        raise InvalidLock('Failed to relock the file on save, please refresh this page')
     # relock was successful, return it
     return wopilock
