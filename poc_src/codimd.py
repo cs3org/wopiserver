@@ -40,7 +40,7 @@ skipsslverify = None
 
 def jsonify(msg):
     '''One-liner to consistently json-ify a given message'''
-    return '{"message": "%s"}' % msg
+    return '{"message": "%s", "delay": "%.1f"}' % (msg, 0 if len(msg) > 90 else 0.8 + ((len(msg) - 20) * 1.3 / 70))
 
 
 def _getattachments(mddoc, docfilename, forcezip=False):
