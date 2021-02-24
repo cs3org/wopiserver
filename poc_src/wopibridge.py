@@ -103,6 +103,7 @@ class WB:
             # init modules
             codimd.log = wopi.log = cls.log
             codimd.skipsslverify = wopi.skipsslverify = cls.skipsslverify
+            codimd.hashsecret = b'TODOsecret'
 
             # start the thread to perform async save operations
             cls.savethread = SaveThread()

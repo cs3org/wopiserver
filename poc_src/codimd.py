@@ -15,6 +15,9 @@ import json
 import hashlib
 import urllib.parse
 import http.client
+from base64 import urlsafe_b64encode
+import hashlib
+import hmac
 import requests
 import wopiclient as wopi
 
@@ -36,6 +39,7 @@ log = None
 codimdurl = None
 codimdexturl = None
 skipsslverify = None
+hashsecret = None
 
 
 def jsonify(msg):
@@ -80,8 +84,7 @@ def _unzipattachments(inputbuf):
             mddoc = inputzip.read(zipinfo)
         else:
             # first check if the file already exists in CodiMD:
-            res = requests.head(codimdurl + '/uploads/' +
-                                fname, verify=not skipsslverify)
+            res = requests.head(codimdurl + '/uploads/' + fname, verify=not skipsslverify)
             if res.status_code == http.client.OK and int(res.headers['Content-Length']) == zipinfo.file_size:
                 # yes (assume that hashed filename AND size matching is a good enough content match!)
                 log.debug('msg="Skipped existing attachment" filename="%s"' % fname)
@@ -179,25 +182,41 @@ def loadfromstorage(filemd, wopisrc, acctok):
         mddoc = mdfile
     h = hashlib.sha1()
     h.update(mddoc)
-    newparams = None
-    if not filemd['UserCanWrite']:
-        # this is an extended feature in CodiMD
-        newparams = {'mode': 'locked'}
-
-    # push the document to CodiMD
     try:
-        res = requests.post(codimdurl + '/new', data=mddoc, allow_redirects=False, params=newparams,
-                            headers={'Content-Type': 'text/markdown'}, verify=not skipsslverify)
-        if res.status_code != http.client.FOUND:
-            log.error('msg="Unable to push document to CodiMD" token="%s" response="%d: %s"' % \
-                      (acctok[-20:], res.status_code, res.content))
-            raise CodiMDFailure
+        if not filemd['UserCanWrite']:
+            # read-only case: push the doc to a newly generated note with a random docid
+            newparams = {'mode': 'locked'}   # this is an extended feature in CodiMD
+            res = requests.post(codimdurl + '/new', data=mddoc, allow_redirects=False, params=newparams,
+                                headers={'Content-Type': 'text/markdown'}, verify=not skipsslverify)
+            if res.status_code != http.client.FOUND:
+                log.error('msg="Unable to push read-only document to CodiMD" token="%s" response="%d"' % \
+                          (acctok[-20:], res.status_code))
+                raise CodiMDFailure
+            notehash = urllib.parse.urlsplit(res.next.url).path.split('/')[-1]
+            log.debug('msg="Got redirect from CodiMD" url="/%s"' % notehash)
+        else:
+            # generate a deterministic note hash
+            dig = hmac.new(hashsecret, msg=wopisrc.split('/')[-1].encode(), digestmod=hashlib.sha1).digest()
+            notehash = urlsafe_b64encode(dig).decode()[:-1]
+            res = requests.get(codimdurl + '/' + notehash, verify=not skipsslverify)
+            if res.status_code != http.client.OK:
+                log.error('msg="Unable to GET notehash from CodiMD" token="%s" response="%d"' % \
+                          (acctok[-20:], res.status_code))
+                raise CodiMDFailure
+            log.debug('msg="Got note hash from CodiMD" url="/%s"' % notehash)
+            # push the document to CodiMD with the update API
+            res = requests.put(codimdurl + '/api/notes/' + notehash,
+                               json={'content': mddoc.decode()}, verify=not skipsslverify)
+            if res.status_code != http.client.OK:
+                log.error('msg="Unable to push document to CodiMD" token="%s" response="%d"' % \
+                          (acctok[-20:], res.status_code))
+                raise CodiMDFailure
+            log.debug('msg="PUT returned from CodiMD" content="%s"' % res.content)
     except requests.exceptions.ConnectionError as e:
         log.error('msg="Exception raised attempting to connect to CodiMD" exception="%s"' % e)
         raise CodiMDFailure
-    log.debug('msg="Got redirect from CodiMD" url="%s"' % res.next.url)
     # we got the hash of the document just created as a redirected URL, generate a WOPI lock structure
-    wopilock = wopi.generatelock(urllib.parse.urlsplit(res.next.url).path.split('/')[-1], \
+    wopilock = wopi.generatelock(notehash, \
                                  filemd, h.hexdigest(), \
                                  'slide' if _isslides(mddoc) else 'md', \
                                  acctok, False)
