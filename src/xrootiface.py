@@ -126,7 +126,7 @@ def statx(endpoint, filepath, userid, versioninv=0):
   If versioninv=1, the logic to support the version folder is not triggered.'''
   tstart = time.time()
   rc, info = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(filepath, encodeamp=True) + _eosargs(userid) + '&mgm.pcmd=stat')
-  info = str(info)
+  info = info.decode()
   log.info('msg="Invoked stat" filepath="%s"' % _getfilepath(filepath))
   if '[SUCCESS]' not in str(rc):
     raise IOError(str(rc).strip('\n'))
@@ -140,16 +140,16 @@ def statx(endpoint, filepath, userid, versioninv=0):
     raise IOError('Is a directory')      # EISDIR
   if versioninv == 0:
     # classic statx info of the given file
-    return {'inode': abs(hash(endpoint + str(statxdata[2]))),
+    return {'inode': endpoint.strip('.cern.ch').strip('root://') + '.' + statxdata[2],
             'filepath': filepath,
-            'userid': str(statxdata[5]) + ':' + str(statxdata[6]),
+            'userid': statxdata[5] + ':' + statxdata[6],
             'size': int(statxdata[8]),
             'mtime': statxdata[12]}
   # now stat the corresponding version folder to get an inode invariant to save operations, see CERNBOX-1216
   verFolder = os.path.dirname(filepath) + os.path.sep + EOSVERSIONPREFIX + os.path.basename(filepath)
   rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder) + _eosargs(userid) + '&mgm.pcmd=stat')
   tend = time.time()
-  infov = str(infov)
+  infov = infov.decode()
   log.debug('msg="Invoked stat on version folder" filepath="%s" result="%s" elapsedTimems="%.1f"' % \
             (_getfilepath(verFolder), infov, (tend-tstart)*1000))
   try:
@@ -161,7 +161,7 @@ def statx(endpoint, filepath, userid, versioninv=0):
       if '[SUCCESS]' not in str(rcmkdir):
         raise IOError
       rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder) + _eosargs(userid) + '&mgm.pcmd=stat')
-      infov = str(infov)
+      infov = infov.decode()
       log.debug('msg="Invoked stat on version folder" filepath="%s" result="%s"' % (_getfilepath(verFolder), infov))
       if '[SUCCESS]' not in str(rcv) or 'retc=' in infov:
         raise IOError
@@ -170,9 +170,9 @@ def statx(endpoint, filepath, userid, versioninv=0):
     log.warn('msg="Failed to mkdir/stat version folder" rc="%s"' % rcv)
     statxvdata = statxdata
   # return the metadata of the given file, except for the inode that is taken from the version folder
-  return {'inode': abs(hash(endpoint + str(statxvdata[2]))),
+  return {'inode': endpoint.strip('.cern.ch').strip('root://') + '.' + statxvdata[2],
           'filepath': filepath,
-          'userid': str(statxdata[5]) + ':' + str(statxdata[6]),
+          'userid': statxdata[5] + ':' + statxdata[6],
           'size': int(statxdata[8]),
           'mtime': statxdata[12]}
 
