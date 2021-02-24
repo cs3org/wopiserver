@@ -82,7 +82,7 @@ class Wopi:
       loghandler = logging.FileHandler('/var/log/wopi/wopiserver.log')
       loghandler.setFormatter(logging.Formatter(
           fmt='{"time": "%(asctime)s", "host": "' + hostname + \
-              '", process": "%(name)s", "level": "%(levelname)s", %(message)s}',
+              '", "process": "%(name)s", "level": "%(levelname)s", %(message)s}',
           datefmt='%Y-%m-%dT%H:%M:%S'))
       cls.app.logger.handlers = [loghandler]
       # read the configuration
