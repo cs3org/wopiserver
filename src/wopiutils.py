@@ -120,9 +120,9 @@ def generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint)
   exptime = int(time.time()) + wopi.tokenvalidity
   acctok = jwt.encode({'userid': userid, 'filename': statInfo['filepath'], 'username': username, 'viewmode': viewmode.value,
                        'folderurl': folderurl, 'exp': exptime, 'endpoint': endpoint}, wopi.wopisecret, algorithm='HS256')
-  log.info('msg="Access token generated" userid="%s" mode="%s" filename="%s" inode="%s" ' \
+  log.info('msg="Access token generated" userid="%s" mode="%s" endpoint="%s" filename="%s" inode="%s" ' \
            'mtime="%s" folderurl="%s" expiration="%d" token="%s"' % \
-           (userid, viewmode, statInfo['filepath'], statInfo['inode'], statInfo['mtime'], \
+           (userid, viewmode, endpoint, statInfo['filepath'], statInfo['inode'], statInfo['mtime'], \
             folderurl, exptime, acctok[-20:]))
   # return the inode == fileid and the access token
   return statInfo['inode'], acctok
