@@ -10,6 +10,7 @@ Lovisa.Lugnegaard@cern.ch, CERN/IT-ST
 
 import time
 import http
+from base64 import urlsafe_b64encode
 import requests
 import grpc
 
@@ -69,18 +70,15 @@ def stat(endpoint, fileid, userid, versioninv=0):
   ctx['log'].info('msg="Invoked stat" fileid="%s" elapsedTimems="%.1f"' % (fileid, (tend-tstart)*1000))
   if statInfo.status.code == cs3code.CODE_OK:
     ctx['log'].debug('msg="Stat result" data="%s"' % statInfo)
-    try:
-      inode = int(statInfo.info.id.opaque_id)
-    except ValueError:
-      # the storage behind Reva provided a non-int file inode: let's hash it to really have an int
-      inode = hash(statInfo.info.id.opaque_id)
+    # we base64-encode the inode so it can be used in a WOPISrc
+    inode = urlsafe_b64encode(statInfo.info.id.opaque_id.encode())
     if statInfo.info.type == cs3spr.RESOURCE_TYPE_CONTAINER:
       raise IOError('Is a directory')
     elif statInfo.info.type not in (cs3spr.RESOURCE_TYPE_FILE, cs3spr.RESOURCE_TYPE_SYMLINK):
       ctx['log'].warning('msg="Stat: unexpected type" type="%d"' % statInfo.info.type)
       raise IOError('Unexpected type %d' % statInfo.info.type)
     return {
-        'inode': statInfo.info.id.storage_id + '-' + str(inode),
+        'inode': statInfo.info.id.storage_id + '-' + inode.decode(),
         'filepath': statInfo.info.path,
         'userid': statInfo.info.owner.opaque_id,
         'size': statInfo.info.size,
