@@ -25,12 +25,6 @@ import wopiclient as wopi
 class CodiMDFailure(Exception):
     '''A custom exception to represent a fatal failure when contacting CodiMD'''
 
-# a message to explain what happens when a lock is lost (could be passed from outside);
-# note the hyperlink is deliberately unquoted, as this is to be embedded in a JSON message
-# TODO to prevent this case from happening, we'd need a mechanism to persist the wopisrc-notehash mapping in CodiMD!
-SAVE_KB_LINK = 'File saved successfully, but a newer version might have been overwritten (see %s)' % \
-               '<a href=https://cern.service-now.com/service-portal?id=kb_article&n=KB0007127 target=_blank>KB0007127</a>'
-
 # a regexp for uploads, that have links like '/uploads/upload_542a360ddefe1e21ad1b8c85207d9365.*'
 upload_re = re.compile(r'\/uploads\/upload_\w{32}\.\w+')
 
@@ -259,10 +253,8 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
         wopi.refreshlock(wopisrc, acctok, wopilock, isdirty=True)
         log.info('msg="Save completed" filename="%s" isclose="%s" token="%s"' % \
                  (wopilock['filename'], isclose, acctok[-20:]))
-        # combine the responses and amend the message in case the file was relocked
-        return attresponse if attresponse else (
-            jsonify('File saved successfully' if wopilock['digest'] != 'relock' else SAVE_KB_LINK), \
-            http.client.OK)
+        # combine the responses
+        return attresponse if attresponse else (jsonify('File saved successfully'), http.client.OK)
 
     # on close, use saveas for either the new bundle, if this is the first time we have attachments,
     # or the single md file, if there are no more attachments.

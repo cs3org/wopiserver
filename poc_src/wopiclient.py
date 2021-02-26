@@ -109,11 +109,12 @@ def relock(wopisrc, acctok, docid, isclose):
     filemd = res.json()
 
     # lock the file again: we assume we are alone as the previous lock had been released
-    wopilock = generatelock(docid, filemd, 'relock', 'md', acctok, isclose)
+    wopilock = generatelock(docid, filemd, 'dirty', 'md', acctok, isclose)
     res = request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'LOCK'})
     if res.status_code != http.client.OK:
         log.warning('msg="Failed to relock the file" response="%d" token="%s" reason="%s"' % (
             res.status_code, acctok[-20:], res.headers.get('X-WOPI-LockFailureReason')))
         raise InvalidLock('Failed to relock the file on save, please refresh this page')
-    # relock was successful, return it
+    # relock was successful, return lock: along with noteids univocally associated to files (WOPISrc's),
+    # we are sure no other updates could have been missed
     return wopilock
