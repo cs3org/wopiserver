@@ -16,7 +16,6 @@ import hashlib
 import urllib.parse
 import http.client
 from base64 import urlsafe_b64encode
-import hashlib
 import hmac
 import requests
 import wopiclient as wopi
@@ -179,8 +178,7 @@ def loadfromstorage(filemd, wopisrc, acctok):
     try:
         if not filemd['UserCanWrite']:
             # read-only case: push the doc to a newly generated note with a random docid
-            newparams = {'mode': 'locked'}   # this is an extended feature in CodiMD
-            res = requests.post(codimdurl + '/new', data=mddoc, allow_redirects=False, params=newparams,
+            res = requests.post(codimdurl + '/new', data=mddoc, allow_redirects=False, params={'mode': 'locked'},
                                 headers={'Content-Type': 'text/markdown'}, verify=not skipsslverify)
             if res.status_code != http.client.FOUND:
                 log.error('msg="Unable to push read-only document to CodiMD" token="%s" response="%d"' % \
@@ -205,7 +203,6 @@ def loadfromstorage(filemd, wopisrc, acctok):
                 log.error('msg="Unable to push document to CodiMD" token="%s" response="%d"' % \
                           (acctok[-20:], res.status_code))
                 raise CodiMDFailure
-            log.debug('msg="PUT returned from CodiMD" content="%s"' % res.content)
     except requests.exceptions.ConnectionError as e:
         log.error('msg="Exception raised attempting to connect to CodiMD" exception="%s"' % e)
         raise CodiMDFailure

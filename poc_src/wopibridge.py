@@ -21,7 +21,7 @@ import http.client
 import json
 import threading
 import atexit
-from functools import reduce
+import functools
 try:
     import flask
     from werkzeug.exceptions import NotFound as Flask_NotFound
@@ -37,8 +37,11 @@ WBVERSION = 'git'
 # this is the default location of secrets in docker
 CERTPATH = '/var/run/secrets/cert.pem'
 
+# path to a secret used to hash noteids and protect the /list endpoint
+SECRETPATH = '/var/run/secrets/wbsecret'
+
 # a standard message to be displayed by the app when some content might be lost: this would only
-# appear in case of uncaught exceptions or bugs introduced in the CodiMD webhook
+# appear in case of uncaught exceptions or bugs handling the CodiMD webhook
 RECOVER_MSG = 'Please copy the content in a safe place and reopen the document afresh to paste it back.'
 
 
@@ -103,7 +106,9 @@ class WB:
             # init modules
             codimd.log = wopi.log = cls.log
             codimd.skipsslverify = wopi.skipsslverify = cls.skipsslverify
-            codimd.hashsecret = b'TODOsecret'
+            with open(SECRETPATH) as f:
+                cls.hashsecret = f.readline().strip('\n')
+                codimd.hashsecret = cls.hashsecret.encode()
 
             # start the thread to perform async save operations
             cls.savethread = SaveThread()
@@ -311,7 +316,11 @@ def appsave():
 @WB.bpr.route("/list", methods=['GET'])
 def applist():
     '''Return a list of all currently opened files'''
-    # TODO this API should be protected
+    if (flask.request.headers.get('Authorization') != 'Bearer ' + WB.hashsecret) and \
+       (flask.request.args.get('auth') != WB.hashsecret):     # added for convenience for the time being
+        WB.log.warning('msg="List: unauthorized access attempt, missing authorization token" '
+                       'client="%s"' % flask.request.remote_addr)
+        return 'Client not authorized', http.client.UNAUTHORIZED
     WB.log.info('msg="List: returned all open files metadata"')
     return flask.Response(json.dumps(WB.openfiles), mimetype='application/json')
 
@@ -320,11 +329,11 @@ def applist():
 
 def _intersection(boolsd):
     '''Given a dictionary of booleans, returns the intersection (AND) of all'''
-    return reduce(lambda x, y: x and y, list(boolsd.values()))
+    return functools.reduce(lambda x, y: x and y, list(boolsd.values()))
 
 def _union(boolsd):
     '''Given a dictionary of booleans, returns the union (OR) of all'''
-    return reduce(lambda x, y: x or y, list(boolsd.values()))
+    return functools.reduce(lambda x, y: x or y, list(boolsd.values()))
 
 class SaveThread(threading.Thread):
     '''Async thread for save operations'''
