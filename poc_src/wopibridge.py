@@ -98,7 +98,7 @@ class WB:
             try:
                 cls.saveinterval = int(os.environ.get('APP_SAVE_INTERVAL'))
             except TypeError:
-                cls.saveinterval = 120
+                cls.saveinterval = 200
             try:
                 cls.saveinterval = int(os.environ.get('APP_UNLOCK_INTERVAL'))
             except TypeError:
