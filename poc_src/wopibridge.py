@@ -189,7 +189,7 @@ def appopen():
     # WOPI GetFileInfo
     res = wopi.request(wopisrc, acctok, 'GET')
     if res.status_code != http.client.OK:
-        WB.log.warning('msg="Open: unable to fetch file WOPI metadata" error="%s" response="%d"' % \
+        WB.log.warning('msg="Open: unable to fetch file WOPI metadata" error="%s" response="%d"' %
                        (res.content, res.status_code))
         return _guireturn('Invalid WOPI context'), http.client.NOT_FOUND
     filemd = res.json()
@@ -275,7 +275,8 @@ def appsave():
         acctok = meta[meta.index('?t=')+3:]
         isclose = flask.request.args.get('close') == 'true'
         docid = flask.request.args.get('id')
-        WB.log.info('msg="Save: requested action" isclose="%s" docid="%s" token="%s"' % (isclose, docid, acctok[-20:]))
+        WB.log.info('msg="Save: requested action" isclose="%s" docid="%s" wopisrc="%s" token="%s"' %
+                    (isclose, docid, wopisrc, acctok[-20:]))
     except (KeyError, ValueError) as e:
         WB.log.error('msg="Save: malformed or missing metadata" client="%s" headers="%s" exception="%s" error="%s"' %
                      (flask.request.remote_addr, flask.request.headers, type(e), e))
@@ -289,7 +290,7 @@ def appsave():
             WB.openfiles[wopisrc]['tosave'] = True
             WB.openfiles[wopisrc]['toclose'][acctok[-20:]] = isclose
         else:
-            WB.log.info('msg="Save: repopulating missing metadata" token="%s"' % acctok[-20:])
+            WB.log.info('msg="Save: repopulating missing metadata" wopisrc="%s" token="%s"' % (wopisrc, acctok[-20:]))
             WB.openfiles[wopisrc] = {'acctok': acctok, 'tosave': True,
                                      'lastsave': int(time.time() - WB.saveinterval),
                                      'toclose': {acctok[-20:]: isclose},
@@ -367,7 +368,7 @@ class SaveThread(threading.Thread):
             try:
                 wopilock = wopi.getlock(wopisrc, openfile['acctok'])
             except wopi.InvalidLock:
-                WB.log.info('msg="SaveThread: attempting to relock file" token="%s" docid="%s"' % \
+                WB.log.info('msg="SaveThread: attempting to relock file" token="%s" docid="%s"' %
                             (openfile['acctok'][-20:], openfile['docid']))
                 try:
                     wopilock = WB.saveresponses[wopisrc] = wopi.relock(
@@ -381,7 +382,7 @@ class SaveThread(threading.Thread):
                     openfile['tosave'] = False
                     openfile['toclose'] = {'invalid-lock': True}
                     return None
-            WB.log.info('msg="SaveThread: saving file" token="%s" docid="%s"' % \
+            WB.log.info('msg="SaveThread: saving file" token="%s" docid="%s"' %
                         (openfile['acctok'][-20:], openfile['docid']))
             WB.saveresponses[wopisrc] = codimd.savetostorage(
                 wopisrc, openfile['acctok'], _intersection(openfile['toclose']), wopilock)

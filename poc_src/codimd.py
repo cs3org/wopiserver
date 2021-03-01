@@ -109,7 +109,7 @@ def _fetchfromcodimd(wopilock, acctok):
     try:
         res = requests.get(codimdurl + wopilock['docid'] + '/download', verify=not skipsslverify)
         if res.status_code != http.client.OK:
-            log.error('msg="Unable to fetch document from CodiMD" token="%s" response="%d: %s"' % \
+            log.error('msg="Unable to fetch document from CodiMD" token="%s" response="%d: %s"' %
                       (acctok[-20:], res.status_code, res.content))
             raise CodiMDFailure
         return res.content
@@ -127,7 +127,7 @@ def _saveas(wopisrc, acctok, wopilock, targetname, content):
                     }
     res = wopi.request(wopisrc, acctok, 'POST', headers=putrelheaders, contents=content)
     if res.status_code != http.client.OK:
-        log.warning('msg="Calling WOPI PutRelative failed" url="%s" response="%s" reason="%s"' % \
+        log.warning('msg="Calling WOPI PutRelative failed" url="%s" response="%s" reason="%s"' %
                     (wopisrc, res.status_code, res.headers.get('X-WOPI-LockFailureReason')))
         # if res.status_code != http.client.CONFLICT: TODO need to save the file on a local storage for later recovery
         return jsonify('Error saving the file. %s' % res.headers.get('X-WOPI-LockFailureReason')), res.status_code
@@ -138,12 +138,12 @@ def _saveas(wopisrc, acctok, wopilock, targetname, content):
     # unlock and delete original file
     res = wopi.request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
     if res.status_code != http.client.OK:
-        log.warning('msg="Failed to unlock the previous file" token="%s" response="%d"' % \
+        log.warning('msg="Failed to unlock the previous file" token="%s" response="%d"' %
                     (acctok[-20:], res.status_code))
     else:
         res = wopi.request(wopisrc, acctok, 'POST', headers={'X-Wopi-Override': 'DELETE'})
         if res.status_code != http.client.OK:
-            log.warning('msg="Failed to delete the previous file" token="%s" response="%d"' % \
+            log.warning('msg="Failed to delete the previous file" token="%s" response="%d"' %
                         (acctok[-20:], res.status_code))
         else:
             log.info('msg="Previous file unlocked and removed successfully" token="%s"' % acctok[-20:])
@@ -181,7 +181,7 @@ def loadfromstorage(filemd, wopisrc, acctok):
             res = requests.post(codimdurl + '/new', data=mddoc, allow_redirects=False, params={'mode': 'locked'},
                                 headers={'Content-Type': 'text/markdown'}, verify=not skipsslverify)
             if res.status_code != http.client.FOUND:
-                log.error('msg="Unable to push read-only document to CodiMD" token="%s" response="%d"' % \
+                log.error('msg="Unable to push read-only document to CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
                 raise CodiMDFailure
             notehash = urllib.parse.urlsplit(res.next.url).path.split('/')[-1]
@@ -192,7 +192,7 @@ def loadfromstorage(filemd, wopisrc, acctok):
             notehash = urlsafe_b64encode(dig).decode()[:-1]
             res = requests.get(codimdurl + '/' + notehash, verify=not skipsslverify)
             if res.status_code != http.client.OK:
-                log.error('msg="Unable to GET notehash from CodiMD" token="%s" response="%d"' % \
+                log.error('msg="Unable to GET notehash from CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
                 raise CodiMDFailure
             log.debug('msg="Got note hash from CodiMD" url="/%s"' % notehash)
@@ -200,7 +200,7 @@ def loadfromstorage(filemd, wopisrc, acctok):
             res = requests.put(codimdurl + '/api/notes/' + notehash,
                                json={'content': mddoc.decode()}, verify=not skipsslverify)
             if res.status_code != http.client.OK:
-                log.error('msg="Unable to push document to CodiMD" token="%s" response="%d"' % \
+                log.error('msg="Unable to push document to CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
                 raise CodiMDFailure
     except requests.exceptions.ConnectionError as e:
@@ -248,7 +248,7 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
             return jsonify('Error saving the file. %s' % res.headers.get('X-WOPI-LockFailureReason')), res.status_code
         # and refresh the WOPI lock
         wopi.refreshlock(wopisrc, acctok, wopilock, isdirty=True)
-        log.info('msg="Save completed" filename="%s" isclose="%s" token="%s"' % \
+        log.info('msg="Save completed" filename="%s" isclose="%s" token="%s"' %
                  (wopilock['filename'], isclose, acctok[-20:]))
         # combine the responses
         return attresponse if attresponse else (jsonify('File saved successfully'), http.client.OK)

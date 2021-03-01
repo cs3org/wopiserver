@@ -51,6 +51,20 @@ def generatelock(docid, filemd, digest, app, acctok, isclose):
            }
 
 
+def getlock(wopisrc, acctok):
+    '''Return the currently held WOPI lock, or raise InvalidLock otherwise'''
+    try:
+        res = request(wopisrc, acctok, 'POST', headers={'X-Wopi-Override': 'GET_LOCK'})
+        if res.status_code != http.client.OK:
+            # lock got lost or any other error
+            raise InvalidLock(res.status_code)
+        # the lock is expected to be a JSON dict, see generatelock()
+        return json.loads(res.headers.get('X-WOPI-Lock'))
+    except (ValueError, KeyError, json.decoder.JSONDecodeError) as e:
+        log.warning('msg="Missing or malformed WOPI lock" exception="%s" error="%s"' % (type(e), e))
+        raise InvalidLock(e)
+
+
 def refreshlock(wopisrc, acctok, wopilock, isdirty=False, toclose=None):
     '''Refresh an existing WOPI lock. Returns the new lock if successful, None otherwise'''
     newlock = json.loads(json.dumps(wopilock))    # this is a hack for a deep copy, to be redone in Go
@@ -79,23 +93,9 @@ def refreshlock(wopisrc, acctok, wopilock, isdirty=False, toclose=None):
                 toclose[t] = currlock['toclose'][t] or (t in toclose and toclose[t])
         # recursively retry, the recursion is going to stop in one round
         return refreshlock(wopisrc, acctok, currlock, isdirty, toclose)
-    log.error('msg="Calling WOPI RefreshLock failed" url="%s" response="%d" reason="%s"' % (
-        wopisrc, res.status_code, res.headers.get('X-WOPI-LockFailureReason')))
+    log.error('msg="Calling WOPI RefreshLock failed" url="%s" response="%d" reason="%s"' %
+              (wopisrc, res.status_code, res.headers.get('X-WOPI-LockFailureReason')))
     return None
-
-
-def getlock(wopisrc, acctok):
-    '''Return the currently held WOPI lock, or raise InvalidLock otherwise'''
-    try:
-        res = request(wopisrc, acctok, 'POST', headers={'X-Wopi-Override': 'GET_LOCK'})
-        if res.status_code != http.client.OK:
-            # lock got lost or any other error
-            raise InvalidLock(res.status_code)
-        # the lock is expected to be a JSON dict, see generatelock()
-        return json.loads(res.headers.get('X-WOPI-Lock'))
-    except (ValueError, KeyError, json.decoder.JSONDecodeError) as e:
-        log.warning('msg="Missing or malformed WOPI lock" exception="%s" error="%s"' % (type(e), e))
-        raise InvalidLock(e)
 
 
 def relock(wopisrc, acctok, docid, isclose):
