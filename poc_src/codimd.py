@@ -178,8 +178,11 @@ def loadfromstorage(filemd, wopisrc, acctok):
     try:
         if not filemd['UserCanWrite']:
             # read-only case: push the doc to a newly generated note with a random docid
-            res = requests.post(codimdurl + '/new', data=mddoc, allow_redirects=False, params={'mode': 'locked'},
-                                headers={'Content-Type': 'text/markdown'}, verify=not skipsslverify)
+            res = requests.post(codimdurl + '/new', data=mddoc,
+                                allow_redirects=False,
+                                params={'mode': 'locked'},
+                                headers={'Content-Type': 'text/markdown'},
+                                verify=not skipsslverify)
             if res.status_code != http.client.FOUND:
                 log.error('msg="Unable to push read-only document to CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
@@ -192,13 +195,14 @@ def loadfromstorage(filemd, wopisrc, acctok):
             notehash = urlsafe_b64encode(dig).decode()[:-1]
             res = requests.get(codimdurl + '/' + notehash, verify=not skipsslverify)
             if res.status_code != http.client.OK:
-                log.error('msg="Unable to GET notehash from CodiMD" token="%s" response="%d"' %
+                log.error('msg="Unable to GET note hash from CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
                 raise CodiMDFailure
             log.debug('msg="Got note hash from CodiMD" url="/%s"' % notehash)
             # push the document to CodiMD with the update API
             res = requests.put(codimdurl + '/api/notes/' + notehash,
-                               json={'content': mddoc.decode()}, verify=not skipsslverify)
+                               json={'content': mddoc.decode()},
+                               verify=not skipsslverify)
             if res.status_code != http.client.OK:
                 log.error('msg="Unable to push document to CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
@@ -207,9 +211,8 @@ def loadfromstorage(filemd, wopisrc, acctok):
         log.error('msg="Exception raised attempting to connect to CodiMD" exception="%s"' % e)
         raise CodiMDFailure
     # we got the hash of the document just created as a redirected URL, generate a WOPI lock structure
-    wopilock = wopi.generatelock(notehash, \
-                                 filemd, h.hexdigest(), \
-                                 'slide' if _isslides(mddoc) else 'md', \
+    wopilock = wopi.generatelock(notehash, filemd, h.hexdigest(),
+                                 'slide' if _isslides(mddoc) else 'md',
                                  acctok, False)
     log.info('msg="Pushed document to CodiMD" url="%s" token="%s"' % (wopilock['docid'], acctok[-20:]))
     return wopilock
