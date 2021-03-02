@@ -352,7 +352,7 @@ class SaveThread(threading.Thread):
                 for wopisrc, openfile in list(WB.openfiles.items()):
                     try:
                         wopilock = self.savedirty(openfile, wopisrc)
-                        wopilock = self.refresh(openfile, wopisrc, wopilock)
+                        wopilock = self.closewhenidle(openfile, wopisrc, wopilock)
                         self.cleanup(openfile, wopisrc, wopilock)
                     except Exception as e:    # pylint: disable=broad-except
                         ex_type, ex_value, ex_traceback = sys.exc_info()
@@ -390,20 +390,21 @@ class SaveThread(threading.Thread):
             openfile['tosave'] = False
         return wopilock
 
-    def refresh(self, openfile, wopisrc, wopilock):
-        '''refresh locks of open idle documents every 30 minutes'''
-        if openfile['lastsave'] < time.time() - (1800 + WB.saveinterval):
+    def closewhenidle(self, openfile, wopisrc, wopilock):
+        '''close and unlock documents tha are idle for more than 60 minutes.
+        They will transparently be relocked when/if the session resumes, but we seem to miss some close notifications,
+        therefore this also works as a cleanup step'''
+        if openfile['lastsave'] < int(time.time()) - 3600:
             try:
                 wopilock = wopi.getlock(wopisrc, openfile['acctok']) if not wopilock else wopilock
-                wopilock = wopi.refreshlock(wopisrc, openfile['acctok'], wopilock)
-                # in case we get soon a save callback, we want to honor it immediately
-                openfile['lastsave'] = int(time.time()) - WB.saveinterval
-                if not wopilock:
-                    # but if refreshlock failed, this was a left-over: let's clean it up
-                    WB.log.info('msg="SaveThread: refresh failed, cleaning up metadata" url="%s"' % wopisrc)
-                    del WB.openfiles[wopisrc]
+                # this will force a close in the cleanup step
+                WB.log.info('msg="SaveThread: force-closing document" lastsavetime="%s" token="%s"' %
+                            (openfile['lastsave'], openfile['acctok'][-20:]))
+                wopilock['toclose'] = {t: True for t in wopilock['toclose']}
             except wopi.InvalidLock:
-                pass
+                # lock is gone, just cleanup our metadata
+                WB.log.warning('msg="SaveThread: cleaning up metadata, detected missed close events" url="%s"' % wopisrc)
+                del WB.openfiles[wopisrc]
         return wopilock
 
     def cleanup(self, openfile, wopisrc, wopilock):
@@ -416,12 +417,12 @@ class SaveThread(threading.Thread):
                 # nothing to do here, this document may have been closed by another wopibridge
                 if openfile['lastsave'] < time.time() - WB.unlockinterval:
                     # yet cleanup only after the unlockinterval time, cf. the InvalidLock handling in savedirty()
-                    WB.log.info('msg="SaveThread: cleaning up metadata" url="%s"' % wopisrc)
+                    WB.log.info('msg="SaveThread: cleaning up metadata, file already unlocked" url="%s"' % wopisrc)
                     del WB.openfiles[wopisrc]
                 return
 
             # reconcile list of toclose tokens
-            openfile['toclose'] = {t: wopilock['toclose'][t] or t in openfile['toclose'] and openfile['toclose'][t]
+            openfile['toclose'] = {t: wopilock['toclose'][t] or (t in openfile['toclose'] and openfile['toclose'][t])
                                    for t in wopilock['toclose']}
             if _intersection(openfile['toclose']):
                 if openfile['lastsave'] < int(time.time()) - WB.unlockinterval:
