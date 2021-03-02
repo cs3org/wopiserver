@@ -38,7 +38,7 @@ hashsecret = None
 def jsonify(msg):
     '''One-liner to consistently json-ify a given message'''
     # a delay = 0 means the user has to click on it to dismiss it, good for longer messages
-    return '{"message": "%s", "delay": "%.1f"}' % (msg, 0 if len(msg) > 90 else 1 + len(msg) * 3.0 / 70)
+    return '{"message": "%s", "delay": "%.1f"}' % (msg, 0 if len(msg) > 60 else 0.5 + len(msg)/20)
 
 
 def _getattachments(mddoc, docfilename, forcezip=False):
@@ -226,7 +226,7 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
                  (isclose, codimdurl + wopilock['docid'], acctok[-20:]))
         mddoc = _fetchfromcodimd(wopilock, acctok)
     except CodiMDFailure:
-        return jsonify('Failed to fetch document from CodiMD'), http.client.INTERNAL_SERVER_ERROR
+        return jsonify('Could not save file, failed to fetch document from CodiMD'), http.client.INTERNAL_SERVER_ERROR
 
     if isclose and wopilock['digest'] != 'dirty':
         # so far the file was not touched and we are about to close: before forcing a put let's validate the contents
