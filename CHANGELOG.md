@@ -1,5 +1,12 @@
 ## Changelog for the WOPI bridge
 
+### wopibridge 3.0.0 (2021-03-03)
+* Added support for the Update CodiMD API (#7)
+* Added a secret file in the docker configuration,
+  for the noteid hashing and for the /list endpoint
+* Simplified bookkeeping logic of the save thread
+* Improved logging
+
 ### wopibridge 2.2.0 (2021-02-11)
 * Improved logic for cleaning up current sessions
   and better handling of failure scenarios
