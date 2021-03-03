@@ -18,8 +18,10 @@ import http.client
 import flask
 import jwt
 
+# this is the xattr key used for conflicts resolution on the remote storage
+LASTSAVETIMEKEY = 'iop.wopi.lastwritetime'
 
-# standard error thrown when attemtping to overwrite a file in O_EXCL mode
+# standard error thrown when attempting to overwrite a file in O_EXCL mode
 EXCL_ERROR = 'File exists and islock flag requested'
 
 # convenience references to global entities
@@ -149,9 +151,12 @@ def retrieveWopiLock(fileid, operation, lock, acctok, overridefilename=None):
     # the following check is necessary as it happens to get a str instead of bytes
     lockcontent += line if isinstance(line, type(lockcontent)) else line.encode()
   try:
-    # check validity
+    # check validity: a lock is deemed expired if the most recent between its expiration time and the last
+    # save time by WOPI has passed
     retrievedLock = jwt.decode(lockcontent, wopi.wopisecret, algorithms=['HS256'])
-    if 'exp' not in retrievedLock or retrievedLock['exp'] < time.time():
+    savetime = st.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], LASTSAVETIMEKEY)
+    if max(0 if 'exp' not in retrievedLock else retrievedLock['exp'],
+           0 if savetime is None else int(savetime) + wopi.config.getint('general', 'wopilockexpiration')) < time.time():
       # we got a malformed or expired lock, reject. Note that we may get an ExpiredSignatureError
       # by jwt.decode() as we had stored it with a timed signature.
       raise jwt.exceptions.ExpiredSignatureError

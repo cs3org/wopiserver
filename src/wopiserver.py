@@ -35,9 +35,6 @@ except ImportError:
 # the following constant is replaced on the fly when generating the RPM (cf. spec file)
 WOPISERVERVERSION = 'git'
 
-# this is the xattr key used for conflicts resolution on the remote storage
-LASTSAVETIMEKEY = 'iop.wopi.lastwritetime'
-
 # alias of the storage layer module, see function below
 storage = None
 
@@ -725,7 +722,7 @@ def wopiUnlock(fileid, reqheaders, acctok, force=False):
     # ignore, it's not worth to report anything here
     pass
   try:
-    storage.rmxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], LASTSAVETIMEKEY)
+    storage.rmxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY)
   except IOError:
     # same as above
     pass
@@ -788,7 +785,7 @@ def wopiLock(fileid, reqheaders, acctok):
   if not retrievedLock:
     # on first lock, set an xattr with the current time for later conflicts checking
     try:
-      storage.setxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], LASTSAVETIMEKEY, int(time.time()))
+      storage.setxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY, int(time.time()))
     except IOError as e:
       # not fatal, but will generate a conflict file later on, so log a warning
       Wopi.log.warning('msg="Unable to set lastwritetime xattr" user="%s" filename="%s" token="%s" reason="%s"' % \
@@ -889,7 +886,7 @@ def wopiPutRelative(fileid, reqheaders, acctok):
     targetName = relTarget
   # either way, we now have a targetName to save the file: attempt to do so
   try:
-    utils.storeWopiFile(flask.request, acctok, LASTSAVETIMEKEY, targetName)
+    utils.storeWopiFile(flask.request, acctok, utils.LASTSAVETIMEKEY, targetName)
   except IOError as e:
     Wopi.log.info('msg="Error writing file" filename="%s" token="%s" error="%s"' % \
                   (targetName, flask.request.args['access_token'][-20:], e))
@@ -974,7 +971,7 @@ def wopiCreateNewFile(fileid, acctok):
     return 'File exists', http.client.CONFLICT
   except IOError:
     # indeed the file did not exist, so we write it for the first time
-    utils.storeWopiFile(flask.request, acctok, LASTSAVETIMEKEY)
+    utils.storeWopiFile(flask.request, acctok, utils.LASTSAVETIMEKEY)
     Wopi.log.info('msg="File stored successfully" action="editnew" user="%s" filename="%s" token="%s"' % \
                   (acctok['userid'], acctok['filename'], flask.request.args['access_token']))
     # and we keep track of it as an open file with timestamp = Epoch, despite not having any lock yet.
@@ -1043,7 +1040,7 @@ def wopiPutFile(fileid):
                   (acctok['userid'], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
     try:
       # check now the destination file against conflicts
-      savetime = storage.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], LASTSAVETIMEKEY)
+      savetime = storage.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY)
       mtime = None
       mtime = storage.stat(acctok['endpoint'], acctok['filename'], acctok['userid'])['mtime']
       if savetime is None or int(mtime) > int(savetime):
@@ -1062,9 +1059,9 @@ def wopiPutFile(fileid):
       newname, ext = os.path.splitext(acctok['filename'])
       # !!! typical EFSS formats are like '<filename>_conflict-<date>-<time>', but they're not synchronized back !!!
       newname = '%s-conflict-%s%s' % (newname, time.strftime('%Y%m%d-%H%M%S'), ext.strip())
-      utils.storeWopiFile(flask.request, acctok, LASTSAVETIMEKEY, newname)
+      utils.storeWopiFile(flask.request, acctok, utils.LASTSAVETIMEKEY, newname)
       # keep track of this action in the original file's xattr, to avoid looping (see below)
-      storage.setxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], LASTSAVETIMEKEY, 'conflict')
+      storage.setxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY, 'conflict')
       Wopi.log.info('msg="Conflicting copy created" user="%s" savetime="%s" lastmtime="%s" newfilename="%s" token="%s"' % \
                     (acctok['userid'], savetime, mtime, newname, flask.request.args['access_token'][-20:]))
       # and report failure to the application: note we use a CONFLICT response as it is better handled by the app
@@ -1080,7 +1077,7 @@ def wopiPutFile(fileid):
     # Go for overwriting the file. Note that the entire check+write operation should be atomic,
     # but the previous check still gives the opportunity of a race condition. We just live with it.
     # Anyhow, the EFSS should support versioning for such cases.
-    utils.storeWopiFile(flask.request, acctok, LASTSAVETIMEKEY)
+    utils.storeWopiFile(flask.request, acctok, utils.LASTSAVETIMEKEY)
     Wopi.log.info('msg="File stored successfully" action="edit" user="%s" filename="%s" token="%s"' % \
                   (acctok['userid'], acctok['filename'], flask.request.args['access_token'][-20:]))
     return 'OK', http.client.OK
