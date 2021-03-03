@@ -398,12 +398,12 @@ class SaveThread(threading.Thread):
             try:
                 wopilock = wopi.getlock(wopisrc, openfile['acctok']) if not wopilock else wopilock
                 # this will force a close in the cleanup step
-                WB.log.info('msg="SaveThread: force-closing document" lastsavetime="%s" token="%s"' %
-                            (openfile['lastsave'], openfile['acctok'][-20:]))
                 wopilock['toclose'] = {t: True for t in wopilock['toclose']}
+                WB.log.info('msg="SaveThread: force-closing document" lastsavetime="%s" toclosetokens="%s"' %
+                            (openfile['lastsave'], wopilock['toclose']))
             except wopi.InvalidLock:
                 # lock is gone, just cleanup our metadata
-                WB.log.warning('msg="SaveThread: cleaning up metadata, detected missed close events" url="%s"' % wopisrc)
+                WB.log.warning('msg="SaveThread: cleaning up metadata, detected missed close event" url="%s"' % wopisrc)
                 del WB.openfiles[wopisrc]
         return wopilock
 
