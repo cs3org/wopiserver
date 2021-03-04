@@ -423,7 +423,7 @@ def cboxLock():
 
   # first make sure the file itself exists
   try:
-    filestat = storage.statx(endpoint, filename, userid)
+    filestat = storage.statx(endpoint, filename, userid, versioninv=1)
   except IOError as e:
     Wopi.log.warning('msg="cboxLock: target not found or not a file" filename="%s"' % filename)
     return 'File not found or file is a directory', http.client.NOT_FOUND
