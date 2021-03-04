@@ -139,8 +139,8 @@ def statx(endpoint, filepath, userid, versioninv=0):
   if S_ISDIR(int(statxdata[3])):
     raise IOError('Is a directory')      # EISDIR
   if versioninv == 0:
-    # classic statx info of the given file
-    return {'inode': endpoint.strip('.cern.ch').strip('root://') + '.' + statxdata[2],
+    # classic statx info of the given file; endpoint is in the form `root://...` here, so we strip the protocol and the domain
+    return {'inode': endpoint[7:-8] + '.' + statxdata[2],
             'filepath': filepath,
             'userid': statxdata[5] + ':' + statxdata[6],
             'size': int(statxdata[8]),
@@ -171,8 +171,8 @@ def statx(endpoint, filepath, userid, versioninv=0):
     statxvdata = statxdata
   # return the metadata of the given file, except for the inode that is taken from the version folder
   log.debug('msg="Invoked stat return" fileid="%s" filepath="%s"' % \
-            (endpoint.strip('.cern.ch').strip('root://') + '.' + statxvdata[2], _getfilepath(verFolder)))
-  return {'inode': endpoint.strip('.cern.ch').strip('root://') + '.' + statxvdata[2],
+            (endpoint[7:-8] + '.' + statxvdata[2], _getfilepath(verFolder)))
+  return {'inode': endpoint[7:-8] + '.' + statxvdata[2],
           'filepath': filepath,
           'userid': statxdata[5] + ':' + statxdata[6],
           'size': int(statxdata[8]),
