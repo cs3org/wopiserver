@@ -150,8 +150,8 @@ def statx(endpoint, filepath, userid, versioninv=0):
   rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder) + _eosargs(userid) + '&mgm.pcmd=stat')
   tend = time.time()
   infov = infov.decode()
-  log.debug('msg="Invoked stat on version folder" filepath="%s" result="%s" elapsedTimems="%.1f"' % \
-            (_getfilepath(verFolder), infov, (tend-tstart)*1000))
+  log.debug('msg="Invoked stat on version folder" endpoint="%s" filepath="%s" result="%s" elapsedTimems="%.1f"' % \
+            (endpoint, _getfilepath(verFolder), infov, (tend-tstart)*1000))
   try:
     if '[SUCCESS]' not in str(rcv) or 'retc=' in infov:
       # the version folder does not exist: create it
@@ -170,6 +170,8 @@ def statx(endpoint, filepath, userid, versioninv=0):
     log.warn('msg="Failed to mkdir/stat version folder" rc="%s"' % rcv)
     statxvdata = statxdata
   # return the metadata of the given file, except for the inode that is taken from the version folder
+  log.debug('msg="Invoked stat return" fileid="%s" filepath="%s"' % \
+            (endpoint.strip('.cern.ch').strip('root://') + '.' + statxvdata[2], _getfilepath(verFolder)))
   return {'inode': endpoint.strip('.cern.ch').strip('root://') + '.' + statxvdata[2],
           'filepath': filepath,
           'userid': statxdata[5] + ':' + statxdata[6],
