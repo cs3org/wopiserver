@@ -423,7 +423,7 @@ def cboxLock():
 
   # first make sure the file itself exists
   try:
-    filestat = storage.stat(endpoint, filename, userid)
+    filestat = storage.statx(endpoint, filename, userid)
   except IOError as e:
     Wopi.log.warning('msg="cboxLock: target not found or not a file" filename="%s"' % filename)
     return 'File not found or file is a directory', http.client.NOT_FOUND
@@ -494,7 +494,8 @@ def cboxLock():
     # try to write in exclusive mode (and if a valid WOPI lock exists, assume the corresponding LibreOffice lock
     # is still there so the write will fail)
     storage.writefile(endpoint, utils.getLibreOfficeLockName(filename), userid, lolockcontent, islock=True)
-    Wopi.log.info('msg="cboxLock: created LibreOffice-compatible lock file" filename="%s" lockid="%ld"' % (filename, lockid))
+    Wopi.log.info('msg="cboxLock: created LibreOffice-compatible lock file" filename="%s" fileid="%s" lockid="%ld"' % \
+                  (filename, filestat['inode'], lockid))
     return str(lockid), http.client.OK
   except IOError as e:
     if 'File exists and islock flag requested' not in str(e):
@@ -539,8 +540,8 @@ def cboxLock():
       lolockcontent = ',OnlyOffice Online Editor,%s,%s,ExtWebApp;\n%d;' % \
                       (Wopi.wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())), lockid)
       storage.writefile(endpoint, utils.getLibreOfficeLockName(filename), userid, lolockcontent, islock=False)
-      Wopi.log.info('msg="cboxLock: refreshed LibreOffice-compatible lock file" filename="%s" mtime="%ld" lockid="%ld"' % \
-                    (filename, filestat['mtime'], lockid))
+      Wopi.log.info('msg="cboxLock: refreshed LibreOffice-compatible lock file" filename="%s" fileid="%s" mtime="%ld" lockid="%ld"' % \
+                    (filename, filestat['inode'], filestat['mtime'], lockid))
       return str(lockid), http.client.OK
     except IndexError as e:
       Wopi.log.error('msg="cboxLock: unable to refresh LibreOffice-compatible lock file" filename="%s" lock="%s" reason="%s"' % \
