@@ -144,7 +144,7 @@ def statx(endpoint, filepath, userid, versioninv=0):
             'filepath': filepath,
             'userid': statxdata[5] + ':' + statxdata[6],
             'size': int(statxdata[8]),
-            'mtime': statxdata[12]}
+            'mtime': int(statxdata[12])}
   # now stat the corresponding version folder to get an inode invariant to save operations, see CERNBOX-1216
   verFolder = os.path.dirname(filepath) + os.path.sep + EOSVERSIONPREFIX + os.path.basename(filepath)
   rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder) + _eosargs(userid) + '&mgm.pcmd=stat')
@@ -176,7 +176,7 @@ def statx(endpoint, filepath, userid, versioninv=0):
           'filepath': filepath,
           'userid': statxdata[5] + ':' + statxdata[6],
           'size': int(statxdata[8]),
-          'mtime': statxdata[12]}
+          'mtime': int(statxdata[12])}
 
 
 def setxattr(endpoint, filepath, userid, key, value):
