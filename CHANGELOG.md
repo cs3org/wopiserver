@@ -1,7 +1,9 @@
 ## Changelog for the WOPI bridge
 
-### wopibridge 3.0.0 (2021-03-03)
-* Added support for the Update CodiMD API (#7)
+### wopibridge 3.0.0 (2021-03-05)
+* Added support for the Update CodiMD API and for
+  deterministic noteid hashing (#7), which requires
+  CodiMD to have `ALLOW_FREEURL` set to true
 * Added a secret file in the docker configuration,
   for the noteid hashing and for the /list endpoint
 * Simplified bookkeeping logic of the save thread
