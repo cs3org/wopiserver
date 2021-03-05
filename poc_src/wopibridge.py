@@ -189,8 +189,7 @@ def appopen():
     # WOPI GetFileInfo
     res = wopi.request(wopisrc, acctok, 'GET')
     if res.status_code != http.client.OK:
-        WB.log.warning('msg="Open: unable to fetch file WOPI metadata" error="%s" response="%d"' %
-                       (res.content, res.status_code))
+        WB.log.warning('msg="Open: unable to fetch file WOPI metadata" response="%d"' % res.status_code)
         return _guireturn('Invalid WOPI context'), http.client.NOT_FOUND
     filemd = res.json()
 
