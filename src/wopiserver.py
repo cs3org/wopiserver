@@ -152,20 +152,16 @@ class Wopi:
         # extract urlsrc from first <app> node inside <net-zone>
         urlsrc = discXml.find('net-zone/app')[0].attrib['urlsrc']
 
-        # The supported Collabora end-points
-        cls.ENDPOINTS['.odt'] = {}
-        cls.ENDPOINTS['.odt']['view'] = urlsrc + 'permission=readonly'
-        cls.ENDPOINTS['.odt']['edit'] = urlsrc + 'permission=edit'
-        cls.ENDPOINTS['.odt']['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace
-        cls.ENDPOINTS['.ods'] = {}
-        cls.ENDPOINTS['.ods']['view'] = urlsrc + 'permission=readonly'
-        cls.ENDPOINTS['.ods']['edit'] = urlsrc + 'permission=edit'
-        cls.ENDPOINTS['.ods']['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace
-        cls.ENDPOINTS['.odp'] = {}
-        cls.ENDPOINTS['.odp']['view'] = urlsrc + 'permission=readonly'
-        cls.ENDPOINTS['.odp']['edit'] = urlsrc + 'permission=edit'
-        cls.ENDPOINTS['.odp']['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace
-        cls.log.info('msg="Collabora Online endpoints successfully configured" CODEURL="%s"' % cls.ENDPOINTS['.odt']['edit'])
+        # The supported Collabora end-points: as Collabora supports most Office-like files (including MS Office), we include here
+        # only the subset defined in the `codeofficetypes` configuration option, defaulting to just the core ODF types
+        codetypes = cls.config.get('general', 'codeofficetypes', fallback='.odt .ods .odp').split()
+        for t in codetypes:
+          cls.ENDPOINTS[t] = {}
+          cls.ENDPOINTS[t]['view'] = urlsrc + 'permission=readonly'
+          cls.ENDPOINTS[t]['edit'] = urlsrc + 'permission=edit'
+          cls.ENDPOINTS[t]['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace
+        cls.log.info('msg="Collabora Online endpoints successfully configured" count="%d" CODEURL="%s"' % \
+                     (len(codetypes), cls.ENDPOINTS['.odt']['edit']))
 
       except (IOError, ET.ParseError) as e:
         cls.log.warning('msg="Failed to initialize Collabora Online endpoints" error="%s"' % e)
