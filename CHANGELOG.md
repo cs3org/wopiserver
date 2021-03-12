@@ -1,12 +1,14 @@
 ## Changelog for the WOPI server
 
-### Mon Mar  8 2021 - v6.3.0
+### Fri Mar 12 2021 - v6.3.0
 - Fixed unique inodes by using a base64 encoding of the
   underlying inode (endpoint + fileid for xrootd-EOS)
 - Extended validity of WOPI locks to take into account
   PutFile operations: the lock will be valid until the most
   recent value between its expiration time and the last
   save time + `wopilockexpiration`
+- Added support for a dynamic list of file extensions for
+  Collabora Online
 - Fixed and improved logging
 
 ### Tue Feb  9 2021 - v6.2.0
