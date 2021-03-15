@@ -102,7 +102,7 @@ class WB:
             try:
                 cls.saveinterval = int(os.environ.get('APP_UNLOCK_INTERVAL'))
             except TypeError:
-                cls.unlockinterval = 120
+                cls.unlockinterval = 90
             # init modules
             codimd.log = wopi.log = cls.log
             codimd.skipsslverify = wopi.skipsslverify = cls.skipsslverify
