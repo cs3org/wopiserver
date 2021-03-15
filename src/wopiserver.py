@@ -1042,7 +1042,7 @@ def wopiPutFile(fileid):
       savetime = storage.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY)
       mtime = None
       mtime = storage.stat(acctok['endpoint'], acctok['filename'], acctok['userid'])['mtime']
-      if savetime is None or int(mtime) > int(savetime):
+      if savetime is None or not savetime.isdigit() or int(mtime) > int(savetime):
         # no xattr was there or we got our xattr but mtime is more recent: someone may have updated the file
         # from a different source (e.g. FUSE or SMB mount), therefore force conflict.
         # Note we can't get a time resolution better than one second!
@@ -1053,6 +1053,7 @@ def wopiPutFile(fileid):
         raise IOError
       Wopi.log.debug('msg="Got lastWopiSaveTime" user="%s" filename="%s" savetime="%s" lastmtime="%s" token="%s"' % \
                      (acctok['userid'], acctok['filename'], savetime, mtime, flask.request.args['access_token'][-20:]))
+
     except IOError:
       # either the file was deleted or it was updated/overwritten by others: force conflict
       newname, ext = os.path.splitext(acctok['filename'])
@@ -1060,19 +1061,13 @@ def wopiPutFile(fileid):
       newname = '%s-conflict-%s%s' % (newname, time.strftime('%Y%m%d-%H%M%S'), ext.strip())
       utils.storeWopiFile(flask.request, acctok, utils.LASTSAVETIMEKEY, newname)
       # keep track of this action in the original file's xattr, to avoid looping (see below)
-      storage.setxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY, 'conflict')
+      storage.setxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY, 0)
       Wopi.log.info('msg="Conflicting copy created" user="%s" savetime="%s" lastmtime="%s" newfilename="%s" token="%s"' % \
                     (acctok['userid'], savetime, mtime, newname, flask.request.args['access_token'][-20:]))
       # and report failure to the application: note we use a CONFLICT response as it is better handled by the app
       return utils.makeConflictResponse('PUTFILE', 'External', lock, '', acctok['filename'], \
                                         'The file being edited got moved or overwritten, conflict copy created')
-    except (ValueError, TypeError) as e:
-      # the xattr was not an integer: assume the app is looping on an already conflicting file,
-      # therefore do nothing and report internal error. Of course if the attribute was modified by hand,
-      # this mechanism fails.
-      Wopi.log.info('msg="Conflicting copy already created" filename="%s" savetime="%s" lastmtime="%s" error="%s" token="%s"' % \
-                    (acctok['filename'], savetime, mtime, e, flask.request.args['access_token'][-20:]))
-      return 'Conflict copy already created', http.client.INTERNAL_SERVER_ERROR
+
     # Go for overwriting the file. Note that the entire check+write operation should be atomic,
     # but the previous check still gives the opportunity of a race condition. We just live with it.
     # Anyhow, the EFSS should support versioning for such cases.
@@ -1080,13 +1075,15 @@ def wopiPutFile(fileid):
     Wopi.log.info('msg="File stored successfully" action="edit" user="%s" filename="%s" token="%s"' % \
                   (acctok['userid'], acctok['filename'], flask.request.args['access_token'][-20:]))
     return 'OK', http.client.OK
+
   except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
     Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" token="%s"' % \
                      (flask.request.remote_addr, flask.request.base_url, flask.request.args['access_token']))
     return 'Invalid access token', http.client.NOT_FOUND
+
   except IOError as e:
-    Wopi.log.info('msg="Error writing file" filename="%s" token="%s" error="%s"' % \
-                  (acctok['filename'], flask.request.args['access_token'], e))
+    Wopi.log.error('msg="Error writing file" filename="%s" token="%s" error="%s"' % \
+                   (acctok['filename'], flask.request.args['access_token'], e))
     return 'I/O Error', http.client.INTERNAL_SERVER_ERROR
 
 
