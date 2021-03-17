@@ -173,6 +173,7 @@ def loadfromstorage(filemd, wopisrc, acctok):
         mddoc = _unzipattachments(mdfile)
     else:
         mddoc = mdfile
+    # compute its SHA1 hash for later checks if the file was modified
     h = hashlib.sha1()
     h.update(mddoc)
     try:
@@ -188,7 +189,7 @@ def loadfromstorage(filemd, wopisrc, acctok):
                           (acctok[-20:], res.status_code))
                 raise CodiMDFailure
             notehash = urllib.parse.urlsplit(res.next.url).path.split('/')[-1]
-            log.debug('msg="Got redirect from CodiMD" url="/%s"' % notehash)
+            log.debug('msg="Got redirect from CodiMD" docid="%s"' % notehash)
         else:
             # generate a deterministic note hash
             dig = hmac.new(hashsecret, msg=wopisrc.split('/')[-1].encode(), digestmod=hashlib.sha1).digest()
@@ -198,7 +199,7 @@ def loadfromstorage(filemd, wopisrc, acctok):
                 log.error('msg="Unable to GET note hash from CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
                 raise CodiMDFailure
-            log.debug('msg="Got note hash from CodiMD" url="/%s"' % notehash)
+            log.debug('msg="Got note hash from CodiMD" docid="%s"' % notehash)
             # push the document to CodiMD with the update API
             res = requests.put(codimdurl + '/api/notes/' + notehash,
                                json={'content': mddoc.decode()},
@@ -214,7 +215,7 @@ def loadfromstorage(filemd, wopisrc, acctok):
     wopilock = wopi.generatelock(notehash, filemd, h.hexdigest(),
                                  'slide' if _isslides(mddoc) else 'md',
                                  acctok, False)
-    log.info('msg="Pushed document to CodiMD" url="%s" token="%s"' % (wopilock['docid'], acctok[-20:]))
+    log.info('msg="Pushed document to CodiMD" docid="%s" token="%s"' % (notehash, acctok[-20:]))
     return wopilock
 
 

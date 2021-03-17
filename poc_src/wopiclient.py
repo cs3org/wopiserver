@@ -103,7 +103,8 @@ def relock(wopisrc, acctok, docid, isclose):
     # first get again the file metadata
     res = request(wopisrc, acctok, 'GET')
     if res.status_code != http.client.OK:
-        log.warning('msg="Session expired or file renamed when attempting to relock it" response="%d"' % res.status_code)
+        log.warning('msg="Session expired or file renamed when attempting to relock it" response="%d" token="%s"' %
+                    (res.status_code, acctok[-20:]))
         raise InvalidLock('Session expired, please refresh this page')
     filemd = res.json()
 
@@ -111,8 +112,8 @@ def relock(wopisrc, acctok, docid, isclose):
     wopilock = generatelock(docid, filemd, 'dirty', 'md', acctok, isclose)
     res = request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'LOCK'})
     if res.status_code != http.client.OK:
-        log.warning('msg="Failed to relock the file" response="%d" token="%s" reason="%s"' % (
-            res.status_code, acctok[-20:], res.headers.get('X-WOPI-LockFailureReason')))
+        log.warning('msg="Failed to relock the file" response="%d" token="%s" reason="%s"' %
+                    (res.status_code, acctok[-20:], res.headers.get('X-WOPI-LockFailureReason')))
         raise InvalidLock('Failed to relock the file on save, please refresh this page')
     # relock was successful, return lock: along with noteids univocally associated to files (WOPISrc's),
     # we are sure no other updates could have been missed

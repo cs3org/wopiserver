@@ -124,11 +124,11 @@ class WB:
         '''Runs the Flask app in secure (standalone) or unsecure mode depending on the context.
            Secure https mode typically is to be provided by the infrastructure (k8s ingress, nginx...)'''
         if os.path.isfile(CERTPATH):
-            cls.log.info('msg="WOPI Bridge starting in secure mode" baseUrl="%s"' % cls.approot)
+            cls.log.info('msg="WOPI Bridge starting in secure mode" baseUrl="%s" version="%s"' % (cls.approot, WBVERSION))
             cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=True,
                         ssl_context=(CERTPATH, CERTPATH.replace('cert', 'key')))
         else:
-            cls.log.info('msg="WOPI Bridge starting in unsecure mode" baseUrl="%s"' % cls.approot)
+            cls.log.info('msg="WOPI Bridge starting in unsecure mode" baseUrl="%s" version="%s"' % (cls.approot, WBVERSION))
             cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=True)
 
 
@@ -206,7 +206,7 @@ def appopen():
             except wopi.InvalidLock as e:
                 if str(e) != str(int(http.client.NOT_FOUND)):
                     # lock is invalid/corrupted: force read-only mode
-                    WB.log.info('msg="Invalid lock, forcing read-only mode" token="%s" error="%s"' % (acctok[-20:], e))
+                    WB.log.info('msg="Invalid lock, forcing read-only mode" error="%s" token="%s"' % (e, acctok[-20:]))
                     filemd['UserCanWrite'] = False
 
                 # otherwise, this is the first user opening the file; in both cases, fetch it
