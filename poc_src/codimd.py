@@ -204,7 +204,10 @@ def loadfromstorage(filemd, wopisrc, acctok):
             res = requests.put(codimdurl + '/api/notes/' + notehash,
                                json={'content': mddoc.decode()},
                                verify=not skipsslverify)
-            if res.status_code != http.client.OK:
+            if res.status_code == http.client.FORBIDDEN:
+                # the file got unlocked because of no activity, yet some user is there: let it go
+                log.warning('msg="Document was being edited in CodiMD, redirecting user" token"%s"' % acctok[-20:])
+            elif res.status_code != http.client.OK:
                 log.error('msg="Unable to push document to CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
                 raise CodiMDFailure
