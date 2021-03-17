@@ -191,12 +191,12 @@ def loadfromstorage(filemd, wopisrc, acctok):
             notehash = urllib.parse.urlsplit(res.next.url).path.split('/')[-1]
             log.debug('msg="Got redirect from CodiMD" docid="%s"' % notehash)
         else:
-            # generate a deterministic note hash
+            # generate a deterministic note hash and reserve it in CodiMD via a HEAD request
             dig = hmac.new(hashsecret, msg=wopisrc.split('/')[-1].encode(), digestmod=hashlib.sha1).digest()
             notehash = urlsafe_b64encode(dig).decode()[:-1]
-            res = requests.get(codimdurl + '/' + notehash, verify=not skipsslverify)
+            res = requests.head(codimdurl + '/' + notehash, verify=not skipsslverify)
             if res.status_code != http.client.OK:
-                log.error('msg="Unable to GET note hash from CodiMD" token="%s" response="%d"' %
+                log.error('msg="Unable to reserve note hash in CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
                 raise CodiMDFailure
             log.debug('msg="Got note hash from CodiMD" docid="%s"' % notehash)
