@@ -1,5 +1,9 @@
 ## Changelog for the WOPI bridge
 
+### wopibridge 3.1.0 (2021-03-19)
+* Fixed a number of corner cases with the CodiMD
+  update API and the WOPI Put/PutRelative calls
+
 ### wopibridge 3.0.0 (2021-03-05)
 * Added support for the Update CodiMD API and for
   deterministic noteid hashing (#7), which requires
