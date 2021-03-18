@@ -309,7 +309,7 @@ def appsave():
             WB.log.info('msg="Save: returned response" response="%s" token="%s"' % (resp, acctok[-20:]))
             del WB.saveresponses[wopisrc]
             return resp
-        WB.log.info('msg="Save: enqueued action" token="%s"' % acctok[-20:])
+        WB.log.info('msg="Save: enqueued action" immediate="%s" token="%s"' % (donotify, acctok[-20:]))
         return '{}', http.client.ACCEPTED
 
 
@@ -321,7 +321,7 @@ def applist():
         WB.log.warning('msg="List: unauthorized access attempt, missing authorization token" '
                        'client="%s"' % flask.request.remote_addr)
         return 'Client not authorized', http.client.UNAUTHORIZED
-    WB.log.info('msg="List: returned all open files metadata"')
+    WB.log.info('msg="List: returning list of open files" client="%s"' % flask.request.remote_addr)
     return flask.Response(json.dumps(WB.openfiles), mimetype='application/json')
 
 

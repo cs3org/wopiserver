@@ -243,8 +243,8 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
     except CodiMDFailure:
         return jsonify('Could not save file, failed to fetch document from CodiMD'), http.client.INTERNAL_SERVER_ERROR
 
-    if isclose and wopilock['digest'] != 'dirty':
-        # so far the file was not touched and we are about to close: before forcing a put let's validate the contents
+    if wopilock['digest'] != 'dirty':
+        # so far the file was not touched: before forcing a put let's validate the contents
         h = hashlib.sha1()
         h.update(mddoc)
         if h.hexdigest() == wopilock['digest']:
