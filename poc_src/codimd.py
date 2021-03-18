@@ -118,6 +118,19 @@ def _fetchfromcodimd(wopilock, acctok):
         raise CodiMDFailure
 
 
+def _dealwithputfile(wopicall, res):
+    '''Deal with conflicts or errors following a PutFile/PutRelative request'''
+    if res.status_code == http.client.CONFLICT:
+        log.warning('msg="Conflict when calling WOPI %s" url="%s" reason="%s"' %
+                    (wopicall, wopisrc, res.headers.get('X-WOPI-LockFailureReason')))
+        return jsonify('Error saving the file. %s' % res.headers.get('X-WOPI-LockFailureReason')), res.status_code
+    elif res.status_code != http.client.OK:
+        log.error('msg="Calling WOPI %s failed" url="%s" response="%s"' % (wopicall, wopisrc, res.status_code))
+        # TODO need to save the file on a local storage for later recovery
+        return jsonify('Error saving the file, please contact support'), res.status_code
+    return None
+
+
 def _saveas(wopisrc, acctok, wopilock, targetname, content):
     '''Save a given document with an alternate name by using WOPI PutRelative'''
     putrelheaders = {'X-WOPI-Lock': json.dumps(wopilock),
@@ -126,11 +139,9 @@ def _saveas(wopisrc, acctok, wopilock, targetname, content):
                      'X-WOPI-SuggestedTarget': targetname
                     }
     res = wopi.request(wopisrc, acctok, 'POST', headers=putrelheaders, contents=content)
-    if res.status_code != http.client.OK:
-        log.warning('msg="Calling WOPI PutRelative failed" url="%s" response="%s" reason="%s"' %
-                    (wopisrc, res.status_code, res.headers.get('X-WOPI-LockFailureReason')))
-        # if res.status_code != http.client.CONFLICT: TODO need to save the file on a local storage for later recovery
-        return jsonify('Error saving the file. %s' % res.headers.get('X-WOPI-LockFailureReason')), res.status_code
+    reply = _dealwithputfile('PutRelative', res)
+    if reply:
+        return reply
 
     # use the new file's metadata from PutRelative to remove the previous file: we can do that only on close
     # because we need to keep using the current wopisrc/acctok until the session is alive in CodiMD
@@ -249,11 +260,9 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
     if (wasbundle ^ (not bundlefile)) or not isclose:
         res = wopi.request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock)},
                            contents=(bundlefile if wasbundle else mddoc))
-        if res.status_code != http.client.OK:
-            log.warning('msg="Calling WOPI PutFile failed" url="%s" response="%s"' % (wopisrc, res.status_code))
-            # if res.status_code != http.client.CONFLICT: TODO need to save the file on a local storage for later recovery
-            return jsonify('Error saving the file. %s' % res.headers.get('X-WOPI-LockFailureReason')), res.status_code
-        # and refresh the WOPI lock
+        reply = _dealwithputfile('PutFile', res)
+        if reply:
+            return reply
         wopi.refreshlock(wopisrc, acctok, wopilock, isdirty=True)
         log.info('msg="Save completed" filename="%s" isclose="%s" token="%s"' %
                  (wopilock['filename'], isclose, acctok[-20:]))
