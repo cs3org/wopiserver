@@ -13,7 +13,7 @@ import io
 from random import randint
 import json
 import hashlib
-import urllib.parse
+import urllib.parse as urlparse
 import http.client
 from base64 import urlsafe_b64encode
 import hmac
@@ -199,19 +199,23 @@ def loadfromstorage(filemd, wopisrc, acctok):
                 log.error('msg="Unable to push read-only document to CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
                 raise CodiMDFailure
-            notehash = urllib.parse.urlsplit(res.next.url).path.split('/')[-1]
+            notehash = urlparse.urlsplit(res.next.url).path.split('/')[-1]
             log.debug('msg="Got redirect from CodiMD" docid="%s"' % notehash)
         else:
             # generate a deterministic note hash and reserve it in CodiMD via a HEAD request
             dig = hmac.new(hashsecret, msg=wopisrc.split('/')[-1].encode(), digestmod=hashlib.sha1).digest()
             notehash = urlsafe_b64encode(dig).decode()[:-1]
-            res = requests.head(codimdurl + '/' + notehash, verify=not skipsslverify)
+            res = requests.head(codimdurl + '/' + notehash + '?displayName=' + urlparse.quote_plus(filemd['UserFriendlyName']),
+                                verify=not skipsslverify)
             if res.status_code != http.client.OK:
                 log.error('msg="Unable to reserve note hash in CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
                 raise CodiMDFailure
             log.debug('msg="Got note hash from CodiMD" docid="%s"' % notehash)
             # push the document to CodiMD with the update API
+            # TODO in the future we could swap the logic: attempt to push content, and on 404 use a HEAD
+            # request to reserve the notehash + do the push again. In most cases the note will be there
+            # thus we would avoid the HEAD call.
             res = requests.put(codimdurl + '/api/notes/' + notehash,
                                json={'content': mddoc.decode()},
                                verify=not skipsslverify)

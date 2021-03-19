@@ -16,7 +16,7 @@ import socket
 from platform import python_version
 import logging
 import logging.handlers
-import urllib.parse
+import urllib.parse as urlparse
 import http.client
 import json
 import threading
@@ -178,7 +178,7 @@ def index():
 def appopen():
     '''Open a MD doc by contacting the provided WOPISrc with the given access_token'''
     try:
-        wopisrc = urllib.parse.unquote(flask.request.args['WOPISrc'])
+        wopisrc = urlparse.unquote(flask.request.args['WOPISrc'])
         acctok = flask.request.args['access_token']
         WB.log.info('msg="Open called" client="%s" token="%s"' %
                     (flask.request.remote_addr, acctok[-20:]))
@@ -228,7 +228,7 @@ def appopen():
         return _guireturn('Unable to contact CodiMD, please try again later'), http.client.INTERNAL_SERVER_ERROR
 
     redirecturl = _redirecttocodimd(filemd['UserCanWrite'], wopisrc, acctok, wopilock) + \
-                  'displayName=' + urllib.parse.quote_plus(filemd['UserFriendlyName'])
+                  'displayName=' + urlparse.quote_plus(filemd['UserFriendlyName'])
     WB.log.info('msg="Redirecting client to CodiMD" redirecturl="%s"' % redirecturl)
     return flask.redirect(redirecturl)
 
@@ -255,7 +255,7 @@ def _redirecttocodimd(isreadwrite, wopisrc, acctok, wopilock):
         # create the external redirect URL to be returned to the client:
         # metadata will be used for autosave (this is an extended feature of CodiMD)
         redirecturl = codimd.codimdexturl + wopilock['docid'] + '?metadata=' + \
-                      urllib.parse.quote_plus('%s?t=%s' % (wopisrc, acctok)) + '&'
+                      urlparse.quote_plus('%s?t=%s' % (wopisrc, acctok)) + '&'
     else:
         # read-only mode: in this case redirect to publish mode or normal view
         # to quickly jump in slide mode depending on the content
@@ -269,7 +269,7 @@ def appsave():
     '''Save a MD doc given its WOPI context, and return a JSON-formatted message. The actual save is asynchronous.'''
     # fetch metadata from request
     try:
-        meta = urllib.parse.unquote(flask.request.headers['X-EFSS-Metadata'])
+        meta = urlparse.unquote(flask.request.headers['X-EFSS-Metadata'])
         wopisrc = meta[:meta.index('?t=')]
         acctok = meta[meta.index('?t=')+3:]
         isclose = flask.request.args.get('close') == 'true'
