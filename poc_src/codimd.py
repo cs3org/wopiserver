@@ -200,7 +200,7 @@ def loadfromstorage(filemd, wopisrc, acctok):
                           (acctok[-20:], res.status_code))
                 raise CodiMDFailure
             notehash = urlparse.urlsplit(res.next.url).path.split('/')[-1]
-            log.debug('msg="Got redirect from CodiMD" docid="%s"' % notehash)
+            log.info('msg="Pushed read-only document to CodiMD" docid="%s" token="%s"' % (notehash, acctok[-20:]))
         else:
             # generate a deterministic note hash and reserve it in CodiMD via a HEAD request
             dig = hmac.new(hashsecret, msg=wopisrc.split('/')[-1].encode(), digestmod=hashlib.sha1).digest()
@@ -226,6 +226,8 @@ def loadfromstorage(filemd, wopisrc, acctok):
                 log.error('msg="Unable to push document to CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
                 raise CodiMDFailure
+            else:
+                log.info('msg="Pushed document to CodiMD" docid="%s" token="%s"' % (notehash, acctok[-20:]))
     except requests.exceptions.ConnectionError as e:
         log.error('msg="Exception raised attempting to connect to CodiMD" exception="%s"' % e)
         raise CodiMDFailure
@@ -233,7 +235,6 @@ def loadfromstorage(filemd, wopisrc, acctok):
     wopilock = wopi.generatelock(notehash, filemd, h.hexdigest(),
                                  'slide' if _isslides(mddoc) else 'md',
                                  acctok, False)
-    log.info('msg="Pushed document to CodiMD" docid="%s" token="%s"' % (notehash, acctok[-20:]))
     return wopilock
 
 
