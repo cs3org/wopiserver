@@ -279,7 +279,7 @@ def appsave():
     except (KeyError, ValueError) as e:
         WB.log.error('msg="Save: malformed or missing metadata" client="%s" headers="%s" exception="%s" error="%s"' %
                      (flask.request.remote_addr, flask.request.headers, type(e), e))
-        return codimd.jsonify('Malformed or missing metadata, could not save. %s' % RECOVER_MSG), http.client.BAD_REQUEST
+        return codimd.jsonify('Malformed or missing metadata, could not save. %s' % RECOVER_MSG), http.client.INTERNAL_SERVER_ERROR
 
     # decide whether to notify the save thread
     donotify = isclose or wopisrc not in WB.openfiles or WB.openfiles[wopisrc]['lastsave'] < time.time() - WB.saveinterval
@@ -375,7 +375,7 @@ class SaveThread(threading.Thread):
                 except wopi.InvalidLock as ile:
                     # even this attempt failed, give up
                     # TODO here we should save the file on a local storage to help later recovery
-                    WB.saveresponses[wopisrc] = codimd.jsonify(str(ile)), http.client.NOT_FOUND
+                    WB.saveresponses[wopisrc] = codimd.jsonify(str(ile)), http.client.INTERNAL_SERVER_ERROR
                     # set some 'fake' metadata, will be automatically cleaned up later
                     openfile['lastsave'] = int(time.time())
                     openfile['tosave'] = False

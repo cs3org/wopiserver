@@ -123,11 +123,11 @@ def _dealwithputfile(wopicall, res):
     if res.status_code == http.client.CONFLICT:
         log.warning('msg="Conflict when calling WOPI %s" url="%s" reason="%s"' %
                     (wopicall, wopisrc, res.headers.get('X-WOPI-LockFailureReason')))
-        return jsonify('Error saving the file. %s' % res.headers.get('X-WOPI-LockFailureReason')), res.status_code
+        return jsonify('Error saving the file. %s' % res.headers.get('X-WOPI-LockFailureReason')), http.client.INTERNAL_SERVER_ERROR
     elif res.status_code != http.client.OK:
         log.error('msg="Calling WOPI %s failed" url="%s" response="%s"' % (wopicall, wopisrc, res.status_code))
         # TODO need to save the file on a local storage for later recovery
-        return jsonify('Error saving the file, please contact support'), res.status_code
+        return jsonify('Error saving the file, please contact support'), http.client.INTERNAL_SERVER_ERROR
     return None
 
 
