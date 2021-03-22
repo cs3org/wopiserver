@@ -159,13 +159,6 @@ def _saveas(wopisrc, acctok, wopilock, targetname, content):
         else:
             log.info('msg="Previous file unlocked and removed successfully" token="%s"' % acctok[-20:])
 
-    # update our metadata: note we already hold the condition variable as we're called within the save thread
-    #WB.openfiles[newwopisrc] = {'acctok': newacctok, 'tosave': False,
-    #                            'lastsave': int(time.time()),
-    #                            'toclose': {newacctok[-20:]: True},
-    #                            }
-    #del WB.openfiles[wopisrc]
-
     log.info('msg="Final save completed" filename"%s" token="%s"' % (newname, acctok[-20:]))
     return jsonify('File saved successfully'), http.client.OK
 
