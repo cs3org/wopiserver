@@ -180,8 +180,8 @@ def appopen():
     try:
         wopisrc = urlparse.unquote(flask.request.args['WOPISrc'])
         acctok = flask.request.args['access_token']
-        WB.log.info('msg="Open called" client="%s" token="%s"' %
-                    (flask.request.remote_addr, acctok[-20:]))
+        WB.log.info('msg="Open called" client="%s" user-agent="%s" token="%s"' %
+                    (flask.request.remote_addr, flask.request.user_agent, acctok[-20:]))
     except KeyError as e:
         WB.log.error('msg="Open: unable to open the file, missing WOPI context" error="%s"' % e)
         return _guireturn('Missing arguments'), http.client.BAD_REQUEST
