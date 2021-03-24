@@ -228,7 +228,9 @@ def appopen():
         return _guireturn('Unable to contact CodiMD, please try again later'), http.client.INTERNAL_SERVER_ERROR
 
     redirecturl = _redirecttocodimd(filemd['UserCanWrite'], wopisrc, acctok, wopilock) + \
-                  'displayName=' + urlparse.quote_plus(filemd['UserFriendlyName'])
+                  'displayName=' + urlparse.quote_plus(filemd['UserFriendlyName'] + '@' + \
+                                       socket.gethostbyaddr(flask.request.remote_addr)[0].split('.')[0] + \
+                                       '/' + flask.request.user_agent.browser)
     WB.log.info('msg="Redirecting client to CodiMD" redirecturl="%s"' % redirecturl)
     return flask.redirect(redirecturl)
 
