@@ -634,7 +634,7 @@ def wopiCheckFileInfo(fileid):
         filemd['BreadcrumbFolderName'] = 'Back to ' + furl[furl.find('?path'):].split('/')[-1]
       else:
         # this is the top level public share, which is anonymous
-        filemd['BreadcrumbFolderName'] = 'Back to the CERNBox share'
+        filemd['BreadcrumbFolderName'] = 'Back to the public share'
     else:
       filemd['UserFriendlyName'] = acctok['username']
       filemd['BreadcrumbFolderName'] = 'Back to ' + acctok['filename'].split('/')[-2]
