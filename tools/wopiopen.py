@@ -62,9 +62,9 @@ if storagetype == 'cs3':
     usage(1)
 elif '/eos/user/' in filename:
   # shortcuts for eos (on xrootd)
-  endpoint = 'root://eoshome-%s' % filename.split('/')[3]
+  endpoint = 'root://eoshome-%s.cern.ch' % filename.split('/')[3]
 elif '/eos/project' in filename:
-  endpoint = 'root://eosproject-%s' % filename.split('/')[3]
+  endpoint = 'root://eosproject-%s.cern.ch' % filename.split('/')[3]
 else:
   endpoint = ''
 
