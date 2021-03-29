@@ -198,8 +198,7 @@ def loadfromstorage(filemd, wopisrc, acctok):
             # generate a deterministic note hash and reserve it in CodiMD via a HEAD request
             dig = hmac.new(hashsecret, msg=wopisrc.split('/')[-1].encode(), digestmod=hashlib.sha1).digest()
             notehash = urlsafe_b64encode(dig).decode()[:-1]
-            res = requests.head(codimdurl + '/' + notehash,
-                                verify=not skipsslverify)
+            res = requests.head(codimdurl + '/' + notehash, verify=not skipsslverify)
             if res.status_code != http.client.OK:
                 log.error('msg="Unable to reserve note hash in CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
@@ -219,6 +218,13 @@ def loadfromstorage(filemd, wopisrc, acctok):
                 log.error('msg="Unable to push document to CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
                 raise CodiMDFailure
+            # need to check again if the actual note is elsewhere and we were redirected
+            res = requests.head(codimdurl + '/' + notehash, verify=not skipsslverify)
+            if res.status_code == http.client.FOUND:
+                oldhash = notehash
+                notehash = urlparse.urlsplit(res.next.url).path.split('/')[-1]
+                log.info('msg="Document got aliased in CodiMD" olddocid="%s" docid="%s" token="%s"' %
+                         (oldhash, notehash, res.acctok[-20:]))
             else:
                 log.info('msg="Pushed document to CodiMD" docid="%s" token="%s"' % (notehash, acctok[-20:]))
     except requests.exceptions.ConnectionError as e:
