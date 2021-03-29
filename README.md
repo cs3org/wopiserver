@@ -15,8 +15,8 @@ This is a proof-of-concept WOPI bridge server, currently only targeting CodiMD, 
   * Files ending as `.zmd` are equally treated as zipped bundles and expanded to CodiMD
 
 ### Required CodiMD APIs
-* `/new`                    push a new file
-* `/<noteid>`               display a file
+* `/new`                    push a new file to a random `<noteid>`
+* `/<noteid>`               display a file, or reserve a `<noteid>` if not existing
 * `/<noteid>/publish`       display a file in readonly mode
 * `/<noteid>/slide`         display a file in slide mode
 * `/<noteid>/download`      get a raw file to store it back
