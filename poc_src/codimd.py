@@ -201,7 +201,7 @@ def _getattachments(mddoc, docfilename, forcezip=False):
     return zip_buffer.getvalue(), response
 
 
-def _dealwithputfile(wopicall, res):
+def _dealwithputfile(wopicall, wopisrc, res):
     '''Deal with conflicts or errors following a PutFile/PutRelative request'''
     if res.status_code == http.client.CONFLICT:
         log.warning('msg="Conflict when calling WOPI %s" url="%s" reason="%s"' %
@@ -222,7 +222,7 @@ def _saveas(wopisrc, acctok, wopilock, targetname, content):
                      'X-WOPI-SuggestedTarget': targetname
                     }
     res = wopi.request(wopisrc, acctok, 'POST', headers=putrelheaders, contents=content)
-    reply = _dealwithputfile('PutRelative', res)
+    reply = _dealwithputfile('PutRelative', wopisrc, res)
     if reply:
         return reply
 
@@ -273,7 +273,7 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
     if (wasbundle ^ (not bundlefile)) or not isclose:
         res = wopi.request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock)},
                            contents=(bundlefile if wasbundle else mddoc))
-        reply = _dealwithputfile('PutFile', res)
+        reply = _dealwithputfile('PutFile', wopisrc, res)
         if reply:
             return reply
         wopi.refreshlock(wopisrc, acctok, wopilock, isdirty=True)
