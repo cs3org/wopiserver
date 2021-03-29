@@ -98,11 +98,12 @@ def _fetchfromcodimd(wopilock, acctok):
 
 
 def checkredirect(wopilock, acctok):
+    '''Check if the target docid is real or is a redirect, and amend the wopilock structure in such case'''
     res = requests.head(codimdurl + wopilock['docid'], verify=not skipsslverify)
     if res.status_code == http.client.FOUND:
         notehash = urlparse.urlsplit(res.next.url).path.split('/')[-1]
         log.info('msg="Document got aliased in CodiMD" olddocid="%s" docid="%s" token="%s"' %
-                    (wopilock['docid'], notehash, acctok[-20:]))
+                 (wopilock['docid'], notehash, acctok[-20:]))
         wopilock['docid'] = '/' + notehash
     return wopilock
 
@@ -206,8 +207,9 @@ def _dealwithputfile(wopicall, wopisrc, res):
     if res.status_code == http.client.CONFLICT:
         log.warning('msg="Conflict when calling WOPI %s" url="%s" reason="%s"' %
                     (wopicall, wopisrc, res.headers.get('X-WOPI-LockFailureReason')))
-        return jsonify('Error saving the file. %s' % res.headers.get('X-WOPI-LockFailureReason')), http.client.INTERNAL_SERVER_ERROR
-    elif res.status_code != http.client.OK:
+        return jsonify('Error saving the file. %s' % res.headers.get('X-WOPI-LockFailureReason')), \
+               http.client.INTERNAL_SERVER_ERROR
+    if res.status_code != http.client.OK:
         log.error('msg="Calling WOPI %s failed" url="%s" response="%s"' % (wopicall, wopisrc, res.status_code))
         # TODO need to save the file on a local storage for later recovery
         return jsonify('Error saving the file, please contact support'), http.client.INTERNAL_SERVER_ERROR
