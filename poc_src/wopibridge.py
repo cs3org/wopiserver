@@ -229,16 +229,19 @@ def appopen():
 
     # here we append the user browser to the displayName
     # TODO need to review this for production usage, it should actually come from WOPI if configured accordingly
-    redirecturl = _redirecttocodimd(filemd['UserCanWrite'], wopisrc, acctok, wopilock) + \
+    redirecturl = _redirecttoapp(filemd['UserCanWrite'], wopisrc, acctok, wopilock) + \
                   'displayName=' + urlparse.quote_plus(filemd['UserFriendlyName'] + \
                           (' / ' + flask.request.user_agent.browser) if flask.request.user_agent.browser else '')
     WB.log.info('msg="Redirecting client to CodiMD" redirecturl="%s"' % redirecturl)
     return flask.redirect(redirecturl)
 
 
-def _redirecttocodimd(isreadwrite, wopisrc, acctok, wopilock):
-    '''Updates internal metadata and returns the correct redirect URL to CodiMD'''
+def _redirecttoapp(isreadwrite, wopisrc, acctok, wopilock):
+    '''Updates internal metadata and returns the correct redirect URL to the editor'''
     if isreadwrite:
+        # need to check again the actual target is elsewhere and we were redirected
+        # (this is CodiMD-specific and it is not understood why it happens in the first place; seems related to the update API)
+        wopilock = codimd.checkredirect(wopilock, acctok)
         # keep track of this open document for the save thread and for statistical purposes
         if wopisrc in WB.openfiles:
             # use the new acctok and the new/current wopilock content

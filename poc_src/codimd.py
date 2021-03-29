@@ -41,29 +41,8 @@ def jsonify(msg):
     return '{"message": "%s", "delay": "%.1f"}' % (msg, 0 if len(msg) > 60 else 0.5 + len(msg)/20)
 
 
-def _getattachments(mddoc, docfilename, forcezip=False):
-    '''Parse a markdown file and generate a zip file containing all included files'''
-    zip_buffer = io.BytesIO()
-    response = None
-    for attachment in upload_re.findall(mddoc):
-        log.debug('msg="Fetching attachment" url="%s"' % attachment)
-        res = requests.get(codimdurl + attachment, verify=not skipsslverify)
-        if res.status_code != http.client.OK:
-            log.error('msg="Failed to fetch included file, skipping" path="%s" response="%d"' % (
-                attachment, res.status_code))
-            # also notify the user
-            response = jsonify('Failed to include a referenced picture in the saved file'), http.client.NOT_FOUND
-            continue
-        with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_STORED, allowZip64=False) as zip_file:
-            zip_file.writestr(attachment.split('/')[-1], res.content)
-    if not forcezip and zip_buffer.getbuffer().nbytes == 0:
-        # no attachments actually found
-        return None, response
-    # also include the markdown file itself
-    with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_STORED, allowZip64=False) as zip_file:
-        zip_file.writestr(docfilename, mddoc)
-    return zip_buffer.getvalue(), response
-
+# Cloud storage to CodiMD
+##########################
 
 def _unzipattachments(inputbuf):
     '''Unzip the given input buffer uploading the content to CodiMD and return the contained .md file'''
@@ -118,49 +97,14 @@ def _fetchfromcodimd(wopilock, acctok):
         raise CodiMDFailure
 
 
-def _dealwithputfile(wopicall, res):
-    '''Deal with conflicts or errors following a PutFile/PutRelative request'''
-    if res.status_code == http.client.CONFLICT:
-        log.warning('msg="Conflict when calling WOPI %s" url="%s" reason="%s"' %
-                    (wopicall, wopisrc, res.headers.get('X-WOPI-LockFailureReason')))
-        return jsonify('Error saving the file. %s' % res.headers.get('X-WOPI-LockFailureReason')), http.client.INTERNAL_SERVER_ERROR
-    elif res.status_code != http.client.OK:
-        log.error('msg="Calling WOPI %s failed" url="%s" response="%s"' % (wopicall, wopisrc, res.status_code))
-        # TODO need to save the file on a local storage for later recovery
-        return jsonify('Error saving the file, please contact support'), http.client.INTERNAL_SERVER_ERROR
-    return None
-
-
-def _saveas(wopisrc, acctok, wopilock, targetname, content):
-    '''Save a given document with an alternate name by using WOPI PutRelative'''
-    putrelheaders = {'X-WOPI-Lock': json.dumps(wopilock),
-                     'X-WOPI-Override': 'PUT_RELATIVE',
-                     # SuggestedTarget to not overwrite a possibly existing file
-                     'X-WOPI-SuggestedTarget': targetname
-                    }
-    res = wopi.request(wopisrc, acctok, 'POST', headers=putrelheaders, contents=content)
-    reply = _dealwithputfile('PutRelative', res)
-    if reply:
-        return reply
-
-    # use the new file's metadata from PutRelative to remove the previous file: we can do that only on close
-    # because we need to keep using the current wopisrc/acctok until the session is alive in CodiMD
-    newname = res.json()['Name']
-    # unlock and delete original file
-    res = wopi.request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
-    if res.status_code != http.client.OK:
-        log.warning('msg="Failed to unlock the previous file" token="%s" response="%d"' %
-                    (acctok[-20:], res.status_code))
-    else:
-        res = wopi.request(wopisrc, acctok, 'POST', headers={'X-Wopi-Override': 'DELETE'})
-        if res.status_code != http.client.OK:
-            log.warning('msg="Failed to delete the previous file" token="%s" response="%d"' %
-                        (acctok[-20:], res.status_code))
-        else:
-            log.info('msg="Previous file unlocked and removed successfully" token="%s"' % acctok[-20:])
-
-    log.info('msg="Final save completed" filename"%s" token="%s"' % (newname, acctok[-20:]))
-    return jsonify('File saved successfully'), http.client.OK
+def checkredirect(wopilock, acctok):
+    res = requests.head(codimdurl + wopilock['docid'], verify=not skipsslverify)
+    if res.status_code == http.client.FOUND:
+        notehash = urlparse.urlsplit(res.next.url).path.split('/')[-1]
+        log.info('msg="Document got aliased in CodiMD" olddocid="%s" docid="%s" token="%s"' %
+                    (wopilock['docid'], notehash, acctok[-20:]))
+        wopilock['docid'] = '/' + notehash
+    return wopilock
 
 
 def loadfromstorage(filemd, wopisrc, acctok):
@@ -218,13 +162,6 @@ def loadfromstorage(filemd, wopisrc, acctok):
                 log.error('msg="Unable to push document to CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
                 raise CodiMDFailure
-            # need to check again if the actual note is elsewhere and we were redirected
-            res = requests.head(codimdurl + '/' + notehash, verify=not skipsslverify)
-            if res.status_code == http.client.FOUND:
-                oldhash = notehash
-                notehash = urlparse.urlsplit(res.next.url).path.split('/')[-1]
-                log.info('msg="Document got aliased in CodiMD" olddocid="%s" docid="%s" token="%s"' %
-                         (oldhash, notehash, res.acctok[-20:]))
             else:
                 log.info('msg="Pushed document to CodiMD" docid="%s" token="%s"' % (notehash, acctok[-20:]))
     except requests.exceptions.ConnectionError as e:
@@ -235,6 +172,78 @@ def loadfromstorage(filemd, wopisrc, acctok):
                                  'slide' if _isslides(mddoc) else 'md',
                                  acctok, False)
     return wopilock
+
+
+# CodiMD to cloud storage
+##########################
+
+def _getattachments(mddoc, docfilename, forcezip=False):
+    '''Parse a markdown file and generate a zip file containing all included files'''
+    zip_buffer = io.BytesIO()
+    response = None
+    for attachment in upload_re.findall(mddoc):
+        log.debug('msg="Fetching attachment" url="%s"' % attachment)
+        res = requests.get(codimdurl + attachment, verify=not skipsslverify)
+        if res.status_code != http.client.OK:
+            log.error('msg="Failed to fetch included file, skipping" path="%s" response="%d"' % (
+                attachment, res.status_code))
+            # also notify the user
+            response = jsonify('Failed to include a referenced picture in the saved file'), http.client.NOT_FOUND
+            continue
+        with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_STORED, allowZip64=False) as zip_file:
+            zip_file.writestr(attachment.split('/')[-1], res.content)
+    if not forcezip and zip_buffer.getbuffer().nbytes == 0:
+        # no attachments actually found
+        return None, response
+    # also include the markdown file itself
+    with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_STORED, allowZip64=False) as zip_file:
+        zip_file.writestr(docfilename, mddoc)
+    return zip_buffer.getvalue(), response
+
+
+def _dealwithputfile(wopicall, res):
+    '''Deal with conflicts or errors following a PutFile/PutRelative request'''
+    if res.status_code == http.client.CONFLICT:
+        log.warning('msg="Conflict when calling WOPI %s" url="%s" reason="%s"' %
+                    (wopicall, wopisrc, res.headers.get('X-WOPI-LockFailureReason')))
+        return jsonify('Error saving the file. %s' % res.headers.get('X-WOPI-LockFailureReason')), http.client.INTERNAL_SERVER_ERROR
+    elif res.status_code != http.client.OK:
+        log.error('msg="Calling WOPI %s failed" url="%s" response="%s"' % (wopicall, wopisrc, res.status_code))
+        # TODO need to save the file on a local storage for later recovery
+        return jsonify('Error saving the file, please contact support'), http.client.INTERNAL_SERVER_ERROR
+    return None
+
+
+def _saveas(wopisrc, acctok, wopilock, targetname, content):
+    '''Save a given document with an alternate name by using WOPI PutRelative'''
+    putrelheaders = {'X-WOPI-Lock': json.dumps(wopilock),
+                     'X-WOPI-Override': 'PUT_RELATIVE',
+                     # SuggestedTarget to not overwrite a possibly existing file
+                     'X-WOPI-SuggestedTarget': targetname
+                    }
+    res = wopi.request(wopisrc, acctok, 'POST', headers=putrelheaders, contents=content)
+    reply = _dealwithputfile('PutRelative', res)
+    if reply:
+        return reply
+
+    # use the new file's metadata from PutRelative to remove the previous file: we can do that only on close
+    # because we need to keep using the current wopisrc/acctok until the session is alive in CodiMD
+    newname = res.json()['Name']
+    # unlock and delete original file
+    res = wopi.request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
+    if res.status_code != http.client.OK:
+        log.warning('msg="Failed to unlock the previous file" token="%s" response="%d"' %
+                    (acctok[-20:], res.status_code))
+    else:
+        res = wopi.request(wopisrc, acctok, 'POST', headers={'X-Wopi-Override': 'DELETE'})
+        if res.status_code != http.client.OK:
+            log.warning('msg="Failed to delete the previous file" token="%s" response="%d"' %
+                        (acctok[-20:], res.status_code))
+        else:
+            log.info('msg="Previous file unlocked and removed successfully" token="%s"' % acctok[-20:])
+
+    log.info('msg="Final save completed" filename"%s" token="%s"' % (newname, acctok[-20:]))
+    return jsonify('File saved successfully'), http.client.OK
 
 
 def savetostorage(wopisrc, acctok, isclose, wopilock):
