@@ -133,8 +133,47 @@ class WB:
 
 
 def _guireturn(msg):
-    '''One-liner to better render messages that may be visible in the user UI'''
+    '''One-liner to better render messages that may be visible in the UI'''
     return '<div align="center" style="color:#A0A0A0; padding-top:50px; font-family:Verdana">%s</div>' % msg
+
+
+def _renderagent(ua):
+    '''One-liner to render a user_agent struct in a user-friendly way'''
+    return (ua.browser if ua.browser else 'unk') + '/' + (ua.platform[:3] if ua.platform else 'unk')
+
+
+def _redirecttoapp(isreadwrite, wopisrc, acctok, wopilock):
+    '''Updates internal metadata and returns the correct redirect URL to the editor'''
+    if isreadwrite:
+        # need to check again if the actual target is elsewhere and we were redirected
+        # (this is CodiMD-specific and it is not understood why it happens in the first place; seems related to the update API)
+        wopilock = codimd.checkredirect(wopilock, acctok)
+        # keep track of this open document for the save thread and for statistical purposes
+        if wopisrc in WB.openfiles:
+            # use the new acctok and the new/current wopilock content
+            WB.openfiles[wopisrc]['acctok'] = acctok
+            WB.openfiles[wopisrc]['toclose'] = wopilock['toclose']
+        else:
+            WB.openfiles[wopisrc] = {'acctok': acctok, 'tosave': False,
+                                     'lastsave': int(time.time()) - WB.saveinterval,
+                                     'toclose': {acctok[-20:]: False},
+                                     'docid': wopilock['docid'],
+                                    }
+        # also clear any potential stale response for this document
+        try:
+            del WB.saveresponses[wopisrc]
+        except KeyError:
+            pass
+        # create the external redirect URL to be returned to the client:
+        # metadata will be used for autosave (this is an extended feature of CodiMD)
+        redirecturl = codimd.codimdexturl + wopilock['docid'] + '?metadata=' + \
+                      urlparse.quote_plus('%s?t=%s' % (wopisrc, acctok)) + '&'
+    else:
+        # read-only mode: in this case redirect to publish mode or normal view
+        # to quickly jump in slide mode depending on the content
+        redirecturl = codimd.codimdexturl + wopilock['docid'] + \
+                      ('/publish?' if wopilock['app'] != 'slide' else '?')
+    return redirecturl
 
 
 # The Web Application starts here
@@ -199,7 +238,7 @@ def appopen():
             try:
                 # was it already being worked on?
                 wopilock = wopi.getlock(wopisrc, acctok)
-                WB.log.info('msg="Lock already held" lock="%s"' % wopilock)
+                WB.log.info('msg="Lock already held" lock="%s" token="%s"' % (wopilock, acctok[-20:]))
                 # add this token to the list, if not already in
                 if acctok[-20:] not in wopilock['toclose']:
                     wopilock = wopi.refreshlock(wopisrc, acctok, wopilock)
@@ -231,43 +270,9 @@ def appopen():
     # TODO need to review this for production usage, it should actually come from WOPI if configured accordingly
     redirecturl = _redirecttoapp(filemd['UserCanWrite'], wopisrc, acctok, wopilock) + \
                   'displayName=' + urlparse.quote_plus(filemd['UserFriendlyName'] + \
-                          (' / ' + flask.request.user_agent.browser) if flask.request.user_agent.browser else '')
+                  '@' + _renderagent(flask.request.user_agent))
     WB.log.info('msg="Redirecting client to CodiMD" redirecturl="%s"' % redirecturl)
     return flask.redirect(redirecturl)
-
-
-def _redirecttoapp(isreadwrite, wopisrc, acctok, wopilock):
-    '''Updates internal metadata and returns the correct redirect URL to the editor'''
-    if isreadwrite:
-        # need to check again the actual target is elsewhere and we were redirected
-        # (this is CodiMD-specific and it is not understood why it happens in the first place; seems related to the update API)
-        wopilock = codimd.checkredirect(wopilock, acctok)
-        # keep track of this open document for the save thread and for statistical purposes
-        if wopisrc in WB.openfiles:
-            # use the new acctok and the new/current wopilock content
-            WB.openfiles[wopisrc]['acctok'] = acctok
-            WB.openfiles[wopisrc]['toclose'] = wopilock['toclose']
-        else:
-            WB.openfiles[wopisrc] = {'acctok': acctok, 'tosave': False,
-                                     'lastsave': int(time.time()) - WB.saveinterval,
-                                     'toclose': {acctok[-20:]: False},
-                                     'docid': wopilock['docid'],
-                                    }
-        # also clear any potential stale response for this document
-        try:
-            del WB.saveresponses[wopisrc]
-        except KeyError:
-            pass
-        # create the external redirect URL to be returned to the client:
-        # metadata will be used for autosave (this is an extended feature of CodiMD)
-        redirecturl = codimd.codimdexturl + wopilock['docid'] + '?metadata=' + \
-                      urlparse.quote_plus('%s?t=%s' % (wopisrc, acctok)) + '&'
-    else:
-        # read-only mode: in this case redirect to publish mode or normal view
-        # to quickly jump in slide mode depending on the content
-        redirecturl = codimd.codimdexturl + wopilock['docid'] + \
-                      ('/publish?' if wopilock['app'] != 'slide' else '?')
-    return redirecturl
 
 
 @WB.bpr.route("/save", methods=['POST'])
