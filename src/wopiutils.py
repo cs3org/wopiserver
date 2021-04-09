@@ -10,10 +10,11 @@ import time
 import traceback
 import hashlib
 import json
-from urllib.parse import quote_plus as url_quote_plus
 from enum import Enum
+from urllib.parse import quote_plus as url_quote_plus
 from random import choice
 from string import ascii_lowercase
+from datetime import datetime
 import http.client
 import flask
 import jwt
@@ -224,14 +225,18 @@ def storeWopiLock(operation, lock, acctok, isnotoffice):
           if isinstance(retrievedlock, IOError):
             raise retrievedlock
           retrievedlock = retrievedlock.decode('UTF-8')
-        except (IOError, StopIteration) as e:
-          retrievedlock = ''   # could not read the lock, maybe it's empty: still, deny WOPI lock
+          # check that the lock is not stale
+          if datetime.strptime(retrievedlock.split(',')[3], '%d.%m.%Y %H:%M').timestamp() + \
+             wopi.config.getint('general', 'wopilockexpiration') < time.time():
+            retrievedlock = 'WOPIServer'
+        except (IOError, StopIteration, IndexError, ValueError) as e:
+          retrievedlock = 'WOPIServer'   # could not read the lock, assume it expired
         if 'WOPIServer' not in retrievedlock:
           # the file was externally locked, make this call fail
           log.info('msg="WOPI lock denied because of an existing LibreOffice lock" filename="%s" holder="%s"' % \
                    (acctok['filename'], retrievedlock.split(',')[1] if ',' in retrievedlock else retrievedlock))
           raise
-        #else it's our previous lock: all right, move on
+        #else it's our previous lock or it had expired: all right, move on
       else:
         # any other error is logged and raised
         log.error('msg="%s: unable to store LibreOffice-compatible lock" filename="%s" token="%s" lock="%s" reason="%s"' % \
