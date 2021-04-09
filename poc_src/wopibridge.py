@@ -139,7 +139,7 @@ def _guireturn(msg):
 
 def _renderagent(ua):
     '''One-liner to render a user_agent struct in a user-friendly way'''
-    return (ua.browser if ua.browser else 'unk') + '/' + (ua.platform[:3] if ua.platform else 'unk')
+    return ua.platform[:3] if ua.platform else 'oth'   # we could use ua.browser as well, but it's maybe not useful
 
 
 def _redirecttoapp(isreadwrite, wopisrc, acctok, wopilock):
