@@ -99,7 +99,9 @@ def _fetchfromcodimd(wopilock, acctok):
 
 def checkredirect(wopilock, acctok):
     '''Check if the target docid is real or is a redirect, and amend the wopilock structure in such case'''
-    res = requests.head(codimdurl + wopilock['docid'], verify=not skipsslverify)
+    res = requests.head(codimdurl + wopilock['docid'],
+                        params={'apikey': hashlib.md5(hashsecret).hexdigest()},
+                        verify=not skipsslverify)
     if res.status_code == http.client.FOUND:
         notehash = urlparse.urlsplit(res.next.url).path.split('/')[-1]
         log.info('msg="Document got aliased in CodiMD" olddocid="%s" docid="%s" token="%s"' %
@@ -143,7 +145,9 @@ def loadfromstorage(filemd, wopisrc, acctok):
             # generate a deterministic note hash and reserve it in CodiMD via a HEAD request
             dig = hmac.new(hashsecret, msg=wopisrc.split('/')[-1].encode(), digestmod=hashlib.sha1).digest()
             notehash = urlsafe_b64encode(dig).decode()[:-1]
-            res = requests.head(codimdurl + '/' + notehash, verify=not skipsslverify)
+            res = requests.head(codimdurl + '/' + notehash,
+                                params={'apikey': hashlib.md5(hashsecret).hexdigest()},
+                                verify=not skipsslverify)
             if res.status_code != http.client.OK:
                 log.error('msg="Unable to reserve note hash in CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
@@ -154,6 +158,7 @@ def loadfromstorage(filemd, wopisrc, acctok):
             # request to reserve the notehash + do the push again. In most cases the note will be there
             # thus we would avoid the HEAD call.
             res = requests.put(codimdurl + '/api/notes/' + notehash,
+                               params={'apikey': hashlib.md5(hashsecret).hexdigest()},    # possibly required in the future
                                json={'content': mddoc.decode()},
                                verify=not skipsslverify)
             if res.status_code == http.client.FORBIDDEN:

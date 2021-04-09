@@ -15,21 +15,21 @@ import traceback
 import socket
 from platform import python_version
 import logging
-import logging.handlers
-import urllib.parse as urlparse
-import http.client
-import json
 import threading
 import atexit
 import functools
+import urllib.parse as urlparse
+import http.client
+import json
+import hashlib
 try:
     import flask
     from werkzeug.exceptions import NotFound as Flask_NotFound
     from werkzeug.exceptions import MethodNotAllowed as Flask_MethodNotAllowed
-    import wopiclient as wopi
 except ImportError:
     print("Missing modules, please install with `pip3 install flask requests`")
     raise
+import wopiclient as wopi
 import codimd
 
 WBVERSION = 'git'
@@ -173,7 +173,9 @@ def _redirecttoapp(isreadwrite, wopisrc, acctok, wopilock):
         # to quickly jump in slide mode depending on the content
         redirecturl = codimd.codimdexturl + wopilock['docid'] + \
                       ('/publish?' if wopilock['app'] != 'slide' else '?')
-    return redirecturl
+    # in all cases append the MD5 hash of our secret as shared API key
+    return redirecturl + 'apikey=' + hashlib.md5(codimd.hashsecret).hexdigest() + '&'
+
 
 
 # The Web Application starts here
@@ -328,10 +330,10 @@ def appsave():
 def applist():
     '''Return a list of all currently opened files'''
     if (flask.request.headers.get('Authorization') != 'Bearer ' + WB.hashsecret) and \
-       (flask.request.args.get('auth') != WB.hashsecret):     # added for convenience for the time being
+       (flask.request.args.get('apikey') != WB.hashsecret):     # added for convenience
         WB.log.warning('msg="List: unauthorized access attempt, missing authorization token" '
                        'client="%s"' % flask.request.remote_addr)
-        return 'Client not authorized', http.client.UNAUTHORIZED
+        return _guireturn('Client not authorized'), http.client.UNAUTHORIZED
     WB.log.info('msg="List: returning list of open files" client="%s"' % flask.request.remote_addr)
     return flask.Response(json.dumps(WB.openfiles), mimetype='application/json')
 
