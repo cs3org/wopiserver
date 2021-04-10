@@ -134,7 +134,7 @@ class WB:
 
 def _guireturn(msg):
     '''One-liner to better render messages that may be visible in the UI'''
-    return '<div align="center" style="color:#A0A0A0; padding-top:50px; font-family:Verdana">%s</div>' % msg
+    return '<div align="center" style="color:#808080; padding-top:50px; font-family:Verdana">%s</div>' % msg
 
 
 def _renderagent(ua):
@@ -264,7 +264,7 @@ def appopen():
             wopilock = codimd.loadfromstorage(filemd, wopisrc, acctok)
     except codimd.CodiMDFailure:
         # this can be raised by loadfromstorage
-        return _guireturn('Unable to contact CodiMD, please try again later'), http.client.INTERNAL_SERVER_ERROR
+        return _guireturn('Unable to connect to CodiMD, please try again later or contact support'), http.client.INTERNAL_SERVER_ERROR
 
     # here we append the user browser to the displayName
     # TODO need to review this for production usage, it should actually come from WOPI if configured accordingly
