@@ -6,14 +6,10 @@ The Etherpad-specific code used by the WOPI bridge.
 Author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 '''
 
-import os
-import re
-import zipfile
-import io
-from random import randint
+from random import choice
+from string import ascii_lowercase
 import json
 import hashlib
-import urllib.parse as urlparse
 import http.client
 from base64 import urlsafe_b64encode
 import hmac
@@ -23,9 +19,6 @@ import wopiclient as wopi
 
 class EtherpadFailure(Exception):
     '''A custom exception to represent a fatal failure when contacting Etherpad'''
-
-# a regexp for uploads, that have links like '/uploads/upload_542a360ddefe1e21ad1b8c85207d9365.*'
-upload_re = re.compile(r'\/uploads\/upload_\w{32}\.\w+')
 
 # initialized by the main class
 log = None
@@ -48,12 +41,18 @@ def jsonify(msg):
 def _fetchfrometherpad(wopilock, acctok):
     '''Fetch a given document from from Etherpad, raise EtherpadFailure in case of errors'''
     try:
-        res = requests.get(codimdurl + wopilock['docid'] + '/download', verify=not skipsslverify)
+        res = requests.get(codimdurl + '/getText',
+                           params={'apikey': hashsecret, 'padID': wopilock['docid'][1:]},
+                           verify=not skipsslverify)
         if res.status_code != http.client.OK:
             log.error('msg="Unable to fetch document from Etherpad" token="%s" response="%d: %s"' %
                       (acctok[-20:], res.status_code, res.content))
             raise EtherpadFailure
-        return res.content
+        res = res.json()
+        if res['code'] == 0:
+            return res['data']['text']
+        log.error('msg="Error received by Etherpad" response="%s"' % res['message'])
+        raise EtherpadFailure
     except requests.exceptions.ConnectionError as e:
         log.error('msg="Exception raised attempting to connect to Etherpad" exception="%s"' % e)
         raise EtherpadFailure
@@ -70,60 +69,48 @@ def loadfromstorage(filemd, wopisrc, acctok):
     res = wopi.request(wopisrc, acctok, 'GET', contents=True)
     if res.status_code != http.client.OK:
         raise ValueError(res.status_code)
-    mdfile = res.content
+    epfile = res.content
     #wasbundle = os.path.splitext(filemd['BaseFileName'])[1] == '.zmd'
 
     # if it's a bundled file, unzip it and push the attachments in the appropriate folder
     #if wasbundle:
     #    mddoc = _unzipattachments(mdfile)
     #else:
-    mddoc = mdfile
     # compute its SHA1 hash for later checks if the file was modified
     h = hashlib.sha1()
-    h.update(mddoc)
+    h.update(epfile)
     try:
         if not filemd['UserCanWrite']:
-            # read-only case: push the doc to a newly generated note with a random docid
-            res = requests.post(codimdurl + '/new', data=mddoc,
-                                allow_redirects=False,
-                                params={'mode': 'locked'},
-                                headers={'Content-Type': 'text/markdown'},
+            # read-only case: push the doc to a newly generated note with a random padid
+            notehash = ''.join([choice(ascii_lowercase) for _ in range(20)])
+            res = requests.post(codimdurl + '/createPad',
+                                data={'text': epfile},
+                                params={'apikey': hashsecret.decode(), 'padID': notehash},
                                 verify=not skipsslverify)
-            if res.status_code != http.client.FOUND:
+            if res.status_code != http.client.OK:
                 log.error('msg="Unable to push read-only document to Etherpad" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
                 raise EtherpadFailure
-            notehash = urlparse.urlsplit(res.next.url).path.split('/')[-1]
             log.info('msg="Pushed read-only document to Etherpad" docid="%s" token="%s"' % (notehash, acctok[-20:]))
         else:
-            # generate a deterministic note hash and reserve it in Etherpad via a HEAD request
+            # generate a deterministic note hash and use it in Etherpad
             dig = hmac.new(hashsecret, msg=wopisrc.split('/')[-1].encode(), digestmod=hashlib.sha1).digest()
             notehash = urlsafe_b64encode(dig).decode()[:-1]
-            res = requests.head(codimdurl + '/' + notehash,
-                                params={'apikey': hashlib.md5(hashsecret).hexdigest()},
+            res = requests.post(codimdurl + '/createPad',
+                                data={'text': epfile},
+                                params={'apikey': hashsecret.decode(), 'padID': notehash},
                                 verify=not skipsslverify)
             if res.status_code != http.client.OK:
-                log.error('msg="Unable to reserve note hash in Etherpad" token="%s" response="%d"' %
-                          (acctok[-20:], res.status_code))
+                log.error('msg="Unable to push document to Etherpad" token="%s" response="%d: %s"' %
+                          (acctok[-20:], res.status_code, res.content))
                 raise EtherpadFailure
-            log.debug('msg="Got note hash from Etherpad" docid="%s"' % notehash)
-            # push the document to Etherpad with the update API
-            # TODO in the future we could swap the logic: attempt to push content, and on 404 use a HEAD
-            # request to reserve the notehash + do the push again. In most cases the note will be there
-            # thus we would avoid the HEAD call.
-            res = requests.put(codimdurl + '/api/notes/' + notehash,
-                               params={'apikey': hashlib.md5(hashsecret).hexdigest()},    # possibly required in the future
-                               json={'content': mddoc.decode()},
-                               verify=not skipsslverify)
-            if res.status_code == http.client.FORBIDDEN:
-                # the file got unlocked because of no activity, yet some user is there: let it go
-                log.warning('msg="Document was being edited in Etherpad, redirecting user" token"%s"' % acctok[-20:])
-            elif res.status_code != http.client.OK:
-                log.error('msg="Unable to push document to Etherpad" token="%s" response="%d"' %
-                          (acctok[-20:], res.status_code))
-                raise EtherpadFailure
-            else:
-                log.info('msg="Pushed document to Etherpad" docid="%s" token="%s"' % (notehash, acctok[-20:]))
+            if res.json()['code'] == 1:
+                # already exists, update text
+                res = requests.post(codimdurl + '/setText',
+                                    data={'text': epfile},
+                                    params={'apikey': hashsecret.decode(), 'padID': notehash},
+                                    verify=not skipsslverify)
+            log.info('msg="Pushed document to Etherpad" docid="%s" token="%s"' % (notehash, acctok[-20:]))
     except requests.exceptions.ConnectionError as e:
         log.error('msg="Exception raised attempting to connect to Etherpad" exception="%s"' % e)
         raise EtherpadFailure

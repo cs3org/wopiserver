@@ -86,7 +86,7 @@ class WB:
             # this is the external-facing URL
             etherpad.codimdexturl = os.environ.get('CODIMD_EXT_URL')
             # this is the internal URL (e.g. as visible in docker/K8s)
-            etherpad.codimdurl = os.environ.get('CODIMD_INT_URL')
+            etherpad.codimdurl = os.environ.get('CODIMD_INT_URL') + '/api/1'
             skipsslverify = os.environ.get('SKIP_SSL_VERIFY')
             if isinstance(skipsslverify, str):
                 cls.skipsslverify = skipsslverify.upper() in ('TRUE', 'YES')
@@ -94,7 +94,7 @@ class WB:
                 cls.skipsslverify = False
             if not etherpad.codimdurl:
                 # defaults to the external
-                etherpad.codimdurl = etherpad.codimdexturl
+                etherpad.codimdurl = etherpad.codimdexturl + '/api/1'
             if not etherpad.codimdurl:
                 # this is the only mandatory option
                 raise ValueError("Missing CODIMD_EXT_URL configuration")
@@ -168,15 +168,20 @@ def _redirecttoapp(isreadwrite, wopisrc, acctok, wopilock):
             pass
         # create the external redirect URL to be returned to the client:
         # metadata will be used for autosave (this is an extended feature of CodiMD)
-        redirecturl = etherpad.codimdexturl + wopilock['docid'] + '?metadata=' + \
+        redirecturl = etherpad.codimdexturl + '/p' + wopilock['docid'] + '?metadata=' + \
                       urlparse.quote_plus('%s?t=%s' % (wopisrc, acctok)) + '&'
     else:
         # read-only mode: in this case redirect to publish mode or normal view
         # to quickly jump in slide mode depending on the content
-        redirecturl = etherpad.codimdexturl + wopilock['docid'] + \
+        redirecturl = etherpad.codimdexturl + '/p' + wopilock['docid'] + \
                       ('/publish?' if wopilock['app'] != 'slide' else '?')
+<<<<<<< HEAD
     # in all cases append the API key
     return redirecturl + 'apikey=' + plugins[].apikey + '&'
+=======
+    # in all cases append the MD5 hash of our secret as shared API key
+    return redirecturl + 'apikey=' + etherpad.hashsecret.decode() + '&'
+>>>>>>> Minimal implementation of the Etherpad API
 
 
 
