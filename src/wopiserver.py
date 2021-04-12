@@ -180,6 +180,8 @@ class Wopi:
     cls.ENDPOINTS['.zmd']['view'] = cls.ENDPOINTS['.zmd']['edit'] = bridge + '/open'
     cls.ENDPOINTS['.txt'] = {}
     cls.ENDPOINTS['.txt']['view'] = cls.ENDPOINTS['.txt']['edit'] = bridge + '/open'
+    cls.ENDPOINTS['.epd'] = {}    # Etherpad, for testing
+    cls.ENDPOINTS['.epd']['view'] = cls.ENDPOINTS['.epd']['edit'] = bridge + '/open'
     cls.log.info('msg="WOPI Bridge endpoints successfully configured" BridgeURL="%s"' % bridge)
 
 
