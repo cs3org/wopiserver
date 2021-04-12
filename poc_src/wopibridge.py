@@ -30,7 +30,7 @@ except ImportError:
     print("Missing modules, please install with `pip3 install flask requests`")
     raise
 import wopiclient as wopi
-import codimd
+import etherpad
 
 WBVERSION = 'git'
 
@@ -84,18 +84,18 @@ class WB:
             cls.log.addHandler(loghandler)
             cls.log.setLevel(cls.loglevels['Debug'])
             # this is the external-facing URL
-            codimd.codimdexturl = os.environ.get('CODIMD_EXT_URL')
+            etherpad.codimdexturl = os.environ.get('CODIMD_EXT_URL')
             # this is the internal URL (e.g. as visible in docker/K8s)
-            codimd.codimdurl = os.environ.get('CODIMD_INT_URL')
+            etherpad.codimdurl = os.environ.get('CODIMD_INT_URL')
             skipsslverify = os.environ.get('SKIP_SSL_VERIFY')
             if isinstance(skipsslverify, str):
                 cls.skipsslverify = skipsslverify.upper() in ('TRUE', 'YES')
             else:
                 cls.skipsslverify = False
-            if not codimd.codimdurl:
+            if not etherpad.codimdurl:
                 # defaults to the external
-                codimd.codimdurl = codimd.codimdexturl
-            if not codimd.codimdurl:
+                etherpad.codimdurl = etherpad.codimdexturl
+            if not etherpad.codimdurl:
                 # this is the only mandatory option
                 raise ValueError("Missing CODIMD_EXT_URL configuration")
             try:
@@ -107,13 +107,10 @@ class WB:
             except TypeError:
                 cls.unlockinterval = 90
             # init modules
-            codimd.log = wopi.log = cls.log
-            codimd.skipsslverify = wopi.skipsslverify = cls.skipsslverify
+            etherpad.log = wopi.log = cls.log
+            etherpad.skipsslverify = wopi.skipsslverify = cls.skipsslverify
             with open(SECRETPATH) as f:
                 cls.hashsecret = f.readline().strip('\n')
-                codimd.hashsecret = cls.hashsecret.encode()
-            with open(APIKEYPATH + 'codimd_apikey') as f:
-                codimd.apikey = f.readline().strip('\n')
 
             # start the thread to perform async save operations
             cls.savethread = SaveThread()
@@ -152,7 +149,7 @@ def _redirecttoapp(isreadwrite, wopisrc, acctok, wopilock):
     if isreadwrite:
         # need to check again if the actual target is elsewhere and we were redirected
         # (this is CodiMD-specific and it is not understood why it happens in the first place; seems related to the update API)
-        wopilock = codimd.checkredirect(wopilock, acctok)
+        wopilock = etherpad.checkredirect(wopilock, acctok)
         # keep track of this open document for the save thread and for statistical purposes
         if wopisrc in WB.openfiles:
             # use the new acctok and the new/current wopilock content
@@ -171,15 +168,15 @@ def _redirecttoapp(isreadwrite, wopisrc, acctok, wopilock):
             pass
         # create the external redirect URL to be returned to the client:
         # metadata will be used for autosave (this is an extended feature of CodiMD)
-        redirecturl = codimd.codimdexturl + wopilock['docid'] + '?metadata=' + \
+        redirecturl = etherpad.codimdexturl + wopilock['docid'] + '?metadata=' + \
                       urlparse.quote_plus('%s?t=%s' % (wopisrc, acctok)) + '&'
     else:
         # read-only mode: in this case redirect to publish mode or normal view
         # to quickly jump in slide mode depending on the content
-        redirecturl = codimd.codimdexturl + wopilock['docid'] + \
+        redirecturl = etherpad.codimdexturl + wopilock['docid'] + \
                       ('/publish?' if wopilock['app'] != 'slide' else '?')
-    # in all cases append the API key (TODO to be refactored)
-    return redirecturl + 'apikey=' + codimd.apikey + '&'
+    # in all cases append the API key
+    return redirecturl + 'apikey=' + plugins[].apikey + '&'
 
 
 
@@ -194,7 +191,7 @@ def handleexception(ex):
     ex_type, ex_value, ex_traceback = sys.exc_info()
     WB.log.error('msg="Unexpected exception caught" exception="%s" type="%s" traceback="%s"' %
                  (ex, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback)))
-    return codimd.jsonify('Internal error, please contact support. %s' % RECOVER_MSG), http.client.INTERNAL_SERVER_ERROR
+    return etherpad.jsonify('Internal error, please contact support. %s' % RECOVER_MSG), http.client.INTERNAL_SERVER_ERROR
 
 
 @WB.app.route("/", methods=['GET'])
@@ -256,7 +253,7 @@ def appopen():
                     filemd['UserCanWrite'] = False
 
                 # otherwise, this is the first user opening the file; in both cases, fetch it
-                wopilock = codimd.loadfromstorage(filemd, wopisrc, acctok)
+                wopilock = etherpad.loadfromstorage(filemd, wopisrc, acctok)
                 # and WOPI Lock it
                 res = wopi.request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock),
                                                                      'X-Wopi-Override': 'LOCK'})
@@ -268,8 +265,8 @@ def appopen():
 
         else:
             # user has no write privileges, just fetch document and push it to CodiMD
-            wopilock = codimd.loadfromstorage(filemd, wopisrc, acctok)
-    except codimd.CodiMDFailure:
+            wopilock = etherpad.loadfromstorage(filemd, wopisrc, acctok)
+    except etherpad.EtherpadFailure:
         # this can be raised by loadfromstorage
         return _guireturn('Unable to connect to CodiMD, please try again later or contact support'), http.client.INTERNAL_SERVER_ERROR
 
@@ -297,7 +294,7 @@ def appsave():
     except (KeyError, ValueError) as e:
         WB.log.error('msg="Save: malformed or missing metadata" client="%s" headers="%s" exception="%s" error="%s"' %
                      (flask.request.remote_addr, flask.request.headers, type(e), e))
-        return codimd.jsonify('Malformed or missing metadata, could not save. %s' % RECOVER_MSG), http.client.INTERNAL_SERVER_ERROR
+        return etherpad.jsonify('Malformed or missing metadata, could not save. %s' % RECOVER_MSG), http.client.INTERNAL_SERVER_ERROR
 
     # decide whether to notify the save thread
     donotify = isclose or wopisrc not in WB.openfiles or WB.openfiles[wopisrc]['lastsave'] < time.time() - WB.saveinterval
@@ -393,7 +390,7 @@ class SaveThread(threading.Thread):
                 except wopi.InvalidLock as ile:
                     # even this attempt failed, give up
                     # TODO here we should save the file on a local storage to help later recovery
-                    WB.saveresponses[wopisrc] = codimd.jsonify(str(ile)), http.client.INTERNAL_SERVER_ERROR
+                    WB.saveresponses[wopisrc] = etherpad.jsonify(str(ile)), http.client.INTERNAL_SERVER_ERROR
                     # set some 'fake' metadata, will be automatically cleaned up later
                     openfile['lastsave'] = int(time.time())
                     openfile['tosave'] = False
@@ -401,7 +398,7 @@ class SaveThread(threading.Thread):
                     return None
             WB.log.info('msg="SaveThread: saving file" token="%s" docid="%s"' %
                         (openfile['acctok'][-20:], openfile['docid']))
-            WB.saveresponses[wopisrc] = codimd.savetostorage(
+            WB.saveresponses[wopisrc] = etherpad.savetostorage(
                 wopisrc, openfile['acctok'], _intersection(openfile['toclose']), wopilock)
             openfile['lastsave'] = int(time.time())
             openfile['tosave'] = False
