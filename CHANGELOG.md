@@ -1,5 +1,11 @@
 ## Changelog for the WOPI server
 
+### Tue Apr 13 2021 - v6.4.0
+- Fixed WOPI locking when a stale LibreOffice/OnlyOffice
+  lock was found on the storage
+- Improved PutFile responses when dealing with conflicts
+- Fixed CS3 APIs bindings import
+
 ### Fri Mar 12 2021 - v6.3.0
 - Fixed unique inodes by using a base64 encoding of the
   underlying inode (endpoint + fileid for xrootd-EOS)
