@@ -32,9 +32,9 @@ def init(config, log):
   ctx['log'] = log
   ctx['chunksize'] = config.getint('io', 'chunksize')
   ctx['authtokenvalidity'] = config.getint('cs3', 'authtokenvalidity')
-  revahost = config.get('cs3', 'revahost')
+  revagateway = config.get('cs3', 'revagateway')
   # prepare the gRPC connection
-  ch = grpc.insecure_channel(revahost)
+  ch = grpc.insecure_channel(revagateway)
   ctx['cs3stub'] = cs3gw_grpc.GatewayAPIStub(ch)
 
 
