@@ -126,3 +126,15 @@ def relock(wopisrc, acctok, docid, isclose):
     # relock was successful, return lock: along with noteids univocally associated to files (WOPISrc's),
     # we are sure no other updates could have been missed
     return wopilock
+
+def handleputfile(wopicall, wopisrc, res):
+    '''Deal with conflicts or errors following a PutFile/PutRelative request'''
+    if res.status_code == http.client.CONFLICT:
+        log.warning('msg="Conflict when calling WOPI %s" url="%s" reason="%s"' %
+                    (wopicall, wopisrc, res.headers.get('X-WOPI-LockFailureReason')))
+        return 'Error saving the file. %s' % res.headers.get('X-WOPI-LockFailureReason'))
+    if res.status_code != http.client.OK:
+        log.error('msg="Calling WOPI %s failed" url="%s" response="%s"' % (wopicall, wopisrc, res.status_code))
+        # TODO need to save the file on a local storage for later recovery
+        return 'Error saving the file, please contact support'
+    return None

@@ -208,20 +208,6 @@ def _getattachments(mddoc, docfilename, forcezip=False):
     return zip_buffer.getvalue(), response
 
 
-def _dealwithputfile(wopicall, wopisrc, res):
-    '''Deal with conflicts or errors following a PutFile/PutRelative request'''
-    if res.status_code == http.client.CONFLICT:
-        log.warning('msg="Conflict when calling WOPI %s" url="%s" reason="%s"' %
-                    (wopicall, wopisrc, res.headers.get('X-WOPI-LockFailureReason')))
-        return jsonify('Error saving the file. %s' % res.headers.get('X-WOPI-LockFailureReason')), \
-               http.client.INTERNAL_SERVER_ERROR
-    if res.status_code != http.client.OK:
-        log.error('msg="Calling WOPI %s failed" url="%s" response="%s"' % (wopicall, wopisrc, res.status_code))
-        # TODO need to save the file on a local storage for later recovery
-        return jsonify('Error saving the file, please contact support'), http.client.INTERNAL_SERVER_ERROR
-    return None
-
-
 def _saveas(wopisrc, acctok, wopilock, targetname, content):
     '''Save a given document with an alternate name by using WOPI PutRelative'''
     putrelheaders = {'X-WOPI-Lock': json.dumps(wopilock),
@@ -230,9 +216,9 @@ def _saveas(wopisrc, acctok, wopilock, targetname, content):
                      'X-WOPI-SuggestedTarget': targetname
                     }
     res = wopi.request(wopisrc, acctok, 'POST', headers=putrelheaders, contents=content)
-    reply = _dealwithputfile('PutRelative', wopisrc, res)
+    reply = wopi.handleputfile('PutRelative', wopisrc, res)
     if reply:
-        return reply
+        return jsonify(reply), http.client.INTERNAL_SERVER_ERROR
 
     # use the new file's metadata from PutRelative to remove the previous file: we can do that only on close
     # because we need to keep using the current wopisrc/acctok until the session is alive in CodiMD
@@ -281,9 +267,9 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
     if (wasbundle ^ (not bundlefile)) or not isclose:
         res = wopi.request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock)},
                            contents=(bundlefile if wasbundle else mddoc))
-        reply = _dealwithputfile('PutFile', wopisrc, res)
+        reply = wopi.handleputfile('PutFile', wopisrc, res)
         if reply:
-            return reply
+            return jsonify(reply), http.client.INTERNAL_SERVER_ERROR
         wopi.refreshlock(wopisrc, acctok, wopilock, isdirty=True)
         log.info('msg="Save completed" filename="%s" isclose="%s" token="%s"' %
                  (wopilock['filename'], isclose, acctok[-20:]))
