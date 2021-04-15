@@ -42,7 +42,7 @@ SECRETPATH = '/var/run/secrets/wbsecret'
 
 # a standard message to be displayed by the app when some content might be lost: this would only
 # appear in case of uncaught exceptions or bugs handling the CodiMD webhook
-RECOVER_MSG = 'Please copy the content in a safe place and reopen the document afresh to paste it back.'
+RECOVER_MSG = 'Please copy the content to a safe place and reopen the document again to paste it back.'
 
 
 class WB:
