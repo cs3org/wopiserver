@@ -11,59 +11,83 @@ from string import ascii_lowercase
 import json
 import hashlib
 import http.client
-from base64 import urlsafe_b64encode
-import hmac
+import urllib.parse as urlparse
 import requests
 import wopiclient as wopi
 
 
-class EtherpadFailure(Exception):
+class AppFailure(Exception):
     '''A custom exception to represent a fatal failure when contacting Etherpad'''
 
-# initialized by the main class
+# initialized by the main class or by the init method
+appurl = None
+appexturl = None
+apikey = None
 log = None
-codimdurl = None
-codimdexturl = None
 skipsslverify = None
-hashsecret = None
+
+
+def init(env, apipath):
+    '''Initialize global vars from the environment'''
+    global appurl
+    global appexturl
+    global apikey
+    appexturl = env.get('ETHERPAD_EXT_URL')
+    appurl = env.get('ETHERPAD_URL')
+    if not appurl:
+        # defaults to the external
+        appurl = appexturl
+    if not appurl:
+        raise ValueError("Missing ETHERPAD_EXT_URL env var")
+    appurl += '/api/1'
+    with open(apipath + 'etherpad_apikey') as f:
+        apikey = f.readline().strip('\n')
 
 
 def jsonify(msg):
     '''One-liner to consistently json-ify a given message'''
-    # a delay = 0 means the user has to click on it to dismiss it, good for longer messages
-    return '{"message": "%s", "delay": "%.1f"}' % (msg, 0 if len(msg) > 60 else 0.5 + len(msg)/20)
+    return '{"message": "%s"}' % msg
+
+
+def getredirecturl(isreadwrite, wopisrc, acctok, wopilock, displayname):
+    '''Return a valid URL to the app for the given WOPI context'''
+    if isreadwrite:
+        url = appexturl + '/p' + wopilock['docid'] + '?metadata=' + \
+              urlparse.quote_plus('%s?t=%s' % (wopisrc, acctok)) + '&'
+    else:
+        # read-only mode: first obtain a read-only link
+        # TODO /getReadOnly
+        url = appexturl # + res....
+    # set the displayname
+    # TODO /setUser
+    # return the URL with the API key
+    return url + 'apikey=' + apikey
 
 
 # Cloud storage to Etherpad
 ###########################
 
-
 def _fetchfrometherpad(wopilock, acctok):
-    '''Fetch a given document from from Etherpad, raise EtherpadFailure in case of errors'''
+    '''Fetch a given document from from Etherpad, raise AppFailure in case of errors'''
     try:
-        res = requests.get(codimdurl + '/getText',
-                           params={'apikey': hashsecret, 'padID': wopilock['docid'][1:]},
+        res = requests.get(appurl + '/getText',
+                           params={'apikey': apikey, 'padID': wopilock['docid'][1:]},
                            verify=not skipsslverify)
         if res.status_code != http.client.OK:
             log.error('msg="Unable to fetch document from Etherpad" token="%s" response="%d: %s"' %
                       (acctok[-20:], res.status_code, res.content))
-            raise EtherpadFailure
+            raise AppFailure
         res = res.json()
         if res['code'] == 0:
             return res['data']['text']
         log.error('msg="Error received by Etherpad" response="%s"' % res['message'])
-        raise EtherpadFailure
+        raise AppFailure
     except requests.exceptions.ConnectionError as e:
         log.error('msg="Exception raised attempting to connect to Etherpad" exception="%s"' % e)
-        raise EtherpadFailure
+        raise AppFailure
 
 
-def checkredirect(wopilock, _acctok_unused):
-    '''Check if the target docid is real or is a redirect, and amend the wopilock structure in such case'''
-    return wopilock
-
-
-def loadfromstorage(filemd, wopisrc, acctok):
+def loadfromstorage(filemd, wopisrc, acctok, docid):
     '''Copy document from storage to Etherpad'''
     # WOPI GetFile
     res = wopi.request(wopisrc, acctok, 'GET', contents=True)
@@ -82,88 +106,51 @@ def loadfromstorage(filemd, wopisrc, acctok):
     try:
         if not filemd['UserCanWrite']:
             # read-only case: push the doc to a newly generated note with a random padid
-            notehash = ''.join([choice(ascii_lowercase) for _ in range(20)])
-            res = requests.post(codimdurl + '/createPad',
+            docid = ''.join([choice(ascii_lowercase) for _ in range(20)])
+            res = requests.post(appurl + '/createPad',
                                 data={'text': epfile},
-                                params={'apikey': hashsecret.decode(), 'padID': notehash},
+                                params={'apikey': apikey, 'padID': docid},
                                 verify=not skipsslverify)
             if res.status_code != http.client.OK:
                 log.error('msg="Unable to push read-only document to Etherpad" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
-                raise EtherpadFailure
-            log.info('msg="Pushed read-only document to Etherpad" docid="%s" token="%s"' % (notehash, acctok[-20:]))
+                raise AppFailure
+            log.info('msg="Pushed read-only document to Etherpad" docid="%s" token="%s"' % (docid, acctok[-20:]))
         else:
             # generate a deterministic note hash and use it in Etherpad
-            dig = hmac.new(hashsecret, msg=wopisrc.split('/')[-1].encode(), digestmod=hashlib.sha1).digest()
-            notehash = urlsafe_b64encode(dig).decode()[:-1]
-            res = requests.post(codimdurl + '/createPad',
+            res = requests.post(appurl + '/createPad',
                                 data={'text': epfile},
-                                params={'apikey': hashsecret.decode(), 'padID': notehash},
+                                params={'apikey': apikey, 'padID': docid},
                                 verify=not skipsslverify)
             if res.status_code != http.client.OK:
                 log.error('msg="Unable to push document to Etherpad" token="%s" response="%d: %s"' %
                           (acctok[-20:], res.status_code, res.content))
-                raise EtherpadFailure
+                raise AppFailure
             if res.json()['code'] == 1:
                 # already exists, update text
-                res = requests.post(codimdurl + '/setText',
+                res = requests.post(appurl + '/setText',
                                     data={'text': epfile},
-                                    params={'apikey': hashsecret.decode(), 'padID': notehash},
+                                    params={'apikey': apikey, 'padID': docid},
                                     verify=not skipsslverify)
-            log.info('msg="Pushed document to Etherpad" docid="%s" token="%s"' % (notehash, acctok[-20:]))
+            log.info('msg="Pushed document to Etherpad" docid="%s" token="%s"' % (docid, acctok[-20:]))
     except requests.exceptions.ConnectionError as e:
         log.error('msg="Exception raised attempting to connect to Etherpad" exception="%s"' % e)
-        raise EtherpadFailure
-    # we got the hash of the document just created as a redirected URL, generate a WOPI lock structure
-    wopilock = wopi.generatelock(notehash, filemd, h.hexdigest(),
-                                 'etherpad',
-                                 acctok, False)
-    return wopilock
+        raise AppFailure
+    # generate and return a WOPI lock structure for this document
+    return wopi.generatelock(docid, filemd, h.hexdigest(), None, acctok, False)
 
 
 # Etherpad to cloud storage
 ###########################
 
-def _saveas(wopisrc, acctok, wopilock, targetname, content):
-    '''Save a given document with an alternate name by using WOPI PutRelative'''
-    putrelheaders = {'X-WOPI-Lock': json.dumps(wopilock),
-                     'X-WOPI-Override': 'PUT_RELATIVE',
-                     # SuggestedTarget to not overwrite a possibly existing file
-                     'X-WOPI-SuggestedTarget': targetname
-                    }
-    res = wopi.request(wopisrc, acctok, 'POST', headers=putrelheaders, contents=content)
-    reply = wopi.handleputfile('PutRelative', wopisrc, res)
-    if reply:
-        return jsonify(reply), http.client.INTERNAL_SERVER_ERROR
-
-    # use the new file's metadata from PutRelative to remove the previous file: we can do that only on close
-    # because we need to keep using the current wopisrc/acctok until the session is alive in Etherpad
-    newname = res.json()['Name']
-    # unlock and delete original file
-    res = wopi.request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
-    if res.status_code != http.client.OK:
-        log.warning('msg="Failed to unlock the previous file" token="%s" response="%d"' %
-                    (acctok[-20:], res.status_code))
-    else:
-        res = wopi.request(wopisrc, acctok, 'POST', headers={'X-Wopi-Override': 'DELETE'})
-        if res.status_code != http.client.OK:
-            log.warning('msg="Failed to delete the previous file" token="%s" response="%d"' %
-                        (acctok[-20:], res.status_code))
-        else:
-            log.info('msg="Previous file unlocked and removed successfully" token="%s"' % acctok[-20:])
-
-    log.info('msg="Final save completed" filename"%s" token="%s"' % (newname, acctok[-20:]))
-    return jsonify('File saved successfully'), http.client.OK
-
-
 def savetostorage(wopisrc, acctok, isclose, wopilock):
     '''Copy document from Etherpad back to storage'''
     # get document from Etherpad
     try:
-        log.info('msg="Fetching file from Etherpad" isclose="%s" codimdurl="%s" token="%s"' %
-                 (isclose, codimdurl + wopilock['docid'], acctok[-20:]))
+        log.info('msg="Fetching file from Etherpad" isclose="%s" appurl="%s" token="%s"' %
+                 (isclose, appurl + wopilock['docid'], acctok[-20:]))
         mddoc = _fetchfrometherpad(wopilock, acctok)
-    except EtherpadFailure:
+    except AppFailure:
         return jsonify('Could not save file, failed to fetch document from Etherpad'), http.client.INTERNAL_SERVER_ERROR
 
     if wopilock['digest'] != 'dirty':
@@ -194,4 +181,4 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
 
     # on close, use saveas for either the new bundle, if this is the first time we have attachments,
     # or the single md file, if there are no more attachments.
-    return _saveas(wopisrc, acctok, wopilock, wopilock['filename'], mddoc)
+    #return _saveas(wopisrc, acctok, wopilock, wopilock['filename'], mddoc)
