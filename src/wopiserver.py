@@ -483,8 +483,9 @@ def cboxLock():
                   (filename, filestat['mtime'], lockid, lockstat['mtime']))
     return str(lockid), http.client.OK
 
-  # else: create a LibreOffice-compatible lock, but with an extra line that contains the timestamp when it was first
-  # created (i.e. now or whatever was found on the previous one). This is used by the OnlyOffice integration.
+  # else: create or refresh a LibreOffice-compatible lock, but with an extra line that contains the timestamp when it was
+  # first created (i.e. now or whatever was found on the previous one, provided it's more recent than the token validity).
+  # This is used by the OnlyOffice integration.
   # TODO once OnlyOffice supports locking, we may create an OnlyOffice-compatible lock here (cf. CERNBOX-1051)
   # provided we can extend it in a similar way.
   try:
@@ -537,6 +538,10 @@ def cboxLock():
     # the sync client), similarly to the WOPI lock logic below.
     try:
       lockid = int(lock.split(';\n')[1].strip(';'))
+      if int(time.time()) - lockid > WB.tokenvalidity:
+        # the previous timestamp is older than the access token validity (one day typically):
+        # force a new lockid, the old one must be stale
+        lockid = int(time.time())
       lolockcontent = ',OnlyOffice Online Editor,%s,%s,ExtWebApp;\n%d;' % \
                       (Wopi.wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())), lockid)
       storage.writefile(endpoint, utils.getLibreOfficeLockName(filename), userid, lolockcontent, islock=False)
