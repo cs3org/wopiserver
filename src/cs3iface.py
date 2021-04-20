@@ -33,6 +33,9 @@ def init(config, log):
   ctx['chunksize'] = config.getint('io', 'chunksize')
   ctx['authtokenvalidity'] = config.getint('cs3', 'authtokenvalidity')
   revagateway = config.get('cs3', 'revagateway')
+  if not revagateway:
+    # legacy entry, to be dropped at next major release
+    revagateway = config.get('cs3', 'revahost')
   # prepare the gRPC connection
   ch = grpc.insecure_channel(revagateway)
   ctx['cs3stub'] = cs3gw_grpc.GatewayAPIStub(ch)
@@ -70,13 +73,13 @@ def stat(endpoint, fileid, userid, versioninv=0):
   ctx['log'].info('msg="Invoked stat" fileid="%s" elapsedTimems="%.1f"' % (fileid, (tend-tstart)*1000))
   if statInfo.status.code == cs3code.CODE_OK:
     ctx['log'].debug('msg="Stat result" data="%s"' % statInfo)
-    # we base64-encode the inode so it can be used in a WOPISrc
-    inode = urlsafe_b64encode(statInfo.info.id.opaque_id.encode())
     if statInfo.info.type == cs3spr.RESOURCE_TYPE_CONTAINER:
       raise IOError('Is a directory')
     elif statInfo.info.type not in (cs3spr.RESOURCE_TYPE_FILE, cs3spr.RESOURCE_TYPE_SYMLINK):
       ctx['log'].warning('msg="Stat: unexpected type" type="%d"' % statInfo.info.type)
       raise IOError('Unexpected type %d' % statInfo.info.type)
+    # we base64-encode the inode so it can be used in a WOPISrc
+    inode = urlsafe_b64encode(statInfo.info.id.opaque_id.encode())
     return {
         'inode': statInfo.info.id.storage_id + '-' + inode.decode(),
         'filepath': statInfo.info.path,
