@@ -538,7 +538,7 @@ def cboxLock():
     # the sync client), similarly to the WOPI lock logic below.
     try:
       lockid = int(lock.split(';\n')[1].strip(';'))
-      if int(time.time()) - lockid > WB.tokenvalidity:
+      if time.time() - lockid > Wopi.tokenvalidity:
         # the previous timestamp is older than the access token validity (one day typically):
         # force a new lockid, the old one must be stale
         lockid = int(time.time())
