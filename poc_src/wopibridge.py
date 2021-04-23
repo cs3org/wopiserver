@@ -178,8 +178,8 @@ def _redirecttoapp(isreadwrite, wopisrc, acctok, wopilock):
         # to quickly jump in slide mode depending on the content
         redirecturl = codimd.codimdexturl + wopilock['docid'] + \
                       ('/publish?' if wopilock['app'] != 'slide' else '?')
-    # in all cases append the MD5 hash of our secret as shared API key
-    return redirecturl + 'apikey=' + hashlib.md5(codimd.hashsecret).hexdigest() + '&'
+    # in all cases append the API key (TODO to be refactored)
+    return redirecturl + 'apikey=' + codimd.apikey + '&'
 
 
 
