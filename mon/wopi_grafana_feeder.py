@@ -20,7 +20,6 @@ import struct
 import datetime
 import getopt
 import sys
-import socket
 
 CARBON_TCPPORT = 2004
 carbonHost = ''

@@ -29,10 +29,10 @@ try:
   import jwt                     # JSON Web Tokens support
   from prometheus_flask_exporter import PrometheusMetrics    # Prometheus support
 except ImportError:
-  print("Missing modules, please install Flask and JWT with `pip3 install flask PyJWT pyOpenSSL`")
+  print("Missing modules, please install dependencies with `pip3 install -f requirements.txt`")
   raise
 
-# the following constant is replaced on the fly when generating the RPM (cf. spec file)
+# the following constant is replaced on the fly when generating the docker image
 WOPISERVERVERSION = 'git'
 
 # alias of the storage layer module, see function below
@@ -885,7 +885,6 @@ def wopiPutRelative(fileid, reqheaders, acctok):
       retrievedTargetLock = utils.retrieveWopiLock(fileid, 'PUT_RELATIVE', None, acctok, overridefilename=relTarget)
     except IOError:
       fileExists = False
-      retrievedTargetLock = None
     if fileExists and (not overwriteTarget or retrievedTargetLock):
       return utils.makeConflictResponse('PUT_RELATIVE', retrievedTargetLock, '', '', relTarget, 'Target file already exists')
     # else we can use the relative target
