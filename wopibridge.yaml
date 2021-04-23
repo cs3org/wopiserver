@@ -21,11 +21,20 @@ services:
       - CODIMD_EXT_URL=${CODIMDPROXY_URL}
     volumes:
       - logs:/var/log/wopi
+    secrets:
+      - wbsecret
+      - codimd_apikey
     healthcheck:
       test: ["CMD", "curl", "--insecure", "https://localhost:8000"]
       interval: 600s
       timeout: 5s
       retries: 3
+
+secrets:
+  wbsecret:
+    file: /etc/wopi/wbsecret
+  codimd_apikey:
+    file: /etc/wopi/codimd_apikey
 
 volumes:
   logs:
