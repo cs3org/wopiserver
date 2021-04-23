@@ -40,6 +40,9 @@ CERTPATH = '/var/run/secrets/cert.pem'
 # path to a secret used to hash noteids and protect the /list endpoint
 SECRETPATH = '/var/run/secrets/wbsecret'
 
+# path to the APIKEY secrets
+APIKEYPATH = '/var/run/secrets/'
+
 # a standard message to be displayed by the app when some content might be lost: this would only
 # appear in case of uncaught exceptions or bugs handling the CodiMD webhook
 RECOVER_MSG = 'Please copy the content to a safe place and reopen the document again to paste it back.'
@@ -109,6 +112,8 @@ class WB:
             with open(SECRETPATH) as f:
                 cls.hashsecret = f.readline().strip('\n')
                 codimd.hashsecret = cls.hashsecret.encode()
+            with open(APIKEYPATH + 'codimd_apikey') as f:
+                codimd.apikey = f.readline().strip('\n')
 
             # start the thread to perform async save operations
             cls.savethread = SaveThread()
