@@ -110,7 +110,15 @@ def relock(wopisrc, acctok, docid, isclose):
 
     # lock the file again: we assume we are alone as the previous lock had been released
     wopilock = generatelock(docid, filemd, 'dirty', 'md', acctok, isclose)
-    res = request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'LOCK'})
+    lockheaders = {'X-WOPI-Lock': json.dumps(wopilock),
+                   'X-WOPI-Override': 'REFRESH_LOCK',
+                   'X-WOPI-Validate-Target': 'True'    # this is an extension of the Lock API
+                  }
+    res = request(wopisrc, acctok, 'POST', headers=lockheaders)
+    if res.status_code == http.client.CONFLICT:
+        log.warning('msg="Got conflict in relocking the file" response="%d" token="%s" reason="%s"' %
+                    (res.status_code, acctok[-20:], res.headers.get('X-WOPI-LockFailureReason')))
+        raise InvalidLock('The file was modified externally, please refresh this page to get its current version')
     if res.status_code != http.client.OK:
         log.warning('msg="Failed to relock the file" response="%d" token="%s" reason="%s"' %
                     (res.status_code, acctok[-20:], res.headers.get('X-WOPI-LockFailureReason')))
