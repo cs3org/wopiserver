@@ -753,13 +753,23 @@ def wopiLock(fileid, reqheaders, acctok):
   # cf. http://wopi.readthedocs.io/projects/wopirest/en/latest/files/Lock.html
   op = reqheaders['X-WOPI-Override']
   lock = reqheaders['X-WOPI-Lock']
-  oldLock = reqheaders['X-WOPI-OldLock'] if 'X-WOPI-OldLock' in reqheaders else None
+  oldLock = reqheaders.get('X-WOPI-OldLock')
+  validateTarget = reqheaders.get('X-WOPI-Validate-Target')
   retrievedLock = utils.retrieveWopiLock(fileid, op, lock, acctok)
+
   # perform the required checks for the validity of the new lock
-  if oldLock is not None and retrievedLock is None and op == 'REFRESH_LOCK':
-    return 'Previous lock not found', http.client.NOT_FOUND
-  if (oldLock is None and retrievedLock is not None and not utils.compareWopiLocks(retrievedLock, lock)) or \
-     (oldLock is not None and not utils.compareWopiLocks(retrievedLock, oldLock)):
+  if not retrievedLock and op == 'REFRESH_LOCK':
+    if validateTarget:
+      # this is an extension of the API: a REFRESH_LOCK without previous lock but with a Validate-Target header
+      # is allowed provided that the target file was last saved by WOPI and not overwritten by external actions,
+      # that is it must have a valid LASTSAVETIMEKEY xattr
+      savetime = storage.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY)
+    else:
+      savetime = None
+    if not savetime or not savetime.isdigit():
+      return utils.makeConflictResponse(op, '', lock, oldLock, acctok['filename'],
+                                        'The file was not locked' + ' and got modified' if validateTarget else '')
+  if retrievedLock and not utils.compareWopiLocks(retrievedLock, (oldLock if oldLock else lock)):
     # XXX we got a locking conflict: as we've seen cases of looping clients attempting to restate the same
     # XXX lock over and over again, we keep track of this request and we forcefully clean up the lock
     # XXX and let the request succeed once 'too many' (> 5) requests come for the same lock
