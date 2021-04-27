@@ -768,21 +768,23 @@ def wopiLock(fileid, reqheaders, acctok):
     else:
       Wopi.repeatedLockRequests[retrievedLock] += 1
     if Wopi.repeatedLockRequests[retrievedLock] < 5:
-      return utils.makeConflictResponse(op, retrievedLock, lock, oldLock, acctok['filename'])
+      return utils.makeConflictResponse(op, retrievedLock, lock, oldLock, acctok['filename'], \
+                                        'The file was locked by another appplication')
     wopiUnlock(fileid, reqheaders, acctok, force=True)
     Wopi.log.warning('msg="Lock: BLINDLY removed the existing lock to unblock client" op="%s" user="%s" '\
                      'filename="%s" token="%s"' % \
                      (op, acctok['userid'], acctok['filename'], \
                       flask.request.args['access_token'][-20:]))
+
   # LOCK or REFRESH_LOCK: set the lock to the given one, including the expiration time
   try:
-    utils.storeWopiLock(op, lock, acctok, os.path.splitext(acctok['filename'])[1] in Wopi.nonofficetypes)
+    utils.storeWopiLock(op, lock, acctok, os.path.splitext(acctok['filename'])[1] not in Wopi.nonofficetypes)
   except IOError as e:
     if utils.EXCL_ERROR in str(e):
       # this file was already locked externally: storeWopiLock looks at LibreOffice-compatible locks
       return utils.makeConflictResponse(op, 'External App', lock, oldLock, acctok['filename'], \
                                         'The file was locked by another application')
-    elif 'No such file or directory' in str(e):
+    if 'No such file or directory' in str(e):
       # the file got renamed/deleted: this is equivalent to a conflict
       return utils.makeConflictResponse(op, 'External App', lock, oldLock, acctok['filename'], \
                                         'The file got moved or deleted')

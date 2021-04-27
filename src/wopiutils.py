@@ -157,7 +157,7 @@ def retrieveWopiLock(fileid, operation, lock, acctok, overridefilename=None):
     retrievedLock = jwt.decode(lockcontent, wopi.wopisecret, algorithms=['HS256'])
     savetime = st.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], LASTSAVETIMEKEY)
     if max(0 if 'exp' not in retrievedLock else retrievedLock['exp'],
-           0 if savetime is None else int(savetime) + wopi.config.getint('general', 'wopilockexpiration')) < time.time():
+           0 if not savetime else int(savetime) + wopi.config.getint('general', 'wopilockexpiration')) < time.time():
       # we got a malformed or expired lock, reject. Note that we may get an ExpiredSignatureError
       # by jwt.decode() as we had stored it with a timed signature.
       raise jwt.exceptions.ExpiredSignatureError
@@ -187,7 +187,7 @@ def retrieveWopiLock(fileid, operation, lock, acctok, overridefilename=None):
   return retrievedLock['wopilock']
 
 
-def storeWopiLock(operation, lock, acctok, isnotoffice):
+def storeWopiLock(operation, lock, acctok, isoffice):
   '''Stores the lock for a given file in the form of an encoded JSON string (cf. the access token)'''
   try:
     # validate that the underlying file is still there (it might have been moved/deleted)
@@ -197,7 +197,7 @@ def storeWopiLock(operation, lock, acctok, isnotoffice):
                 (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], e))
     raise
 
-  if not isnotoffice:
+  if isoffice:
     try:
       # first try to look for a MS Office lock
       lockstat = st.stat(acctok['endpoint'], getMicrosoftOfficeLockName(acctok['filename']), acctok['userid'])
