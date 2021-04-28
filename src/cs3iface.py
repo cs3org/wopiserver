@@ -32,8 +32,9 @@ def init(config, log):
   ctx['log'] = log
   ctx['chunksize'] = config.getint('io', 'chunksize')
   ctx['authtokenvalidity'] = config.getint('cs3', 'authtokenvalidity')
-  revagateway = config.get('cs3', 'revagateway')
-  if not revagateway:
+  if config.has_option('cs3', 'revagateway'):
+    revagateway = config.get('cs3', 'revagateway')
+  else:
     # legacy entry, to be dropped at next major release
     revagateway = config.get('cs3', 'revahost')
   # prepare the gRPC connection
