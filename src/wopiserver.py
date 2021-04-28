@@ -117,7 +117,8 @@ class Wopi:
     except (configparser.NoOptionError, OSError) as e:
       # any error we get here with the configuration is fatal
       cls.log.fatal('msg="Failed to initialize the service, aborting" error="%s"' % e)
-      sys.exit(-22)
+      print("Failed to initialize the service: %s\n" % e, file=sys.stderr)
+      sys.exit(22)
 
   @classmethod
   def initappsregistry(cls):
