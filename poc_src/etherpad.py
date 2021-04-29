@@ -70,18 +70,13 @@ def getredirecturl(isreadwrite, wopisrc, acctok, wopilock, displayname):
 def _fetchfrometherpad(wopilock, acctok):
     '''Fetch a given document from from Etherpad, raise AppFailure in case of errors'''
     try:
-        res = requests.get(appurl + '/getText',
-                           params={'apikey': apikey, 'padID': wopilock['docid'][1:]},
+        res = requests.get(appurl + '/p' + wopilock['docid'] + '/export/etherpad',
                            verify=not skipsslverify)
         if res.status_code != http.client.OK:
             log.error('msg="Unable to fetch document from Etherpad" token="%s" response="%d: %s"' %
                       (acctok[-20:], res.status_code, res.content))
             raise AppFailure
-        res = res.json()
-        if res['code'] == 0:
-            return res['data']['text']
-        log.error('msg="Error received by Etherpad" response="%s"' % res['message'])
-        raise AppFailure
+        return res.content
     except requests.exceptions.ConnectionError as e:
         log.error('msg="Exception raised attempting to connect to Etherpad" exception="%s"' % e)
         raise AppFailure
@@ -94,12 +89,6 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
     if res.status_code != http.client.OK:
         raise ValueError(res.status_code)
     epfile = res.content
-    #wasbundle = os.path.splitext(filemd['BaseFileName'])[1] == '.zmd'
-
-    # if it's a bundled file, unzip it and push the attachments in the appropriate folder
-    #if wasbundle:
-    #    mddoc = _unzipattachments(mdfile)
-    #else:
     # compute its SHA1 hash for later checks if the file was modified
     h = hashlib.sha1()
     h.update(epfile)
@@ -149,36 +138,25 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
     try:
         log.info('msg="Fetching file from Etherpad" isclose="%s" appurl="%s" token="%s"' %
                  (isclose, appurl + wopilock['docid'], acctok[-20:]))
-        mddoc = _fetchfrometherpad(wopilock, acctok)
+        epfile = _fetchfrometherpad(wopilock, acctok)
     except AppFailure:
         return jsonify('Could not save file, failed to fetch document from Etherpad'), http.client.INTERNAL_SERVER_ERROR
 
     if wopilock['digest'] != 'dirty':
         # so far the file was not touched: before forcing a put let's validate the contents
         h = hashlib.sha1()
-        h.update(mddoc)
+        h.update(epfile.encode())
         if h.hexdigest() == wopilock['digest']:
             log.info('msg="File unchanged, skipping save" token="%s"' % acctok[-20:])
             return '{}', http.client.ACCEPTED
 
-    # check if we have attachments
-    # wasbundle = os.path.splitext(wopilock['filename'])[1] == '.zmd'
-    # bundlefile, attresponse = _getattachments(mddoc.decode(), wopilock['filename'].replace('.zmd', '.md'),
-    #                                          (wasbundle and not isclose))
-
-    # WOPI PutFile for the file or the bundle if it already existed
-    if True: # (wasbundle ^ (not bundlefile)) or not isclose:
-        res = wopi.request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock)},
-                           contents=mddoc)
-        reply = wopi.handleputfile('PutFile', wopisrc, res)
-        if reply:
-            return jsonify(reply), http.client.INTERNAL_SERVER_ERROR
-        wopi.refreshlock(wopisrc, acctok, wopilock, isdirty=True)
-        log.info('msg="Save completed" filename="%s" isclose="%s" token="%s"' %
-                 (wopilock['filename'], isclose, acctok[-20:]))
-        # combine the responses
-        return jsonify('File saved successfully'), http.client.OK
-
-    # on close, use saveas for either the new bundle, if this is the first time we have attachments,
-    # or the single md file, if there are no more attachments.
-    #return _saveas(wopisrc, acctok, wopilock, wopilock['filename'], mddoc)
+    # WOPI PutFile
+    res = wopi.request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock)},
+                        contents=epfile)
+    reply = wopi.handleputfile('PutFile', wopisrc, res)
+    if reply:
+        return jsonify(reply), http.client.INTERNAL_SERVER_ERROR
+    wopi.refreshlock(wopisrc, acctok, wopilock, isdirty=True)
+    log.info('msg="Save completed" filename="%s" isclose="%s" token="%s"' %
+                (wopilock['filename'], isclose, acctok[-20:]))
+    return jsonify('File saved successfully'), http.client.OK
