@@ -1,5 +1,12 @@
 ## Changelog for the WOPI server
 
+### Thu Apr 29 2021 - v6.5.0
+- Extended the REFRESH_LOCK API to support relocking
+  a file when it was not externally modified
+- Fixed /cbox/lock in order to ensure the returned
+  lockid is never older than the token expiration time
+- Introduced a new .epd file extension for Etherpad
+
 ### Tue Apr 13 2021 - v6.4.0
 - Fixed WOPI locking when a stale LibreOffice/OnlyOffice
   lock was found on the storage
