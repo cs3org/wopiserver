@@ -2,7 +2,7 @@
 #
 # Build: docker-compose -f wopibridge.yaml build --build-arg VERSION=`git describe | sed 's/^v//'` wopibridge
 
-FROM python:3
+FROM python:3.10.0a6-slim
 
 ARG VERSION=latest
 
