@@ -31,6 +31,7 @@ def init(config, log):
   '''Init module-level variables'''
   ctx['log'] = log
   ctx['chunksize'] = config.getint('io', 'chunksize')
+  ctx['ssl_verify'] = config.getboolean('cs3', 'sslverify', fallback=True)
   ctx['authtokenvalidity'] = config.getint('cs3', 'authtokenvalidity')
   if config.has_option('cs3', 'revagateway'):
     revagateway = config.get('cs3', 'revagateway')
@@ -40,6 +41,7 @@ def init(config, log):
   # prepare the gRPC connection
   ch = grpc.insecure_channel(revagateway)
   ctx['cs3stub'] = cs3gw_grpc.GatewayAPIStub(ch)
+
 
 
 def authenticate_for_test(userid, userpwd):
@@ -165,7 +167,7 @@ def readfile(_endpoint, filepath, userid):
         'x-access-token': userid,
         'X-Reva-Transfer': protocol.token    # needed if the downloads pass through the data gateway in reva
     }
-    fileget = requests.get(url=protocol.download_endpoint, headers=headers)
+    fileget = requests.get(url=protocol.download_endpoint, headers=headers, verify=ctx['ssl_verify'])
   except requests.exceptions.RequestException as e:
     ctx['log'].error('msg="Exception when downloading file from Reva" reason="%s"' % e)
     yield IOError(e)
@@ -211,7 +213,7 @@ def writefile(_endpoint, filepath, userid, content, islock=False):
         'Upload-Length': size,
         'X-Reva-Transfer': protocol.token    # needed if the uploads pass through the data gateway in reva
     }
-    putres = requests.put(url=protocol.upload_endpoint, data=content, headers=headers)
+    putres = requests.put(url=protocol.upload_endpoint, data=content, headers=headers, verify=ctx['ssl_verify'])
   except requests.exceptions.RequestException as e:
     ctx['log'].error('msg="Exception when uploading file to Reva" reason="%s"' % e)
     raise IOError(e)
