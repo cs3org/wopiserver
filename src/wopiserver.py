@@ -66,6 +66,7 @@ class Wopi:
               }
   log = utils.JsonLogger(app.logger)
   openfiles = {}
+  repeatedLockRequests = {}               # cf. the wopiLock() function below
 
   @classmethod
   def init(cls):
@@ -103,7 +104,6 @@ class Wopi:
       cls.tokenvalidity = cls.config.getint('general', 'tokenvalidity')
       storage.init(cls.config, cls.log)                          # initialize the storage layer
       cls.useHttps = cls.config.get('security', 'usehttps').lower() == 'yes'
-      cls.repeatedLockRequests = {}               # cf. the wopiLock() function below
       cls.wopiurl = cls.config.get('general', 'wopiurl')
       if cls.config.has_option('general', 'lockpath'):
         cls.lockpath = cls.config.get('general', 'lockpath')
