@@ -18,11 +18,12 @@ def usage(exitcode):
 
 # first parse the options
 try:
-  options, args = getopt.getopt(sys.argv[1:], 'hv:', ['help', 'viewmode'])
+  options, args = getopt.getopt(sys.argv[1:], 'hv:e:', ['help', 'viewmode', 'endpoint'])
 except getopt.GetoptError as e:
   print(e)
   usage(1)
 viewmode = ViewMode.READ_WRITE
+endpoint = ''
 for f, v in options:
   if f == '-h' or f == '--help':
     usage(0)
@@ -32,6 +33,8 @@ for f, v in options:
     except ValueError:
       print("Invalid argument for viewmode: " + v)
       usage(1)
+  elif f == '-e' or f == '--endpoint':
+    endpoint = v
   else:
     print("Unknown option: " + f)
     usage(1)
@@ -52,21 +55,20 @@ config.read_file(open('/etc/wopi/wopiserver.defaults.conf'))    # fails if the f
 config.read('/etc/wopi/wopiserver.conf')
 iopsecret = open(config.get('security', 'iopsecretfile')).read().strip('\n')
 storagetype = config.get('general', 'storagetype')
-# work out the endpoint
-if storagetype == 'cs3':
-  # here we assume the filename has the form storageid:/path/to/file
-  if ':/' in filename:
-    endpoint, filename = filename.split(':')
-  else:
-    print("Invalid argument for filename, storageid:/full/path form required")
-    usage(1)
-elif '/eos/user/' in filename:
-  # shortcuts for eos (on xrootd)
-  endpoint = 'root://eoshome-%s.cern.ch' % filename.split('/')[3]
-elif '/eos/project' in filename:
-  endpoint = 'root://eosproject-%s.cern.ch' % filename.split('/')[3]
-else:
-  endpoint = ''
+if endpoint == '':
+  # work out the endpoint
+  if storagetype == 'cs3':
+    # here we assume the filename has the form storageid:/path/to/file
+    if ':/' in filename:
+      endpoint, filename = filename.split(':')
+    else:
+      print("Invalid argument for filename, storageid:/full/path form required")
+      usage(1)
+  elif '/eos/user/' in filename:
+    # shortcuts for eos (on xrootd)
+    endpoint = 'root://eoshome-%s.cern.ch' % filename.split('/')[3]
+  elif '/eos/project' in filename:
+    endpoint = 'root://eosproject-%s.cern.ch' % filename.split('/')[3]
 
 wopiurl = 'http%s://localhost:%d' % \
           ('s' if config.get('security', 'usehttps') == 'yes' else '', config.getint('general', 'port'))
