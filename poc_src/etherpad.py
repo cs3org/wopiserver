@@ -33,12 +33,12 @@ def init(env, apipath):
     global appexturl
     global apikey
     appexturl = env.get('ETHERPAD_EXT_URL')
+    if not appexturl:
+        raise ValueError("Missing ETHERPAD_EXT_URL env var")
     appurl = env.get('ETHERPAD_URL')
     if not appurl:
         # defaults to the external
         appurl = appexturl
-    if not appurl:
-        raise ValueError("Missing ETHERPAD_EXT_URL env var")
     appurl += '/api/1'
     with open(apipath + 'etherpad_apikey') as f:
         apikey = f.readline().strip('\n')

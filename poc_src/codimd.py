@@ -39,12 +39,12 @@ def init(env, apipath):
     global appexturl
     global apikey
     appexturl = env.get('CODIMD_EXT_URL')
+    if not appexturl:
+        raise ValueError("Missing CODIMD_EXT_URL env var")
     appurl = env.get('CODIMD_URL')
     if not appurl:
         # defaults to the external
         appurl = appexturl
-    if not appurl:
-        raise ValueError("Missing CODIMD_EXT_URL env var")
     with open(apipath + 'codimd_apikey') as f:
         apikey = f.readline().strip('\n')
 
