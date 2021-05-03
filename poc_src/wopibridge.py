@@ -106,11 +106,15 @@ class WB:
             wopi.skipsslverify = cls.skipsslverify
             # init plugins
             for p in set(BRIDGE_EXT_PLUGINS.values()):
-                cls.plugins[p] = __import__(p, globals(), locals())
-                cls.plugins[p].init(os.environ, APIKEYPATH)
-                cls.plugins[p].log = cls.log
-                cls.plugins[p].skipsslverify = cls.skipsslverify
-                cls.log.info('msg="Imported plugin for application" app="%s" plugin="%s"' % (p, cls.plugins[p]))
+                try:
+                    cls.plugins[p] = __import__(p, globals(), locals())
+                    cls.plugins[p].init(os.environ, APIKEYPATH)
+                    cls.plugins[p].log = cls.log
+                    cls.plugins[p].skipsslverify = cls.skipsslverify
+                    cls.log.info('msg="Imported plugin for application" app="%s" plugin="%s"' % (p, cls.plugins[p]))
+                except Exception as e:
+                    cls.log.info('msg="App plugin disabled because initialization failed" app="%s" message="%s"' % (p, e))
+                    cls.plugins[p] = None
 
             # start the thread to perform async save operations
             cls.savethread = SaveThread()
@@ -119,7 +123,7 @@ class WB:
         except Exception as e:    # pylint: disable=broad-except
             # any error we get here with the configuration is fatal
             cls.log.fatal('msg="Failed to initialize the service, aborting" error="%s"' % e)
-            sys.exit(-22)
+            sys.exit(22)
 
     @classmethod
     def run(cls):
