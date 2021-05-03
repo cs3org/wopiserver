@@ -108,9 +108,9 @@ class WB:
             for p in set(BRIDGE_EXT_PLUGINS.values()):
                 try:
                     cls.plugins[p] = __import__(p, globals(), locals())
-                    cls.plugins[p].init(os.environ, APIKEYPATH)
                     cls.plugins[p].log = cls.log
                     cls.plugins[p].skipsslverify = cls.skipsslverify
+                    cls.plugins[p].init(os.environ, APIKEYPATH)
                     cls.log.info('msg="Imported plugin for application" app="%s" plugin="%s"' % (p, cls.plugins[p]))
                 except Exception as e:
                     cls.log.info('msg="App plugin disabled because initialization failed" app="%s" message="%s"' % (p, e))
@@ -209,6 +209,7 @@ def appopen():
     if not app:
         WB.log.warning('msg="Open: file type not supported" filename="%s" token="%s"' % (filemd['FileName'], acctok[-20:]))
         return _guireturn('File type not supported'), http.client.BAD_REQUEST
+    WB.log.debug('msg="Processing open for supported app" app="%s" plugin="%s"' % (app, WB.plugins[app]))
     app = WB.plugins[app]
 
     try:

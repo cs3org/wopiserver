@@ -115,7 +115,7 @@ def _fetchfromcodimd(wopilock, acctok):
         res = requests.get(appurl + wopilock['docid'] + '/download', verify=not skipsslverify)
         if res.status_code != http.client.OK:
             log.error('msg="Unable to fetch document from CodiMD" token="%s" response="%d: %s"' %
-                      (acctok[-20:], res.status_code, res.content))
+                      (acctok[-20:], res.status_code, res.content.decode()))
             raise AppFailure
         return res.content
     except requests.exceptions.ConnectionError as e:
