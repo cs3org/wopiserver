@@ -256,8 +256,8 @@ def appopen():
             except KeyError:
                 pass
         else:
-            # user has no write privileges, just fetch document and push it to the app
-            wopilock = app.loadfromstorage(filemd, wopisrc, acctok, _gendocid(wopisrc))
+            # user has no write privileges, just fetch the document and push it to the app on a random docid
+            wopilock = app.loadfromstorage(filemd, wopisrc, acctok, None)
     except app.AppFailure:
         # this can be raised by loadfromstorage
         return _guireturn('Unable to load the app, please try again later or contact support'), http.client.INTERNAL_SERVER_ERROR

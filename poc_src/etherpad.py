@@ -123,7 +123,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
     h = hashlib.sha1()
     h.update(epfile)
     try:
-        if not filemd['UserCanWrite']:
+        if not docid:
             docid = ''.join([choice(ascii_lowercase) for _ in range(20)])
             log.debug('msg="Generated random padID for read-only document" docid="%s" token="%s"' % (docid, acctok[-20:]))
         # create pad with the given docid as name (the padID will be `groupid$docid`)

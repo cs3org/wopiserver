@@ -123,7 +123,7 @@ def _fetchfromcodimd(wopilock, acctok):
         raise AppFailure
 
 
-def loadfromstorage(filemd, wopisrc, acctok, docid=None):
+def loadfromstorage(filemd, wopisrc, acctok, docid):
     '''Copy document from storage to CodiMD'''
     # WOPI GetFile
     res = wopi.request(wopisrc, acctok, 'GET', contents=True)
@@ -141,7 +141,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid=None):
     h = hashlib.sha1()
     h.update(mddoc)
     try:
-        if not filemd['UserCanWrite']:
+        if not docid:
             # read-only case: push the doc to a newly generated note with a random docid
             res = requests.post(appurl + '/new', data=mddoc,
                                 allow_redirects=False,
