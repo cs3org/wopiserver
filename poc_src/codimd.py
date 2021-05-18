@@ -163,11 +163,15 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
                 log.error('msg="Unable to reserve note hash in CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
                 raise AppFailure
-            log.debug('msg="Got note hash from CodiMD" docid="%s"' % docid)
+            # check if the target docid is real or is a redirect
+            if res.status_code == http.client.FOUND:
+                newdocid = urlparse.urlsplit(res.next.url).path.split('/')[-1]
+                log.info('msg="Document got aliased in CodiMD" olddocid="%s" docid="%s" token="%s"' %
+                        (docid, newdocid, acctok[-20:]))
+                docid = newdocid
+            else:
+                log.debug('msg="Got note hash from CodiMD" docid="%s"' % docid)
             # push the document to CodiMD with the update API
-            # TODO in the future we could swap the logic: attempt to push content, and on 404 use a HEAD
-            # request to reserve the docid + do the push again. In most cases the note will be there
-            # thus we would avoid the HEAD call.
             res = requests.put(appurl + '/api/notes/' + docid,
                                params={'apikey': apikey},    # possibly required in the future
                                json={'content': mddoc.decode()},
@@ -179,15 +183,6 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
                 log.error('msg="Unable to push document to CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
                 raise AppFailure
-            # check again if the target docid is real or is a redirect
-            res = requests.head(appurl + '/' + docid,
-                                params={'apikey': apikey},
-                                verify=not skipsslverify)
-            if res.status_code == http.client.FOUND:
-                newdocid = urlparse.urlsplit(res.next.url).path.split('/')[-1]
-                log.info('msg="Document got aliased in CodiMD" olddocid="%s" docid="%s" token="%s"' %
-                        (docid, newdocid, acctok[-20:]))
-                docid = newdocid
             log.info('msg="Pushed document to CodiMD" docid="%s" token="%s"' % (docid, acctok[-20:]))
     except requests.exceptions.ConnectionError as e:
         log.error('msg="Exception raised attempting to connect to CodiMD" exception="%s"' % e)
