@@ -11,6 +11,7 @@ from string import ascii_lowercase
 import time
 import json
 import hashlib
+import hmac
 import http.client
 import urllib.parse as urlparse
 import requests
@@ -79,14 +80,19 @@ def getredirecturl(isreadwrite, wopisrc, acctok, wopilock, displayname):
         res = _apicall('getReadOnlyID', {'padID': wopilock['docid'][1:]}, acctok=acctok)
         return appexturl + '/p/' + res['data']['readOnlyID']
     # associate the displayname to an author
-    res = _apicall('createAuthorIfNotExistsFor', {'name': displayname, 'authorMapper': displayname}, acctok=acctok)
-    authorid = res['data']['authorID']
+    #authorid = hmac.new(apikey.encode(), displayname.encode(), digestmod=hashlib.sha1).digest()
+    #authorid = int.from_bytes(authorid[4:12], 'big')    # arbitrarily take 8 bytes = 64bit int
+    #res = _apicall('createAuthorIfNotExistsFor', {'name': displayname, 'authorMapper': authorid}, acctok=acctok)
+    #authorid = res['data']['authorID']
     # create session
-    validity = int(time.time() + 86400)
-    res = _apicall('createSession', {'groupID': groupid, 'authorID': authorid, 'validUntil': validity}, acctok=acctok)
+    #validity = int(time.time() + 86400)
+    #res = _apicall('createSession', {'groupID': groupid, 'authorID': authorid, 'validUntil': validity}, acctok=acctok)
     # return an url to the auth_session plugin
-    return appexturl + '/auth_session?sessionID=' + res['data']['sessionID'] + '&padName=' + wopilock['docid'][1:] + \
-           '&metadata=' + urlparse.quote_plus('%s?t=%s' % (wopisrc, acctok))
+    #return appexturl + '/auth_session?sessionID=%s&padName=%s&userName=%s&metadata=%s' % \
+    #       (res['data']['sessionID'], wopilock['docid'][1:], displayname, urlparse.quote_plus('%s?t=%s' % (wopisrc, acctok))
+    # return an url to the pad
+    return appexturl + '/p/%s?userName=%s&metadata=%s' % \
+           (wopilock['docid'][1:], displayname, urlparse.quote_plus('%s?t=%s' % (wopisrc, acctok)))
 
 
 # Cloud storage to Etherpad
@@ -107,11 +113,10 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
             docid = ''.join([choice(ascii_lowercase) for _ in range(20)])
             log.debug('msg="Generated random padID for read-only document" docid="%s" token="%s"' % (docid, acctok[-20:]))
         # first drop previous pad if it exists
-        res = _apicall('deletePad', {'padID': docid}, acctok=acctok, raiseonnonzerocode=False)
+        _apicall('deletePad', {'padID': docid}, acctok=acctok, raiseonnonzerocode=False)
         # create pad with the given docid as name
-        res = _apicall('createGroupPad', {'groupID': groupid, 'padName': docid, 'text': 'placeholder'},
-                       acctok=acctok, raiseonnonzerocode=False)
-        log.debug('msg="Got pad" token="%s" docid="%s" response="%s"' % (acctok[-20:], docid, res))
+        _apicall('createGroupPad', {'groupID': groupid, 'padName': docid, 'text': 'placeholder'},
+                 acctok=acctok, raiseonnonzerocode=False)
         # push content
         res = requests.post(appurl + '/p/' + docid + '/import',
                             files={'file': (docid + '.etherpad', epfile)},    # a .etherpad file is imported as raw (JSON) content
