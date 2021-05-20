@@ -161,7 +161,7 @@ def handleexception(ex):
     ex_type, ex_value, ex_traceback = sys.exc_info()
     WB.log.error('msg="Unexpected exception caught" exception="%s" type="%s" traceback="%s"' %
                  (ex, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback)))
-    return WB.plugins['codimd'].jsonify('Internal error, please contact support. %s' % RECOVER_MSG), http.client.INTERNAL_SERVER_ERROR
+    return wopi.jsonify('Internal error, please contact support. %s' % RECOVER_MSG), http.client.INTERNAL_SERVER_ERROR
 
 
 @WB.app.route("/", methods=['GET'])
@@ -287,7 +287,7 @@ def appsave():
     except (KeyError, ValueError) as e:
         WB.log.error('msg="Save: malformed or missing metadata" client="%s" headers="%s" exception="%s" error="%s"' %
                      (flask.request.remote_addr, flask.request.headers, type(e), e))
-        return WB.plugins['codimd'].jsonify('Malformed or missing metadata, could not save. %s' % RECOVER_MSG), http.client.INTERNAL_SERVER_ERROR
+        return wopi.jsonify('Malformed or missing metadata, could not save. %s' % RECOVER_MSG), http.client.INTERNAL_SERVER_ERROR
 
     # decide whether to notify the save thread
     donotify = isclose or wopisrc not in WB.openfiles or WB.openfiles[wopisrc]['lastsave'] < time.time() - WB.saveinterval
@@ -383,7 +383,7 @@ class SaveThread(threading.Thread):
                 except wopi.InvalidLock as ile:
                     # even this attempt failed, give up
                     # TODO here we should save the file on a local storage to help later recovery
-                    WB.saveresponses[wopisrc] = WB.plugins['codimd'].jsonify(str(ile)), http.client.INTERNAL_SERVER_ERROR
+                    WB.saveresponses[wopisrc] = wopi.jsonify(str(ile)), http.client.INTERNAL_SERVER_ERROR
                     # set some 'fake' metadata, will be automatically cleaned up later
                     openfile['lastsave'] = int(time.time())
                     openfile['tosave'] = False
@@ -392,7 +392,7 @@ class SaveThread(threading.Thread):
             app = BRIDGE_EXT_PLUGINS.get(wopilock['app'])
             if not app:
                 WB.log.error('msg="SaveThread: malformed app attribute in WOPI lock" lock="%s"' % wopilock)
-                WB.saveresponses[wopisrc] = WB.plugins['codimd'].jsonify('Unrecognized app for this file'), http.client.BAD_REQUEST
+                WB.saveresponses[wopisrc] = wopi.jsonify('Unrecognized app for this file'), http.client.BAD_REQUEST
             else:
                 WB.log.info('msg="SaveThread: saving file" token="%s" docid="%s"' %
                             (openfile['acctok'][-20:], openfile['docid']))

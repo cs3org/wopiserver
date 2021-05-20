@@ -50,11 +50,6 @@ def init(env, apipath):
     log.info('msg="Got Etherpad global groupid" groupid="%s"' % groupid)
 
 
-def jsonify(msg):
-    '''One-liner to consistently json-ify a given message'''
-    return '{"message": "%s"}' % msg
-
-
 def _apicall(method, params, data=None, acctok=None, raiseonnonzerocode=True):
     '''Generic method to call the Etherpad REST API'''
     params['apikey'] = apikey
@@ -161,7 +156,7 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
                  (isclose, appurl + '/p' + wopilock['docid'], acctok[-20:]))
         epfile = _fetchfrometherpad(wopilock, acctok)
     except AppFailure:
-        return jsonify('Could not save file, failed to fetch document from Etherpad'), http.client.INTERNAL_SERVER_ERROR
+        return wopi.jsonify('Could not save file, failed to fetch document from Etherpad'), http.client.INTERNAL_SERVER_ERROR
 
     if wopilock['digest'] != 'dirty':
         # so far the file was not touched: before forcing a put let's validate the contents
@@ -176,8 +171,8 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
                         contents=epfile)
     reply = wopi.handleputfile('PutFile', wopisrc, res)
     if reply:
-        return jsonify(reply), http.client.INTERNAL_SERVER_ERROR
+        return reply
     wopi.refreshlock(wopisrc, acctok, wopilock, isdirty=True)
     log.info('msg="Save completed" filename="%s" isclose="%s" token="%s"' %
                 (wopilock['filename'], isclose, acctok[-20:]))
-    return jsonify('File saved successfully'), http.client.OK
+    return wopi.jsonify('File saved successfully'), http.client.OK

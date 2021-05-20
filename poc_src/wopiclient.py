@@ -20,6 +20,13 @@ log = None
 skipsslverify = None
 
 
+def jsonify(msg):
+    '''One-liner to consistently json-ify a given message'''
+    # a delay = 0 means the user has to click on it to dismiss it, good for longer messages:
+    # this is an extended feature of CodiMD only, TODO have it supported on Etherpad as well
+    return '{"message": "%s", "delay": "%.1f"}' % (msg, 0 if len(msg) > 60 else 0.5 + len(msg)/20)
+
+
 def request(wopisrc, acctok, method, contents=None, headers=None):
     '''Execute a WOPI request with the given parameters and headers'''
     try:
@@ -134,11 +141,12 @@ def handleputfile(wopicall, wopisrc, res):
     if res.status_code == http.client.CONFLICT:
         log.warning('msg="Conflict when calling WOPI %s" url="%s" reason="%s"' %
                     (wopicall, wopisrc, res.headers.get('X-WOPI-LockFailureReason')))
-        return 'Error saving the file. %s' % res.headers.get('X-WOPI-LockFailureReason')
+        return jsonify('Error saving the file. %s' % res.headers.get('X-WOPI-LockFailureReason')), \
+               http.client.INTERNAL_SERVER_ERROR
     if res.status_code != http.client.OK:
         log.error('msg="Calling WOPI %s failed" url="%s" response="%s"' % (wopicall, wopisrc, res.status_code))
         # TODO need to save the file on a local storage for later recovery
-        return 'Error saving the file, please contact support'
+        return jsonify('Error saving the file, please contact support'), http.client.INTERNAL_SERVER_ERROR
     return None
 
 
@@ -152,7 +160,7 @@ def saveas(wopisrc, acctok, wopilock, targetname, content):
     res = request(wopisrc, acctok, 'POST', headers=putrelheaders, contents=content)
     reply = handleputfile('PutRelative', wopisrc, res)
     if reply:
-        return reply, http.client.INTERNAL_SERVER_ERROR
+        return reply
 
     # use the new file's metadata from PutRelative to remove the previous file: we can do that only on close
     # because we need to keep using the current wopisrc/acctok until the session is alive in the app
@@ -171,4 +179,4 @@ def saveas(wopisrc, acctok, wopilock, targetname, content):
             log.info('msg="Previous file unlocked and removed successfully" token="%s"' % acctok[-20:])
 
     log.info('msg="Final save completed" filename"%s" token="%s"' % (newname, acctok[-20:]))
-    return 'File saved successfully', http.client.OK
+    return jsonify('File saved successfully'), http.client.OK

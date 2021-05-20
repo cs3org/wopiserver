@@ -49,12 +49,6 @@ def init(env, apipath):
         apikey = f.readline().strip('\n')
 
 
-def jsonify(msg):
-    '''One-liner to consistently json-ify a given message'''
-    # a delay = 0 means the user has to click on it to dismiss it, good for longer messages
-    return '{"message": "%s", "delay": "%.1f"}' % (msg, 0 if len(msg) > 60 else 0.5 + len(msg)/20)
-
-
 def getredirecturl(isreadwrite, wopisrc, acctok, wopilock, displayname):
     '''Return a valid URL to the app for the given WOPI context'''
     if isreadwrite:
@@ -205,7 +199,7 @@ def _getattachments(mddoc, docfilename, forcezip=False):
             log.error('msg="Failed to fetch included file, skipping" path="%s" response="%d"' % (
                 attachment, res.status_code))
             # also notify the user
-            response = jsonify('Failed to include a referenced picture in the saved file'), http.client.NOT_FOUND
+            response = wopi.jsonify('Failed to include a referenced picture in the saved file'), http.client.NOT_FOUND
             continue
         with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_STORED, allowZip64=False) as zip_file:
             zip_file.writestr(attachment.split('/')[-1], res.content)
@@ -226,7 +220,7 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
                  (isclose, appurl + wopilock['docid'], acctok[-20:]))
         mddoc = _fetchfromcodimd(wopilock, acctok)
     except AppFailure:
-        return jsonify('Could not save file, failed to fetch document from CodiMD'), http.client.INTERNAL_SERVER_ERROR
+        return wopi.jsonify('Could not save file, failed to fetch document from CodiMD'), http.client.INTERNAL_SERVER_ERROR
 
     if wopilock['digest'] != 'dirty':
         # so far the file was not touched: before forcing a put let's validate the contents
@@ -247,15 +241,14 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
                            contents=(bundlefile if wasbundle else mddoc))
         reply = wopi.handleputfile('PutFile', wopisrc, res)
         if reply:
-            return jsonify(reply), http.client.INTERNAL_SERVER_ERROR
+            return reply
         wopi.refreshlock(wopisrc, acctok, wopilock, isdirty=True)
         log.info('msg="Save completed" filename="%s" isclose="%s" token="%s"' %
                  (wopilock['filename'], isclose, acctok[-20:]))
         # combine the responses
-        return attresponse if attresponse else (jsonify('File saved successfully'), http.client.OK)
+        return attresponse if attresponse else (wopi.jsonify('File saved successfully'), http.client.OK)
 
     # on close, use saveas for either the new bundle, if this is the first time we have attachments,
     # or the single md file, if there are no more attachments.
-    msg, rc = wopi.saveas(wopisrc, acctok, wopilock, os.path.splitext(wopilock['filename'])[0] + ('.zmd' if bundlefile else '.md'),
-                          bundlefile if bundlefile else mddoc)
-    return jsonify(msg), rc
+    return wopi.saveas(wopisrc, acctok, wopilock, os.path.splitext(wopilock['filename'])[0] + ('.zmd' if bundlefile else '.md'),
+                       bundlefile if bundlefile else mddoc)
