@@ -66,7 +66,6 @@ class Wopi:
               }
   log = utils.JsonLogger(app.logger)
   openfiles = {}
-  repeatedLockRequests = {}               # cf. the wopiLock() function below
 
   @classmethod
   def init(cls):
@@ -771,21 +770,8 @@ def wopiLock(fileid, reqheaders, acctok):
       return utils.makeConflictResponse(op, '', lock, oldLock, acctok['filename'],
                                         'The file was not locked' + ' and got modified' if validateTarget else '')
   if retrievedLock and not utils.compareWopiLocks(retrievedLock, (oldLock if oldLock else lock)):
-    # XXX we got a locking conflict: as we've seen cases of looping clients attempting to restate the same
-    # XXX lock over and over again, we keep track of this request and we forcefully clean up the lock
-    # XXX and let the request succeed once 'too many' (> 5) requests come for the same lock
-    if retrievedLock not in Wopi.repeatedLockRequests:
-      Wopi.repeatedLockRequests[retrievedLock] = 1
-    else:
-      Wopi.repeatedLockRequests[retrievedLock] += 1
-    if Wopi.repeatedLockRequests[retrievedLock] < 5:
       return utils.makeConflictResponse(op, retrievedLock, lock, oldLock, acctok['filename'], \
-                                        'The file was locked by another appplication')
-    wopiUnlock(fileid, reqheaders, acctok, force=True)
-    Wopi.log.warning('msg="Lock: BLINDLY removed the existing lock to unblock client" op="%s" user="%s" '\
-                     'filename="%s" token="%s"' % \
-                     (op, acctok['userid'], acctok['filename'], \
-                      flask.request.args['access_token'][-20:]))
+                                        'The file was locked by another WOPI application')
 
   # LOCK or REFRESH_LOCK: set the lock to the given one, including the expiration time
   try:
