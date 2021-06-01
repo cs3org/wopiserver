@@ -113,8 +113,10 @@ class WB:
                     cls.plugins[p].init(os.environ, APIKEYPATH)
                     cls.log.info('msg="Imported plugin for application" app="%s" plugin="%s"' % (p, cls.plugins[p]))
                 except Exception as e:
-                    cls.log.info('msg="App plugin disabled because initialization failed" app="%s" message="%s"' % (p, e))
+                    cls.log.info('msg="Disabled plugin following failed initialization" app="%s" message="%s"' % (p, e))
                     cls.plugins[p] = None
+            if not list(filter(None.__ne__, cls.plugins.values())):
+                raise ValueError('None of the available app plugins could be initialized')
 
             # start the thread to perform async save operations
             cls.savethread = SaveThread()
