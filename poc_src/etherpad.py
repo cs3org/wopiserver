@@ -8,10 +8,8 @@ Author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 
 from random import choice
 from string import ascii_lowercase
-import time
 import json
 import hashlib
-import hmac
 import http.client
 import urllib.parse as urlparse
 import requests
@@ -76,21 +74,10 @@ def _apicall(method, params, data=None, acctok=None, raiseonnonzerocode=True):
 def getredirecturl(isreadwrite, wopisrc, acctok, wopilock, displayname):
     '''Return a valid URL to the app for the given WOPI context'''
     if not isreadwrite:
-        # read-only mode: first generate a read-only link
+        # for read-only mode generate a read-only link
         res = _apicall('getReadOnlyID', {'padID': wopilock['docid'][1:]}, acctok=acctok)
         return appexturl + '/p/' + res['data']['readOnlyID']
-    # associate the displayname to an author
-    #authorid = hmac.new(apikey.encode(), displayname.encode(), digestmod=hashlib.sha1).digest()
-    #authorid = int.from_bytes(authorid[4:12], 'big')    # arbitrarily take 8 bytes = 64bit int
-    #res = _apicall('createAuthorIfNotExistsFor', {'name': displayname, 'authorMapper': authorid}, acctok=acctok)
-    #authorid = res['data']['authorID']
-    # create session
-    #validity = int(time.time() + 86400)
-    #res = _apicall('createSession', {'groupID': groupid, 'authorID': authorid, 'validUntil': validity}, acctok=acctok)
-    # return an url to the auth_session plugin
-    #return appexturl + '/auth_session?sessionID=%s&padName=%s&userName=%s&metadata=%s' % \
-    #       (res['data']['sessionID'], wopilock['docid'][1:], displayname, urlparse.quote_plus('%s?t=%s' % (wopisrc, acctok))
-    # return an url to the pad
+    # return the URL to the pad (TODO the metadata argument must be picked up by an Etherpad plugin)
     return appexturl + '/p/%s?userName=%s&metadata=%s' % \
            (wopilock['docid'][1:], displayname, urlparse.quote_plus('%s?t=%s' % (wopisrc, acctok)))
 
