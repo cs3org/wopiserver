@@ -15,31 +15,51 @@ import json
 import hashlib
 import urllib.parse as urlparse
 import http.client
-from base64 import urlsafe_b64encode
-import hmac
 import requests
 import wopiclient as wopi
 
 
-class CodiMDFailure(Exception):
+class AppFailure(Exception):
     '''A custom exception to represent a fatal failure when contacting CodiMD'''
 
 # a regexp for uploads, that have links like '/uploads/upload_542a360ddefe1e21ad1b8c85207d9365.*'
 upload_re = re.compile(r'\/uploads\/upload_\w{32}\.\w+')
 
-# initialized by the main class
-log = None
-codimdurl = None
-codimdexturl = None
-skipsslverify = None
-hashsecret = None
+# initialized by the main class or by the init method
+appurl = None
+appexturl = None
 apikey = None
+log = None
+skipsslverify = None
 
 
-def jsonify(msg):
-    '''One-liner to consistently json-ify a given message'''
-    # a delay = 0 means the user has to click on it to dismiss it, good for longer messages
-    return '{"message": "%s", "delay": "%.1f"}' % (msg, 0 if len(msg) > 60 else 0.5 + len(msg)/20)
+def init(env, apipath):
+    '''Initialize global vars from the environment'''
+    global appurl
+    global appexturl
+    global apikey
+    appexturl = env.get('CODIMD_EXT_URL')
+    if not appexturl:
+        raise ValueError("Missing CODIMD_EXT_URL env var")
+    appurl = env.get('CODIMD_URL')
+    if not appurl:
+        # defaults to the external
+        appurl = appexturl
+    with open(apipath + 'codimd_apikey') as f:
+        apikey = f.readline().strip('\n')
+
+
+def getredirecturl(isreadwrite, wopisrc, acctok, wopilock, displayname):
+    '''Return a valid URL to the app for the given WOPI context'''
+    if isreadwrite:
+        url = appexturl + wopilock['docid'] + '?metadata=' + \
+              urlparse.quote_plus('%s?t=%s' % (wopisrc, acctok)) + '&'
+    else:
+        # read-only mode: in this case redirect to publish mode or normal view
+        # to quickly jump in slide mode depending on the content
+        url = appexturl + wopilock['docid'] + ('/publish?' if wopilock['app'] != 'mds' else '?')
+    # in all cases append the display name and the API key
+    return url + 'apikey=' + apikey + '&displayName=' + displayname
 
 
 # Cloud storage to CodiMD
@@ -47,8 +67,7 @@ def jsonify(msg):
 
 def _unzipattachments(inputbuf):
     '''Unzip the given input buffer uploading the content to CodiMD and return the contained .md file'''
-    inputzip = zipfile.ZipFile(io.BytesIO(
-        inputbuf), compression=zipfile.ZIP_STORED)
+    inputzip = zipfile.ZipFile(io.BytesIO(inputbuf), compression=zipfile.ZIP_STORED)
     mddoc = None
     for zipinfo in inputzip.infolist():
         fname = zipinfo.filename
@@ -57,7 +76,7 @@ def _unzipattachments(inputbuf):
             mddoc = inputzip.read(zipinfo)
         else:
             # first check if the file already exists in CodiMD:
-            res = requests.head(codimdurl + '/uploads/' + fname, verify=not skipsslverify)
+            res = requests.head(appurl + '/uploads/' + fname, verify=not skipsslverify)
             if res.status_code == http.client.OK and int(res.headers['Content-Length']) == zipinfo.file_size:
                 # yes (assume that hashed filename AND size matching is a good enough content match!)
                 log.debug('msg="Skipped existing attachment" filename="%s"' % fname)
@@ -72,7 +91,7 @@ def _unzipattachments(inputbuf):
                 mddoc = mddoc.replace(zipinfo.filename, fname)
             # OK, let's upload
             log.debug('msg="Pushing attachment" filename="%s"' % fname)
-            res = requests.post(codimdurl + '/uploadimage', params={'generateFilename': 'false'},
+            res = requests.post(appurl + '/uploadimage', params={'generateFilename': 'false'},
                                 files={'image': (fname, inputzip.read(zipinfo))}, verify=not skipsslverify)
             if res.status_code != http.client.OK:
                 log.error('msg="Failed to push included file" filename="%s" httpcode="%d"' % (fname, res.status_code))
@@ -85,33 +104,20 @@ def _isslides(doc):
 
 
 def _fetchfromcodimd(wopilock, acctok):
-    '''Fetch a given document from from CodiMD, raise CodiMDFailure in case of errors'''
+    '''Fetch a given document from from CodiMD, raise AppFailure in case of errors'''
     try:
-        res = requests.get(codimdurl + wopilock['docid'] + '/download', verify=not skipsslverify)
+        res = requests.get(appurl + wopilock['docid'] + '/download', verify=not skipsslverify)
         if res.status_code != http.client.OK:
             log.error('msg="Unable to fetch document from CodiMD" token="%s" response="%d: %s"' %
-                      (acctok[-20:], res.status_code, res.content))
-            raise CodiMDFailure
+                      (acctok[-20:], res.status_code, res.content.decode()))
+            raise AppFailure
         return res.content
     except requests.exceptions.ConnectionError as e:
         log.error('msg="Exception raised attempting to connect to CodiMD" exception="%s"' % e)
-        raise CodiMDFailure
+        raise AppFailure
 
 
-def checkredirect(wopilock, acctok):
-    '''Check if the target docid is real or is a redirect, and amend the wopilock structure in such case'''
-    res = requests.head(codimdurl + wopilock['docid'],
-                        params={'apikey': apikey},
-                        verify=not skipsslverify)
-    if res.status_code == http.client.FOUND:
-        notehash = urlparse.urlsplit(res.next.url).path.split('/')[-1]
-        log.info('msg="Document got aliased in CodiMD" olddocid="%s" docid="%s" token="%s"' %
-                 (wopilock['docid'], notehash, acctok[-20:]))
-        wopilock['docid'] = '/' + notehash
-    return wopilock
-
-
-def loadfromstorage(filemd, wopisrc, acctok):
+def loadfromstorage(filemd, wopisrc, acctok, docid):
     '''Copy document from storage to CodiMD'''
     # WOPI GetFile
     res = wopi.request(wopisrc, acctok, 'GET', contents=True)
@@ -129,9 +135,9 @@ def loadfromstorage(filemd, wopisrc, acctok):
     h = hashlib.sha1()
     h.update(mddoc)
     try:
-        if not filemd['UserCanWrite']:
+        if not docid:
             # read-only case: push the doc to a newly generated note with a random docid
-            res = requests.post(codimdurl + '/new', data=mddoc,
+            res = requests.post(appurl + '/new', data=mddoc,
                                 allow_redirects=False,
                                 params={'mode': 'locked'},
                                 headers={'Content-Type': 'text/markdown'},
@@ -139,26 +145,28 @@ def loadfromstorage(filemd, wopisrc, acctok):
             if res.status_code != http.client.FOUND:
                 log.error('msg="Unable to push read-only document to CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
-                raise CodiMDFailure
-            notehash = urlparse.urlsplit(res.next.url).path.split('/')[-1]
-            log.info('msg="Pushed read-only document to CodiMD" docid="%s" token="%s"' % (notehash, acctok[-20:]))
+                raise AppFailure
+            docid = urlparse.urlsplit(res.next.url).path.split('/')[-1]
+            log.info('msg="Pushed read-only document to CodiMD" docid="%s" token="%s"' % (docid, acctok[-20:]))
         else:
-            # generate a deterministic note hash and reserve it in CodiMD via a HEAD request
-            dig = hmac.new(hashsecret, msg=wopisrc.split('/')[-1].encode(), digestmod=hashlib.sha1).digest()
-            notehash = urlsafe_b64encode(dig).decode()[:-1]
-            res = requests.head(codimdurl + '/' + notehash,
+            # reserve the given docid in CodiMD via a HEAD request
+            res = requests.head(appurl + '/' + docid,
                                 params={'apikey': apikey},
                                 verify=not skipsslverify)
-            if res.status_code != http.client.OK:
+            if res.status_code not in (http.client.OK, http.client.FOUND):
                 log.error('msg="Unable to reserve note hash in CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
-                raise CodiMDFailure
-            log.debug('msg="Got note hash from CodiMD" docid="%s"' % notehash)
+                raise AppFailure
+            # check if the target docid is real or is a redirect
+            if res.status_code == http.client.FOUND:
+                newdocid = urlparse.urlsplit(res.next.url).path.split('/')[-1]
+                log.info('msg="Document got aliased in CodiMD" olddocid="%s" docid="%s" token="%s"' %
+                        (docid, newdocid, acctok[-20:]))
+                docid = newdocid
+            else:
+                log.debug('msg="Got note hash from CodiMD" docid="%s"' % docid)
             # push the document to CodiMD with the update API
-            # TODO in the future we could swap the logic: attempt to push content, and on 404 use a HEAD
-            # request to reserve the notehash + do the push again. In most cases the note will be there
-            # thus we would avoid the HEAD call.
-            res = requests.put(codimdurl + '/api/notes/' + notehash,
+            res = requests.put(appurl + '/api/notes/' + docid,
                                params={'apikey': apikey},    # possibly required in the future
                                json={'content': mddoc.decode()},
                                verify=not skipsslverify)
@@ -168,17 +176,13 @@ def loadfromstorage(filemd, wopisrc, acctok):
             elif res.status_code != http.client.OK:
                 log.error('msg="Unable to push document to CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
-                raise CodiMDFailure
-            else:
-                log.info('msg="Pushed document to CodiMD" docid="%s" token="%s"' % (notehash, acctok[-20:]))
+                raise AppFailure
+            log.info('msg="Pushed document to CodiMD" docid="%s" token="%s"' % (docid, acctok[-20:]))
     except requests.exceptions.ConnectionError as e:
         log.error('msg="Exception raised attempting to connect to CodiMD" exception="%s"' % e)
-        raise CodiMDFailure
-    # we got the hash of the document just created as a redirected URL, generate a WOPI lock structure
-    wopilock = wopi.generatelock(notehash, filemd, h.hexdigest(),
-                                 'slide' if _isslides(mddoc) else 'md',
-                                 acctok, False)
-    return wopilock
+        raise AppFailure
+    # generate and return a WOPI lock structure for this document
+    return wopi.generatelock(docid, filemd, h.hexdigest(), 'mds' if _isslides(mddoc) else 'md', acctok, False)
 
 
 # CodiMD to cloud storage
@@ -190,12 +194,12 @@ def _getattachments(mddoc, docfilename, forcezip=False):
     response = None
     for attachment in upload_re.findall(mddoc):
         log.debug('msg="Fetching attachment" url="%s"' % attachment)
-        res = requests.get(codimdurl + attachment, verify=not skipsslverify)
+        res = requests.get(appurl + attachment, verify=not skipsslverify)
         if res.status_code != http.client.OK:
             log.error('msg="Failed to fetch included file, skipping" path="%s" response="%d"' % (
                 attachment, res.status_code))
             # also notify the user
-            response = jsonify('Failed to include a referenced picture in the saved file'), http.client.NOT_FOUND
+            response = wopi.jsonify('Failed to include a referenced picture in the saved file'), http.client.NOT_FOUND
             continue
         with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_STORED, allowZip64=False) as zip_file:
             zip_file.writestr(attachment.split('/')[-1], res.content)
@@ -208,61 +212,15 @@ def _getattachments(mddoc, docfilename, forcezip=False):
     return zip_buffer.getvalue(), response
 
 
-def _dealwithputfile(wopicall, wopisrc, res):
-    '''Deal with conflicts or errors following a PutFile/PutRelative request'''
-    if res.status_code == http.client.CONFLICT:
-        log.warning('msg="Conflict when calling WOPI %s" url="%s" reason="%s"' %
-                    (wopicall, wopisrc, res.headers.get('X-WOPI-LockFailureReason')))
-        return jsonify('Error saving the file. %s' % res.headers.get('X-WOPI-LockFailureReason')), \
-               http.client.INTERNAL_SERVER_ERROR
-    if res.status_code != http.client.OK:
-        log.error('msg="Calling WOPI %s failed" url="%s" response="%s"' % (wopicall, wopisrc, res.status_code))
-        # TODO need to save the file on a local storage for later recovery
-        return jsonify('Error saving the file, please contact support'), http.client.INTERNAL_SERVER_ERROR
-    return None
-
-
-def _saveas(wopisrc, acctok, wopilock, targetname, content):
-    '''Save a given document with an alternate name by using WOPI PutRelative'''
-    putrelheaders = {'X-WOPI-Lock': json.dumps(wopilock),
-                     'X-WOPI-Override': 'PUT_RELATIVE',
-                     # SuggestedTarget to not overwrite a possibly existing file
-                     'X-WOPI-SuggestedTarget': targetname
-                    }
-    res = wopi.request(wopisrc, acctok, 'POST', headers=putrelheaders, contents=content)
-    reply = _dealwithputfile('PutRelative', wopisrc, res)
-    if reply:
-        return reply
-
-    # use the new file's metadata from PutRelative to remove the previous file: we can do that only on close
-    # because we need to keep using the current wopisrc/acctok until the session is alive in CodiMD
-    newname = res.json()['Name']
-    # unlock and delete original file
-    res = wopi.request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
-    if res.status_code != http.client.OK:
-        log.warning('msg="Failed to unlock the previous file" token="%s" response="%d"' %
-                    (acctok[-20:], res.status_code))
-    else:
-        res = wopi.request(wopisrc, acctok, 'POST', headers={'X-Wopi-Override': 'DELETE'})
-        if res.status_code != http.client.OK:
-            log.warning('msg="Failed to delete the previous file" token="%s" response="%d"' %
-                        (acctok[-20:], res.status_code))
-        else:
-            log.info('msg="Previous file unlocked and removed successfully" token="%s"' % acctok[-20:])
-
-    log.info('msg="Final save completed" filename"%s" token="%s"' % (newname, acctok[-20:]))
-    return jsonify('File saved successfully'), http.client.OK
-
-
 def savetostorage(wopisrc, acctok, isclose, wopilock):
     '''Copy document from CodiMD back to storage'''
     # get document from CodiMD
     try:
-        log.info('msg="Fetching file from CodiMD" isclose="%s" codimdurl="%s" token="%s"' %
-                 (isclose, codimdurl + wopilock['docid'], acctok[-20:]))
+        log.info('msg="Fetching file from CodiMD" isclose="%s" appurl="%s" token="%s"' %
+                 (isclose, appurl + wopilock['docid'], acctok[-20:]))
         mddoc = _fetchfromcodimd(wopilock, acctok)
-    except CodiMDFailure:
-        return jsonify('Could not save file, failed to fetch document from CodiMD'), http.client.INTERNAL_SERVER_ERROR
+    except AppFailure:
+        return wopi.jsonify('Could not save file, failed to fetch document from CodiMD'), http.client.INTERNAL_SERVER_ERROR
 
     if wopilock['digest'] != 'dirty':
         # so far the file was not touched: before forcing a put let's validate the contents
@@ -281,16 +239,16 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
     if (wasbundle ^ (not bundlefile)) or not isclose:
         res = wopi.request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock)},
                            contents=(bundlefile if wasbundle else mddoc))
-        reply = _dealwithputfile('PutFile', wopisrc, res)
+        reply = wopi.handleputfile('PutFile', wopisrc, res)
         if reply:
             return reply
         wopi.refreshlock(wopisrc, acctok, wopilock, isdirty=True)
         log.info('msg="Save completed" filename="%s" isclose="%s" token="%s"' %
                  (wopilock['filename'], isclose, acctok[-20:]))
         # combine the responses
-        return attresponse if attresponse else (jsonify('File saved successfully'), http.client.OK)
+        return attresponse if attresponse else (wopi.jsonify('File saved successfully'), http.client.OK)
 
     # on close, use saveas for either the new bundle, if this is the first time we have attachments,
     # or the single md file, if there are no more attachments.
-    return _saveas(wopisrc, acctok, wopilock, os.path.splitext(wopilock['filename'])[0] + ('.zmd' if bundlefile else '.md'),
-                   bundlefile if bundlefile else mddoc)
+    return wopi.saveas(wopisrc, acctok, wopilock, os.path.splitext(wopilock['filename'])[0] + ('.zmd' if bundlefile else '.md'),
+                       bundlefile if bundlefile else mddoc)

@@ -2,8 +2,7 @@
 '''
 wopibridge.py
 
-The WOPI bridge for IOP. This PoC only integrates CodiMD
-and for now the code is not fully abstracted to support other integrations.
+The WOPI Bridge for IOP. This connector service supports CodiMD and Etherpad.
 
 Author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 '''
@@ -22,6 +21,8 @@ import urllib.parse as urlparse
 import http.client
 import json
 import hashlib
+import hmac
+from base64 import urlsafe_b64encode
 try:
     import flask
     from werkzeug.exceptions import NotFound as Flask_NotFound
@@ -30,7 +31,6 @@ except ImportError:
     print("Missing modules, please install with `pip3 install flask requests`")
     raise
 import wopiclient as wopi
-import codimd
 
 WBVERSION = 'git'
 
@@ -43,15 +43,17 @@ SECRETPATH = '/var/run/secrets/wbsecret'
 # path to the APIKEY secrets
 APIKEYPATH = '/var/run/secrets/'
 
+# The supported plugins integrated with this WOPI Bridge
+BRIDGE_EXT_PLUGINS = {'md': 'codimd', 'zmd': 'codimd', 'mds': 'codimd', 'epd': 'etherpad'}
+
 # a standard message to be displayed by the app when some content might be lost: this would only
-# appear in case of uncaught exceptions or bugs handling the CodiMD webhook
+# appear in case of uncaught exceptions or bugs handling the webhook callbacks
 RECOVER_MSG = 'Please copy the content to a safe place and reopen the document again to paste it back.'
 
 
 class WB:
     '''A singleton container for all state information of the server'''
-    approot = os.getenv(
-        'APP_ROOT', '/wopib')               # application root path
+    approot = os.getenv('APP_ROOT', '/wopib')               # application root path
     bpr = flask.Blueprint('WOPIBridge', __name__, url_prefix=approot)
     app = flask.Flask('WOPIBridge')
     log = app.logger
@@ -71,6 +73,8 @@ class WB:
     saveresponses = {}  # a map of responses: wopisrc -> (http code, message)
     # a condition variable to synchronize the save thread and the main Flask threads
     savecv = threading.Condition()
+    # a map file-extension -> application plugin
+    plugins = {}
 
     @classmethod
     def init(cls):
@@ -83,21 +87,11 @@ class WB:
                                                       datefmt='%Y-%m-%dT%H:%M:%S'))
             cls.log.addHandler(loghandler)
             cls.log.setLevel(cls.loglevels['Debug'])
-            # this is the external-facing URL
-            codimd.codimdexturl = os.environ.get('CODIMD_EXT_URL')
-            # this is the internal URL (e.g. as visible in docker/K8s)
-            codimd.codimdurl = os.environ.get('CODIMD_INT_URL')
             skipsslverify = os.environ.get('SKIP_SSL_VERIFY')
             if isinstance(skipsslverify, str):
                 cls.skipsslverify = skipsslverify.upper() in ('TRUE', 'YES')
             else:
                 cls.skipsslverify = False
-            if not codimd.codimdurl:
-                # defaults to the external
-                codimd.codimdurl = codimd.codimdexturl
-            if not codimd.codimdurl:
-                # this is the only mandatory option
-                raise ValueError("Missing CODIMD_EXT_URL configuration")
             try:
                 cls.saveinterval = int(os.environ.get('APP_SAVE_INTERVAL'))
             except TypeError:
@@ -106,14 +100,23 @@ class WB:
                 cls.saveinterval = int(os.environ.get('APP_UNLOCK_INTERVAL'))
             except TypeError:
                 cls.unlockinterval = 90
-            # init modules
-            codimd.log = wopi.log = cls.log
-            codimd.skipsslverify = wopi.skipsslverify = cls.skipsslverify
             with open(SECRETPATH) as f:
                 cls.hashsecret = f.readline().strip('\n')
-                codimd.hashsecret = cls.hashsecret.encode()
-            with open(APIKEYPATH + 'codimd_apikey') as f:
-                codimd.apikey = f.readline().strip('\n')
+            wopi.log = cls.log
+            wopi.skipsslverify = cls.skipsslverify
+            # init plugins
+            for p in set(BRIDGE_EXT_PLUGINS.values()):
+                try:
+                    cls.plugins[p] = __import__(p, globals(), locals())
+                    cls.plugins[p].log = cls.log
+                    cls.plugins[p].skipsslverify = cls.skipsslverify
+                    cls.plugins[p].init(os.environ, APIKEYPATH)
+                    cls.log.info('msg="Imported plugin for application" app="%s" plugin="%s"' % (p, cls.plugins[p]))
+                except Exception as e:
+                    cls.log.info('msg="Disabled plugin following failed initialization" app="%s" message="%s"' % (p, e))
+                    cls.plugins[p] = None
+            if not list(filter(None.__ne__, cls.plugins.values())):
+                raise ValueError('None of the available app plugins could be initialized')
 
             # start the thread to perform async save operations
             cls.savethread = SaveThread()
@@ -122,7 +125,7 @@ class WB:
         except Exception as e:    # pylint: disable=broad-except
             # any error we get here with the configuration is fatal
             cls.log.fatal('msg="Failed to initialize the service, aborting" error="%s"' % e)
-            sys.exit(-22)
+            sys.exit(22)
 
     @classmethod
     def run(cls):
@@ -130,10 +133,10 @@ class WB:
            Secure https mode typically is to be provided by the infrastructure (k8s ingress, nginx...)'''
         if os.path.isfile(CERTPATH):
             cls.log.info('msg="WOPI Bridge starting in secure mode" baseUrl="%s" version="%s"' % (cls.approot, WBVERSION))
-            cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=True,
+            cls.app.run(host='0.0.0.0', port=cls.port, threaded=True,
                         ssl_context=(CERTPATH, CERTPATH.replace('cert', 'key')))
         else:
-            cls.log.info('msg="WOPI Bridge starting in unsecure mode" baseUrl="%s" version="%s"' % (cls.approot, WBVERSION))
+            cls.log.info('msg="WOPI Bridge starting in unsecure/debugging mode" baseUrl="%s" version="%s"' % (cls.approot, WBVERSION))
             cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=True)
 
 
@@ -142,44 +145,10 @@ def _guireturn(msg):
     return '<div align="center" style="color:#808080; padding-top:50px; font-family:Verdana">%s</div>' % msg
 
 
-def _renderagent(ua):
-    '''One-liner to render a user_agent struct in a user-friendly way'''
-    return ua.platform[:3] if ua.platform else 'oth'   # we could use ua.browser as well, but it's maybe not useful
-
-
-def _redirecttoapp(isreadwrite, wopisrc, acctok, wopilock):
-    '''Updates internal metadata and returns the correct redirect URL to the editor'''
-    if isreadwrite:
-        # need to check again if the actual target is elsewhere and we were redirected
-        # (this is CodiMD-specific and it is not understood why it happens in the first place; seems related to the update API)
-        wopilock = codimd.checkredirect(wopilock, acctok)
-        # keep track of this open document for the save thread and for statistical purposes
-        if wopisrc in WB.openfiles:
-            # use the new acctok and the new/current wopilock content
-            WB.openfiles[wopisrc]['acctok'] = acctok
-            WB.openfiles[wopisrc]['toclose'] = wopilock['toclose']
-        else:
-            WB.openfiles[wopisrc] = {'acctok': acctok, 'tosave': False,
-                                     'lastsave': int(time.time()) - WB.saveinterval,
-                                     'toclose': {acctok[-20:]: False},
-                                     'docid': wopilock['docid'],
-                                    }
-        # also clear any potential stale response for this document
-        try:
-            del WB.saveresponses[wopisrc]
-        except KeyError:
-            pass
-        # create the external redirect URL to be returned to the client:
-        # metadata will be used for autosave (this is an extended feature of CodiMD)
-        redirecturl = codimd.codimdexturl + wopilock['docid'] + '?metadata=' + \
-                      urlparse.quote_plus('%s?t=%s' % (wopisrc, acctok)) + '&'
-    else:
-        # read-only mode: in this case redirect to publish mode or normal view
-        # to quickly jump in slide mode depending on the content
-        redirecturl = codimd.codimdexturl + wopilock['docid'] + \
-                      ('/publish?' if wopilock['app'] != 'slide' else '?')
-    # in all cases append the API key (TODO to be refactored)
-    return redirecturl + 'apikey=' + codimd.apikey + '&'
+def _gendocid(wopisrc):
+    '''Generate a URL safe hash of the wopisrc to be used as document id by the app'''
+    dig = hmac.new(WB.hashsecret.encode(), msg=wopisrc.split('/')[-1].encode(), digestmod=hashlib.sha1).digest()
+    return urlsafe_b64encode(dig).decode()[:-1]
 
 
 
@@ -194,7 +163,7 @@ def handleexception(ex):
     ex_type, ex_value, ex_traceback = sys.exc_info()
     WB.log.error('msg="Unexpected exception caught" exception="%s" type="%s" traceback="%s"' %
                  (ex, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback)))
-    return codimd.jsonify('Internal error, please contact support. %s' % RECOVER_MSG), http.client.INTERNAL_SERVER_ERROR
+    return wopi.jsonify('Internal error, please contact support. %s' % RECOVER_MSG), http.client.INTERNAL_SERVER_ERROR
 
 
 @WB.app.route("/", methods=['GET'])
@@ -211,7 +180,7 @@ def index():
     <html><head><title>ScienceMesh WOPI Bridge</title></head>
     <body>
     <div align="center" style="color:#000080; padding-top:50px; font-family:Verdana; size:11">
-    This is a WOPI HTTP bridge, to be used in conjunction with a WOPI-enabled EFSS.<br>Only CodiMD is supported for now.<br>
+    This is a WOPI HTTP bridge, to be used in conjunction with a WOPI-enabled EFSS.<br>Supports CodiMD and Etherpad.<br>
     To use this service, please log in to your EFSS Storage and click on a supported document.</div>
     <div style="position: absolute; bottom: 10px; left: 10px; width: 99%%;"><hr>
     <i>ScienceMesh WOPI Bridge %s at %s. Powered by Flask %s for Python %s</i>.</div>
@@ -238,6 +207,12 @@ def appopen():
         WB.log.warning('msg="Open: unable to fetch file WOPI metadata" response="%d"' % res.status_code)
         return _guireturn('Invalid WOPI context'), http.client.NOT_FOUND
     filemd = res.json()
+    app = BRIDGE_EXT_PLUGINS.get(os.path.splitext(filemd['BaseFileName'])[1][1:])
+    if not app:
+        WB.log.warning('msg="Open: file type not supported" filename="%s" token="%s"' % (filemd['FileName'], acctok[-20:]))
+        return _guireturn('File type not supported'), http.client.BAD_REQUEST
+    WB.log.debug('msg="Processing open for supported app" app="%s" plugin="%s"' % (app, WB.plugins[app]))
+    app = WB.plugins[app]
 
     try:
         # use the 'UserCanWrite' attribute to decide whether the file is to be opened in read-only mode
@@ -256,7 +231,7 @@ def appopen():
                     filemd['UserCanWrite'] = False
 
                 # otherwise, this is the first user opening the file; in both cases, fetch it
-                wopilock = codimd.loadfromstorage(filemd, wopisrc, acctok)
+                wopilock = app.loadfromstorage(filemd, wopisrc, acctok, _gendocid(wopisrc))
                 # and WOPI Lock it
                 res = wopi.request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock),
                                                                      'X-Wopi-Override': 'LOCK'})
@@ -266,19 +241,36 @@ def appopen():
                                    (res.status_code, acctok[-20:]))
                     filemd['UserCanWrite'] = False
 
+            # keep track of this open document for the save thread and for statistical purposes
+            if wopisrc in WB.openfiles:
+                # use the new acctok and the new/current wopilock content
+                WB.openfiles[wopisrc]['acctok'] = acctok
+                WB.openfiles[wopisrc]['toclose'] = wopilock['toclose']
+            else:
+                WB.openfiles[wopisrc] = {'acctok': acctok, 'tosave': False,
+                                        'lastsave': int(time.time()) - WB.saveinterval,
+                                        'toclose': {acctok[-20:]: False},
+                                        'docid': wopilock['docid'],
+                                        }
+            # also clear any potential stale response for this document
+            try:
+                del WB.saveresponses[wopisrc]
+            except KeyError:
+                pass
         else:
-            # user has no write privileges, just fetch document and push it to CodiMD
-            wopilock = codimd.loadfromstorage(filemd, wopisrc, acctok)
-    except codimd.CodiMDFailure:
+            # user has no write privileges, just fetch the document and push it to the app on a random docid
+            wopilock = app.loadfromstorage(filemd, wopisrc, acctok, None)
+    except app.AppFailure:
         # this can be raised by loadfromstorage
-        return _guireturn('Unable to connect to CodiMD, please try again later or contact support'), http.client.INTERNAL_SERVER_ERROR
+        return _guireturn('Unable to load the app, please try again later or contact support'), http.client.INTERNAL_SERVER_ERROR
 
     # here we append the user browser to the displayName
     # TODO need to review this for production usage, it should actually come from WOPI if configured accordingly
-    redirecturl = _redirecttoapp(filemd['UserCanWrite'], wopisrc, acctok, wopilock) + \
-                  'displayName=' + urlparse.quote_plus(filemd['UserFriendlyName'] + \
-                  '@' + _renderagent(flask.request.user_agent))
-    WB.log.info('msg="Redirecting client to CodiMD" redirecturl="%s"' % redirecturl)
+    redirecturl = app.getredirecturl(
+            filemd['UserCanWrite'], wopisrc, acctok, wopilock,
+            urlparse.quote_plus(filemd['UserFriendlyName'] + '@' + \
+                                (flask.request.user_agent.platform[:3] if flask.request.user_agent.platform else 'oth')))
+    WB.log.info('msg="Redirecting client to the app" redirecturl="%s"' % redirecturl)
     return flask.redirect(redirecturl)
 
 
@@ -297,7 +289,7 @@ def appsave():
     except (KeyError, ValueError) as e:
         WB.log.error('msg="Save: malformed or missing metadata" client="%s" headers="%s" exception="%s" error="%s"' %
                      (flask.request.remote_addr, flask.request.headers, type(e), e))
-        return codimd.jsonify('Malformed or missing metadata, could not save. %s' % RECOVER_MSG), http.client.INTERNAL_SERVER_ERROR
+        return wopi.jsonify('Malformed or missing metadata, could not save. %s' % RECOVER_MSG), http.client.INTERNAL_SERVER_ERROR
 
     # decide whether to notify the save thread
     donotify = isclose or wopisrc not in WB.openfiles or WB.openfiles[wopisrc]['lastsave'] < time.time() - WB.saveinterval
@@ -393,18 +385,23 @@ class SaveThread(threading.Thread):
                 except wopi.InvalidLock as ile:
                     # even this attempt failed, give up
                     # TODO here we should save the file on a local storage to help later recovery
-                    WB.saveresponses[wopisrc] = codimd.jsonify(str(ile)), http.client.INTERNAL_SERVER_ERROR
+                    WB.saveresponses[wopisrc] = wopi.jsonify(str(ile)), http.client.INTERNAL_SERVER_ERROR
                     # set some 'fake' metadata, will be automatically cleaned up later
                     openfile['lastsave'] = int(time.time())
                     openfile['tosave'] = False
                     openfile['toclose'] = {'invalid-lock': True}
                     return None
-            WB.log.info('msg="SaveThread: saving file" token="%s" docid="%s"' %
-                        (openfile['acctok'][-20:], openfile['docid']))
-            WB.saveresponses[wopisrc] = codimd.savetostorage(
-                wopisrc, openfile['acctok'], _intersection(openfile['toclose']), wopilock)
-            openfile['lastsave'] = int(time.time())
-            openfile['tosave'] = False
+            app = BRIDGE_EXT_PLUGINS.get(wopilock['app'])
+            if not app:
+                WB.log.error('msg="SaveThread: malformed app attribute in WOPI lock" lock="%s"' % wopilock)
+                WB.saveresponses[wopisrc] = wopi.jsonify('Unrecognized app for this file'), http.client.BAD_REQUEST
+            else:
+                WB.log.info('msg="SaveThread: saving file" token="%s" docid="%s"' %
+                            (openfile['acctok'][-20:], openfile['docid']))
+                WB.saveresponses[wopisrc] = WB.plugins[app].savetostorage(
+                    wopisrc, openfile['acctok'], _intersection(openfile['toclose']), wopilock)
+                openfile['lastsave'] = int(time.time())
+                openfile['tosave'] = False
         return wopilock
 
     def closewhenidle(self, openfile, wopisrc, wopilock):
