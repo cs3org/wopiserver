@@ -1,5 +1,9 @@
 ## Changelog for the WOPI server
 
+### Tue Jun  8 2021 - v6.6.0
+- Make SSL certificate validation configurable for Reva
+- Removed workarounds targeting MS Word Online
+
 ### Thu Apr 29 2021 - v6.5.0
 - Extended the REFRESH_LOCK API to support relocking
   a file when it was not externally modified
