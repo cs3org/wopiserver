@@ -52,14 +52,19 @@ def init(env, apipath):
 def getredirecturl(isreadwrite, wopisrc, acctok, wopilock, displayname):
     '''Return a valid URL to the app for the given WOPI context'''
     if isreadwrite:
-        url = appexturl + wopilock['docid'] + '?metadata=' + \
-              urlparse.quote_plus('%s?t=%s' % (wopisrc, acctok)) + '&'
-    else:
-        # read-only mode: in this case redirect to publish mode or normal view
-        # to quickly jump in slide mode depending on the content
-        url = appexturl + wopilock['docid'] + ('/publish?' if wopilock['app'] != 'mds' else '?')
-    # in all cases append the display name and the API key
-    return url + 'apikey=' + apikey + '&displayName=' + displayname
+        return appexturl + wopilock['docid'] + '?metadata=' + \
+               urlparse.quote_plus('%s?t=%s' % (wopisrc, acctok)) + \
+               '&apiKey=' + apikey + '&displayName=' + displayname
+    # read-only mode: in this case redirect to publish mode or normal view
+    # to quickly jump in slide mode depending on the content
+    url = wopilock['docid'] + ('/publish' if wopilock['app'] != 'mds' else '')
+    res = requests.head(appurl + url,
+                        params={'apiKey': apikey},
+                        verify=not skipsslverify)
+    if res.status_code == http.client.FOUND:
+        return appexturl + '/s/' + urlparse.urlsplit(res.next.url).path.split('/')[-1]
+    return appexturl + url + '?apiKey=' + apikey
+
 
 
 # Cloud storage to CodiMD
