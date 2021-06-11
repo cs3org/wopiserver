@@ -156,7 +156,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
         else:
             # reserve the given docid in CodiMD via a HEAD request
             res = requests.head(appurl + '/' + docid,
-                                params={'apikey': apikey},
+                                params={'apiKey': apikey},
                                 verify=not skipsslverify)
             if res.status_code not in (http.client.OK, http.client.FOUND):
                 log.error('msg="Unable to reserve note hash in CodiMD" token="%s" response="%d"' %
@@ -172,7 +172,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
                 log.debug('msg="Got note hash from CodiMD" docid="%s"' % docid)
             # push the document to CodiMD with the update API
             res = requests.put(appurl + '/api/notes/' + docid,
-                               params={'apikey': apikey},    # possibly required in the future
+                               params={'apiKey': apikey},    # possibly required in the future
                                json={'content': mddoc.decode()},
                                verify=not skipsslverify)
             if res.status_code == http.client.FORBIDDEN:
