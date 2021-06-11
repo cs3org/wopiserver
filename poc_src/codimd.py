@@ -227,7 +227,8 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
     except AppFailure:
         return wopi.jsonify('Could not save file, failed to fetch document from CodiMD'), http.client.INTERNAL_SERVER_ERROR
 
-    if wopilock['digest'] != 'dirty':
+    h = None
+    if isclose and wopilock['digest'] != 'dirty':
         # so far the file was not touched: before forcing a put let's validate the contents
         h = hashlib.sha1()
         h.update(mddoc)
@@ -247,7 +248,10 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
         reply = wopi.handleputfile('PutFile', wopisrc, res)
         if reply:
             return reply
-        wopi.refreshlock(wopisrc, acctok, wopilock, isdirty=True)
+        if isclose and wopilock['digest'] == 'dirty':
+            h = hashlib.sha1()
+            h.update(mddoc)
+        wopilock = wopi.refreshlock(wopisrc, acctok, wopilock, digest=(h.hexdigest() if h else 'dirty'))
         log.info('msg="Save completed" filename="%s" isclose="%s" token="%s"' %
                  (wopilock['filename'], isclose, acctok[-20:]))
         # combine the responses

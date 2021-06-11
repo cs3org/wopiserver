@@ -150,7 +150,7 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
     except AppFailure:
         return wopi.jsonify('Could not save file, failed to fetch document from Etherpad'), http.client.INTERNAL_SERVER_ERROR
 
-    if wopilock['digest'] != 'dirty':
+    if isclose and wopilock['digest'] != 'dirty':
         # so far the file was not touched: before forcing a put let's validate the contents
         h = hashlib.sha1()
         h.update(epfile)
@@ -164,7 +164,7 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
     reply = wopi.handleputfile('PutFile', wopisrc, res)
     if reply:
         return reply
-    wopi.refreshlock(wopisrc, acctok, wopilock, isdirty=True)
+    wopilock = wopi.refreshlock(wopisrc, acctok, wopilock, digest='dirty')
     log.info('msg="Save completed" filename="%s" isclose="%s" token="%s"' %
-                (wopilock['filename'], isclose, acctok[-20:]))
+             (wopilock['filename'], isclose, acctok[-20:]))
     return wopi.jsonify('File saved successfully'), http.client.OK
