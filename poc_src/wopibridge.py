@@ -67,10 +67,11 @@ class WB:
                 }
     active = True
     # a map of all open documents: wopisrc -> (acctok, tosave, lastsave, toclose)
-    openfiles = {}
     # where acctok is one of the access tokens for the given doc, and
     # toclose is a dict {shorttok -> isclose} with shorttok = 20 last chars of all known tokens
-    saveresponses = {}  # a map of responses: wopisrc -> (http code, message)
+    openfiles = {}
+    # a map of responses: wopisrc -> (http code, message)
+    saveresponses = {}
     # a condition variable to synchronize the save thread and the main Flask threads
     savecv = threading.Condition()
     # a map file-extension -> application plugin
@@ -405,10 +406,10 @@ class SaveThread(threading.Thread):
         return wopilock
 
     def closewhenidle(self, openfile, wopisrc, wopilock):
-        '''close and unlock documents tha are idle for more than 60 minutes.
+        '''close and unlock documents tha are idle for more than 4x the save interval (about 14 minutes by default).
         They will transparently be relocked when/if the session resumes, but we seem to miss some close notifications,
         therefore this also works as a cleanup step'''
-        if openfile['lastsave'] < int(time.time()) - 3600:
+        if openfile['lastsave'] < int(time.time()) - 4*WB.saveinterval:
             try:
                 wopilock = wopi.getlock(wopisrc, openfile['acctok']) if not wopilock else wopilock
                 # this will force a close in the cleanup step
