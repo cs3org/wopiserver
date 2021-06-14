@@ -1,5 +1,13 @@
 ## Changelog for the WOPI bridge
 
+### wopibridge 4.0.0 (2021-06-14)
+* Refactored code to support plugins, and
+  introduced a plugin for Etherpad with
+  minimal functionality
+* Fixed public links for CodiMD
+* Fixed repeated autosaving in CodiMD when
+  a document is left open (#11)
+
 ### wopibridge 3.2.0 (2021-04-23)
 * Introduced a shared secret as an `apikey`
   parameter to be passed to CodiMD
@@ -75,4 +83,3 @@
 
 * First PoC of a WOPI bridge service for CodiMD,
   including collaborative editing and WOPI-compliant locking.
-
