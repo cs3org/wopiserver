@@ -73,7 +73,7 @@ def getlock(wopisrc, acctok):
         raise InvalidLock(e)
 
 
-def refreshlock(wopisrc, acctok, wopilock, isdirty=False, toclose=None):
+def refreshlock(wopisrc, acctok, wopilock, digest=None, toclose=None):
     '''Refresh an existing WOPI lock. Returns the new lock if successful, None otherwise'''
     newlock = json.loads(json.dumps(wopilock))    # this is a hack for a deep copy, to be redone in Go
     if toclose:
@@ -82,8 +82,8 @@ def refreshlock(wopisrc, acctok, wopilock, isdirty=False, toclose=None):
     elif acctok[-20:] not in wopilock['toclose']:
         # if missing, just append the short token to the 'toclose' dict, similarly to the openfiles map
         newlock['toclose'][acctok[-20:]] = False
-    if isdirty and wopilock['digest'] != 'dirty':
-        newlock['digest'] = 'dirty'
+    if digest and wopilock['digest'] != digest:
+        newlock['digest'] = digest
     lockheaders = {'X-Wopi-Override': 'REFRESH_LOCK',
                    'X-WOPI-OldLock': json.dumps(wopilock),
                    'X-WOPI-Lock': json.dumps(newlock)
@@ -100,7 +100,7 @@ def refreshlock(wopisrc, acctok, wopilock, isdirty=False, toclose=None):
             for t in currlock['toclose']:
                 toclose[t] = currlock['toclose'][t] or (t in toclose and toclose[t])
         # recursively retry, the recursion is going to stop in one round
-        return refreshlock(wopisrc, acctok, currlock, isdirty, toclose)
+        return refreshlock(wopisrc, acctok, currlock, digest, toclose)
     log.error('msg="Calling WOPI RefreshLock failed" url="%s" response="%d" reason="%s"' %
               (wopisrc, res.status_code, res.headers.get('X-WOPI-LockFailureReason')))
     return None
