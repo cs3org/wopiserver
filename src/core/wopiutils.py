@@ -27,7 +27,7 @@ EXCL_ERROR = 'File exists and islock flag requested'
 
 # convenience references to global entities
 st = None
-wopi = None
+srv = None
 log = None
 
 class ViewMode(Enum):
@@ -83,7 +83,7 @@ def logGeneralExceptionAndReturn(ex, req):
 
 def generateWopiSrc(fileid):
     '''Returns a valid URL-encoded WOPISrc for the given fileid'''
-    return url_quote_plus('%s/wopi/files/%s' % (wopi.wopiurl, fileid))
+    return url_quote_plus('%s/wopi/files/%s' % (srv.wopiurl, fileid))
 
 
 def getLibreOfficeLockName(filename):
@@ -119,10 +119,10 @@ def generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint)
         log.info('msg="Requested file not found or not a file" fileid="%s" error="%s"' % (fileid, e))
         raise
     # if write access is requested, probe whether there's already a lock file coming from Desktop applications
-    exptime = int(time.time()) + wopi.tokenvalidity
+    exptime = int(time.time()) + srv.tokenvalidity
     acctok = jwt.encode({'userid': userid, 'filename': statInfo['filepath'], 'username': username,
                          'viewmode': viewmode.value, 'folderurl': folderurl, 'exp': exptime, 'endpoint': endpoint},
-                         wopi.wopisecret, algorithm='HS256')
+                         srv.wopisecret, algorithm='HS256')
     log.info('msg="Access token generated" userid="%s" mode="%s" endpoint="%s" filename="%s" inode="%s" ' \
              'mtime="%s" folderurl="%s" expiration="%d" token="%s"' %
              (userid, viewmode, endpoint, statInfo['filepath'], statInfo['inode'], statInfo['mtime'], \
@@ -133,8 +133,8 @@ def generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint)
 
 def getLockName(filename):
     '''Generates a hidden filename used to store the WOPI locks'''
-    if wopi.lockpath:
-        lockfile = filename.split("/files/", 1)[0] + wopi.lockpath + 'wopilock.' + \
+    if srv.lockpath:
+        lockfile = filename.split("/files/", 1)[0] + srv.lockpath + 'wopilock.' + \
                                   hashlib.sha1(filename).hexdigest() + '.' + os.path.basename(filename)
     else:
         lockfile = os.path.dirname(filename) + os.path.sep + '.sys.wopilock.' + os.path.basename(filename) + '.'
@@ -154,10 +154,10 @@ def retrieveWopiLock(fileid, operation, lock, acctok, overridefilename=None):
     try:
         # check validity: a lock is deemed expired if the most recent between its expiration time and the last
         # save time by WOPI has passed
-        retrievedLock = jwt.decode(lockcontent, wopi.wopisecret, algorithms=['HS256'])
+        retrievedLock = jwt.decode(lockcontent, srv.wopisecret, algorithms=['HS256'])
         savetime = st.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], LASTSAVETIMEKEY)
         if max(0 if 'exp' not in retrievedLock else retrievedLock['exp'],
-               0 if not savetime else int(savetime) + wopi.config.getint('general', 'wopilockexpiration')) < time.time():
+               0 if not savetime else int(savetime) + srv.config.getint('general', 'wopilockexpiration')) < time.time():
             # we got a malformed or expired lock, reject. Note that we may get an ExpiredSignatureError
             # by jwt.decode() as we had stored it with a timed signature.
             raise jwt.exceptions.ExpiredSignatureError
@@ -213,7 +213,7 @@ def storeWopiLock(operation, lock, acctok, isoffice):
             # then create a LibreOffice-compatible lock file for interoperability purposes, making sure to
             # not overwrite any existing or being created lock
             lockcontent = ',Collaborative Online Editor,%s,%s,WOPIServer;' % \
-                          (wopi.wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())))
+                          (srv.wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())))
             st.writefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], \
                          lockcontent, islock=True)
         except IOError as e:
@@ -227,7 +227,7 @@ def storeWopiLock(operation, lock, acctok, isoffice):
                     retrievedlock = retrievedlock.decode('UTF-8')
                     # check that the lock is not stale
                     if datetime.strptime(retrievedlock.split(',')[3], '%d.%m.%Y %H:%M').timestamp() + \
-                                         wopi.config.getint('general', 'wopilockexpiration') < time.time():
+                                         srv.config.getint('general', 'wopilockexpiration') < time.time():
                         retrievedlock = 'WOPIServer'
                 except (IOError, StopIteration, IndexError, ValueError) as e:
                     retrievedlock = 'WOPIServer'     # could not read the lock, assume it expired
@@ -250,9 +250,9 @@ def storeWopiLock(operation, lock, acctok, isoffice):
         lockcontent = {}
         lockcontent['wopilock'] = lock
         # append or overwrite the expiration time
-        lockcontent['exp'] = int(time.time()) + wopi.config.getint('general', 'wopilockexpiration')
+        lockcontent['exp'] = int(time.time()) + srv.config.getint('general', 'wopilockexpiration')
         st.writefile(acctok['endpoint'], getLockName(acctok['filename']), acctok['userid'], \
-                     jwt.encode(lockcontent, wopi.wopisecret, algorithm='HS256'))
+                     jwt.encode(lockcontent, srv.wopisecret, algorithm='HS256'))
         log.info('msg="%s" filename="%s" token="%s" lock="%s" result="success"' %
                  (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
     except IOError as e:

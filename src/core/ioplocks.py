@@ -10,7 +10,7 @@ import core.wopiutils as utils
 
 # convenience references to global entities
 st = None
-wopi = None
+srv = None
 log = None
 
 
@@ -127,7 +127,7 @@ def createLock(filestat, filename, userid, endpoint):
     try:
         lockid = int(time.time())
         lolockcontent = ',OnlyOffice Online Editor,%s,%s,ExtWebApp;\n%d;' % \
-                        (wopi.wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())), lockid)
+                        (srv.wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())), lockid)
         # try to write in exclusive mode (and if a valid WOPI lock exists, assume the corresponding LibreOffice lock
         # is still there so the write will fail)
         st.writefile(endpoint, utils.getLibreOfficeLockName(filename), userid, lolockcontent, islock=True)
@@ -174,12 +174,12 @@ def createLock(filestat, filename, userid, endpoint):
         # the sync client), similarly to the WOPI lock logic below.
         try:
             lockid = int(lock.split(';\n')[1].strip(';'))
-            if time.time() - lockid > wopi.tokenvalidity:
+            if time.time() - lockid > srv.tokenvalidity:
                 # the previous timestamp is older than the access token validity (one day typically):
                 # force a new lockid, the old one must be stale
                 lockid = int(time.time())
             lolockcontent = ',OnlyOffice Online Editor,%s,%s,ExtWebApp;\n%d;' % \
-                            (wopi.wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())), lockid)
+                            (srv.wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())), lockid)
             st.writefile(endpoint, utils.getLibreOfficeLockName(filename), userid, lolockcontent, islock=False)
             log.info('msg="cboxLock: refreshed LibreOffice-compatible lock file" filename="%s" fileid="%s" mtime="%ld" lockid="%ld"' %
                      (filename, filestat['inode'], filestat['mtime'], lockid))
