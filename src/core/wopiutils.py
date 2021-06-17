@@ -53,16 +53,20 @@ class JsonLogger:
         def facade(*args, **kwargs):
             '''internal method returned by getattr and wrapping the original one'''
             if name in ['debug', 'info', 'warning', 'error', 'fatal']:
+                # resolve the current module
+                m = traceback.extract_stack()[-2].filename
+                m = m[m.rfind('/')+1:m.rfind('.')]
                 # as we use a `key="value" ...` format in all logs, we only have args[0]
-                msg = args[0] + ' '
+                args = ('module="%s" ' % m + args[0],)
                 try:
-                    # now convert that to a dictionary assuming no `="` nor `" ` is present inside any key or value!
+                    msg = args[0] + ' '
+                    # now convert the msg to a dictionary assuming no `="` nor `" ` is present inside any key or value!
                     # the added trailing space matches the `" ` split, so we remove the last element of that list
                     msg = dict([tuple(kv.split('="')) for kv in msg.split('" ')[:-1]])
                     # then convert dict -> json -> str + strip `{` and `}`
                     return getattr(self.logger, name)(str(json.dumps(msg))[1:-1], **kwargs)
                 except Exception:
-                    # if the above assumptions do not hold, keep the log in its original format
+                    # if the above assumptions do not hold, keep the log in its original format but with the enriched args
                     return getattr(self.logger, name)(*args, **kwargs)
             elif hasattr(self.logger, name):
                 # pass-through facade

@@ -56,7 +56,7 @@ def storage_layer_import(storagetype):
 
 class Wopi:
     '''A singleton container for all state information of the WOPI server'''
-    app = flask.Flask("WOPIServer")
+    app = flask.Flask("wopiserver")
     metrics = PrometheusMetrics(app, group_by='endpoint')
     port = 0
     lastConfigReadTime = time.time()
@@ -81,7 +81,7 @@ class Wopi:
             loghandler = logging.FileHandler('/var/log/wopi/wopiserver.log')
             loghandler.setFormatter(logging.Formatter(
                 fmt='{"time": "%(asctime)s", "host": "' + hostname + \
-                    '", "process": "%(name)s", "level": "%(levelname)s", %(message)s}',
+                    '", "level": "%(levelname)s", "process": "%(name)s", %(message)s}',
                 datefmt='%Y-%m-%dT%H:%M:%S'))
             cls.app.logger.handlers = [loghandler]
             # read the configuration
