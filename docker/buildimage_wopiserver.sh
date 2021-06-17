@@ -4,8 +4,10 @@
 #
 # This script can be used to generate a docker image of the WOPI server.
 # Prior to run it, you need to collect here a valid wopiserver.conf and
-# an iopsecret file that contains the shared secret used by your EFSS
-# servers to authenticate to the WOPI server.
+# an iopsecret file that contains a shared secret used to strengthen the
+# open REST endpoint, as they give access to any file of the underlying
+# storage: the secret is only to be used between the client of the
+# /wopi/iop/open endpoint and the WOPI server.
 #
 # If you want the WOPI server to run in secure mode, you need to generate
 # a certificate/key with the hostname of the node that will be running 
