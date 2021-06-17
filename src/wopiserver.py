@@ -269,8 +269,18 @@ def iopOpen():
   '''
   Wopi.refreshconfig()
   req = flask.request
-  # if running in https mode, first check if the shared secret matches ours
-  if req.headers.get('Authorization') != 'Bearer ' + Wopi.iopsecret:
+  authenticated = False
+  # try to authenticate user with REVA JWT bearer token first
+  try:
+    auth = req.headers.get('Authorization')
+    auth = auth.replace("Bearer ", '', 1)
+    jwt.decode(auth, Wopi.iopsecret, algorithms=["HS256"], options={"verify_aud": False})
+    authenticated = True
+  except Exception: # eg. jwt.exceptions.DecodeError:
+    # fall back to shared secret
+    pass
+  # if running in https mode, first check if the shared secret matches ours when bearer token authentication didn't work
+  if not authenticated and req.headers.get('Authorization') != 'Bearer ' + Wopi.iopsecret:
     Wopi.log.warning('msg="iopOpen: unauthorized access attempt, missing authorization token" ' \
                      'client="%s" clientAuth="%s"' % (req.remote_addr, req.headers.get('Authorization')))
     return 'Client not authorized', http.client.UNAUTHORIZED
