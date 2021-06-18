@@ -1,0 +1,88 @@
+# docker-compose configuration file for CodiMD + Postgres + WOPI bridge
+#
+# Build with:   docker-compose -f codinet.yaml build
+# Run with:     DBPWD='yourdbpassword' HOST='https://yourserver' docker-compose -f codimd.yaml up -d
+#
+
+version: "3.1"
+services:
+  database:
+    image: postgres:11.6-alpine
+    container_name: codimd-postgres
+    hostname: cbox-codimd-postgres
+    environment:
+      - POSTGRES_USER=codimd
+      - POSTGRES_PASSWORD=${DBPWD}
+      - POSTGRES_DB=codimd
+    network_mode: codinet
+    volumes:
+      - "database-data:/var/lib/postgresql/data"
+    restart: always
+  frontend:
+    image: gitlab-registry.cern.ch/authoring/notes/codimd:cernbox-integration
+    container_name: codimd-web
+    hostname: cbox-codimd-web
+    environment:
+      - CMD_DB_URL=postgres://codimd:${DBPWD}@codimd-postgres/codimd
+      - CMD_AUTO_VERSION_CHECK=false
+      - CMD_ALLOW_ANONYMOUS=true
+      - CMD_ALLOW_ANONYMOUS_EDITS=true
+      - CMD_ALLOW_ANONYMOUS_VIEWS=true
+      - CMS_ALLOW_FREEURL=true
+      - CMD_EMAIL=false
+      - CMD_ALLOW_EMAIL_REGISTER=false
+      - CMD_USESSL=true
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
+      - CMD_APPLIANCE_MODE=true
+      - CMD_SAVE_WEBHOOK=https://codimd-wopi.codinet:8000/wopib/save
+    depends_on:
+      - database
+    ports:
+      - 3000:3000
+    secrets:
+      - cert.pem
+      - key.pem
+      - dhparam.pem
+    network_mode: codinet
+    restart: always
+  wopibridge:
+    build:
+      context: .
+      dockerfile: wopibridge-poc.Dockerfile
+    image: wopibridge-poc:cern
+    container_name: codimd-wopi
+    hostname: cbox-codimd-wopi
+    environment:
+      - CODIMD_INT_URL=https://codimd-web.codinet:3000
+      - CODIMD_EXT_URL=${HOST}:3000
+    depends_on:
+      - frontend
+    ports:
+      - 8000:8000
+    volumes:
+      - logs:/var/log/wopi
+    secrets:
+      - cert.pem
+      - key.pem
+    network_mode: codinet
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "--insecure", "https://localhost:8000"]
+      interval: 600s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  database-data: {}
+  logs: {}
+
+networks:
+  codinet:
+
+secrets:
+  cert.pem:
+    file: /etc/grid-security/hostcert.pem
+  key.pem:
+    file: /etc/grid-security/hostkey.pem
+  dhparam.pem:
+    file: ./dhparams.pem
