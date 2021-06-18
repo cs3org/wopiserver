@@ -8,7 +8,7 @@ CERN IT/ST
 '''
 
 import sys, os, getopt, configparser, requests
-from wopiutils import ViewMode
+from core.wopiutils import ViewMode
 
 # usage function
 def usage(exitcode):
