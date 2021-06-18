@@ -11,13 +11,11 @@ Contributions: see README.md
 import sys
 import os
 import time
-from datetime import datetime
 import socket
 import configparser
 from platform import python_version
 import logging
 import logging.handlers
-import urllib.request
 import urllib.parse
 import http.client
 import json

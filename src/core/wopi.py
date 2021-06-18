@@ -7,9 +7,13 @@ Implementation of the core WOPI API
 
 import time
 import os
-import http
+import configparser
+import json
+import http.client
 import jwt
 import flask
+from urllib.parse import quote_plus as url_quote_plus
+from urllib.parse import unquote as url_unquote
 import core.wopiutils as utils
 
 # convenience references to global entities
@@ -37,7 +41,7 @@ def checkFileInfo(fileid):
         filemd['BaseFileName'] = filemd['BreadcrumbDocName'] = os.path.basename(acctok['filename'])
         furl = acctok['folderurl']
         # encode the path part as it is going to be an URL GET argument
-        filemd['BreadcrumbFolderUrl'] = furl[:furl.find('=')+1] + urllib.parse.quote_plus(furl[furl.find('=')+1:])
+        filemd['BreadcrumbFolderUrl'] = furl[:furl.find('=')+1] + url_quote_plus(furl[furl.find('=')+1:])
         if acctok['username'] == '':
             filemd['UserFriendlyName'] = 'Guest ' + utils.randomString(3)
             if '?path' in furl and furl[-1] != '/' and furl[-1] != '=':
@@ -48,7 +52,7 @@ def checkFileInfo(fileid):
                 filemd['BreadcrumbFolderName'] = 'Back to the public share'
         else:
             filemd['UserFriendlyName'] = acctok['username']
-            filemd['BreadcrumbFolderName'] = 'Back to ' + acctok['filename'].split('/')[-2]
+            filemd['BreadcrumbFolderName'] = 'Back to ' + os.path.dirname(acctok['filename'])
         if acctok['viewmode'] in (utils.ViewMode.READ_ONLY, utils.ViewMode.READ_WRITE):
             filemd['DownloadUrl'] = '%s?access_token=%s' % \
                                     (srv.config.get('general', 'downloadurl'), flask.request.args['access_token'])
@@ -307,7 +311,7 @@ def putRelative(fileid, reqheaders, acctok):
     # prepare and send the response as JSON
     putrelmd = {}
     putrelmd['Name'] = os.path.basename(targetName)
-    putrelmd['Url'] = '%s?access_token=%s' % (urllib.parse.unquote(utils.generateWopiSrc(inode)), newacctok)
+    putrelmd['Url'] = '%s?access_token=%s' % (url_unquote(utils.generateWopiSrc(inode)), newacctok)
     fExt = os.path.splitext(targetName)[1]
     if fExt in srv.ENDPOINTS:
         # TODO once the endpoints are managed by Reva, this metadata has to be provided in the initial /open call
