@@ -1,7 +1,8 @@
 # WOPI Server
 
 A Vendor-neutral application gateway compatible with the Web-application Open Platform Interface (WOPI) specifications.
-It enables ScienceMesh EFSS storages to integrate several Office Online platforms including Microsoft Office Online and Collabora Online.
+
+It enables ScienceMesh EFSS storages to integrate Office Online platforms including Microsoft Office Online and Collabora Online, as well as other apps like CodiMD with dedicated extensions.
 
 Author: Giuseppe Lo Presti (@glpatcern) <br/>
 Contributions: Michael DSilva (@madsi1m), Lovisa Lugnegaard (@LovisaLugnegard), Samuel Alfageme (@SamuAlfageme), Ishank Arora (@ishank011)
@@ -10,12 +11,17 @@ Initial revision: December 2016 <br/>
 First production version for CERNBox: September 2017 <br/>
 Integration in the CS3 Organisation: April 2020
 
-This project has been presented at the [ownCloud Conference 2017](https://occon17.owncloud.org).
-Slides available at [slideshare.net](https://www.slideshare.net/giuseppelopresti/collaborative-editing-and-more-in-cernbox).
+This project has been presented at the [ownCloud Conference 2017](https://occon17.owncloud.org) ([slides](https://www.slideshare.net/giuseppelopresti/collaborative-editing-and-more-in-cernbox)).
+
+## Modules
+
+* [core](src/core/readme.md)
+* [bridge](src/bridge/readme.md)
 
 ## Changelog
 
 [Available here](CHANGELOG.md)
+
 
 ## Unit testing
 
