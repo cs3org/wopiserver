@@ -29,8 +29,9 @@ except ImportError:
     print("Missing modules, please install dependencies with `pip3 install -f requirements.txt`")
     raise
 import core.wopiutils as utils
-import core.ioplocks as ioplocks
 import core.wopi
+import core.ioplocks
+import core.discovery
 
 # the following constant is replaced on the fly when generating the docker image
 WOPISERVERVERSION = 'git'
@@ -66,6 +67,7 @@ class Wopi:
                 }
     log = utils.JsonLogger(app.logger)
     openfiles = {}
+    endpoints = {}
 
     @classmethod
     def init(cls):
@@ -110,79 +112,14 @@ class Wopi:
                 cls.lockpath = ''
             _ = cls.config.get('general', 'downloadurl')   # make sure this is defined
             # initialize the submodules
-            utils.srv = ioplocks.srv = core.wopi.srv = cls
-            utils.log = ioplocks.log = core.wopi.log = cls.log
-            utils.st = ioplocks.st = core.wopi.st = storage
+            utils.srv = core.ioplocks.srv = core.wopi.srv = core.discovery.srv = cls
+            utils.log = core.ioplocks.log = core.wopi.log = core.discovery.log = cls.log
+            utils.st = core.ioplocks.st = core.wopi.st = storage
         except (configparser.NoOptionError, OSError) as e:
             # any error we get here with the configuration is fatal
             cls.log.fatal('msg="Failed to initialize the service, aborting" error="%s"' % e)
             print("Failed to initialize the service: %s\n" % e, file=sys.stderr)
             sys.exit(22)
-
-    @classmethod
-    def initappsregistry(cls):
-        '''Initializes the CERNBox Office-like Apps Registry'''
-        # TODO all this is supposed to be moved to the CERNBox Apps Registry microservice at some stage in the future
-        cls.ENDPOINTS = {}
-
-        oos = cls.config.get('general', 'oosurl', fallback=None)
-        if oos:
-            # The supported Microsoft Office Online end-points
-            cls.ENDPOINTS['.docx'] = {}
-            cls.ENDPOINTS['.docx']['view'] = oos + '/wv/wordviewerframe.aspx?edit=0'
-            cls.ENDPOINTS['.docx']['edit'] = oos + '/we/wordeditorframe.aspx?edit=1'
-            cls.ENDPOINTS['.docx']['new']  = oos + '/we/wordeditorframe.aspx?new=1'                          # pylint: disable=bad-whitespace
-            cls.ENDPOINTS['.xlsx'] = {}
-            cls.ENDPOINTS['.xlsx']['view'] = oos + '/x/_layouts/xlviewerinternal.aspx?edit=0'
-            cls.ENDPOINTS['.xlsx']['edit'] = oos + '/x/_layouts/xlviewerinternal.aspx?edit=1'
-            cls.ENDPOINTS['.xlsx']['new']  = oos + '/x/_layouts/xlviewerinternal.aspx?edit=1&new=1'          # pylint: disable=bad-whitespace
-            cls.ENDPOINTS['.pptx'] = {}
-            cls.ENDPOINTS['.pptx']['view'] = oos + '/p/PowerPointFrame.aspx?PowerPointView=ReadingView'
-            cls.ENDPOINTS['.pptx']['edit'] = oos + '/p/PowerPointFrame.aspx?PowerPointView=EditView'
-            cls.ENDPOINTS['.pptx']['new']  = oos + '/p/PowerPointFrame.aspx?PowerPointView=EditView&New=1'   # pylint: disable=bad-whitespace
-            cls.log.info('msg="Microsoft Office Online endpoints successfully configured" OfficeURL="%s"' % cls.ENDPOINTS['.docx']['edit'])
-
-        code = cls.config.get('general', 'codeurl', fallback=None)
-        if code:
-            try:
-                import requests
-                from xml.etree import ElementTree as ET
-                discData = requests.get(url=(code + '/hosting/discovery'), verify=False).content
-                discXml = ET.fromstring(discData)
-                # extract urlsrc from first <app> node inside <net-zone>
-                urlsrc = discXml.find('net-zone/app')[0].attrib['urlsrc']
-
-                # The supported Collabora end-points: as Collabora supports most Office-like files (including MS Office), we include here
-                # only the subset defined in the `codeofficetypes` configuration option, defaulting to just the core ODF types
-                codetypes = cls.config.get('general', 'codeofficetypes', fallback='.odt .ods .odp').split()
-                for t in codetypes:
-                    cls.ENDPOINTS[t] = {}
-                    cls.ENDPOINTS[t]['view'] = urlsrc + 'permission=readonly'
-                    cls.ENDPOINTS[t]['edit'] = urlsrc + 'permission=edit'
-                    cls.ENDPOINTS[t]['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace
-                cls.log.info('msg="Collabora Online endpoints successfully configured" count="%d" CODEURL="%s"' %
-                             (len(codetypes), cls.ENDPOINTS['.odt']['edit']))
-
-            except (IOError, ET.ParseError) as e:
-                cls.log.warning('msg="Failed to initialize Collabora Online endpoints" error="%s"' % e)
-
-        # The WOPI Bridge end-point
-        bridge = cls.config.get('general', 'wopibridgeurl', fallback=None)
-        if not bridge:
-            # fallback to the same WOPI url but on default port 8000
-            bridge = urllib.parse.urlsplit(cls.wopiurl)
-            bridge = '%s://%s:8000/wopib' % (bridge.scheme, bridge.netloc[:bridge.netloc.find(':')+1])
-        # The bridge only supports CodiMD for now, therefore this is hardcoded:
-        # once we move to the Apps Registry microservice, we can make it dynamic
-        cls.ENDPOINTS['.md'] = {}
-        cls.ENDPOINTS['.md']['view'] = cls.ENDPOINTS['.md']['edit'] = bridge + '/open'
-        cls.ENDPOINTS['.zmd'] = {}
-        cls.ENDPOINTS['.zmd']['view'] = cls.ENDPOINTS['.zmd']['edit'] = bridge + '/open'
-        cls.ENDPOINTS['.txt'] = {}
-        cls.ENDPOINTS['.txt']['view'] = cls.ENDPOINTS['.txt']['edit'] = bridge + '/open'
-        cls.ENDPOINTS['.epd'] = {}    # Etherpad, for testing
-        cls.ENDPOINTS['.epd']['view'] = cls.ENDPOINTS['.epd']['edit'] = bridge + '/open'
-        cls.log.info('msg="WOPI Bridge endpoints successfully configured" BridgeURL="%s"' % bridge)
 
 
     @classmethod
@@ -339,6 +276,36 @@ def iopGetOpenFiles():
 
 
 #
+# WOPI discovery endpoints
+#
+@Wopi.app.route("/wopi/cbox/endpoints", methods=['GET'])
+@Wopi.metrics.do_not_track()
+def cboxEndPoints():
+    '''Returns the office apps end-points registered with this WOPI server. This is used by the EFSS
+    client to discover which Apps frontends can be used with this WOPI server.
+    Note that if the end-points are relocated and the corresponding configuration entry updated,
+    the WOPI server must be restarted.'''
+    # TODO this endpoint should be moved to the Apps Registry service in Reva
+    Wopi.log.info('msg="cboxEndPoints: returning all registered office apps end-points" client="%s" mimetypesCount="%d"' %
+                  (flask.request.remote_addr, len(Wopi.endpoints)))
+    return flask.Response(json.dumps(Wopi.endpoints), mimetype='application/json')
+
+
+@Wopi.app.route("/wopi/iop/registerapp", methods=['POST'])
+@Wopi.metrics.do_not_track()
+def iopRegisterApp():
+    '''Register a new WOPI app
+    Required headers:
+    - Authorization: a bearer shared secret to protect this call
+    Request arguments:
+    - appname: a human-readable string to identify the app
+    - appurl: the URL of the app engine: it is expected that the WOPI discovery info can be gathered
+      by loading appurl + '/hosting/discovery'
+    '''
+    pass
+
+
+#
 # The WOPI protocol implementation starts here
 #
 @Wopi.app.route("/wopi/files/<fileid>", methods=['GET'])
@@ -425,7 +392,7 @@ def cboxLock():
     filename = req.args['filename']
     userid = req.args['userid'] if 'userid' in req.args else '0:0'
     endpoint = req.args['endpoint'] if 'endpoint' in req.args else 'default'
-    return ioplocks.lock(filename, userid, endpoint, req.method == 'GET')
+    return core.ioplocks.lock(filename, userid, endpoint, req.method == 'GET')
 
 
 @Wopi.app.route("/wopi/cbox/unlock", methods=['POST'])
@@ -452,25 +419,12 @@ def cboxUnlock():
     filename = req.args['filename']
     userid = req.args['userid'] if 'userid' in req.args else '0:0'
     endpoint = req.args['endpoint'] if 'endpoint' in req.args else 'default'
-    return ioplocks.unlock(filename, userid, endpoint)
+    return core.ioplocks.unlock(filename, userid, endpoint)
 
 
 #
-# deprecated endpoints to be moved to Reva
+# deprecated
 #
-@Wopi.app.route("/wopi/cbox/endpoints", methods=['GET'])
-@Wopi.metrics.do_not_track()
-def cboxEndPoints():
-    '''Returns the office apps end-points registered with this WOPI server. This is used by the EFSS
-    client to discover which Apps frontends can be used with this WOPI server.
-    Note that if the end-points are relocated and the corresponding configuration entry updated,
-    the WOPI server must be restarted.'''
-    # TODO this endpoint should be moved to the Apps Registry service in Reva
-    Wopi.log.info('msg="cboxEndPoints: returning all registered office apps end-points" client="%s" mimetypesCount="%d"' %
-                  (flask.request.remote_addr, len(Wopi.ENDPOINTS)))
-    return flask.Response(json.dumps(Wopi.ENDPOINTS), mimetype='application/json')
-
-
 @Wopi.app.route("/wopi/cbox/download", methods=['GET'])
 def cboxDownload():
     '''Returns the file's content for a given valid access token. Used as a download URL,
@@ -506,5 +460,5 @@ def cboxDownload():
 #
 if __name__ == '__main__':
     Wopi.init()
-    Wopi.initappsregistry()
+    core.discovery.initappsregistry(Wopi)
     Wopi.run()

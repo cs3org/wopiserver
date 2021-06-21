@@ -68,9 +68,8 @@ def checkFileInfo(fileid):
         # populate app-specific metadata
         # the following properties are only used by MS Office Online
         if fExt in ['.docx', '.xlsx', '.pptx']:
-            # TODO once the endpoints are managed by Reva, this metadata has to be provided in the initial /open call
-            filemd['HostViewUrl'] = '%s&%s' % (srv.ENDPOINTS[fExt]['view'], wopiSrc)
-            filemd['HostEditUrl'] = '%s&%s' % (srv.ENDPOINTS[fExt]['edit'], wopiSrc)
+            filemd['HostViewUrl'] = '%s&%s' % (srv.endpoints[fExt]['view'], wopiSrc)
+            filemd['HostEditUrl'] = '%s&%s' % (srv.endpoints[fExt]['edit'], wopiSrc)
             # the following actions are broken in MS Office Online, therefore they are disabled
             filemd['SupportsRename'] = filemd['UserCanRename'] = False
         # the following is to enable the 'Edit in Word/Excel/PowerPoint' (desktop) action (probably broken)
@@ -313,10 +312,9 @@ def putRelative(fileid, reqheaders, acctok):
     putrelmd['Name'] = os.path.basename(targetName)
     putrelmd['Url'] = '%s?access_token=%s' % (url_unquote(utils.generateWopiSrc(inode)), newacctok)
     fExt = os.path.splitext(targetName)[1]
-    if fExt in srv.ENDPOINTS:
-        # TODO once the endpoints are managed by Reva, this metadata has to be provided in the initial /open call
+    if fExt in srv.endpoints:
         putrelmd['HostEditUrl'] = '%s&WOPISrc=%s&access_token=%s' % \
-                                  (srv.ENDPOINTS[fExt]['edit'], \
+                                  (srv.endpoints[fExt]['edit'], \
                                    utils.generateWopiSrc(inode), newacctok)
     #else we don't know the app to edit this file type, therefore we do not provide the info
     log.debug('msg="PutRelative response" token="%s" metadata="%s"' % (newacctok[-20:], putrelmd))
