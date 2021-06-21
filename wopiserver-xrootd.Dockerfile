@@ -38,8 +38,10 @@ RUN python3 -m pip install --upgrade pip setuptools && \
     python3 -m pip install xrootd
 
 # install software
-RUN mkdir -p /app /test /etc/wopi /var/log/wopi
+RUN mkdir -p /app/core /app/bridge /test /etc/wopi /var/log/wopi
 ADD ./src/* ./tools/* /app/
+ADD ./src/core/* /app/core/
+ADD ./src/bridge/* /app/bridge/
 RUN sed -i "s/WOPISERVERVERSION = 'git'/WOPISERVERVERSION = '$VERSION'/" /app/wopiserver.py
 RUN grep 'WOPISERVERVERSION =' /app/wopiserver.py
 ADD wopiserver.conf /etc/wopi/wopiserver.defaults.conf
