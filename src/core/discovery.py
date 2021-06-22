@@ -5,83 +5,121 @@ Helper code for the WOPI discovery phase, as well as
 for integrating the apps supported by the bridge functionality.
 '''
 
-import time
-import configparser
-import json
-import http.client
-import requests
 from xml.etree import ElementTree as ET
+import http.client
+import json
+import requests
 import flask
-from urllib.parse import quote_plus as url_quote_plus
-from urllib.parse import unquote as url_unquote
-import core.wopiutils as utils
+import bridge
 
 # convenience references to global entities
-st = None
 srv = None
 log = None
 
 
-def registerapp(srv):
-    pass
+def registerapp(appname, appurl, appinturl):
+    '''Registers the given app in the internal endpoints list'''
+    '''For the time being, this is highly customized to keep backwards-compatibility. To be reviewed'''
+    if not appinturl:
+        appinturl = appurl
+    try:
+        discReq = requests.get(appurl + '/hosting/discovery', verify=False)
+    except requests.exceptions.ConnectionError as e:
+        log.error('msg="iopRegisterApp: failed to probe application" appurl="%s" response="%s"' % (appurl, e))
+        return 'Error connecting to the provided app URL', http.client.NOT_FOUND
 
-
-def initappsregistry(srv):
-    '''Initializes the CERNBox Office-like Apps Registry'''
-    # TODO to be deprecated in favour of a /wopi/iop/registerapp endpoint
-    oos = srv.config.get('general', 'oosurl', fallback=None)
-    if oos:
-        # The supported Microsoft Office Online end-points
-        srv.endpoints['.docx'] = {}
-        srv.endpoints['.docx']['view'] = oos + '/wv/wordviewerframe.aspx?edit=0'
-        srv.endpoints['.docx']['edit'] = oos + '/we/wordeditorframe.aspx?edit=1'
-        srv.endpoints['.docx']['new']  = oos + '/we/wordeditorframe.aspx?new=1'                          # pylint: disable=bad-whitespace
-        srv.endpoints['.xlsx'] = {}
-        srv.endpoints['.xlsx']['view'] = oos + '/x/_layouts/xlviewerinternal.aspx?edit=0'
-        srv.endpoints['.xlsx']['edit'] = oos + '/x/_layouts/xlviewerinternal.aspx?edit=1'
-        srv.endpoints['.xlsx']['new']  = oos + '/x/_layouts/xlviewerinternal.aspx?edit=1&new=1'          # pylint: disable=bad-whitespace
-        srv.endpoints['.pptx'] = {}
-        srv.endpoints['.pptx']['view'] = oos + '/p/PowerPointFrame.aspx?PowerPointView=ReadingView'
-        srv.endpoints['.pptx']['edit'] = oos + '/p/PowerPointFrame.aspx?PowerPointView=EditView'
-        srv.endpoints['.pptx']['new']  = oos + '/p/PowerPointFrame.aspx?PowerPointView=EditView&New=1'   # pylint: disable=bad-whitespace
-        log.info('msg="Microsoft Office Online endpoints successfully configured" OfficeURL="%s"' % srv.endpoints['.docx']['edit'])
-
-    code = srv.config.get('general', 'codeurl', fallback=None)
-    if code:
-        try:
-            discData = requests.get(url=(code + '/hosting/discovery'), verify=False).content
-            discXml = ET.fromstring(discData)
-            # extract urlsrc from first <app> node inside <net-zone>
-            urlsrc = discXml.find('net-zone/app')[0].attrib['urlsrc']
-
-            # The supported Collabora end-points: as Collabora supports most Office-like files (including MS Office), we include here
-            # only the subset defined in the `codeofficetypes` configuration option, defaulting to just the core ODF types
+    if discReq.status_code == http.client.OK:
+        discXml = ET.fromstring(discReq.content)
+        # extract urlsrc from first <app> node inside <net-zone>
+        urlsrc = discXml.find('net-zone/app')[0].attrib['urlsrc']
+        if urlsrc.find('loleaflet') > 0:
+            # this is Collabora
+            srv.apps[appname] = {}
             codetypes = srv.config.get('general', 'codeofficetypes', fallback='.odt .ods .odp').split()
             for t in codetypes:
                 srv.endpoints[t] = {}
                 srv.endpoints[t]['view'] = urlsrc + 'permission=readonly'
                 srv.endpoints[t]['edit'] = urlsrc + 'permission=edit'
                 srv.endpoints[t]['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace
+                srv.apps[appname][t] = srv.endpoints[t]
             log.info('msg="Collabora Online endpoints successfully configured" count="%d" CODEURL="%s"' %
-                            (len(codetypes), srv.endpoints['.odt']['edit']))
+                     (len(codetypes), srv.endpoints['.odt']['edit']))
+            return flask.Response(json.dumps(list(srv.apps[appname].keys())), mimetype='application/json')
 
-        except (IOError, ET.ParseError) as e:
-            log.warning('msg="Failed to initialize Collabora Online endpoints" error="%s"' % e)
+        # else this must be Microsoft Office Online
+        # TODO remove hardcoded logic
+        srv.apps[appname] = {}
+        srv.endpoints['.docx'] = {}
+        srv.endpoints['.docx']['view'] = appurl + '/wv/wordviewerframe.aspx?edit=0'
+        srv.endpoints['.docx']['edit'] = appurl + '/we/wordeditorframe.aspx?edit=1'
+        srv.endpoints['.docx']['new']  = appurl + '/we/wordeditorframe.aspx?new=1'                         # pylint: disable=bad-whitespace
+        srv.endpoints['.xlsx'] = {}
+        srv.endpoints['.xlsx']['view'] = appurl + '/x/_layouts/xlviewerinternal.aspx?edit=0'
+        srv.endpoints['.xlsx']['edit'] = appurl + '/x/_layouts/xlviewerinternal.aspx?edit=1'
+        srv.endpoints['.xlsx']['new']  = appurl + '/x/_layouts/xlviewerinternal.aspx?edit=1&new=1'         # pylint: disable=bad-whitespace
+        srv.endpoints['.pptx'] = {}
+        srv.endpoints['.pptx']['view'] = appurl + '/p/PowerPointFrame.aspx?PowerPointView=ReadingView'
+        srv.endpoints['.pptx']['edit'] = appurl + '/p/PowerPointFrame.aspx?PowerPointView=EditView'
+        srv.endpoints['.pptx']['new']  = appurl + '/p/PowerPointFrame.aspx?PowerPointView=EditView&New=1'  # pylint: disable=bad-whitespace
+        srv.apps[appname]['.docx'] = srv.endpoints['.docx']
+        srv.apps[appname]['.xlsx'] = srv.endpoints['.xlsx']
+        srv.apps[appname]['.pptx'] = srv.endpoints['.pptx']
+        log.info('msg="Microsoft Office Online endpoints successfully configured" OfficeURL="%s"' %
+                 srv.endpoints['.docx']['edit'])
+        return flask.Response(json.dumps(list(srv.apps[appname].keys())), mimetype='application/json')
 
-    # The WOPI Bridge end-point
-    bridge = srv.config.get('general', 'wopibridgeurl', fallback=None)
-    if not bridge:
-        # fallback to the same WOPI url but on default port 8000
-        bridge = urllib.parse.urlsplit(srv.wopiurl)
-        bridge = '%s://%s:8000/wopib' % (bridge.scheme, bridge.netloc[:bridge.netloc.find(':')+1])
-    # The bridge only supports CodiMD for now, therefore this is hardcoded:
-    # once we move to the Apps Registry microservice, we can make it dynamic
-    srv.endpoints['.md'] = {}
-    srv.endpoints['.md']['view'] = srv.endpoints['.md']['edit'] = bridge + '/open'
-    srv.endpoints['.zmd'] = {}
-    srv.endpoints['.zmd']['view'] = srv.endpoints['.zmd']['edit'] = bridge + '/open'
-    srv.endpoints['.txt'] = {}
-    srv.endpoints['.txt']['view'] = srv.endpoints['.txt']['edit'] = bridge + '/open'
-    srv.endpoints['.epd'] = {}    # Etherpad, for testing
-    srv.endpoints['.epd']['view'] = srv.endpoints['.epd']['edit'] = bridge + '/open'
-    log.info('msg="WOPI Bridge endpoints successfully configured" BridgeURL="%s"' % bridge)
+    elif discReq.status_code == http.client.NOT_FOUND:
+        # try and scrape the app homepage to see if a bridge-supported app is found
+        try:
+            discReq = requests.get(appurl, verify=False).content.decode()
+            if discReq.find('CodiMD') > 0:
+                # TODO remove hardcoded logic
+                bridge.WB.loadplugin(appname, appurl, appinturl)
+                srv.apps[appname] = {}
+                bridgeurl = srv.config.get('general', 'wopiurl') + '/wopi/bridge/open?'
+                srv.endpoints['.md'] = {}
+                srv.endpoints['.md']['view'] = srv.endpoints['.md']['edit'] = bridgeurl
+                srv.endpoints['.zmd'] = {}
+                srv.endpoints['.zmd']['view'] = srv.endpoints['.zmd']['edit'] = bridgeurl
+                srv.endpoints['.txt'] = {}
+                srv.endpoints['.txt']['view'] = srv.endpoints['.txt']['edit'] = bridgeurl
+                srv.apps[appname]['.md'] = srv.endpoints['.md']
+                srv.apps[appname]['.zmd'] = srv.endpoints['.zmd']
+                srv.apps[appname]['.txt'] = srv.endpoints['.txt']
+                log.info('msg="iopRegisterApp: CodiMD endpoints successfully configured" BridgeURL="%s"' % bridgeurl)
+                return flask.Response(json.dumps(list(srv.apps[appname].keys())), mimetype='application/json')
+
+            if discReq.find('Etherpad') > 0:
+                bridge.WB.loadplugin(appname, appurl, appinturl)
+                bridgeurl = srv.config.get('general', 'wopiurl') + '/wopi/bridge/open?'
+                # TODO remove hardcoded logic
+                srv.apps[appname] = {}
+                srv.endpoints['.epd'] = {}
+                srv.endpoints['.epd']['view'] = srv.endpoints['.epd']['edit'] = bridgeurl
+                srv.apps[appname]['.epd'] = srv.endpoints['.epd']
+                log.info('msg="iopRegisterApp: Etherpad endpoints successfully configured" BridgeURL="%s"' % bridgeurl)
+                return flask.Response(json.dumps(list(srv.apps[appname].keys())), mimetype='application/json')
+        except ValueError:
+            # bridge plugin could not be initialized
+            return 'Failed to initialize WOPI bridge plugin for app "%s"' % appname, http.client.INTERNAL_SERVER_ERROR
+        except requests.exceptions.ConnectionError:
+            pass
+
+    # in all other cases, fail
+    log.error('msg="iopRegisterApp: app is not WOPI-compatible" appurl="%s"' % appurl)
+    return 'App is not WOPI-compatible', http.client.BAD_REQUEST
+
+
+def initappsregistry():
+    '''Initializes the CERNBox Office-like Apps Registry'''
+    # TODO to be deprecated in favour of a /wopi/iop/registerapp endpoint
+    oos = srv.config.get('general', 'oosurl', fallback=None)
+    if oos:
+        registerapp('MSOffice', oos, oos)
+    code = srv.config.get('general', 'codeurl', fallback=None)
+    if code:
+        registerapp('Collabora', code, code)
+    codimd = srv.config.get('general', 'codimdurl', fallback=None)
+    codimdint = srv.config.get('general', 'codimdinturl', fallback=None)
+    if codimd:
+        registerapp('CodiMD', codimd, codimdint)

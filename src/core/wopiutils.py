@@ -54,8 +54,11 @@ class JsonLogger:
             '''internal method returned by getattr and wrapping the original one'''
             if name in ['debug', 'info', 'warning', 'error', 'fatal']:
                 # resolve the current module
-                m = traceback.extract_stack()[-2].filename
-                m = m[m.rfind('/')+1:m.rfind('.')]
+                f = traceback.extract_stack()[-2].filename
+                m = f[f.rfind('/')+1:f.rfind('.')]
+                if m == '__init__':
+                    f = f[:f.rfind('/')]
+                    m = f[f.rfind('/')+1:]
                 # as we use a `key="value" ...` format in all logs, we only have args[0]
                 args = ('module="%s" ' % m + args[0],)
                 try:
@@ -112,7 +115,7 @@ def randomString(size):
     return ''.join([choice(ascii_lowercase) for _ in range(size)])
 
 
-def generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint):
+def generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint, appname):
     '''Generates an access token for a given file and a given user, and returns a tuple with
     the file's inode and the URL-encoded access token.'''
     try:

@@ -28,10 +28,11 @@ try:
 except ImportError:
     print("Missing modules, please install dependencies with `pip3 install -f requirements.txt`")
     raise
-import core.wopiutils as utils
 import core.wopi
-import core.ioplocks
 import core.discovery
+import core.ioplocks
+import core.wopiutils as utils
+import bridge
 
 # the following constant is replaced on the fly when generating the docker image
 WOPISERVERVERSION = 'git'
@@ -68,6 +69,7 @@ class Wopi:
     log = utils.JsonLogger(app.logger)
     openfiles = {}
     endpoints = {}
+    apps = {}
 
     @classmethod
     def init(cls):
@@ -111,7 +113,10 @@ class Wopi:
             else:
                 cls.lockpath = ''
             _ = cls.config.get('general', 'downloadurl')   # make sure this is defined
+            # initialize the bridge
+            bridge.WB.init(cls.config, cls.log)
             # initialize the submodules
+            # TODO improve handling of globals across the whole code base
             utils.srv = core.ioplocks.srv = core.wopi.srv = core.discovery.srv = cls
             utils.log = core.ioplocks.log = core.wopi.log = core.discovery.log = cls.log
             utils.st = core.ioplocks.st = core.wopi.st = storage
@@ -178,14 +183,17 @@ def index():
       """ % (WOPISERVERVERSION, socket.getfqdn(), flask.__version__, python_version())
 
 
+#
+# open-in-app endpoint
+#
 @Wopi.app.route("/wopi/iop/open", methods=['GET'])
 @Wopi.metrics.do_not_track()
 @Wopi.metrics.counter('open_by_ext', 'Number of /open calls by file extension',
-    labels={'open_type': lambda:
-      flask.request.args['filename'].split('.')[-1] \
-      if 'filename' in flask.request.args and '.' in flask.request.args['filename'] \
-      else ('noext' if 'filename' in flask.request.args else 'fileid')
-    })
+                      labels={'open_type': lambda:
+                         flask.request.args['filename'].split('.')[-1] \
+                         if 'filename' in flask.request.args and '.' in flask.request.args['filename'] \
+                         else ('noext' if 'filename' in flask.request.args else 'fileid')
+                      })
 def iopOpen():
     '''Generates a WOPISrc target and an access token to be passed to a WOPI-compatible Office-like app
     for accessing a given file for a given user.
@@ -201,6 +209,9 @@ def iopOpen():
     - string folderurl: the URL to come back to the containing folder for this file, typically shown by the Office app
     - string endpoint (optional): the storage endpoint to be used to look up the file or the storage id, in case of
       multi-instance underlying storage; defaults to 'default'
+    - string appname (optional): the application engine to be used to open the file, previously registered
+      via /wopi/iop/registerapp. When provided, the return is a HTTP redirect to the full URL, otherwise only
+      the WOPISrc and access_token parts of the URL are returned in the body.
     '''
     Wopi.refreshconfig()
     req = flask.request
@@ -225,7 +236,10 @@ def iopOpen():
         Wopi.log.warning('msg="iopOpen: invalid or missing user/token in request" client="%s" user="%s"' %
                          (req.remote_addr, userid))
         return 'Client not authorized', http.client.UNAUTHORIZED
-    fileid = urllib.parse.unquote(req.args['filename']) if 'filename' in req.args else req.args['fileid']
+    fileid = urllib.parse.unquote(req.args['filename']) if 'filename' in req.args else req.args.get('fileid', '')
+    if fileid == '':
+        Wopi.log.warning('msg="iopOpen: either filename or fileid must be provided" client="%s"' % req.remote_addr)
+        return 'Invalid argument', http.client.BAD_REQUEST
     if 'viewmode' in req.args:
         try:
             viewmode = utils.ViewMode(req.args['viewmode'])
@@ -237,13 +251,17 @@ def iopOpen():
         # backwards compatibility
         viewmode = utils.ViewMode.READ_WRITE if 'canedit' in req.args and req.args['canedit'].lower() == 'true' \
                    else utils.ViewMode.READ_ONLY
-    username = req.args['username'] if 'username' in req.args else ''
-    folderurl = urllib.parse.unquote(req.args['folderurl'])
-    endpoint = req.args['endpoint'] if 'endpoint' in req.args else 'default'
+    username = req.args.get('username', '')
+    folderurl = urllib.parse.unquote(req.args.get('folderurl', '%%2F'))   # defaults to `/`
+    endpoint = req.args.get('endpoint', 'default')
+    appname = urllib.parse.unquote(req.args.get('appname', 'default'))
     try:
-        inode, acctok = utils.generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint)
-        # return an URL-encoded WOPISrc URL for the Office Online server
-        return '%s&access_token=%s' % (utils.generateWopiSrc(inode), acctok)      # no need to URL-encode the JWT token
+        inode, acctok = utils.generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint, appname)
+        # generate the URL-encoded payload for the app engine
+        url = '%s&access_token=%s' % (utils.generateWopiSrc(inode), acctok)      # no need to URL-encode the JWT token
+        if appname == '':
+            return url
+        return Wopi.apps[appname][os.path.splitext(filename)[1]]['edit' if viewmode == utils.ViewMode.READ_WRITE else 'view']
     except IOError as e:
         Wopi.log.info('msg="iopOpen: remote error on generating token" client="%s" user="%s" ' \
                       'friendlyname="%s" mode="%s" endpoint="%s" reason="%s"' %
@@ -291,18 +309,33 @@ def cboxEndPoints():
     return flask.Response(json.dumps(Wopi.endpoints), mimetype='application/json')
 
 
-@Wopi.app.route("/wopi/iop/registerapp", methods=['POST'])
+@Wopi.app.route("/wopi/iop/discoverapp", methods=['POST'])
 @Wopi.metrics.do_not_track()
-def iopRegisterApp():
-    '''Register a new WOPI app
+def iopDiscoverApp():
+    '''Discover a new WOPI app
     Required headers:
     - Authorization: a bearer shared secret to protect this call
     Request arguments:
     - appname: a human-readable string to identify the app
-    - appurl: the URL of the app engine: it is expected that the WOPI discovery info can be gathered
-      by loading appurl + '/hosting/discovery'
+    - appurl: the (URL-encoded) URL of the app engine. It is expected that the WOPI discovery info can be gathered
+      by querying appurl + '/hosting/discovery' according to the WOPI specs, or that the app is supported via
+      the bridge extensions
+    - appinturl (optional): if provided, the internal URL to be used for reaching the app (defaults to the appurl)
+    The call returns:
+    - HTTP UNAUTHORIZED (401) if the 'Authorization: Bearer' secret is not provided in the header (cf. /wopi/cbox/open)
+    - HTTP NOT_FOUND (404) if there was an error contacting the appurl
+    - HTTP BAD_REQUEST (400) if the appurl is not a WOPI-compatible or supported application
+    - HTTP OK (200) if the appplication was properly registered: in this case, all supported file extensions
+      are returned as a JSON list
     '''
-    pass
+    req = flask.request
+    if req.headers.get('Authorization') != 'Bearer ' + Wopi.iopsecret:
+        Wopi.log.warning('msg="iopRegisterApp: unauthorized access attempt, missing authorization token" ' \
+                         'client="%s"' % req.remote_addr)
+        return 'Client not authorized', http.client.UNAUTHORIZED
+    return core.discovery.registerapp(req.args.get('appname', 'unnamed'), \
+                                      urllib.parse.unquote(req.args.get('appurl', 'http://invalid')),
+                                      urllib.parse.unquote(req.args.get('appinturl', '')))
 
 
 #
@@ -366,11 +399,11 @@ def wopiPutFile(fileid):
 #
 @Wopi.app.route("/wopi/cbox/lock", methods=['GET', 'POST'])
 @Wopi.metrics.counter('lock_by_ext', 'Number of /lock calls by file extension',
-    labels={'open_type': lambda:
-      (flask.request.args['filename'].split('.')[-1] \
-       if 'filename' in flask.request.args and '.' in flask.request.args['filename'] \
-       else 'noext') if flask.request.method == 'POST' else 'query'
-    })
+                      labels={'open_type': lambda:
+                          (flask.request.args['filename'].split('.')[-1] \
+                           if 'filename' in flask.request.args and '.' in flask.request.args['filename'] \
+                           else 'noext') if flask.request.method == 'POST' else 'query'
+                          })
 def cboxLock():
     '''Lock a given filename so that a later WOPI lock call would detect a conflict.
     Used for OnlyOffice as they do not use WOPI: this way better interoperability is ensured.
@@ -423,6 +456,30 @@ def cboxUnlock():
 
 
 #
+# Bridge functionality
+#
+@Wopi.app.route("/wopi/bridge/open", methods=["GET"])
+def bridgeOpen():
+    return bridge.appopen()
+
+
+@Wopi.app.route("/wopi/bridge/<docid>", methods=["POST"])
+def bridgeSave(docid):
+    return bridge.appsave(docid)
+
+
+@Wopi.app.route("/wopi/bridge/save", methods=["GET"])
+def bridgeSave_old():
+    docid = flask.request.args.get('id')
+    return bridge.appsave(docid)
+
+
+@Wopi.app.route("/wopi/bridge/list", methods=["GET"])
+def bridgeList():
+    return bridge.applist()
+
+
+#
 # deprecated
 #
 @Wopi.app.route("/wopi/cbox/download", methods=['GET'])
@@ -460,5 +517,5 @@ def cboxDownload():
 #
 if __name__ == '__main__':
     Wopi.init()
-    core.discovery.initappsregistry(Wopi)
+    core.discovery.initappsregistry()
     Wopi.run()

@@ -1,7 +1,4 @@
-#!/usr/bin/python3
 '''
-wopibridge.py
-
 The WOPI Bridge for IOP. This connector service supports CodiMD and Etherpad.
 
 Author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
@@ -12,7 +9,6 @@ import sys
 import time
 import traceback
 import socket
-from platform import python_version
 import logging
 import threading
 import atexit
@@ -23,16 +19,8 @@ import json
 import hashlib
 import hmac
 from base64 import urlsafe_b64encode
-try:
-    import flask
-    from werkzeug.exceptions import NotFound as Flask_NotFound
-    from werkzeug.exceptions import MethodNotAllowed as Flask_MethodNotAllowed
-except ImportError:
-    print("Missing modules, please install with `pip3 install flask requests`")
-    raise
-import wopiclient as wopi
-
-WBVERSION = 'git'
+import flask
+import bridge.wopiclient as wopic
 
 # this is the default location of secrets in docker
 CERTPATH = '/var/run/secrets/cert.pem'
@@ -50,15 +38,10 @@ BRIDGE_EXT_PLUGINS = {'md': 'codimd', 'zmd': 'codimd', 'mds': 'codimd', 'epd': '
 # appear in case of uncaught exceptions or bugs handling the webhook callbacks
 RECOVER_MSG = 'Please copy the content to a safe place and reopen the document again to paste it back.'
 
-
 class WB:
     '''A singleton container for all state information of the server'''
-    approot = os.getenv('APP_ROOT', '/wopib')               # application root path
-    bpr = flask.Blueprint('WOPIBridge', __name__, url_prefix=approot)
-    app = flask.Flask('WOPIBridge')
-    log = app.logger
-    port = 8000
-    skipsslverify = False
+    sslverify = False
+    log = None
     loglevels = {"Critical": logging.CRITICAL,  # 50
                  "Error":    logging.ERROR,     # 40
                  "Warning":  logging.WARNING,   # 30
@@ -72,73 +55,45 @@ class WB:
     openfiles = {}
     # a map of responses: wopisrc -> (http code, message)
     saveresponses = {}
+    # the save thread, to asynchronously save dirty or closed files
+    savethread = None
     # a condition variable to synchronize the save thread and the main Flask threads
     savecv = threading.Condition()
     # a map file-extension -> application plugin
     plugins = {}
 
     @classmethod
-    def init(cls):
+    def init(cls, config, log):
         '''Initialises the application, bails out in case of failures. Note this is not a __init__ method'''
-        cls.app.register_blueprint(cls.bpr)
-        try:
-            # configuration
-            loghandler = logging.FileHandler('/var/log/wopi/wopibridge.log')
-            loghandler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)s[%(process)d] %(levelname)-8s %(message)s',
-                                                      datefmt='%Y-%m-%dT%H:%M:%S'))
-            cls.log.addHandler(loghandler)
-            cls.log.setLevel(cls.loglevels['Debug'])
-            skipsslverify = os.environ.get('SKIP_SSL_VERIFY')
-            if isinstance(skipsslverify, str):
-                cls.skipsslverify = skipsslverify.upper() in ('TRUE', 'YES')
-            else:
-                cls.skipsslverify = False
-            try:
-                cls.saveinterval = int(os.environ.get('APP_SAVE_INTERVAL'))
-            except TypeError:
-                cls.saveinterval = 200
-            try:
-                cls.saveinterval = int(os.environ.get('APP_UNLOCK_INTERVAL'))
-            except TypeError:
-                cls.unlockinterval = 90
-            with open(SECRETPATH) as f:
-                cls.hashsecret = f.readline().strip('\n')
-            wopi.log = cls.log
-            wopi.skipsslverify = cls.skipsslverify
-            # init plugins
-            for p in set(BRIDGE_EXT_PLUGINS.values()):
-                try:
-                    cls.plugins[p] = __import__(p, globals(), locals())
-                    cls.plugins[p].log = cls.log
-                    cls.plugins[p].skipsslverify = cls.skipsslverify
-                    cls.plugins[p].init(os.environ, APIKEYPATH)
-                    cls.log.info('msg="Imported plugin for application" app="%s" plugin="%s"' % (p, cls.plugins[p]))
-                except Exception as e:
-                    cls.log.info('msg="Disabled plugin following failed initialization" app="%s" message="%s"' % (p, e))
-                    cls.plugins[p] = None
-            if not list(filter(None.__ne__, cls.plugins.values())):
-                raise ValueError('None of the available app plugins could be initialized')
-
-            # start the thread to perform async save operations
-            cls.savethread = SaveThread()
-            cls.savethread.start()
-
-        except Exception as e:    # pylint: disable=broad-except
-            # any error we get here with the configuration is fatal
-            cls.log.fatal('msg="Failed to initialize the service, aborting" error="%s"' % e)
-            sys.exit(22)
+        cls.sslverify = config.get('bridge', 'sslverify', fallback='True').upper() in ('FALSE', 'NO')
+        cls.saveinterval = int(config.get('bridge', 'saveinterval', fallback='200'))
+        cls.unlockinterval = int(config.get('bridge', 'unlockinterval', fallback='90'))
+        with open(SECRETPATH) as f:
+            cls.hashsecret = f.readline().strip('\n')
+        cls.log = wopic.log = log
+        wopic.sslverify = cls.sslverify
 
     @classmethod
-    def run(cls):
-        '''Runs the Flask app in secure (standalone) or unsecure mode depending on the context.
-           Secure https mode typically is to be provided by the infrastructure (k8s ingress, nginx...)'''
-        if os.path.isfile(CERTPATH):
-            cls.log.info('msg="WOPI Bridge starting in secure mode" baseUrl="%s" version="%s"' % (cls.approot, WBVERSION))
-            cls.app.run(host='0.0.0.0', port=cls.port, threaded=True,
-                        ssl_context=(CERTPATH, CERTPATH.replace('cert', 'key')))
-        else:
-            cls.log.info('msg="WOPI Bridge starting in unsecure/debugging mode" baseUrl="%s" version="%s"' % (cls.approot, WBVERSION))
-            cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=True)
+    def loadplugin(cls, appname, appurl, appinturl):
+        '''Load plugin for the given appname, if supported by the bridge service'''
+        p = appname.lower()
+        if p not in set(BRIDGE_EXT_PLUGINS.values()):
+            raise ValueError(appname)
+        try:
+            cls.plugins[p] = __import__('bridge.' + p, globals(), locals(), [p])
+            cls.plugins[p].log = cls.log
+            cls.plugins[p].sslverify = cls.sslverify
+            cls.plugins[p].init(appurl, appinturl, APIKEYPATH)
+            cls.log.info('msg="Imported plugin for application" app="%s" plugin="%s"' % (p, cls.plugins[p]))
+        except Exception as e:
+            cls.log.info('msg="Disabled plugin following failed initialization" app="%s" message="%s"' % (p, e))
+            cls.plugins[p] = None
+            raise ValueError(appname)
+
+        # start the thread to perform async save operations if not yet started
+        if not cls.savethread:
+            cls.savethread = SaveThread()
+            cls.savethread.start()
 
 
 def _guireturn(msg):
@@ -153,44 +108,9 @@ def _gendocid(wopisrc):
 
 
 
-# The Web Application starts here
+# The Bridge endpoints start here
 #############################################################################################################
 
-@WB.app.errorhandler(Exception)
-def handleexception(ex):
-    '''Generic method to log any uncaught exception'''
-    if isinstance(ex, (Flask_NotFound, Flask_MethodNotAllowed)):
-        return ex
-    ex_type, ex_value, ex_traceback = sys.exc_info()
-    WB.log.error('msg="Unexpected exception caught" exception="%s" type="%s" traceback="%s"' %
-                 (ex, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback)))
-    return wopi.jsonify('Internal error, please contact support. %s' % RECOVER_MSG), http.client.INTERNAL_SERVER_ERROR
-
-
-@WB.app.route("/", methods=['GET'])
-def redir():
-    '''A simple redirect to the page below'''
-    return flask.redirect(WB.approot + '/')
-
-
-@WB.bpr.route("/", methods=['GET'])
-def index():
-    '''Return a default index page with some user-friendly information about this service'''
-    #WB.log.debug('msg="Accessed index page" client="%s"' % flask.request.remote_addr)
-    return """
-    <html><head><title>ScienceMesh WOPI Bridge</title></head>
-    <body>
-    <div align="center" style="color:#000080; padding-top:50px; font-family:Verdana; size:11">
-    This is a WOPI HTTP bridge, to be used in conjunction with a WOPI-enabled EFSS.<br>Supports CodiMD and Etherpad.<br>
-    To use this service, please log in to your EFSS Storage and click on a supported document.</div>
-    <div style="position: absolute; bottom: 10px; left: 10px; width: 99%%;"><hr>
-    <i>ScienceMesh WOPI Bridge %s at %s. Powered by Flask %s for Python %s</i>.</div>
-    </body>
-    </html>
-    """ % (WBVERSION, socket.getfqdn(), flask.__version__, python_version())
-
-
-@WB.bpr.route("/open", methods=['GET'])
 def appopen():
     '''Open a MD doc by contacting the provided WOPISrc with the given access_token'''
     try:
@@ -203,14 +123,14 @@ def appopen():
         return _guireturn('Missing arguments'), http.client.BAD_REQUEST
 
     # WOPI GetFileInfo
-    res = wopi.request(wopisrc, acctok, 'GET')
+    res = wopic.request(wopisrc, acctok, 'GET')
     if res.status_code != http.client.OK:
         WB.log.warning('msg="Open: unable to fetch file WOPI metadata" response="%d"' % res.status_code)
         return _guireturn('Invalid WOPI context'), http.client.NOT_FOUND
     filemd = res.json()
     app = BRIDGE_EXT_PLUGINS.get(os.path.splitext(filemd['BaseFileName'])[1][1:])
-    if not app:
-        WB.log.warning('msg="Open: file type not supported" filename="%s" token="%s"' % (filemd['FileName'], acctok[-20:]))
+    if not app or not WB.plugins[app]:
+        WB.log.warning('msg="Open: file type not supported or missing plugin" filename="%s" token="%s"' % (filemd['FileName'], acctok[-20:]))
         return _guireturn('File type not supported'), http.client.BAD_REQUEST
     WB.log.debug('msg="Processing open for supported app" app="%s" plugin="%s"' % (app, WB.plugins[app]))
     app = WB.plugins[app]
@@ -220,12 +140,12 @@ def appopen():
         if filemd['UserCanWrite']:
             try:
                 # was it already being worked on?
-                wopilock = wopi.getlock(wopisrc, acctok)
+                wopilock = wopic.getlock(wopisrc, acctok)
                 WB.log.info('msg="Lock already held" lock="%s" token="%s"' % (wopilock, acctok[-20:]))
                 # add this token to the list, if not already in
                 if acctok[-20:] not in wopilock['toclose']:
-                    wopilock = wopi.refreshlock(wopisrc, acctok, wopilock)
-            except wopi.InvalidLock as e:
+                    wopilock = wopic.refreshlock(wopisrc, acctok, wopilock)
+            except wopic.InvalidLock as e:
                 if str(e) != str(int(http.client.NOT_FOUND)):
                     # lock is invalid/corrupted: force read-only mode
                     WB.log.info('msg="Invalid lock, forcing read-only mode" error="%s" token="%s"' % (e, acctok[-20:]))
@@ -234,8 +154,8 @@ def appopen():
                 # otherwise, this is the first user opening the file; in both cases, fetch it
                 wopilock = app.loadfromstorage(filemd, wopisrc, acctok, _gendocid(wopisrc))
                 # and WOPI Lock it
-                res = wopi.request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock),
-                                                                     'X-Wopi-Override': 'LOCK'})
+                res = wopic.request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock),
+                                                                      'X-Wopi-Override': 'LOCK'})
                 if res.status_code != http.client.OK:
                     # failed to lock the file: open in read-only mode
                     WB.log.warning('msg="Failed to lock the file" response="%d" token="%s"' %
@@ -275,8 +195,7 @@ def appopen():
     return flask.redirect(redirecturl)
 
 
-@WB.bpr.route("/save", methods=['POST'])
-def appsave():
+def appsave(docid):
     '''Save a MD doc given its WOPI context, and return a JSON-formatted message. The actual save is asynchronous.'''
     # fetch metadata from request
     try:
@@ -284,13 +203,12 @@ def appsave():
         wopisrc = meta[:meta.index('?t=')]
         acctok = meta[meta.index('?t=')+3:]
         isclose = flask.request.args.get('close') == 'true'
-        docid = flask.request.args.get('id')
         WB.log.info('msg="Save: requested action" isclose="%s" docid="%s" wopisrc="%s" token="%s"' %
                     (isclose, docid, wopisrc, acctok[-20:]))
     except (KeyError, ValueError) as e:
         WB.log.error('msg="Save: malformed or missing metadata" client="%s" headers="%s" exception="%s" error="%s"' %
                      (flask.request.remote_addr, flask.request.headers, type(e), e))
-        return wopi.jsonify('Malformed or missing metadata, could not save. %s' % RECOVER_MSG), http.client.INTERNAL_SERVER_ERROR
+        return wopic.jsonify('Malformed or missing metadata, could not save. %s' % RECOVER_MSG), http.client.INTERNAL_SERVER_ERROR
 
     # decide whether to notify the save thread
     donotify = isclose or wopisrc not in WB.openfiles or WB.openfiles[wopisrc]['lastsave'] < time.time() - WB.saveinterval
@@ -324,7 +242,6 @@ def appsave():
         return '{}', http.client.ACCEPTED
 
 
-@WB.bpr.route("/list", methods=['GET'])
 def applist():
     '''Return a list of all currently opened files'''
     if (flask.request.headers.get('Authorization') != 'Bearer ' + WB.hashsecret) and \
@@ -376,17 +293,17 @@ class SaveThread(threading.Thread):
         if openfile['tosave'] and (_intersection(openfile['toclose'])
                                    or (openfile['lastsave'] < time.time() - WB.saveinterval)):
             try:
-                wopilock = wopi.getlock(wopisrc, openfile['acctok'])
-            except wopi.InvalidLock:
+                wopilock = wopic.getlock(wopisrc, openfile['acctok'])
+            except wopic.InvalidLock:
                 WB.log.info('msg="SaveThread: attempting to relock file" token="%s" docid="%s"' %
                             (openfile['acctok'][-20:], openfile['docid']))
                 try:
-                    wopilock = WB.saveresponses[wopisrc] = wopi.relock(
+                    wopilock = WB.saveresponses[wopisrc] = wopic.relock(
                         wopisrc, openfile['acctok'], openfile['docid'], _intersection(openfile['toclose']))
-                except wopi.InvalidLock as ile:
+                except wopic.InvalidLock as ile:
                     # even this attempt failed, give up
                     # TODO here we should save the file on a local storage to help later recovery
-                    WB.saveresponses[wopisrc] = wopi.jsonify(str(ile)), http.client.INTERNAL_SERVER_ERROR
+                    WB.saveresponses[wopisrc] = wopic.jsonify(str(ile)), http.client.INTERNAL_SERVER_ERROR
                     # set some 'fake' metadata, will be automatically cleaned up later
                     openfile['lastsave'] = int(time.time())
                     openfile['tosave'] = False
@@ -395,7 +312,7 @@ class SaveThread(threading.Thread):
             app = BRIDGE_EXT_PLUGINS.get(wopilock['app'])
             if not app:
                 WB.log.error('msg="SaveThread: malformed app attribute in WOPI lock" lock="%s"' % wopilock)
-                WB.saveresponses[wopisrc] = wopi.jsonify('Unrecognized app for this file'), http.client.BAD_REQUEST
+                WB.saveresponses[wopisrc] = wopic.jsonify('Unrecognized app for this file'), http.client.BAD_REQUEST
             else:
                 WB.log.info('msg="SaveThread: saving file" token="%s" docid="%s"' %
                             (openfile['acctok'][-20:], openfile['docid']))
@@ -411,12 +328,12 @@ class SaveThread(threading.Thread):
         therefore this also works as a cleanup step'''
         if openfile['lastsave'] < int(time.time()) - 4*WB.saveinterval:
             try:
-                wopilock = wopi.getlock(wopisrc, openfile['acctok']) if not wopilock else wopilock
+                wopilock = wopic.getlock(wopisrc, openfile['acctok']) if not wopilock else wopilock
                 # this will force a close in the cleanup step
                 openfile['toclose'] = {t: True for t in openfile['toclose']}
                 WB.log.info('msg="SaveThread: force-closing document" lastsavetime="%s" toclosetokens="%s"' %
                             (openfile['lastsave'], openfile['toclose']))
-            except wopi.InvalidLock:
+            except wopic.InvalidLock:
                 # lock is gone, just cleanup our metadata
                 WB.log.warning('msg="SaveThread: cleaning up metadata, detected missed close event" url="%s"' % wopisrc)
                 del WB.openfiles[wopisrc]
@@ -427,8 +344,8 @@ class SaveThread(threading.Thread):
         if _union(openfile['toclose']) and not openfile['tosave']:
             # check lock
             try:
-                wopilock = wopi.getlock(wopisrc, openfile['acctok']) if not wopilock else wopilock
-            except wopi.InvalidLock:
+                wopilock = wopic.getlock(wopisrc, openfile['acctok']) if not wopilock else wopilock
+            except wopic.InvalidLock:
                 # nothing to do here, this document may have been closed by another wopibridge
                 if openfile['lastsave'] < time.time() - WB.unlockinterval:
                     # yet cleanup only after the unlockinterval time, cf. the InvalidLock handling in savedirty()
@@ -442,8 +359,8 @@ class SaveThread(threading.Thread):
             if _intersection(openfile['toclose']):
                 if openfile['lastsave'] < int(time.time()) - WB.unlockinterval:
                     # nobody is still on this document and some time has passed, unlock
-                    res = wopi.request(wopisrc, openfile['acctok'], 'POST',
-                                       headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
+                    res = wopic.request(wopisrc, openfile['acctok'], 'POST',
+                                        headers={'X-WOPI-Lock': json.dumps(wopilock), 'X-Wopi-Override': 'UNLOCK'})
                     if res.status_code != http.client.OK:
                         WB.log.warning('msg="SaveThread: failed to unlock" lastsavetime="%s" token="%s" response="%s"' %
                                        (openfile['lastsave'], openfile['acctok'][-20:], res.status_code))
@@ -453,21 +370,14 @@ class SaveThread(threading.Thread):
                     del WB.openfiles[wopisrc]
             elif openfile['toclose'] != wopilock['toclose']:
                 # some user still on it, refresh lock if the toclose part has changed
-                wopi.refreshlock(wopisrc, openfile['acctok'], wopilock, toclose=openfile['toclose'])
+                wopic.refreshlock(wopisrc, openfile['acctok'], wopilock, toclose=openfile['toclose'])
 
 
 @atexit.register
 def stopsavethread():
     '''Exit handler to cleanly stop the storage sync thread'''
-    WB.log.info('msg="Waiting for SaveThread to complete"')
-    with WB.savecv:
-        WB.active = False
-        WB.savecv.notify()
-
-
-#
-# Start the Flask endless listening loop and the background sync thread
-#
-if __name__ == '__main__':
-    WB.init()
-    WB.run()
+    if WB.savethread:
+        WB.log.info('msg="Waiting for SaveThread to complete"')
+        with WB.savecv:
+            WB.active = False
+            WB.savecv.notify()

@@ -13,7 +13,7 @@ import hashlib
 import http.client
 import urllib.parse as urlparse
 import requests
-import wopiclient as wopi
+import bridge.wopiclient as wopic
 
 
 class AppFailure(Exception):
@@ -24,23 +24,18 @@ appurl = None
 appexturl = None
 apikey = None
 log = None
-skipsslverify = None
+sslverify = None
 groupid = None
 
 
-def init(env, apipath):
+def init(_appurl, _appinturl, apipath):
     '''Initialize global vars from the environment'''
     global appurl
     global appexturl
     global apikey
     global groupid
-    appexturl = env.get('ETHERPAD_EXT_URL')
-    if not appexturl:
-        raise ValueError("Missing ETHERPAD_EXT_URL env var")
-    appurl = env.get('ETHERPAD_URL')
-    if not appurl:
-        # defaults to the external
-        appurl = appexturl
+    appexturl = _appurl
+    appurl = _appinturl
     with open(apipath + 'etherpad_apikey') as f:
         apikey = f.readline().strip('\n')
     # create a general group to attach all pads
@@ -53,7 +48,7 @@ def _apicall(method, params, data=None, acctok=None, raiseonnonzerocode=True):
     '''Generic method to call the Etherpad REST API'''
     params['apikey'] = apikey
     try:
-        res = requests.post(appurl + '/api/1/' + method, params=params, data=data, verify=not skipsslverify)
+        res = requests.post(appurl + '/api/1/' + method, params=params, data=data, verify=sslverify)
         if res.status_code != http.client.OK:
             log.error('msg="Failed to call Etherpad" method="%s" token="%s" response="%d: %s"' %
                         (method, acctok[-20:] if acctok else 'N/A', res.status_code, res.content.decode()))
@@ -88,7 +83,7 @@ def getredirecturl(isreadwrite, wopisrc, acctok, wopilock, displayname):
 def loadfromstorage(filemd, wopisrc, acctok, docid):
     '''Copy document from storage to Etherpad'''
     # WOPI GetFile
-    res = wopi.request(wopisrc, acctok, 'GET', contents=True)
+    res = wopic.request(wopisrc, acctok, 'GET', contents=True)
     if res.status_code != http.client.OK:
         raise ValueError(res.status_code)
     epfile = res.content
@@ -108,7 +103,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
         res = requests.post(appurl + '/p/' + docid + '/import',
                             files={'file': (docid + '.etherpad', epfile)},    # a .etherpad file is imported as raw (JSON) content
                             params={'apikey': apikey},
-                            verify=not skipsslverify)
+                            verify=sslverify)
         if res.status_code != http.client.OK:
             log.error('msg="Unable to push document to Etherpad" token="%s" response="%d: %s"' %
                       (acctok[-20:], res.status_code, res.content.decode()))
@@ -118,7 +113,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
         log.error('msg="Exception raised attempting to connect to Etherpad" exception="%s"' % e)
         raise AppFailure
     # generate and return a WOPI lock structure for this document
-    return wopi.generatelock(docid, filemd, h.hexdigest(), None, acctok, False)
+    return wopic.generatelock(docid, filemd, h.hexdigest(), None, acctok, False)
 
 
 # Etherpad to cloud storage
@@ -129,7 +124,7 @@ def _fetchfrometherpad(wopilock, acctok):
     try:
         # this operation does not use the API (and it is NOT protected by the API key!), so we use a plain GET
         res = requests.get(appurl + '/p' + wopilock['docid'] + '/export/etherpad',
-                           verify=not skipsslverify)
+                           verify=sslverify)
         if res.status_code != http.client.OK:
             log.error('msg="Unable to fetch document from Etherpad" token="%s" response="%d: %s"' %
                       (acctok[-20:], res.status_code, res.content.decode()))
@@ -148,7 +143,7 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
                  (isclose, appurl + '/p' + wopilock['docid'], acctok[-20:]))
         epfile = _fetchfrometherpad(wopilock, acctok)
     except AppFailure:
-        return wopi.jsonify('Could not save file, failed to fetch document from Etherpad'), http.client.INTERNAL_SERVER_ERROR
+        return wopic.jsonify('Could not save file, failed to fetch document from Etherpad'), http.client.INTERNAL_SERVER_ERROR
 
     if isclose and wopilock['digest'] != 'dirty':
         # so far the file was not touched: before forcing a put let's validate the contents
@@ -159,12 +154,12 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
             return '{}', http.client.ACCEPTED
 
     # WOPI PutFile
-    res = wopi.request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock)},
+    res = wopic.request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock)},
                         contents=epfile)
-    reply = wopi.handleputfile('PutFile', wopisrc, res)
+    reply = wopic.handleputfile('PutFile', wopisrc, res)
     if reply:
         return reply
-    wopilock = wopi.refreshlock(wopisrc, acctok, wopilock, digest='dirty')
+    wopilock = wopic.refreshlock(wopisrc, acctok, wopilock, digest='dirty')
     log.info('msg="Save completed" filename="%s" isclose="%s" token="%s"' %
              (wopilock['filename'], isclose, acctok[-20:]))
-    return wopi.jsonify('File saved successfully'), http.client.OK
+    return wopic.jsonify('File saved successfully'), http.client.OK

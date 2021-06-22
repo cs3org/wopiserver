@@ -306,7 +306,7 @@ def putRelative(fileid, reqheaders, acctok):
              'mode="ViewMode.READ_WRITE" friendlyname="%s"' %
              (acctok['userid'], targetName, acctok['username']))
     inode, newacctok = utils.generateAccessToken(acctok['userid'], targetName, utils.ViewMode.READ_WRITE, acctok['username'], \
-                                                 acctok['folderurl'], acctok['endpoint'])
+                                                 acctok['folderurl'], acctok['endpoint'], acctok['appname'])
     # prepare and send the response as JSON
     putrelmd = {}
     putrelmd['Name'] = os.path.basename(targetName)

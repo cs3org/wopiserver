@@ -17,7 +17,7 @@ class InvalidLock(Exception):
 
 # initialized by the main class
 log = None
-skipsslverify = None
+sslverify = None
 
 
 def jsonify(msg):
@@ -36,9 +36,9 @@ def request(wopisrc, acctok, method, contents=None, headers=None):
         log.debug('msg="Calling WOPI" url="%s" headers="%s" acctok="%s"' %
                   (wopiurl, headers, acctok[-20:]))
         if method == 'GET':
-            return requests.get('%s?access_token=%s' % (wopiurl, acctok), verify=not skipsslverify)
+            return requests.get('%s?access_token=%s' % (wopiurl, acctok), verify=sslverify)
         if method == 'POST':
-            return requests.post('%s?access_token=%s' % (wopiurl, acctok), verify=not skipsslverify,
+            return requests.post('%s?access_token=%s' % (wopiurl, acctok), verify=sslverify,
                                  headers=headers, data=contents)
     except requests.exceptions.ConnectionError as e:
         log.error('msg="Unable to contact WOPI" wopiurl="%s" acctok="%s" response="%s"' % (wopiurl, acctok, e))
