@@ -69,7 +69,7 @@ def stat(endpoint, fileid, userid, versioninv=0):
     ref = cs3spr.Reference(path=fileid)
   else:
     # assume we have an opaque fileid
-    ref = cs3spr.Reference(id=cs3spr.ResourceId(storage_id=endpoint, opaque_id=fileid))
+    ref = cs3spr.Reference(resource_id=cs3spr.ResourceId(storage_id=endpoint, opaque_id=fileid))
   statInfo = ctx['cs3stub'].Stat(request=cs3sp.StatRequest(ref=ref),
                                  metadata=[('x-access-token', userid)])
   tend = time.time()
