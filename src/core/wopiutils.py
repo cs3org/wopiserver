@@ -115,28 +115,33 @@ def randomString(size):
     return ''.join([choice(ascii_lowercase) for _ in range(size)])
 
 
-def generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint, appname):
+def generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint, appname, appediturl, appviewurl):
     '''Generates an access token for a given file and a given user, and returns a tuple with
     the file's inode and the URL-encoded access token.'''
     try:
         # stat the file to check for existence and get a version-invariant inode and modification time:
         # the inode serves as fileid (and must not change across save operations), the mtime is used for version information.
-        statInfo = st.statx(endpoint, fileid, userid, versioninv=1)
+        statinfo = st.statx(endpoint, fileid, userid, versioninv=1)
     except IOError as e:
         log.info('msg="Requested file not found or not a file" fileid="%s" error="%s"' % (fileid, e))
         raise
     # if write access is requested, probe whether there's already a lock file coming from Desktop applications
     exptime = int(time.time()) + srv.tokenvalidity
-    acctok = jwt.encode({'userid': userid, 'filename': statInfo['filepath'], 'username': username,
+    if not appediturl:
+        # for backwards compatibility
+        fext = os.path.splitext(statinfo['filepath'])[1]
+        appediturl = srv.endpoints[fext]['edit']
+        appviewurl = srv.endpoints[fext]['view']
+    acctok = jwt.encode({'userid': userid, 'filename': statinfo['filepath'], 'username': username,
                          'viewmode': viewmode.value, 'folderurl': folderurl, 'endpoint': endpoint,
-                         'appname': appname, 'exp': exptime},
+                         'appname': appname, 'appediturl': appediturl, 'appviewurl': appviewurl, 'exp': exptime},
                          srv.wopisecret, algorithm='HS256')
     log.info('msg="Access token generated" userid="%s" mode="%s" endpoint="%s" filename="%s" inode="%s" ' \
              'mtime="%s" folderurl="%s" appname="%s" expiration="%d" token="%s"' %
-             (userid, viewmode, endpoint, statInfo['filepath'], statInfo['inode'], statInfo['mtime'], \
+             (userid, viewmode, endpoint, statinfo['filepath'], statinfo['inode'], statinfo['mtime'], \
               folderurl, appname, exptime, acctok[-20:]))
     # return the inode == fileid, the filepath and the access token
-    return statInfo['inode'], statInfo['filepath'], acctok
+    return statinfo['inode'], acctok
 
 
 def getLockName(filename):

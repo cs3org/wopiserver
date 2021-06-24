@@ -1,7 +1,8 @@
 ## WOPI server - core module
 
 This module includes the core WOPI protocol implementation, along with the discovery logic
-in the `discovery.py` module and the interoperable lock APIs in the `ioplocks.py` module.
+in the `discovery.py` module (to be moved to Reva) and the interoperable lock APIs
+in the `ioplocks.py` module.
 
 To access the storage, three interfaces are provided:
 

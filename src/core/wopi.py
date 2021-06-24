@@ -15,7 +15,6 @@ import flask
 from urllib.parse import quote_plus as url_quote_plus
 from urllib.parse import unquote as url_unquote
 import core.wopiutils as utils
-import core.discovery
 
 # convenience references to global entities
 st = None
@@ -66,12 +65,8 @@ def checkFileInfo(fileid):
         filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = filemd['SupportsRename'] = \
             filemd['SupportsDeleteFile'] = filemd['UserCanRename'] = acctok['viewmode'] == utils.ViewMode.READ_WRITE
         filemd['UserCanNotWriteRelative'] = acctok['viewmode'] != utils.ViewMode.READ_WRITE
-        if acctok['appname'] in core.discovery.apps:
-            appurl = core.discovery.apps[acctok['appname']][fExt]
-        else:
-            appurl = srv.endpoints[fExt]   # TODO deprecated, must make sure appname is always correct
-        filemd['HostViewUrl'] = '%s&%s' % (appurl['view'], wopiSrc)
-        filemd['HostEditUrl'] = '%s&%s' % (appurl['edit'], wopiSrc)
+        filemd['HostViewUrl'] = '%s&%s' % (acctok['appviewurl'], wopiSrc)
+        filemd['HostEditUrl'] = '%s&%s' % (acctok['appediturl'], wopiSrc)
 
         # populate app-specific metadata
         if acctok['appname'].find('Microsoft') > 0:
@@ -310,22 +305,15 @@ def putRelative(fileid, reqheaders, acctok):
     log.info('msg="PutRelative: generating new access token" user="%s" filename="%s" ' \
              'mode="ViewMode.READ_WRITE" friendlyname="%s"' %
              (acctok['userid'], targetName, acctok['username']))
-    inode, _, newacctok = utils.generateAccessToken(acctok['userid'], targetName, utils.ViewMode.READ_WRITE, acctok['username'], \
-                                                    acctok['folderurl'], acctok['endpoint'], acctok['appname'])
+    inode, newacctok = utils.generateAccessToken(acctok['userid'], targetName, utils.ViewMode.READ_WRITE, acctok['username'], \
+                                                 acctok['folderurl'], acctok['endpoint'], acctok['appname'], \
+                                                 acctok['appediturl'], acctok['appviewurl'])
     # prepare and send the response as JSON
     putrelmd = {}
     putrelmd['Name'] = os.path.basename(targetName)
     putrelmd['Url'] = '%s?access_token=%s' % (url_unquote(utils.generateWopiSrc(inode)), newacctok)
-    fExt = os.path.splitext(targetName)[1]
-    appurl = None
-    if acctok['appname'] in core.discovery.apps:
-        appurl = core.discovery.apps[acctok['appname']][fExt]
-    elif fExt in srv.endpoints:
-        appurl = srv.endpoints[fExt]   # TODO deprecated
-    if appurl:
-        putrelmd['HostEditUrl'] = '%s&WOPISrc=%s&access_token=%s' % \
-                                  (appurl['edit'], utils.generateWopiSrc(inode), newacctok)
-    # else we don't know the app to edit this file type, therefore we do not provide the info
+    putrelmd['HostEditUrl'] = '%s&WOPISrc=%s&access_token=%s' % \
+                              (acctok['appediturl'], utils.generateWopiSrc(inode), newacctok)
     log.debug('msg="PutRelative response" token="%s" metadata="%s"' % (newacctok[-20:], putrelmd))
     return flask.Response(json.dumps(putrelmd), mimetype='application/json')
 

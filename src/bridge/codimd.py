@@ -33,15 +33,14 @@ log = None
 sslverify = None
 
 
-def init(_appurl, _appinturl, apipath):
+def init(_appurl, _appinturl, _apikey):
     '''Initialize global vars from the environment'''
     global appurl
     global appexturl
     global apikey
     appexturl = _appurl
     appurl = _appinturl
-    with open(apipath + 'codimd_apikey') as f:
-        apikey = f.readline().strip('\n')
+    apikey = _apikey
 
 
 def getredirecturl(isreadwrite, wopisrc, acctok, wopilock, displayname):

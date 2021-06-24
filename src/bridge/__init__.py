@@ -26,10 +26,8 @@ import bridge.wopiclient as wopic
 CERTPATH = '/var/run/secrets/cert.pem'
 
 # path to a secret used to hash noteids and protect the /list endpoint
+# TODO "merge" with main wopisecret
 SECRETPATH = '/var/run/secrets/wbsecret'
-
-# path to the APIKEY secrets
-APIKEYPATH = '/var/run/secrets/'
 
 # The supported plugins integrated with this WOPI Bridge
 BRIDGE_EXT_PLUGINS = {'md': 'codimd', 'zmd': 'codimd', 'mds': 'codimd', 'epd': 'etherpad'}
@@ -74,16 +72,19 @@ class WB:
         wopic.sslverify = cls.sslverify
 
     @classmethod
-    def loadplugin(cls, appname, appurl, appinturl):
+    def loadplugin(cls, appname, appurl, appinturl, apikey):
         '''Load plugin for the given appname, if supported by the bridge service'''
         p = appname.lower()
-        if p not in set(BRIDGE_EXT_PLUGINS.values()):
+        if p in cls.plugins:
+            # already initialized
+            return
+        if not issupported(appname):
             raise ValueError(appname)
         try:
             cls.plugins[p] = __import__('bridge.' + p, globals(), locals(), [p])
             cls.plugins[p].log = cls.log
             cls.plugins[p].sslverify = cls.sslverify
-            cls.plugins[p].init(appurl, appinturl, APIKEYPATH)
+            cls.plugins[p].init(appurl, appinturl, apikey)
             cls.log.info('msg="Imported plugin for application" app="%s" plugin="%s"' % (p, cls.plugins[p]))
         except Exception as e:
             cls.log.info('msg="Disabled plugin following failed initialization" app="%s" message="%s"' % (p, e))
@@ -96,7 +97,12 @@ class WB:
             cls.savethread.start()
 
 
-def _guireturn(msg):
+def issupported(appname):
+    '''One-liner to return if a given application is supported by the bridge extensions'''
+    return appname.lower() in set(BRIDGE_EXT_PLUGINS.values())
+
+
+def guireturn(msg):
     '''One-liner to better render messages that may be visible in the UI'''
     return '<div align="center" style="color:#808080; padding-top:50px; font-family:Verdana">%s</div>' % msg
 
@@ -107,31 +113,21 @@ def _gendocid(wopisrc):
     return urlsafe_b64encode(dig).decode()[:-1]
 
 
-
 # The Bridge endpoints start here
 #############################################################################################################
 
-def appopen():
-    '''Open a MD doc by contacting the provided WOPISrc with the given access_token'''
-    try:
-        wopisrc = urlparse.unquote(flask.request.args['WOPISrc'])
-        acctok = flask.request.args['access_token']
-        WB.log.info('msg="Open called" client="%s" user-agent="%s" token="%s"' %
-                    (flask.request.remote_addr, flask.request.user_agent, acctok[-20:]))
-    except KeyError as e:
-        WB.log.error('msg="Open: unable to open the file, missing WOPI context" error="%s"' % e)
-        return _guireturn('Missing arguments'), http.client.BAD_REQUEST
-
+def appopen(wopisrc, acctok):
+    '''Open a doc by contacting the provided WOPISrc with the given access_token'''
     # WOPI GetFileInfo
     res = wopic.request(wopisrc, acctok, 'GET')
     if res.status_code != http.client.OK:
         WB.log.warning('msg="Open: unable to fetch file WOPI metadata" response="%d"' % res.status_code)
-        return _guireturn('Invalid WOPI context'), http.client.NOT_FOUND
+        return guireturn('Invalid WOPI context'), http.client.NOT_FOUND
     filemd = res.json()
     app = BRIDGE_EXT_PLUGINS.get(os.path.splitext(filemd['BaseFileName'])[1][1:])
     if not app or not WB.plugins[app]:
         WB.log.warning('msg="Open: file type not supported or missing plugin" filename="%s" token="%s"' % (filemd['FileName'], acctok[-20:]))
-        return _guireturn('File type not supported'), http.client.BAD_REQUEST
+        return guireturn('File type not supported'), http.client.BAD_REQUEST
     WB.log.debug('msg="Processing open for supported app" app="%s" plugin="%s"' % (app, WB.plugins[app]))
     app = WB.plugins[app]
 
@@ -183,20 +179,19 @@ def appopen():
             wopilock = app.loadfromstorage(filemd, wopisrc, acctok, None)
     except app.AppFailure:
         # this can be raised by loadfromstorage
-        return _guireturn('Unable to load the app, please try again later or contact support'), http.client.INTERNAL_SERVER_ERROR
+        return guireturn('Unable to load the app, please try again later or contact support'), http.client.INTERNAL_SERVER_ERROR
 
     # here we append the user browser to the displayName
     # TODO need to review this for production usage, it should actually come from WOPI if configured accordingly
-    redirecturl = app.getredirecturl(
-            filemd['UserCanWrite'], wopisrc, acctok, wopilock,
-            urlparse.quote_plus(filemd['UserFriendlyName'] + '@' + \
-                                (flask.request.user_agent.platform[:3] if flask.request.user_agent.platform else 'oth')))
-    WB.log.info('msg="Redirecting client to the app" redirecturl="%s"' % redirecturl)
-    return flask.redirect(redirecturl)
+    redirurl = app.getredirecturl(filemd['UserCanWrite'], wopisrc, acctok, wopilock,
+                                  urlparse.quote_plus(filemd['UserFriendlyName'] + '@' + \
+                                  (flask.request.user_agent.platform[:3] if flask.request.user_agent.platform else 'oth')))
+    WB.log.info('msg="Redirecting client to the app" redirecturl="%s"' % redirurl)
+    return flask.redirect(redirurl)
 
 
 def appsave(docid):
-    '''Save a MD doc given its WOPI context, and return a JSON-formatted message. The actual save is asynchronous.'''
+    '''Save a doc given its WOPI context, and return a JSON-formatted message. The actual save is asynchronous.'''
     # fetch metadata from request
     try:
         meta = urlparse.unquote(flask.request.headers['X-EFSS-Metadata'])
@@ -250,7 +245,7 @@ def applist():
        (flask.request.args.get('apikey') != WB.hashsecret):     # added for convenience
         WB.log.warning('msg="List: unauthorized access attempt, missing authorization token" '
                        'client="%s"' % flask.request.remote_addr)
-        return _guireturn('Client not authorized'), http.client.UNAUTHORIZED
+        return guireturn('Client not authorized'), http.client.UNAUTHORIZED
     WB.log.info('msg="List: returning list of open files" client="%s"' % flask.request.remote_addr)
     return flask.Response(json.dumps(WB.openfiles), mimetype='application/json')
 

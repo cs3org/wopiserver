@@ -28,7 +28,7 @@ sslverify = None
 groupid = None
 
 
-def init(_appurl, _appinturl, apipath):
+def init(_appurl, _appinturl, _apikey):
     '''Initialize global vars from the environment'''
     global appurl
     global appexturl
@@ -36,8 +36,7 @@ def init(_appurl, _appinturl, apipath):
     global groupid
     appexturl = _appurl
     appurl = _appinturl
-    with open(apipath + 'etherpad_apikey') as f:
-        apikey = f.readline().strip('\n')
+    apikey = _apikey
     # create a general group to attach all pads
     groupid = _apicall('createGroupIfNotExistsFor', {'groupMapper': 1})
     groupid = groupid['data']['groupID']

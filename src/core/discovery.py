@@ -3,6 +3,7 @@ discovery.py
 
 Helper code for the WOPI discovery phase, as well as
 for integrating the apps supported by the bridge functionality.
+This code is going to be deprecated once the new Reva AppProvider is fully functional.
 '''
 
 from xml.etree import ElementTree as ET
@@ -15,9 +16,8 @@ import bridge
 # convenience references to global entities
 srv = None
 log = None
-apps = {}
 
-def registerapp(appname, appurl, appinturl):
+def registerapp(appname, appurl, appinturl, apikey=None):
     '''Registers the given app in the internal endpoints list'''
     '''For the time being, this is highly customized to keep backwards-compatibility. To be reviewed'''
     if not appinturl:
@@ -34,21 +34,17 @@ def registerapp(appname, appurl, appinturl):
         urlsrc = discXml.find('net-zone/app')[0].attrib['urlsrc']
         if urlsrc.find('loleaflet') > 0:
             # this is Collabora
-            apps[appname] = {}
             codetypes = srv.config.get('general', 'codeofficetypes', fallback='.odt .ods .odp').split()
             for t in codetypes:
                 srv.endpoints[t] = {}
                 srv.endpoints[t]['view'] = urlsrc + 'permission=readonly'
                 srv.endpoints[t]['edit'] = urlsrc + 'permission=edit'
                 srv.endpoints[t]['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace
-                apps[appname][t] = srv.endpoints[t]
             log.info('msg="Collabora Online endpoints successfully configured" count="%d" CODEURL="%s"' %
                      (len(codetypes), srv.endpoints['.odt']['edit']))
-            return flask.Response(json.dumps(list(apps[appname].keys())), mimetype='application/json')
+            return
 
         # else this must be Microsoft Office Online
-        # TODO remove hardcoded logic
-        apps[appname] = {}
         srv.endpoints['.docx'] = {}
         srv.endpoints['.docx']['view'] = appurl + '/wv/wordviewerframe.aspx?edit=0'
         srv.endpoints['.docx']['edit'] = appurl + '/we/wordeditorframe.aspx?edit=1'
@@ -61,12 +57,9 @@ def registerapp(appname, appurl, appinturl):
         srv.endpoints['.pptx']['view'] = appurl + '/p/PowerPointFrame.aspx?PowerPointView=ReadingView'
         srv.endpoints['.pptx']['edit'] = appurl + '/p/PowerPointFrame.aspx?PowerPointView=EditView'
         srv.endpoints['.pptx']['new']  = appurl + '/p/PowerPointFrame.aspx?PowerPointView=EditView&New=1'  # pylint: disable=bad-whitespace
-        apps[appname]['.docx'] = srv.endpoints['.docx']
-        apps[appname]['.xlsx'] = srv.endpoints['.xlsx']
-        apps[appname]['.pptx'] = srv.endpoints['.pptx']
         log.info('msg="Microsoft Office Online endpoints successfully configured" OfficeURL="%s"' %
                  srv.endpoints['.docx']['edit'])
-        return flask.Response(json.dumps(list(apps[appname].keys())), mimetype='application/json')
+        return
 
     elif discReq.status_code == http.client.NOT_FOUND:
         # try and scrape the app homepage to see if a bridge-supported app is found
@@ -74,8 +67,7 @@ def registerapp(appname, appurl, appinturl):
             discReq = requests.get(appurl, verify=False).content.decode()
             if discReq.find('CodiMD') > 0:
                 # TODO remove hardcoded logic
-                bridge.WB.loadplugin(appname, appurl, appinturl)
-                apps[appname] = {}
+                bridge.WB.loadplugin(appname, appurl, appinturl, apikey)
                 bridgeurl = srv.config.get('general', 'wopiurl') + '/wopi/bridge/open?'
                 srv.endpoints['.md'] = {}
                 srv.endpoints['.md']['view'] = srv.endpoints['.md']['edit'] = bridgeurl
@@ -83,31 +75,25 @@ def registerapp(appname, appurl, appinturl):
                 srv.endpoints['.zmd']['view'] = srv.endpoints['.zmd']['edit'] = bridgeurl
                 srv.endpoints['.txt'] = {}
                 srv.endpoints['.txt']['view'] = srv.endpoints['.txt']['edit'] = bridgeurl
-                apps[appname]['.md'] = srv.endpoints['.md']
-                apps[appname]['.zmd'] = srv.endpoints['.zmd']
-                apps[appname]['.txt'] = srv.endpoints['.txt']
                 log.info('msg="iopRegisterApp: CodiMD endpoints successfully configured" BridgeURL="%s"' % bridgeurl)
-                return flask.Response(json.dumps(list(apps[appname].keys())), mimetype='application/json')
+                return
 
             if discReq.find('Etherpad') > 0:
-                bridge.WB.loadplugin(appname, appurl, appinturl)
+                bridge.WB.loadplugin(appname, appurl, appinturl, apikey)
                 bridgeurl = srv.config.get('general', 'wopiurl') + '/wopi/bridge/open?'
                 # TODO remove hardcoded logic
-                apps[appname] = {}
                 srv.endpoints['.epd'] = {}
                 srv.endpoints['.epd']['view'] = srv.endpoints['.epd']['edit'] = bridgeurl
-                apps[appname]['.epd'] = srv.endpoints['.epd']
                 log.info('msg="iopRegisterApp: Etherpad endpoints successfully configured" BridgeURL="%s"' % bridgeurl)
-                return flask.Response(json.dumps(list(apps[appname].keys())), mimetype='application/json')
+                return
         except ValueError:
             # bridge plugin could not be initialized
-            return 'Failed to initialize WOPI bridge plugin for app "%s"' % appname, http.client.INTERNAL_SERVER_ERROR
+            pass
         except requests.exceptions.ConnectionError:
             pass
 
     # in all other cases, fail
     log.error('msg="iopRegisterApp: app is not WOPI-compatible" appurl="%s"' % appurl)
-    return 'App is not WOPI-compatible', http.client.BAD_REQUEST
 
 
 def initappsregistry():
@@ -122,4 +108,6 @@ def initappsregistry():
     codimd = srv.config.get('general', 'codimdurl', fallback=None)
     codimdint = srv.config.get('general', 'codimdinturl', fallback=None)
     if codimd:
-        registerapp('CodiMD', codimd, codimdint)
+        with open('/var/run/secrets/codimd_apikey') as f:
+            apikey = f.readline().strip('\n')
+            registerapp('CodiMD', codimd, codimdint, apikey)

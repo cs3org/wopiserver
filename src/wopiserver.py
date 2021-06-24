@@ -16,7 +16,7 @@ import configparser
 from platform import python_version
 import logging
 import logging.handlers
-import urllib.parse
+from urllib.parse import unquote as url_unquote
 import http.client
 import json
 try:
@@ -183,7 +183,7 @@ def index():
 
 
 #
-# open-in-app endpoint
+# open-in-app endpoints
 #
 @Wopi.app.route("/wopi/iop/open", methods=['GET'])
 @Wopi.metrics.do_not_track()
@@ -208,9 +208,6 @@ def iopOpen():
     - string folderurl: the URL to come back to the containing folder for this file, typically shown by the Office app
     - string endpoint (optional): the storage endpoint to be used to look up the file or the storage id, in case of
       multi-instance underlying storage; defaults to 'default'
-    - string appname (optional): the application engine to be used to open the file, previously registered
-      via /wopi/iop/registerapp. When provided, the return is a HTTP redirect to the full URL, otherwise only
-      the WOPISrc and access_token parts of the URL are returned in the body.
     '''
     Wopi.refreshconfig()
     req = flask.request
@@ -235,7 +232,7 @@ def iopOpen():
         Wopi.log.warning('msg="iopOpen: invalid or missing user/token in request" client="%s" user="%s"' %
                          (req.remote_addr, userid))
         return 'Client not authorized', http.client.UNAUTHORIZED
-    fileid = urllib.parse.unquote(req.args['filename']) if 'filename' in req.args else req.args.get('fileid', '')
+    fileid = url_unquote(req.args['filename']) if 'filename' in req.args else req.args.get('fileid', '')
     if fileid == '':
         Wopi.log.warning('msg="iopOpen: either filename or fileid must be provided" client="%s"' % req.remote_addr)
         return 'Invalid argument', http.client.BAD_REQUEST
@@ -251,16 +248,12 @@ def iopOpen():
         viewmode = utils.ViewMode.READ_WRITE if 'canedit' in req.args and req.args['canedit'].lower() == 'true' \
                    else utils.ViewMode.READ_ONLY
     username = req.args.get('username', '')
-    folderurl = urllib.parse.unquote(req.args.get('folderurl', '%%2F'))   # defaults to `/`
+    folderurl = url_unquote(req.args.get('folderurl', '%%2F'))   # defaults to `/`
     endpoint = req.args.get('endpoint', 'default')
-    appname = urllib.parse.unquote(req.args.get('appname', 'default'))
     try:
-        inode, fname, acctok = utils.generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint, appname)
+        inode, acctok = utils.generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint, '', '', '')
         # generate the URL-encoded payload for the app engine
-        url = '%s&access_token=%s' % (utils.generateWopiSrc(inode), acctok)      # no need to URL-encode the JWT token
-        if appname not in core.discovery.apps:
-            return url
-        return flask.redirect('%s&WOPISrc=%s' % (core.discovery.apps[appname][os.path.splitext(fname)[1]]['edit' if viewmode == utils.ViewMode.READ_WRITE else 'view'], url))
+        return '%s&access_token=%s' % (utils.generateWopiSrc(inode), acctok)      # no need to URL-encode the JWT token
     except IOError as e:
         Wopi.log.info('msg="iopOpen: remote error on generating token" client="%s" user="%s" ' \
                       'friendlyname="%s" mode="%s" endpoint="%s" reason="%s"' %
@@ -272,6 +265,88 @@ def iopOpen():
 def cboxOpen():
     '''CERNBox-specific endpoint for /open, provided for backwards compatibility'''
     return iopOpen()
+
+
+@Wopi.app.route("/wopi/iop/openinapp", methods=['GET'])
+@Wopi.metrics.do_not_track()
+@Wopi.metrics.counter('open_by_app', 'Number of /open calls by appname',
+                      labels={ 'open_type': lambda: flask.request.args['appname'] })
+def iopOpenInApp():
+    '''Generates a WOPISrc target and an access token to be passed to a WOPI-compatible Office-like app
+    for accessing a given file for a given user.
+    Required headers:
+    - Authorization: a bearer shared secret to protect this call as it provides direct access to any user's file
+    - TokenHeader: an x-access-token to serve as user identity towards Reva
+    - ApiKey (optional): a shared secret to be used with the end-user application if required
+    Request arguments:
+    - enum viewmode: how the user should access the file, according to utils.ViewMode/the CS3 app provider API
+    - string username (optional): user's full display name, typically shown by the Office app
+    - string filename OR fileid: the full path of the filename to be opened, or its fileid
+    - string folderurl: the URL to come back to the containing folder for this file, typically shown by the Office app
+    - string endpoint (optional): the storage endpoint to be used to look up the file or the storage id, in case of
+      multi-instance underlying storage; defaults to 'default'
+    - string appname: the identifier of the end-user application to be served
+    - string appediturl: the URL of the end-user application in edit mode
+    - string appviewurl (optional): the URL of the end-user application in view mode when different (defaults to appediturl)
+    - string appinturl (optional): the internal URL of the end-user application (applicable with containerized deployments)
+    '''
+    Wopi.refreshconfig()
+    req = flask.request
+    if req.headers.get('Authorization') != 'Bearer ' + Wopi.iopsecret:
+        Wopi.log.warning('msg="iopOpenInApp: unauthorized access attempt, missing authorization token" ' \
+                         'client="%s" clientAuth="%s"' % (req.remote_addr, req.headers.get('Authorization')))
+        return 'Client not authorized', http.client.UNAUTHORIZED
+    # now validate the user identity and deny root access
+    try:
+        userid = req.headers['TokenHeader']
+    except KeyError:
+        Wopi.log.warning('msg="iopOpenInApp: invalid or missing token in request" client="%s" user="%s"' %
+                         (req.remote_addr, userid))
+        return 'Client not authorized', http.client.UNAUTHORIZED
+    fileid = req.args.get('fileid', '')
+    if not fileid:
+        Wopi.log.warning('msg="iopOpenInApp: fileid must be provided" client="%s"' % req.remote_addr)
+        return 'Missing fileid argument', http.client.BAD_REQUEST
+    try:
+        viewmode = utils.ViewMode(req.args['viewmode'])
+    except (KeyError, ValueError) as e:
+        Wopi.log.warning('msg="iopOpenInApp: invalid viewmode parameter" client="%s" viewmode="%s" error="%s"' %
+                            (req.remote_addr, req.args.get('viewmode'), e))
+        return 'Missing or invalid viewmode argument', http.client.BAD_REQUEST
+    username = req.args.get('username', '')
+    folderurl = url_unquote(req.args.get('folderurl', '%%2F'))   # defaults to `/`
+    endpoint = req.args.get('endpoint', 'default')
+    appname = url_unquote(req.args.get('appname', ''))
+    appediturl = url_unquote(req.args.get('appediturl', ''))
+    appviewurl = url_unquote(req.args.get('appviewurl', ''))
+    if bridge.issupported(appname):
+        # This is a WOPI-bridge application, get the extra info to enable it
+        apikey = req.headers.get('ApiKey')
+        appurl = appediturl
+        appinturl = req.headers.get('appinturl', appurl)     # defaults to the external appurl
+        appediturl = appviewurl = Wopi.wopiurl + '/wopi/bridge/open?'
+        try:
+            bridge.WB.loadplugin(appname, appurl, appinturl, apikey)
+        except ValueError:
+            return 'Failed to load WOPI bridge plugin for %s' % appname, http.client.INTERNAL_SERVER_ERROR
+    elif not appname or not appediturl or not appviewurl:
+        Wopi.log.warning('msg="iopOpenInApp: app-related arguments must be provided" client="%s"' % req.remote_addr)
+        return 'Missing appname or appediturl or appviewurl arguments', http.client.BAD_REQUEST
+
+    try:
+        inode, acctok = utils.generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint,
+                                                  appname, appediturl, appviewurl)
+    except IOError as e:
+        Wopi.log.info('msg="iopOpenInApp: remote error on generating token" client="%s" user="%s" ' \
+                      'friendlyname="%s" mode="%s" endpoint="%s" reason="%s"' %
+                      (req.remote_addr, userid, username, viewmode, endpoint, e))
+        return 'Remote error, file not found or file is a directory', http.client.NOT_FOUND
+
+    if bridge.issupported(appname):
+        return bridge.appopen(utils.generateWopiSrc(inode), acctok)
+    return flask.redirect('%s&WOPISrc=%s&access_token=%s' %
+                            (appediturl if viewmode == utils.ViewMode.READ_WRITE else appviewurl,
+                            utils.generateWopiSrc(inode), acctok))      # no need to URL-encode the JWT token
 
 
 @Wopi.app.route("/wopi/iop/open/list", methods=['GET'])
@@ -290,51 +365,6 @@ def iopGetOpenFiles():
     # dump the current list of opened files in JSON format
     Wopi.log.info('msg="iopGetOpenFiles: returning list of open files" client="%s"' % req.remote_addr)
     return flask.Response(json.dumps(jlist), mimetype='application/json')
-
-
-#
-# WOPI discovery endpoints
-#
-@Wopi.app.route("/wopi/cbox/endpoints", methods=['GET'])
-@Wopi.metrics.do_not_track()
-def cboxEndPoints():
-    '''Returns the office apps end-points registered with this WOPI server. This is used by the EFSS
-    client to discover which Apps frontends can be used with this WOPI server.
-    Note that if the end-points are relocated and the corresponding configuration entry updated,
-    the WOPI server must be restarted.'''
-    # TODO this endpoint should be moved to the Apps Registry service in Reva
-    Wopi.log.info('msg="cboxEndPoints: returning all registered office apps end-points" client="%s" mimetypesCount="%d"' %
-                  (flask.request.remote_addr, len(Wopi.endpoints)))
-    return flask.Response(json.dumps(Wopi.endpoints), mimetype='application/json')
-
-
-@Wopi.app.route("/wopi/iop/discoverapp", methods=['POST'])
-@Wopi.metrics.do_not_track()
-def iopDiscoverApp():
-    '''Discover a new WOPI app
-    Required headers:
-    - Authorization: a bearer shared secret to protect this call
-    Request arguments:
-    - appname: a human-readable string to identify the app
-    - appurl: the (URL-encoded) URL of the app engine. It is expected that the WOPI discovery info can be gathered
-      by querying appurl + '/hosting/discovery' according to the WOPI specs, or that the app is supported via
-      the bridge extensions
-    - appinturl (optional): if provided, the internal URL to be used for reaching the app (defaults to the appurl)
-    The call returns:
-    - HTTP UNAUTHORIZED (401) if the 'Authorization: Bearer' secret is not provided in the header (cf. /wopi/cbox/open)
-    - HTTP NOT_FOUND (404) if there was an error contacting the appurl
-    - HTTP BAD_REQUEST (400) if the appurl is not a WOPI-compatible or supported application
-    - HTTP OK (200) if the appplication was properly registered: in this case, all supported file extensions
-      are returned as a JSON list
-    '''
-    req = flask.request
-    if req.headers.get('Authorization') != 'Bearer ' + Wopi.iopsecret:
-        Wopi.log.warning('msg="iopRegisterApp: unauthorized access attempt, missing authorization token" ' \
-                         'client="%s"' % req.remote_addr)
-        return 'Client not authorized', http.client.UNAUTHORIZED
-    return core.discovery.registerapp(req.args.get('appname', 'unnamed'), \
-                                      urllib.parse.unquote(req.args.get('appurl', 'http://invalid')),
-                                      urllib.parse.unquote(req.args.get('appinturl', '')))
 
 
 #
@@ -459,7 +489,15 @@ def cboxUnlock():
 #
 @Wopi.app.route("/wopi/bridge/open", methods=["GET"])
 def bridgeOpen():
-    return bridge.appopen()
+    try:
+        wopisrc = url_unquote(flask.request.args['WOPISrc'])
+        acctok = flask.request.args['access_token']
+        Wopi.log.info('msg="BridgeOpen called" client="%s" user-agent="%s" token="%s"' %
+                      (flask.request.remote_addr, flask.request.user_agent, acctok[-20:]))
+    except KeyError as e:
+        Wopi.log.error('msg="BridgeOpen: unable to open the file, missing WOPI context" error="%s"' % e)
+        return bridge.guireturn('Missing arguments'), http.client.BAD_REQUEST
+    return bridge.appopen(wopisrc, acctok)
 
 
 @Wopi.app.route("/wopi/bridge/<docid>", methods=["POST"])
@@ -483,6 +521,19 @@ def bridgeList():
 #
 # deprecated
 #
+@Wopi.app.route("/wopi/cbox/endpoints", methods=['GET'])
+@Wopi.metrics.do_not_track()
+def cboxEndPoints():
+    '''Returns the office apps end-points registered with this WOPI server. This is used by the EFSS
+    client to discover which Apps frontends can be used with this WOPI server.
+    Note that if the end-points are relocated and the corresponding configuration entry updated,
+    the WOPI server must be restarted.'''
+    # TODO this endpoint should be moved to the Apps Registry service in Reva
+    Wopi.log.info('msg="cboxEndPoints: returning all registered office apps end-points" client="%s" mimetypesCount="%d"' %
+                  (flask.request.remote_addr, len(Wopi.endpoints)))
+    return flask.Response(json.dumps(Wopi.endpoints), mimetype='application/json')
+
+
 @Wopi.app.route("/wopi/cbox/download", methods=['GET'])
 def cboxDownload():
     '''Returns the file's content for a given valid access token. Used as a download URL,
