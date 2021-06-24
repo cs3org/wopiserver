@@ -69,7 +69,6 @@ class Wopi:
     log = utils.JsonLogger(app.logger)
     openfiles = {}
     endpoints = {}
-    apps = {}
 
     @classmethod
     def init(cls):
@@ -256,12 +255,12 @@ def iopOpen():
     endpoint = req.args.get('endpoint', 'default')
     appname = urllib.parse.unquote(req.args.get('appname', 'default'))
     try:
-        inode, acctok = utils.generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint, appname)
+        inode, fname, acctok = utils.generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint, appname)
         # generate the URL-encoded payload for the app engine
         url = '%s&access_token=%s' % (utils.generateWopiSrc(inode), acctok)      # no need to URL-encode the JWT token
-        if appname == '':
+        if appname not in core.discovery.apps:
             return url
-        return Wopi.apps[appname][os.path.splitext(filename)[1]]['edit' if viewmode == utils.ViewMode.READ_WRITE else 'view']
+        return flask.redirect('%s&WOPISrc=%s' % (core.discovery.apps[appname][os.path.splitext(fname)[1]]['edit' if viewmode == utils.ViewMode.READ_WRITE else 'view'], url))
     except IOError as e:
         Wopi.log.info('msg="iopOpen: remote error on generating token" client="%s" user="%s" ' \
                       'friendlyname="%s" mode="%s" endpoint="%s" reason="%s"' %
@@ -339,7 +338,7 @@ def iopDiscoverApp():
 
 
 #
-# The WOPI protocol implementation starts here
+# WOPI protocol implementation
 #
 @Wopi.app.route("/wopi/files/<fileid>", methods=['GET'])
 def wopiCheckFileInfo(fileid):
@@ -464,11 +463,13 @@ def bridgeOpen():
 
 
 @Wopi.app.route("/wopi/bridge/<docid>", methods=["POST"])
+@Wopi.metrics.do_not_track()
 def bridgeSave(docid):
     return bridge.appsave(docid)
 
 
 @Wopi.app.route("/wopi/bridge/save", methods=["GET"])
+@Wopi.metrics.do_not_track()
 def bridgeSave_old():
     docid = flask.request.args.get('id')
     return bridge.appsave(docid)
@@ -517,5 +518,5 @@ def cboxDownload():
 #
 if __name__ == '__main__':
     Wopi.init()
-    core.discovery.initappsregistry()
+    core.discovery.initappsregistry()    # TODO to be removed
     Wopi.run()

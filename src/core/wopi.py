@@ -15,6 +15,7 @@ import flask
 from urllib.parse import quote_plus as url_quote_plus
 from urllib.parse import unquote as url_unquote
 import core.wopiutils as utils
+import core.discovery
 
 # convenience references to global entities
 st = None
@@ -65,19 +66,23 @@ def checkFileInfo(fileid):
         filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = filemd['SupportsRename'] = \
             filemd['SupportsDeleteFile'] = filemd['UserCanRename'] = acctok['viewmode'] == utils.ViewMode.READ_WRITE
         filemd['UserCanNotWriteRelative'] = acctok['viewmode'] != utils.ViewMode.READ_WRITE
+        if acctok['appname'] in core.discovery.apps:
+            appurl = core.discovery.apps[acctok['appname']][fExt]
+        else:
+            appurl = srv.endpoints[fExt]   # TODO deprecated, must make sure appname is always correct
+        filemd['HostViewUrl'] = '%s&%s' % (appurl['view'], wopiSrc)
+        filemd['HostEditUrl'] = '%s&%s' % (appurl['edit'], wopiSrc)
+
         # populate app-specific metadata
-        # the following properties are only used by MS Office Online
-        if fExt in ['.docx', '.xlsx', '.pptx']:
-            filemd['HostViewUrl'] = '%s&%s' % (srv.endpoints[fExt]['view'], wopiSrc)
-            filemd['HostEditUrl'] = '%s&%s' % (srv.endpoints[fExt]['edit'], wopiSrc)
+        if acctok['appname'].find('Microsoft') > 0:
             # the following actions are broken in MS Office Online, therefore they are disabled
             filemd['SupportsRename'] = filemd['UserCanRename'] = False
-        # the following is to enable the 'Edit in Word/Excel/PowerPoint' (desktop) action (probably broken)
-        try:
-            filemd['ClientUrl'] = srv.config.get('general', 'webdavurl') + '/' + acctok['filename']
-        except configparser.NoOptionError:
-            # if no WebDAV URL is provided, ignore this setting
-            pass
+            # the following is to enable the 'Edit in Word/Excel/PowerPoint' (desktop) action (probably broken)
+            try:
+                filemd['ClientUrl'] = srv.config.get('general', 'webdavurl') + '/' + acctok['filename']
+            except configparser.NoOptionError:
+                # if no WebDAV URL is provided, ignore this setting
+                pass
         # extensions for Collabora Online
         filemd['EnableOwnerTermination'] = True
         filemd['DisableExport'] = filemd['DisableCopy'] = filemd['DisablePrint'] = acctok['viewmode'] == utils.ViewMode.VIEW_ONLY
@@ -305,18 +310,22 @@ def putRelative(fileid, reqheaders, acctok):
     log.info('msg="PutRelative: generating new access token" user="%s" filename="%s" ' \
              'mode="ViewMode.READ_WRITE" friendlyname="%s"' %
              (acctok['userid'], targetName, acctok['username']))
-    inode, newacctok = utils.generateAccessToken(acctok['userid'], targetName, utils.ViewMode.READ_WRITE, acctok['username'], \
-                                                 acctok['folderurl'], acctok['endpoint'], acctok['appname'])
+    inode, _, newacctok = utils.generateAccessToken(acctok['userid'], targetName, utils.ViewMode.READ_WRITE, acctok['username'], \
+                                                    acctok['folderurl'], acctok['endpoint'], acctok['appname'])
     # prepare and send the response as JSON
     putrelmd = {}
     putrelmd['Name'] = os.path.basename(targetName)
     putrelmd['Url'] = '%s?access_token=%s' % (url_unquote(utils.generateWopiSrc(inode)), newacctok)
     fExt = os.path.splitext(targetName)[1]
-    if fExt in srv.endpoints:
+    appurl = None
+    if acctok['appname'] in core.discovery.apps:
+        appurl = core.discovery.apps[acctok['appname']][fExt]
+    elif fExt in srv.endpoints:
+        appurl = srv.endpoints[fExt]   # TODO deprecated
+    if appurl:
         putrelmd['HostEditUrl'] = '%s&WOPISrc=%s&access_token=%s' % \
-                                  (srv.endpoints[fExt]['edit'], \
-                                   utils.generateWopiSrc(inode), newacctok)
-    #else we don't know the app to edit this file type, therefore we do not provide the info
+                                  (appurl['edit'], utils.generateWopiSrc(inode), newacctok)
+    # else we don't know the app to edit this file type, therefore we do not provide the info
     log.debug('msg="PutRelative response" token="%s" metadata="%s"' % (newacctok[-20:], putrelmd))
     return flask.Response(json.dumps(putrelmd), mimetype='application/json')
 

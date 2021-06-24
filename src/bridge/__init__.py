@@ -169,9 +169,9 @@ def appopen():
                 WB.openfiles[wopisrc]['toclose'] = wopilock['toclose']
             else:
                 WB.openfiles[wopisrc] = {'acctok': acctok, 'tosave': False,
-                                        'lastsave': int(time.time()) - WB.saveinterval,
-                                        'toclose': {acctok[-20:]: False},
-                                        'docid': wopilock['docid'],
+                                         'lastsave': int(time.time()) - WB.saveinterval,
+                                         'toclose': {acctok[-20:]: False},
+                                         'docid': wopilock['docid'],
                                         }
             # also clear any potential stale response for this document
             try:
@@ -203,6 +203,8 @@ def appsave(docid):
         wopisrc = meta[:meta.index('?t=')]
         acctok = meta[meta.index('?t=')+3:]
         isclose = flask.request.args.get('close') == 'true'
+        if not docid:
+            raise ValueError
         WB.log.info('msg="Save: requested action" isclose="%s" docid="%s" wopisrc="%s" token="%s"' %
                     (isclose, docid, wopisrc, acctok[-20:]))
     except (KeyError, ValueError) as e:

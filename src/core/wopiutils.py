@@ -128,14 +128,15 @@ def generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint,
     # if write access is requested, probe whether there's already a lock file coming from Desktop applications
     exptime = int(time.time()) + srv.tokenvalidity
     acctok = jwt.encode({'userid': userid, 'filename': statInfo['filepath'], 'username': username,
-                         'viewmode': viewmode.value, 'folderurl': folderurl, 'exp': exptime, 'endpoint': endpoint},
+                         'viewmode': viewmode.value, 'folderurl': folderurl, 'endpoint': endpoint,
+                         'appname': appname, 'exp': exptime},
                          srv.wopisecret, algorithm='HS256')
     log.info('msg="Access token generated" userid="%s" mode="%s" endpoint="%s" filename="%s" inode="%s" ' \
-             'mtime="%s" folderurl="%s" expiration="%d" token="%s"' %
+             'mtime="%s" folderurl="%s" appname="%s" expiration="%d" token="%s"' %
              (userid, viewmode, endpoint, statInfo['filepath'], statInfo['inode'], statInfo['mtime'], \
-              folderurl, exptime, acctok[-20:]))
-    # return the inode == fileid and the access token
-    return statInfo['inode'], acctok
+              folderurl, appname, exptime, acctok[-20:]))
+    # return the inode == fileid, the filepath and the access token
+    return statInfo['inode'], statInfo['filepath'], acctok
 
 
 def getLockName(filename):
