@@ -66,9 +66,8 @@ def registerapp(appname, appurl, appinturl, apikey=None):
         try:
             discReq = requests.get(appurl, verify=False).content.decode()
             if discReq.find('CodiMD') > 0:
-                # TODO remove hardcoded logic
                 bridge.WB.loadplugin(appname, appurl, appinturl, apikey)
-                bridgeurl = srv.config.get('general', 'wopiurl') + '/wopi/bridge/open?'
+                bridgeurl = srv.config.get('general', 'wopiurl') + '/wopi/bridge/open'
                 srv.endpoints['.md'] = {}
                 srv.endpoints['.md']['view'] = srv.endpoints['.md']['edit'] = bridgeurl
                 srv.endpoints['.zmd'] = {}
@@ -80,8 +79,7 @@ def registerapp(appname, appurl, appinturl, apikey=None):
 
             if discReq.find('Etherpad') > 0:
                 bridge.WB.loadplugin(appname, appurl, appinturl, apikey)
-                bridgeurl = srv.config.get('general', 'wopiurl') + '/wopi/bridge/open?'
-                # TODO remove hardcoded logic
+                bridgeurl = srv.config.get('general', 'wopiurl') + '/wopi/bridge/open'
                 srv.endpoints['.epd'] = {}
                 srv.endpoints['.epd']['view'] = srv.endpoints['.epd']['edit'] = bridgeurl
                 log.info('msg="iopRegisterApp: Etherpad endpoints successfully configured" BridgeURL="%s"' % bridgeurl)
@@ -111,3 +109,4 @@ def initappsregistry():
         with open('/var/run/secrets/codimd_apikey') as f:
             apikey = f.readline().strip('\n')
             registerapp('CodiMD', codimd, codimdint, apikey)
+

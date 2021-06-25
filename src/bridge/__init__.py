@@ -22,9 +22,6 @@ from base64 import urlsafe_b64encode
 import flask
 import bridge.wopiclient as wopic
 
-# this is the default location of secrets in docker
-CERTPATH = '/var/run/secrets/cert.pem'
-
 # path to a secret used to hash noteids and protect the /list endpoint
 # TODO "merge" with main wopisecret
 SECRETPATH = '/var/run/secrets/wbsecret'
@@ -35,6 +32,7 @@ BRIDGE_EXT_PLUGINS = {'md': 'codimd', 'zmd': 'codimd', 'mds': 'codimd', 'epd': '
 # a standard message to be displayed by the app when some content might be lost: this would only
 # appear in case of uncaught exceptions or bugs handling the webhook callbacks
 RECOVER_MSG = 'Please copy the content to a safe place and reopen the document again to paste it back.'
+
 
 class WB:
     '''A singleton container for all state information of the server'''
@@ -63,7 +61,7 @@ class WB:
     @classmethod
     def init(cls, config, log):
         '''Initialises the application, bails out in case of failures. Note this is not a __init__ method'''
-        cls.sslverify = config.get('bridge', 'sslverify', fallback='True').upper() in ('FALSE', 'NO')
+        cls.sslverify = config.get('bridge', 'sslverify', fallback='True').upper() in ('TRUE', 'YES')
         cls.saveinterval = int(config.get('bridge', 'saveinterval', fallback='200'))
         cls.unlockinterval = int(config.get('bridge', 'unlockinterval', fallback='90'))
         with open(SECRETPATH) as f:

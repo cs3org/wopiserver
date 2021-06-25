@@ -495,7 +495,7 @@ def bridgeOpen():
         Wopi.log.info('msg="BridgeOpen called" client="%s" user-agent="%s" token="%s"' %
                       (flask.request.remote_addr, flask.request.user_agent, acctok[-20:]))
     except KeyError as e:
-        Wopi.log.error('msg="BridgeOpen: unable to open the file, missing WOPI context" error="%s"' % e)
+        Wopi.log.warning('msg="BridgeOpen: unable to open the file, missing WOPI context" error="%s"' % e)
         return bridge.guireturn('Missing arguments'), http.client.BAD_REQUEST
     return bridge.appopen(wopisrc, acctok)
 
@@ -508,7 +508,7 @@ def bridgeSave(docid):
 
 @Wopi.app.route("/wopi/bridge/save", methods=["GET"])
 @Wopi.metrics.do_not_track()
-def bridgeSave_old():
+def bridgeSave_deprecated():
     docid = flask.request.args.get('id')
     return bridge.appsave(docid)
 
@@ -559,7 +559,7 @@ def cboxDownload():
                       (acctok['filename'], flask.request.args['access_token'][-20:], e))
         return 'File not found', http.client.NOT_FOUND
     except KeyError as e:
-        Wopi.log.error('msg="Invalid access token or request argument" error="%s"' % e)
+        Wopi.log.warning('msg="Invalid access token or request argument" error="%s"' % e)
         return 'Invalid access token', http.client.UNAUTHORIZED
 
 

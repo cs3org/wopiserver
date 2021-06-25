@@ -33,8 +33,8 @@ def request(wopisrc, acctok, method, contents=None, headers=None):
         wopiurl = '%s%s' % (wopisrc, ('/contents' if contents is not None and
                                       (not headers or headers.get('X-WOPI-Override') != 'PUT_RELATIVE')
                                       else ''))
-        log.debug('msg="Calling WOPI" url="%s" headers="%s" acctok="%s"' %
-                  (wopiurl, headers, acctok[-20:]))
+        log.debug('msg="Calling WOPI" url="%s" headers="%s" acctok="%s" ssl="%s"' %
+                  (wopiurl, headers, acctok[-20:], sslverify))
         if method == 'GET':
             return requests.get('%s?access_token=%s' % (wopiurl, acctok), verify=sslverify)
         if method == 'POST':
