@@ -8,7 +8,6 @@ import os
 import sys
 import time
 import traceback
-import socket
 import logging
 import threading
 import atexit

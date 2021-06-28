@@ -78,7 +78,7 @@ def stat(endpoint, fileid, userid, versioninv=0):
         ctx['log'].debug('msg="Stat result" data="%s"' % statInfo)
         if statInfo.info.type == cs3spr.RESOURCE_TYPE_CONTAINER:
             raise IOError('Is a directory')
-        elif statInfo.info.type not in (cs3spr.RESOURCE_TYPE_FILE, cs3spr.RESOURCE_TYPE_SYMLINK):
+        if statInfo.info.type not in (cs3spr.RESOURCE_TYPE_FILE, cs3spr.RESOURCE_TYPE_SYMLINK):
             ctx['log'].warning('msg="Stat: unexpected type" type="%d"' % statInfo.info.type)
             raise IOError('Unexpected type %d' % statInfo.info.type)
         # we base64-encode the inode so it can be used in a WOPISrc

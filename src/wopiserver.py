@@ -372,13 +372,13 @@ def iopGetOpenFiles():
 #
 @Wopi.app.route("/wopi/files/<fileid>", methods=['GET'])
 def wopiCheckFileInfo(fileid):
-    '''Implements the CheckFileInfo WOPI call'''
+    '''The CheckFileInfo WOPI call'''
     return core.wopi.checkFileInfo(fileid)
 
 
 @Wopi.app.route("/wopi/files/<fileid>/contents", methods=['GET'])
 def wopiGetFile(fileid):
-    '''Implements the GetFile WOPI call'''
+    '''The GetFile WOPI call'''
     return core.wopi.getFile(fileid)
 
 
@@ -396,7 +396,7 @@ def wopiFilesPost(fileid):
             # protect this call if the WOPI client does not have privileges
             return 'Attempting to perform a write operation using a read-only token', http.client.UNAUTHORIZED
         if op in ('LOCK', 'REFRESH_LOCK'):
-            return core.wopi.lock(fileid, headers, acctok)
+            return core.wopi.setLock(fileid, headers, acctok)
         if op == 'UNLOCK':
             return core.wopi.unlock(fileid, headers, acctok)
         if op == 'GET_LOCK':
@@ -419,7 +419,7 @@ def wopiFilesPost(fileid):
 
 @Wopi.app.route("/wopi/files/<fileid>/contents", methods=['POST'])
 def wopiPutFile(fileid):
-    '''Implements the PutFile WOPI call'''
+    '''The PutFile WOPI call'''
     return core.wopi.putFile(fileid)
 
 
@@ -454,7 +454,7 @@ def cboxLock():
     filename = req.args['filename']
     userid = req.args['userid'] if 'userid' in req.args else '0:0'
     endpoint = req.args['endpoint'] if 'endpoint' in req.args else 'default'
-    return core.ioplocks.lock(filename, userid, endpoint, req.method == 'GET')
+    return core.ioplocks.ioplock(filename, userid, endpoint, req.method == 'GET')
 
 
 @Wopi.app.route("/wopi/cbox/unlock", methods=['POST'])
@@ -481,7 +481,7 @@ def cboxUnlock():
     filename = req.args['filename']
     userid = req.args['userid'] if 'userid' in req.args else '0:0'
     endpoint = req.args['endpoint'] if 'endpoint' in req.args else 'default'
-    return core.ioplocks.unlock(filename, userid, endpoint)
+    return core.ioplocks.iopunlock(filename, userid, endpoint)
 
 
 #
@@ -489,6 +489,7 @@ def cboxUnlock():
 #
 @Wopi.app.route("/wopi/bridge/open", methods=["GET"])
 def bridgeOpen():
+    '''The WOPI bridge open call'''
     try:
         wopisrc = url_unquote(flask.request.args['WOPISrc'])
         acctok = flask.request.args['access_token']
@@ -503,18 +504,21 @@ def bridgeOpen():
 @Wopi.app.route("/wopi/bridge/<docid>", methods=["POST"])
 @Wopi.metrics.do_not_track()
 def bridgeSave(docid):
+    '''The WOPI bridge save call'''
     return bridge.appsave(docid)
 
 
 @Wopi.app.route("/wopi/bridge/save", methods=["GET"])
 @Wopi.metrics.do_not_track()
 def bridgeSave_deprecated():
+    '''The WOPI bridge save call (deprecated)'''
     docid = flask.request.args.get('id')
     return bridge.appsave(docid)
 
 
 @Wopi.app.route("/wopi/bridge/list", methods=["GET"])
 def bridgeList():
+    '''The WOPI bridge list call'''
     return bridge.applist()
 
 

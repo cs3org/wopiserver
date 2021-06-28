@@ -8,9 +8,7 @@ This code is going to be deprecated once the new Reva AppProvider is fully funct
 
 from xml.etree import ElementTree as ET
 import http.client
-import json
 import requests
-import flask
 import bridge
 
 # convenience references to global entities
@@ -18,15 +16,15 @@ srv = None
 log = None
 
 def registerapp(appname, appurl, appinturl, apikey=None):
-    '''Registers the given app in the internal endpoints list'''
-    '''For the time being, this is highly customized to keep backwards-compatibility. To be reviewed'''
+    '''Registers the given app in the internal endpoints list
+       For the time being, this is highly customized to keep backwards-compatibility. To be reviewed'''
     if not appinturl:
         appinturl = appurl
     try:
         discReq = requests.get(appurl + '/hosting/discovery', verify=False)
     except requests.exceptions.ConnectionError as e:
         log.error('msg="iopRegisterApp: failed to probe application" appurl="%s" response="%s"' % (appurl, e))
-        return 'Error connecting to the provided app URL', http.client.NOT_FOUND
+        return
 
     if discReq.status_code == http.client.OK:
         discXml = ET.fromstring(discReq.content)
@@ -61,7 +59,7 @@ def registerapp(appname, appurl, appinturl, apikey=None):
                  srv.endpoints['.docx']['edit'])
         return
 
-    elif discReq.status_code == http.client.NOT_FOUND:
+    if discReq.status_code == http.client.NOT_FOUND:
         # try and scrape the app homepage to see if a bridge-supported app is found
         try:
             discReq = requests.get(appurl, verify=False).content.decode()
@@ -96,7 +94,6 @@ def registerapp(appname, appurl, appinturl, apikey=None):
 
 def initappsregistry():
     '''Initializes the CERNBox Office-like Apps Registry'''
-    # TODO to be deprecated in favour of a /wopi/iop/registerapp endpoint
     oos = srv.config.get('general', 'oosurl', fallback=None)
     if oos:
         registerapp('MSOffice', oos, oos)
@@ -109,4 +106,9 @@ def initappsregistry():
         with open('/var/run/secrets/codimd_apikey') as f:
             apikey = f.readline().strip('\n')
             registerapp('CodiMD', codimd, codimdint, apikey)
-
+    etherpad = srv.config.get('general', 'etherpadurl', fallback=None)
+    etherpadint = srv.config.get('general', 'etherpadinturl', fallback=None)
+    if etherpad:
+        with open('/var/run/secrets/etherpad_apikey') as f:
+            apikey = f.readline().strip('\n')
+            registerapp('CodiMD', etherpad, etherpadint, apikey)

@@ -10,10 +10,10 @@ import os
 import configparser
 import json
 import http.client
-import jwt
-import flask
 from urllib.parse import quote_plus as url_quote_plus
 from urllib.parse import unquote as url_unquote
+import jwt
+import flask
 import core.wopiutils as utils
 
 # convenience references to global entities
@@ -35,7 +35,6 @@ def checkFileInfo(fileid):
         statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
         # compute some entities for the response
         wopiSrc = 'WOPISrc=%s&access_token=%s' % (utils.generateWopiSrc(fileid), flask.request.args['access_token'])
-        fExt = os.path.splitext(acctok['filename'])[1]
         # populate metadata for this file
         filemd = {}
         filemd['BaseFileName'] = filemd['BreadcrumbDocName'] = os.path.basename(acctok['filename'])
@@ -154,7 +153,7 @@ def unlock(fileid, reqheaders, acctok, force=False):
     return 'OK', http.client.OK
 
 
-def lock(fileid, reqheaders, acctok):
+def setLock(fileid, reqheaders, acctok):
     '''Implements the Lock, RefreshLock, and UnlockAndRelock WOPI calls'''
     # cf. http://wopi.readthedocs.io/projects/wopirest/en/latest/files/Lock.html
     op = reqheaders['X-WOPI-Override']
@@ -363,7 +362,7 @@ def renameFile(fileid, reqheaders, acctok):
         return resp
 
 
-def createNewFile(fileid, acctok):
+def _createNewFile(fileid, acctok):
     '''Implements the editnew action as part of the PutFile WOPI call.'''
     log.info('msg="PutFile" user="%s" filename="%s" fileid="%s" action="editnew" token="%s"' %
                   (acctok['userid'], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
@@ -387,6 +386,7 @@ def createNewFile(fileid, acctok):
 
 
 def putFile(fileid):
+    '''Implements the PutFile WOPI call'''
     srv.refreshconfig()
     try:
         acctok = jwt.decode(flask.request.args['access_token'], srv.wopisecret, algorithms=['HS256'])
@@ -394,14 +394,14 @@ def putFile(fileid):
             raise jwt.exceptions.ExpiredSignatureError
         if 'X-WOPI-Lock' not in flask.request.headers:
             # no lock given: assume we are in creation mode (cf. editnew WOPI action)
-            return createNewFile(fileid, acctok)
+            return _createNewFile(fileid, acctok)
         # otherwise, check that the caller holds the current lock on the file
         lock = flask.request.headers['X-WOPI-Lock']
         retrievedLock = utils.retrieveWopiLock(fileid, 'PUTFILE', lock, acctok)
         if retrievedLock is None:
             return utils.makeConflictResponse('PUTFILE', retrievedLock, lock, '', acctok['filename'], \
                                               'Cannot overwrite unlocked file')
-        elif not utils.compareWopiLocks(retrievedLock, lock):
+        if not utils.compareWopiLocks(retrievedLock, lock):
             return utils.makeConflictResponse('PUTFILE', retrievedLock, lock, '', acctok['filename'], \
                                               'Cannot overwrite file locked by another application')
         # OK, we can save the file now

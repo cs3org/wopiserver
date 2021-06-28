@@ -14,7 +14,7 @@ srv = None
 log = None
 
 
-def lock(filename, userid, endpoint, isquery):
+def ioplock(filename, userid, endpoint, isquery):
     '''Lock or query a given filename, see below for the specs of these APIs'''
     log.info('msg="cboxLock: start processing" filename="%s" request="%s" userid="%s"' %
                   (filename, "query" if isquery else "create", userid))
@@ -22,7 +22,7 @@ def lock(filename, userid, endpoint, isquery):
     # first make sure the file itself exists
     try:
         filestat = st.statx(endpoint, filename, userid, versioninv=1)
-    except IOError as e:
+    except IOError:
         log.warning('msg="cboxLock: target not found or not a file" filename="%s"' % filename)
         return 'File not found or file is a directory', http.client.NOT_FOUND
 
@@ -40,7 +40,7 @@ def lock(filename, userid, endpoint, isquery):
         log.info('msg="cboxLock: found existing Microsoft Office lock" filename="%s" lockmtime="%ld"' %
                       (filename, mslockstat['mtime']))
         return 'Previous lock exists', http.client.CONFLICT
-    except IOError as e:
+    except IOError:
         pass
 
     if isquery:
@@ -194,7 +194,7 @@ def createLock(filestat, filename, userid, endpoint):
             return 'Error relocking file', http.client.INTERNAL_SERVER_ERROR
 
 
-def unlock(filename, userid, endpoint):
+def iopunlock(filename, userid, endpoint):
     '''Unlock a given filename. Used for OnlyOffice as they do not use WOPI (see cboxLock).'''
     log.info('msg="cboxUnlock: start processing" filename="%s"' % filename)
     try:
