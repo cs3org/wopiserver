@@ -11,23 +11,35 @@ services:
       dockerfile: wopiserver${WOPI_DOCKER_TYPE}.Dockerfile
     image: wopiserver:cern
     container_name: wopiserver
-    hostname: cbox-iop-wopiserver
+    hostname: iop-wopiserver
     network_mode: "bridge"
     restart: always
     ports:
       - 8880:8880
+    secrets:
+      - codimd_apikey
+      - etherpad_apikey
+    environment:
+      - DEBUG_METRICS=false
+      - HOST_HOSTNAME=${HOST_HOSTNAME}
     volumes:
       - config:/etc/wopi
       - storage:/var/wopi_local_storage
       - logs:/var/log/wopi
     healthcheck:
       test: ["CMD", "curl", "--insecure", "http://localhost:8880"]
-      interval: 300s
+      interval: 600s
       timeout: 5s
       retries: 3
-      #start_period: 60s
+
+secrets:
+  codimd_apikey:
+    file: /etc/wopi/codimd_apikey
+  etherpad_apikey:
+    file: /etc/wopi/etherpad_apikey
 
 volumes:
   config:
   storage:
   logs:
+

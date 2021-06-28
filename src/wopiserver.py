@@ -113,7 +113,7 @@ class Wopi:
                 cls.lockpath = ''
             _ = cls.config.get('general', 'downloadurl')   # make sure this is defined
             # initialize the bridge
-            bridge.WB.init(cls.config, cls.log)
+            bridge.WB.init(cls.config, cls.log, cls.wopisecret)
             # initialize the submodules
             # TODO improve handling of globals across the whole code base
             utils.srv = core.ioplocks.srv = core.wopi.srv = core.discovery.srv = cls

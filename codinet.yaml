@@ -34,7 +34,7 @@ services:
       - CMD_USESSL=true
       - NODE_TLS_REJECT_UNAUTHORIZED=0
       - CMD_APPLIANCE_MODE=true
-      - CMD_SAVE_WEBHOOK=https://codimd-wopi.codinet:8000/wopib/save
+      - CMD_SAVE_WEBHOOK=https://codimd-wopi.codinet:8000/wopi/bridge
     depends_on:
       - database
     ports:
@@ -45,32 +45,6 @@ services:
       - dhparam.pem
     network_mode: codinet
     restart: always
-  wopibridge:
-    build:
-      context: .
-      dockerfile: wopibridge-poc.Dockerfile
-    image: wopibridge-poc:cern
-    container_name: codimd-wopi
-    hostname: cbox-codimd-wopi
-    environment:
-      - CODIMD_INT_URL=https://codimd-web.codinet:3000
-      - CODIMD_EXT_URL=${HOST}:3000
-    depends_on:
-      - frontend
-    ports:
-      - 8000:8000
-    volumes:
-      - logs:/var/log/wopi
-    secrets:
-      - cert.pem
-      - key.pem
-    network_mode: codinet
-    restart: always
-    healthcheck:
-      test: ["CMD", "curl", "--insecure", "https://localhost:8000"]
-      interval: 600s
-      timeout: 5s
-      retries: 3
 
 volumes:
   database-data: {}

@@ -21,10 +21,6 @@ from base64 import urlsafe_b64encode
 import flask
 import bridge.wopiclient as wopic
 
-# path to a secret used to hash noteids and protect the /list endpoint
-# TODO "merge" with main wopisecret
-SECRETPATH = '/var/run/secrets/wbsecret'
-
 # The supported plugins integrated with this WOPI Bridge
 BRIDGE_EXT_PLUGINS = {'md': 'codimd', 'zmd': 'codimd', 'mds': 'codimd', 'epd': 'etherpad'}
 
@@ -58,13 +54,12 @@ class WB:
     plugins = {}
 
     @classmethod
-    def init(cls, config, log):
+    def init(cls, config, log, secret):
         '''Initialises the application, bails out in case of failures. Note this is not a __init__ method'''
         cls.sslverify = config.get('bridge', 'sslverify', fallback='True').upper() in ('TRUE', 'YES')
         cls.saveinterval = int(config.get('bridge', 'saveinterval', fallback='200'))
         cls.unlockinterval = int(config.get('bridge', 'unlockinterval', fallback='90'))
-        with open(SECRETPATH) as f:
-            cls.hashsecret = f.readline().strip('\n')
+        cls.hashsecret = secret
         cls.log = wopic.log = log
         wopic.sslverify = cls.sslverify
 
@@ -95,7 +90,7 @@ class WB:
 
 
 def issupported(appname):
-    '''One-liner to return if a given application is supported by the bridge extensions'''
+    '''One-liner to return if a given application is supported by one of the bridge extensions'''
     return appname.lower() in set(BRIDGE_EXT_PLUGINS.values())
 
 
