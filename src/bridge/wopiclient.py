@@ -73,8 +73,8 @@ def getlock(wopisrc, acctok):
         raise InvalidLock(e)
 
 
-def refreshlock(wopisrc, acctok, wopilock, digest=None, toclose=None):
-    '''Refresh an existing WOPI lock. Returns the new lock if successful, None otherwise'''
+def _getheadersforrefreshlock(acctok, wopilock, digest, toclose):
+    '''Helper function for refreshlock to generate the old and new lock structures'''
     newlock = json.loads(json.dumps(wopilock))    # this is a hack for a deep copy, to be redone in Go
     if toclose:
         # we got the full 'toclose' dict, push it as is
@@ -84,11 +84,16 @@ def refreshlock(wopisrc, acctok, wopilock, digest=None, toclose=None):
         newlock['toclose'][acctok[-20:]] = False
     if digest and wopilock['digest'] != digest:
         newlock['digest'] = digest
-    lockheaders = {'X-Wopi-Override': 'REFRESH_LOCK',
-                   'X-WOPI-OldLock': json.dumps(wopilock),
-                   'X-WOPI-Lock': json.dumps(newlock)
-                  }
-    res = request(wopisrc, acctok, 'POST', headers=lockheaders)
+    return {'X-Wopi-Override': 'REFRESH_LOCK',
+            'X-WOPI-OldLock': json.dumps(wopilock),
+            'X-WOPI-Lock': json.dumps(newlock)
+           }, newlock
+
+
+def refreshlock(wopisrc, acctok, wopilock, digest=None, toclose=None):
+    '''Refresh an existing WOPI lock. Returns the new lock if successful, None otherwise'''
+    h, newlock = _getheadersforrefreshlock(acctok, wopilock, digest, toclose)
+    res = request(wopisrc, acctok, 'POST', headers=h)
     if res.status_code == http.client.OK:
         return newlock
     if res.status_code == http.client.CONFLICT:
@@ -99,8 +104,12 @@ def refreshlock(wopisrc, acctok, wopilock, digest=None, toclose=None):
             # merge toclose token lists
             for t in currlock['toclose']:
                 toclose[t] = currlock['toclose'][t] or (t in toclose and toclose[t])
-        # recursively retry, the recursion is going to stop in one round
-        return refreshlock(wopisrc, acctok, currlock, digest, toclose)
+        # retry with the newly got lock
+        h, newlock = _getheadersforrefreshlock(acctok, wopilock, digest, toclose)
+        res = request(wopisrc, acctok, 'POST', headers=h)
+        if res.status_code == http.client.OK:
+            return newlock
+        # else fail
     log.error('msg="Calling WOPI RefreshLock failed" url="%s" response="%d" reason="%s"' %
               (wopisrc, res.status_code, res.headers.get('X-WOPI-LockFailureReason')))
     return None
