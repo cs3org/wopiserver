@@ -126,10 +126,10 @@ def statx(endpoint, filepath, userid, versioninv=0):
     If versioninv=1, the logic to support the version folder is not triggered.'''
     tstart = time.time()
     rc, info = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(filepath, encodeamp=True) + _eosargs(userid) + '&mgm.pcmd=stat')
-    info = info.decode()
     log.info('msg="Invoked stat" filepath="%s"' % _getfilepath(filepath))
-    if '[SUCCESS]' not in str(rc):
+    if '[SUCCESS]' not in str(rc) or info is None:
         raise IOError(str(rc).strip('\n'))
+    info = info.decode()
     if 'retc=2\\x00' in info:
         raise IOError('No such file or directory')     # convert ENOENT
     if 'retc=' in info:
