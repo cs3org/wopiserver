@@ -12,7 +12,7 @@ import configparser
 import sys
 import os
 from threading import Thread
-sys.path.append('../src')  # for tests out of the git repo
+sys.path.append('../src/core')  # for tests out of the git repo
 sys.path.append('/app')    # for tests within the Docker image
 
 

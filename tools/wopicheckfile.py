@@ -24,7 +24,7 @@ def storage_layer_import(storagetype):
   else:
     raise ImportError('Unsupported/Unknown storage type %s' % storagetype)
   try:
-    storage = __import__(storagetype, globals(), locals())
+    storage = __import__('core.' + storagetype, globals(), locals(), [storagetype])
   except ImportError:
     print("Missing module when attempting to import {}. Please make sure dependencies are met.", storagetype)
     raise

@@ -3,12 +3,12 @@
 # Build: WOPI_DOCKER_TYPE=-xrootd docker-compose -f wopiserver.yaml build --build-arg VERSION=`git describe | sed 's/^v//'` wopiserver
 # Run: docker-compose -f wopiserver.yaml up -d
 
-FROM cern/c8-base:latest
+FROM cern/cs8-base:latest
 
 ARG VERSION=latest
 
 LABEL maintainer="cernbox-admins@cern.ch" \
-  org.opencontainers.image.title="The CERNBox WOPI server" \
+  org.opencontainers.image.title="The CERNBox/IOP WOPI server" \
   org.opencontainers.image.version="$VERSION"
 
 # The following is needed for now to keep compatibility with MS Office Online
@@ -28,18 +28,20 @@ RUN yum clean all && yum -y install \
         xrootd-client \
         xrootd-devel \
         libuuid-devel \
-        cmake3 \
+        cmake \
         make \
         gcc \
         gcc-c++
 
-RUN python3 -m pip install --upgrade pip setuptools && \
-    python3 -m pip install flask pyOpenSSL PyJWT requests prometheus-flask-exporter wheel && \
-    python3 -m pip install xrootd
+RUN pip3 install --upgrade pip setuptools && \
+    pip3 install --upgrade flask pyOpenSSL PyJWT requests prometheus-flask-exporter wheel && \
+    pip3 install xrootd
 
 # install software
-RUN mkdir -p /app /test /etc/wopi /var/log/wopi
+RUN mkdir -p /app/core /app/bridge /test /etc/wopi /var/log/wopi
 ADD ./src/* ./tools/* /app/
+ADD ./src/core/* /app/core/
+ADD ./src/bridge/* /app/bridge/
 RUN sed -i "s/WOPISERVERVERSION = 'git'/WOPISERVERVERSION = '$VERSION'/" /app/wopiserver.py
 RUN grep 'WOPISERVERVERSION =' /app/wopiserver.py
 ADD wopiserver.conf /etc/wopi/wopiserver.defaults.conf

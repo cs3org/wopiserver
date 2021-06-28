@@ -1,0 +1,40 @@
+# docker-compose configuration file for the WOPI bridge
+#
+# Build with: docker-compose -f wopibridge.yaml build --build-arg VERSION=`git describe | sed 's/^v//'` wopibridge
+# Run with: CODIMD_HOST=http://your-codimd-host CODIMDPROXY_URL=https://your-ingress/codimd docker-compose -f wopibridge.yaml up -d
+
+version: "3.3"
+services:
+  wopibridge:
+    build:
+      context: .
+      dockerfile: wopibridge-poc.Dockerfile
+    image: wopibridge-poc:cern
+    container_name: wopibridge
+    hostname: cbox-iop-wopibridge
+    network_mode: "bridge"
+    restart: always
+    ports:
+      - 8000:8000
+    environment:
+      - CODIMD_INT_URL=${CODIMD_HOST}:3000
+      - CODIMD_EXT_URL=${CODIMDPROXY_URL}
+    volumes:
+      - logs:/var/log/wopi
+    secrets:
+      - wbsecret
+      - codimd_apikey
+    healthcheck:
+      test: ["CMD", "curl", "--insecure", "https://localhost:8000"]
+      interval: 600s
+      timeout: 5s
+      retries: 3
+
+secrets:
+  wbsecret:
+    file: /etc/wopi/wbsecret
+  codimd_apikey:
+    file: /etc/wopi/codimd_apikey
+
+volumes:
+  logs:
