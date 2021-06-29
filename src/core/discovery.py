@@ -111,4 +111,4 @@ def initappsregistry():
     if etherpad:
         with open('/var/run/secrets/etherpad_apikey') as f:
             apikey = f.readline().strip('\n')
-            registerapp('CodiMD', etherpad, etherpadint, apikey)
+            registerapp('Etherpad', etherpad, etherpadint, apikey)
