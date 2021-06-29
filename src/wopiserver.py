@@ -286,8 +286,8 @@ def iopOpenInApp():
     - string endpoint (optional): the storage endpoint to be used to look up the file or the storage id, in case of
       multi-instance underlying storage; defaults to 'default'
     - string appname: the identifier of the end-user application to be served
-    - string appediturl: the URL of the end-user application in edit mode
-    - string appviewurl (optional): the URL of the end-user application in view mode when different (defaults to appediturl)
+    - string appurl: the URL of the end-user application
+    - string appviewurl (optional): the URL of the end-user application in view mode when different (defaults to appurl)
     - string appinturl (optional): the internal URL of the end-user application (applicable with containerized deployments)
     '''
     Wopi.refreshconfig()
@@ -311,31 +311,32 @@ def iopOpenInApp():
         viewmode = utils.ViewMode(req.args['viewmode'])
     except (KeyError, ValueError) as e:
         Wopi.log.warning('msg="iopOpenInApp: invalid viewmode parameter" client="%s" viewmode="%s" error="%s"' %
-                            (req.remote_addr, req.args.get('viewmode'), e))
+                         (req.remote_addr, req.args.get('viewmode'), e))
         return 'Missing or invalid viewmode argument', http.client.BAD_REQUEST
     username = req.args.get('username', '')
     folderurl = url_unquote(req.args.get('folderurl', '%%2F'))   # defaults to `/`
     endpoint = req.args.get('endpoint', 'default')
     appname = url_unquote(req.args.get('appname', ''))
-    appediturl = url_unquote(req.args.get('appediturl', ''))
+    appurl = url_unquote(req.args.get('appurl', ''))
     appviewurl = url_unquote(req.args.get('appviewurl', ''))
+    if not appname or not appurl:
+        Wopi.log.warning('msg="iopOpenInApp: app-related arguments must be provided" client="%s"' % req.remote_addr)
+        return 'Missing appname or appurl arguments', http.client.BAD_REQUEST
+
     if bridge.issupported(appname):
-        # This is a WOPI-bridge application, get the extra info to enable it
+        # This is a bridge-supported application, get the extra info to enable it
         apikey = req.headers.get('ApiKey')
-        appurl = appediturl
         appinturl = req.headers.get('appinturl', appurl)     # defaults to the external appurl
-        appediturl = appviewurl = Wopi.wopiurl + '/wopi/bridge/open?'
         try:
             bridge.WB.loadplugin(appname, appurl, appinturl, apikey)
         except ValueError:
             return 'Failed to load WOPI bridge plugin for %s' % appname, http.client.INTERNAL_SERVER_ERROR
-    elif not appname or not appediturl or not appviewurl:
-        Wopi.log.warning('msg="iopOpenInApp: app-related arguments must be provided" client="%s"' % req.remote_addr)
-        return 'Missing appname or appediturl or appviewurl arguments', http.client.BAD_REQUEST
+        # for the WOPI context, bridge-supported app URLs look like this
+        appurl = appviewurl = Wopi.wopiurl + '/wopi/bridge/open'
 
     try:
         inode, acctok = utils.generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint,
-                                                  appname, appediturl, appviewurl)
+                                                  appname, appurl, appviewurl)
     except IOError as e:
         Wopi.log.info('msg="iopOpenInApp: remote error on generating token" client="%s" user="%s" ' \
                       'friendlyname="%s" mode="%s" endpoint="%s" reason="%s"' %
@@ -345,7 +346,7 @@ def iopOpenInApp():
     if bridge.issupported(appname):
         return bridge.appopen(utils.generateWopiSrc(inode), acctok)
     return flask.redirect('%s&WOPISrc=%s&access_token=%s' %
-                            (appediturl if viewmode == utils.ViewMode.READ_WRITE else appviewurl,
+                            (appurl if viewmode == utils.ViewMode.READ_WRITE else appviewurl,
                             utils.generateWopiSrc(inode), acctok))      # no need to URL-encode the JWT token
 
 
