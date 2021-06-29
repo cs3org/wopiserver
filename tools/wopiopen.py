@@ -1,7 +1,8 @@
 #!/usr/bin/python3
 '''
+This tool is now deprecated. An alternative is the CLI open-in-app command in Reva.
 Call the /wopi/iop/open REST API on the given file and return a URL for direct editing it.
-This tool is meant to be used from a WOPI server for opreations purposes, not externally.
+Meant to be used from a WOPI server for opreations purposes, not externally.
 
 Author: Giuseppe.LoPresti@cern.ch
 CERN IT/ST
