@@ -1,5 +1,20 @@
 ## Changelog for the WOPI server
 
+### Tue Jun 29 2021 - v7.0.0
+- Merged wopibridge functionality: now
+  the server supports a new `codimdurl` parameter
+  as well as a `codimd_apikey` file as a "secret",
+  whereas `wopibridgeurl` was removed
+- Introduced a new /wopi/iop/openinapp endpoint,
+  which does not use the discovery but relies on
+  Reva to have the needed app URLs: the discovery
+  logic was moved to a separate module and will
+  be deprecated once reva#1779 is fixed
+- Complete refactoring/linting of the code
+  to follow PEP8 standards
+- Enhanced logging to include the python module
+- Fixed some uncaught exceptions found in production
+
 ### Tue Jun  8 2021 - v6.6.0
 - Make SSL certificate validation configurable for Reva
 - Removed workarounds targeting MS Word Online
