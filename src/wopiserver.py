@@ -40,6 +40,9 @@ WOPISERVERVERSION = 'git'
 # alias of the storage layer module, see function below
 storage = None
 
+# convenience constant for returning 401
+UNAUTHORIZED = 'Client not authorized', http.client.UNAUTHORIZED
+
 def storage_layer_import(storagetype):
     '''A convenience function to import the storage layer module specified in the config and make it globally available'''
     global storage        # pylint: disable=global-statement
@@ -215,7 +218,7 @@ def iopOpen():
     if req.headers.get('Authorization') != 'Bearer ' + Wopi.iopsecret:
         Wopi.log.warning('msg="iopOpen: unauthorized access attempt, missing authorization token" ' \
                          'client="%s" clientAuth="%s"' % (req.remote_addr, req.headers.get('Authorization')))
-        return 'Client not authorized', http.client.UNAUTHORIZED
+        return UNAUTHORIZED
     # now validate the user identity and deny root access
     try:
         if 'TokenHeader' in req.headers:
@@ -231,7 +234,7 @@ def iopOpen():
     except ValueError:
         Wopi.log.warning('msg="iopOpen: invalid or missing user/token in request" client="%s" user="%s"' %
                          (req.remote_addr, userid))
-        return 'Client not authorized', http.client.UNAUTHORIZED
+        return UNAUTHORIZED
     fileid = url_unquote(req.args['filename']) if 'filename' in req.args else req.args.get('fileid', '')
     if fileid == '':
         Wopi.log.warning('msg="iopOpen: either filename or fileid must be provided" client="%s"' % req.remote_addr)
@@ -295,14 +298,14 @@ def iopOpenInApp():
     if req.headers.get('Authorization') != 'Bearer ' + Wopi.iopsecret:
         Wopi.log.warning('msg="iopOpenInApp: unauthorized access attempt, missing authorization token" ' \
                          'client="%s" clientAuth="%s"' % (req.remote_addr, req.headers.get('Authorization')))
-        return 'Client not authorized', http.client.UNAUTHORIZED
+        return UNAUTHORIZED
     # now validate the user identity and deny root access
     try:
         userid = req.headers['TokenHeader']
     except KeyError:
         Wopi.log.warning('msg="iopOpenInApp: invalid or missing token in request" client="%s" user="%s"' %
                          (req.remote_addr, userid))
-        return 'Client not authorized', http.client.UNAUTHORIZED
+        return UNAUTHORIZED
     fileid = req.args.get('fileid', '')
     if not fileid:
         Wopi.log.warning('msg="iopOpenInApp: fileid must be provided" client="%s"' % req.remote_addr)
@@ -344,7 +347,7 @@ def iopOpenInApp():
         return 'Remote error, file not found or file is a directory', http.client.NOT_FOUND
 
     if bridge.issupported(appname):
-        return bridge.appopen(utils.generateWopiSrc(inode), acctok)
+        return bridge.appopen(url_unquote(utils.generateWopiSrc(inode)), acctok)
     return flask.redirect('%s&WOPISrc=%s&access_token=%s' %
                             (appurl if viewmode == utils.ViewMode.READ_WRITE else appviewurl,
                             utils.generateWopiSrc(inode), acctok))      # no need to URL-encode the JWT token
@@ -358,7 +361,7 @@ def iopGetOpenFiles():
     if req.headers.get('Authorization') != 'Bearer ' + Wopi.iopsecret:
         Wopi.log.warning('msg="iopGetOpenFiles: unauthorized access attempt, missing authorization token" ' \
                          'client="%s"' % req.remote_addr)
-        return 'Client not authorized', http.client.UNAUTHORIZED
+        return UNAUTHORIZED
     # first convert the sets into lists, otherwise sets cannot be serialized in JSON format
     jlist = {}
     for f in list(Wopi.openfiles.keys()):
@@ -451,7 +454,7 @@ def cboxLock():
     if req.headers.get('Authorization') != 'Bearer ' + Wopi.iopsecret:
         Wopi.log.warning('msg="cboxLock: unauthorized access attempt, missing authorization token" '
                          'client="%s"' % req.remote_addr)
-        return 'Client not authorized', http.client.UNAUTHORIZED
+        return UNAUTHORIZED
     filename = req.args['filename']
     userid = req.args['userid'] if 'userid' in req.args else '0:0'
     endpoint = req.args['endpoint'] if 'endpoint' in req.args else 'default'
@@ -478,7 +481,7 @@ def cboxUnlock():
     if req.headers.get('Authorization') != 'Bearer ' + Wopi.iopsecret:
         Wopi.log.warning('msg="cboxUnlock: unauthorized access attempt, missing authorization token" ' \
                          'client="%s"' % req.remote_addr)
-        return 'Client not authorized', http.client.UNAUTHORIZED
+        return UNAUTHORIZED
     filename = req.args['filename']
     userid = req.args['userid'] if 'userid' in req.args else '0:0'
     endpoint = req.args['endpoint'] if 'endpoint' in req.args else 'default'

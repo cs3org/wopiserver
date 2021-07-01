@@ -31,8 +31,9 @@ RECOVER_MSG = 'Please copy the content to a safe place and reopen the document a
 
 class WB:
     '''A singleton container for all state information of the server'''
-    sslverify = False
     log = None
+    hashsecret = None
+    sslverify = True
     loglevels = {"Critical": logging.CRITICAL,  # 50
                  "Error":    logging.ERROR,     # 40
                  "Warning":  logging.WARNING,   # 30
