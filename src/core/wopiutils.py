@@ -130,8 +130,12 @@ def generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint,
     if not appediturl:
         # for backwards compatibility
         fext = os.path.splitext(statinfo['filepath'])[1]
-        appediturl = srv.endpoints[fext]['edit']
-        appviewurl = srv.endpoints[fext]['view']
+        try:
+            appediturl = srv.endpoints[fext]['edit']
+            appviewurl = srv.endpoints[fext]['view']
+        except KeyError as e:
+            log.critical('msg="No app URLs registered for the given file" fileExtension="%s"' % fext)
+            raise IOError
     acctok = jwt.encode({'userid': userid, 'filename': statinfo['filepath'], 'username': username,
                          'viewmode': viewmode.value, 'folderurl': folderurl, 'endpoint': endpoint,
                          'appname': appname, 'appediturl': appediturl, 'appviewurl': appviewurl, 'exp': exptime},

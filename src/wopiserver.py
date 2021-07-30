@@ -261,7 +261,7 @@ def iopOpen():
         Wopi.log.info('msg="iopOpen: remote error on generating token" client="%s" user="%s" ' \
                       'friendlyname="%s" mode="%s" endpoint="%s" reason="%s"' %
                       (req.remote_addr, userid, username, viewmode, endpoint, e))
-        return 'Remote error, file not found or file is a directory', http.client.NOT_FOUND
+        return 'Remote error, file or app not found or file is a directory', http.client.NOT_FOUND
 
 
 @Wopi.app.route("/wopi/cbox/open", methods=['GET'])
