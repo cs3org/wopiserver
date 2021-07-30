@@ -121,7 +121,7 @@ def appopen(wopisrc, acctok):
     if not app or not WB.plugins[app]:
         WB.log.warning('msg="Open: file type not supported or missing plugin" filename="%s" token="%s"' % (filemd['FileName'], acctok[-20:]))
         return guireturn('File type not supported'), http.client.BAD_REQUEST
-    WB.log.debug('msg="Processing open for supported app" app="%s" plugin="%s"' % (app, WB.plugins[app]))
+    WB.log.debug('msg="Processing open in supported app" app="%s" plugin="%s"' % (app, WB.plugins[app]))
     app = WB.plugins[app]
 
     try:
@@ -170,9 +170,10 @@ def appopen(wopisrc, acctok):
         else:
             # user has no write privileges, just fetch the document and push it to the app on a random docid
             wopilock = app.loadfromstorage(filemd, wopisrc, acctok, None)
-    except app.AppFailure:
+    except app.AppFailure as e:
         # this can be raised by loadfromstorage
-        return guireturn('Unable to load the app, please try again later or contact support'), http.client.INTERNAL_SERVER_ERROR
+        usermsg = str(e) if str(e) else 'Unable to load the app, please try again later or contact support'
+        return guireturn(usermsg), http.client.INTERNAL_SERVER_ERROR
 
     # here we append the user browser to the displayName
     # TODO need to review this for production usage, it should actually come from WOPI if configured accordingly

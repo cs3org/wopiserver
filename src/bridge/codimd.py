@@ -151,7 +151,10 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
                                 params={'mode': 'locked'},
                                 headers={'Content-Type': 'text/markdown'},
                                 verify=sslverify)
-            if res.status_code != http.client.FOUND:
+            if res.status_code == http.client.REQUEST_ENTITY_TOO_LARGE:
+                log.error('msg="File is too large to be edited in CodiMD" token="%s"')
+                raise AppFailure('File is too large to be edited in CodiMD. Please reduce its size with a regular text editor and try again.')
+            elif res.status_code != http.client.FOUND:
                 log.error('msg="Unable to push read-only document to CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
                 raise AppFailure
@@ -182,6 +185,9 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
             if res.status_code == http.client.FORBIDDEN:
                 # the file got unlocked because of no activity, yet some user is there: let it go
                 log.warning('msg="Document was being edited in CodiMD, redirecting user" token"%s"' % acctok[-20:])
+            elif res.status_code == http.client.REQUEST_ENTITY_TOO_LARGE:
+                log.error('msg="File is too large to be edited in CodiMD" token="%s"')
+                raise AppFailure('File is too large to be edited in CodiMD. Please reduce its size with a regular text editor and try again.')
             elif res.status_code != http.client.OK:
                 log.error('msg="Unable to push document to CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
