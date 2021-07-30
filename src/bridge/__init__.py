@@ -178,8 +178,7 @@ def appopen(wopisrc, acctok):
     # here we append the user browser to the displayName
     # TODO need to review this for production usage, it should actually come from WOPI if configured accordingly
     redirurl = app.getredirecturl(filemd['UserCanWrite'], wopisrc, acctok, wopilock,
-                                  urlparse.quote_plus(filemd['UserFriendlyName'] + '@' + \
-                                  (flask.request.user_agent.platform[:3] if flask.request.user_agent.platform else 'oth')))
+                                  urlparse.quote_plus(filemd['UserFriendlyName']))
     WB.log.info('msg="Redirecting client to the app" redirecturl="%s"' % redirurl)
     return flask.redirect(redirurl)
 
