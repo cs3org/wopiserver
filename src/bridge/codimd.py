@@ -187,7 +187,8 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
                 log.warning('msg="Document was being edited in CodiMD, redirecting user" token"%s"' % acctok[-20:])
             elif res.status_code == http.client.REQUEST_ENTITY_TOO_LARGE:
                 log.error('msg="File is too large to be edited in CodiMD" token="%s"')
-                raise AppFailure('File is too large to be edited in CodiMD. Please reduce its size with a regular text editor and try again.')
+                raise AppFailure('File is too large to be edited in CodiMD. ' + \
+                                 'Please reduce its size with a regular text editor and try again.')
             elif res.status_code != http.client.OK:
                 log.error('msg="Unable to push document to CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
@@ -196,6 +197,10 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
     except requests.exceptions.ConnectionError as e:
         log.error('msg="Exception raised attempting to connect to CodiMD" exception="%s"' % e)
         raise AppFailure
+    except UnicodeDecodeError as e:
+        log.warn('msg="Invalid UTF content found in file" error="%s"' % e)
+        raise AppFailure('File contains an invalid UTF character, was it corrupted? ' + \
+                         'Please fix it in a regular editor before opening it in CodiMD.')
     # generate and return a WOPI lock structure for this document
     return wopic.generatelock(docid, filemd, h.hexdigest(), 'mds' if _isslides(mddoc) else 'md', acctok, False)
 
