@@ -37,7 +37,7 @@ def init(_appurl, _appinturl, _apikey):
     appexturl = _appurl
     appurl = _appinturl
     apikey = _apikey
-    # create a general group to attach all pads
+    # create a general group to attach all pads; can raise AppFailure
     groupid = _apicall('createGroupIfNotExistsFor', {'groupMapper': 1})
     groupid = groupid['data']['groupID']
     log.info('msg="Got Etherpad global groupid" groupid="%s"' % groupid)

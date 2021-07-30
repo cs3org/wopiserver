@@ -41,6 +41,16 @@ def init(_appurl, _appinturl, _apikey):
     appexturl = _appurl
     appurl = _appinturl
     apikey = _apikey
+    try:
+        # CodiMD integrates Prometheus metrics, let's probe if they exist
+        res = requests.head(appurl + '/metrics/codimd', verify=sslverify)
+        if res.status_code != http.client.OK:
+            log.error('msg="The provided URL does not seem to be a CodiMD instance" appurl="%s"' % appurl)
+            raise AppFailure
+        log.info('msg="Successfully connected to CodiMD" appurl="%s"' % appurl)
+    except requests.exceptions.ConnectionError as e:
+        log.error('msg="Exception raised attempting to connect to CodiMD" exception="%s"' % e)
+        raise AppFailure
 
 
 def getredirecturl(isreadwrite, wopisrc, acctok, wopilock, displayname):
