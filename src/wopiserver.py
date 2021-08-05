@@ -212,6 +212,7 @@ def iopOpen():
     - string folderurl: the URL to come back to the containing folder for this file, typically shown by the Office app
     - string endpoint (optional): the storage endpoint to be used to look up the file or the storage id, in case of
       multi-instance underlying storage; defaults to 'default'
+    Returns: a single string with the application URL, or a message and a 4xx/5xx HTTP code in case of errors
     '''
     Wopi.refreshconfig()
     req = flask.request
@@ -293,6 +294,12 @@ def iopOpenInApp():
     - string appurl: the URL of the end-user application
     - string appviewurl (optional): the URL of the end-user application in view mode when different (defaults to appurl)
     - string appinturl (optional): the internal URL of the end-user application (applicable with containerized deployments)
+    Returns: a JSON response as follows:
+    {
+      "app-url" : "<URL of the target application with query parameters>",
+      "form-parameters" : { "access_token" : "<WOPI access token>" }
+    }
+    or a message and a 4xx/5xx HTTP code in case of errors
     '''
     Wopi.refreshconfig()
     req = flask.request
@@ -347,11 +354,18 @@ def iopOpenInApp():
                       (req.remote_addr, userid, username, viewmode, endpoint, e))
         return 'Remote error, file not found or file is a directory', http.client.NOT_FOUND
 
+    res = {}
     if bridge.issupported(appname):
-        return bridge.appopen(url_unquote(utils.generateWopiSrc(inode)), acctok)
-    return flask.redirect('%s&WOPISrc=%s&access_token=%s' %
-                            (appurl if viewmode == utils.ViewMode.READ_WRITE else appviewurl,
-                            utils.generateWopiSrc(inode), acctok))      # no need to URL-encode the JWT token
+        a, b = bridge.appopen(url_unquote(utils.generateWopiSrc(inode)), acctok)
+        if isinstance(b, http.HTTPStatus):
+            # error in bridge.appopen(): return message and status code
+            return a, b
+        res['app-url'], res['form-parameters'] = a, b
+    else:
+        res['app-url'] = '%s&WOPISrc=%s' % \
+                         (appurl if viewmode == utils.ViewMode.READ_WRITE else appviewurl, utils.generateWopiSrc(inode))
+        res['form-parameters'] = {'access_token' : acctok.decode()}
+    return flask.Response(json.dumps(res), mimetype='application/json')
 
 
 @Wopi.app.route("/wopi/iop/open/list", methods=['GET'])
@@ -492,6 +506,10 @@ def cboxUnlock():
 #
 # Bridge functionality
 #
+def _guireturn(msg):
+    '''One-liner to better render messages that are visible in the UI. Only used by Revaold'''
+    return '<div align="center" style="color:#808080; padding-top:50px; font-family:Verdana">%s</div>' % msg
+
 @Wopi.app.route("/wopi/bridge/open", methods=["GET"])
 def bridgeOpen():
     '''The WOPI bridge open call'''
@@ -502,8 +520,13 @@ def bridgeOpen():
                       (flask.request.remote_addr, flask.request.user_agent, acctok[-20:]))
     except KeyError as e:
         Wopi.log.warning('msg="BridgeOpen: unable to open the file, missing WOPI context" error="%s"' % e)
-        return bridge.guireturn('Missing arguments'), http.client.BAD_REQUEST
-    return bridge.appopen(wopisrc, acctok)
+        return _guireturn('Missing arguments'), http.client.BAD_REQUEST
+    a, b = bridge.appopen(wopisrc, acctok)
+    if isinstance(b, http.HTTPStatus):
+        # error in the bridge, report it
+        return _guireturn(a), b
+    # for now we know that b == {} as in Revaold we only redirect
+    return flask.redirect(a)
 
 
 @Wopi.app.route("/wopi/bridge/<docid>", methods=["POST"])

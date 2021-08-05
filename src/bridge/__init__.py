@@ -95,11 +95,6 @@ def issupported(appname):
     return appname.lower() in set(BRIDGE_EXT_PLUGINS.values())
 
 
-def guireturn(msg):
-    '''One-liner to better render messages that may be visible in the UI'''
-    return '<div align="center" style="color:#808080; padding-top:50px; font-family:Verdana">%s</div>' % msg
-
-
 def _gendocid(wopisrc):
     '''Generate a URL safe hash of the wopisrc to be used as document id by the app'''
     dig = hmac.new(WB.hashsecret.encode(), msg=wopisrc.split('/')[-1].encode(), digestmod=hashlib.sha1).digest()
@@ -110,17 +105,18 @@ def _gendocid(wopisrc):
 #############################################################################################################
 
 def appopen(wopisrc, acctok):
-    '''Open a doc by contacting the provided WOPISrc with the given access_token'''
+    '''Open a doc by contacting the provided WOPISrc with the given access_token.
+    Returns a (app-url, params{}) pair if successful, or a (errormessage, httpcode) otherwise'''
     # WOPI GetFileInfo
     res = wopic.request(wopisrc, acctok, 'GET')
     if res.status_code != http.client.OK:
         WB.log.warning('msg="Open: unable to fetch file WOPI metadata" response="%d"' % res.status_code)
-        return guireturn('Invalid WOPI context'), http.client.NOT_FOUND
+        return 'Invalid WOPI context', http.client.NOT_FOUND
     filemd = res.json()
     app = BRIDGE_EXT_PLUGINS.get(os.path.splitext(filemd['BaseFileName'])[1][1:])
     if not app or not WB.plugins[app]:
         WB.log.warning('msg="Open: file type not supported or missing plugin" filename="%s" token="%s"' % (filemd['FileName'], acctok[-20:]))
-        return guireturn('File type not supported'), http.client.BAD_REQUEST
+        return 'File type not supported', http.client.BAD_REQUEST
     WB.log.debug('msg="Processing open in supported app" app="%s" plugin="%s"' % (app, WB.plugins[app]))
     app = WB.plugins[app]
 
@@ -173,14 +169,13 @@ def appopen(wopisrc, acctok):
     except app.AppFailure as e:
         # this can be raised by loadfromstorage
         usermsg = str(e) if str(e) else 'Unable to load the app, please try again later or contact support'
-        return guireturn(usermsg), http.client.INTERNAL_SERVER_ERROR
+        return usermsg, http.client.INTERNAL_SERVER_ERROR
 
-    # here we append the user browser to the displayName
-    # TODO need to review this for production usage, it should actually come from WOPI if configured accordingly
     redirurl = app.getredirecturl(filemd['UserCanWrite'], wopisrc, acctok, wopilock,
                                   urlparse.quote_plus(filemd['UserFriendlyName']))
     WB.log.info('msg="Redirecting client to the app" redirecturl="%s"' % redirurl)
-    return flask.redirect(redirurl)
+    # TODO in the future we should pass some metadata (including access tokens) as a form parameter
+    return redirurl, {}
 
 
 def appsave(docid):
@@ -238,7 +233,7 @@ def applist():
        (flask.request.args.get('apikey') != WB.hashsecret):     # added for convenience
         WB.log.warning('msg="List: unauthorized access attempt, missing authorization token" '
                        'client="%s"' % flask.request.remote_addr)
-        return guireturn('Client not authorized'), http.client.UNAUTHORIZED
+        return 'Client not authorized', http.client.UNAUTHORIZED
     WB.log.info('msg="List: returning list of open files" client="%s"' % flask.request.remote_addr)
     return flask.Response(json.dumps(WB.openfiles), mimetype='application/json')
 
