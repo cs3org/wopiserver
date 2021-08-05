@@ -31,8 +31,8 @@ srv = None
 log = None
 
 class ViewMode(Enum):
-    '''File view mode: reference is
-    https://github.com/cs3org/cs3apis/blob/master/cs3/app/provider/v1beta1/provider_api.proto#L72
+    '''File view mode: reference is `ViewMode` at
+    https://github.com/cs3org/cs3apis/blob/master/cs3/app/provider/v1beta1/provider_api.proto
     '''
     # The file can be opened but not downloaded
     VIEW_ONLY = "VIEW_MODE_VIEW_ONLY"
