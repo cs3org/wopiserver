@@ -1,9 +1,11 @@
 ## Changelog for the WOPI server
 
-### Fri Jul 30 2021 - v7.1.0
+### Fri Aug  6 2021 - v7.1.0
 - Handled cases of too large files as well as
   invalid UTF encoding in CodiMD
 - Improved initialization of bridge plugins
+- Reworked openinapp endpoint following
+  developments in the AppProviders model
 
 ### Tue Jun 29 2021 - v7.0.0
 - Merged wopibridge functionality: now
