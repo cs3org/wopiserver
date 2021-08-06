@@ -177,6 +177,7 @@ def index():
       <body>
       <div align="center" style="color:#000080; padding-top:50px; font-family:Verdana; size:11">
       This is the ScienceMesh IOP <a href=http://wopi.readthedocs.io>WOPI</a> server to support online office-like editors.<br>
+      The service includes support for non-WOPI-native apps through a bridge extension.<br>
       To use this service, please log in to your EFSS Storage and click on a supported document.</div>
       <div style="position: absolute; bottom: 10px; left: 10px; width: 99%%;"><hr>
       <i>ScienceMesh WOPI Server %s at %s. Powered by Flask %s for Python %s</i>.
