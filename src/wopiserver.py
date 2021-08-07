@@ -356,11 +356,10 @@ def iopOpenInApp():
 
     res = {}
     if bridge.issupported(appname):
-        a, b = bridge.appopen(url_unquote(utils.generateWopiSrc(inode)), acctok)
-        if isinstance(b, http.HTTPStatus):
-            # error in bridge.appopen(): return message and status code
-            return a, b
-        res['app-url'], res['form-parameters'] = a, b
+        try:
+            res['app-url'], res['form-parameters'] = bridge.appopen(url_unquote(utils.generateWopiSrc(inode)), acctok)
+        except bridge.FailedOpen as foe:
+            return foe.msg, foe.statuscode
     else:
         res['app-url'] = '%s&WOPISrc=%s' % \
                          (appurl if viewmode == utils.ViewMode.READ_WRITE else appviewurl, utils.generateWopiSrc(inode))
@@ -518,15 +517,14 @@ def bridgeOpen():
         acctok = flask.request.args['access_token']
         Wopi.log.info('msg="BridgeOpen called" client="%s" user-agent="%s" token="%s"' %
                       (flask.request.remote_addr, flask.request.user_agent, acctok[-20:]))
+        appurl, _ = bridge.appopen(wopisrc, acctok)
+        # for now we know that the second member is {} as in Revaold we only redirect
+        return flask.redirect(appurl)
     except KeyError as e:
         Wopi.log.warning('msg="BridgeOpen: unable to open the file, missing WOPI context" error="%s"' % e)
         return _guireturn('Missing arguments'), http.client.BAD_REQUEST
-    a, b = bridge.appopen(wopisrc, acctok)
-    if isinstance(b, http.HTTPStatus):
-        # error in the bridge, report it
-        return _guireturn(a), b
-    # for now we know that b == {} as in Revaold we only redirect
-    return flask.redirect(a)
+    except bridge.FailedOpen as foe:
+        return _guireturn(foe.msg), foe.statuscode
 
 
 @Wopi.app.route("/wopi/bridge/<docid>", methods=["POST"])

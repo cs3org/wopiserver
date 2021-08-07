@@ -28,6 +28,15 @@ BRIDGE_EXT_PLUGINS = {'md': 'codimd', 'zmd': 'codimd', 'mds': 'codimd', 'epd': '
 # appear in case of uncaught exceptions or bugs handling the webhook callbacks
 RECOVER_MSG = 'Please copy the content to a safe place and reopen the document again to paste it back.'
 
+class FailedOpen(Exception):
+    '''A custom exception raised by appopen() in case of failures'''
+
+    def __init__(self, msg, statuscode):
+        '''Initialize the exception with the arguments for an HTTP Response'''
+        self.msg = msg
+        self.statuscode = statuscode
+        self.args = (msg, statuscode)
+
 
 class WB:
     '''A singleton container for all state information of the server'''
@@ -106,17 +115,17 @@ def _gendocid(wopisrc):
 
 def appopen(wopisrc, acctok):
     '''Open a doc by contacting the provided WOPISrc with the given access_token.
-    Returns a (app-url, params{}) pair if successful, or a (errormessage, httpcode) otherwise'''
+    Returns a (app-url, params{}) pair if successful, raises a FailedOpen exception otherwise'''
     # WOPI GetFileInfo
     res = wopic.request(wopisrc, acctok, 'GET')
     if res.status_code != http.client.OK:
         WB.log.warning('msg="Open: unable to fetch file WOPI metadata" response="%d"' % res.status_code)
-        return 'Invalid WOPI context', http.client.NOT_FOUND
+        raise FailedOpen('Invalid WOPI context', http.client.NOT_FOUND)
     filemd = res.json()
     app = BRIDGE_EXT_PLUGINS.get(os.path.splitext(filemd['BaseFileName'])[1][1:])
     if not app or not WB.plugins[app]:
         WB.log.warning('msg="Open: file type not supported or missing plugin" filename="%s" token="%s"' % (filemd['FileName'], acctok[-20:]))
-        return 'File type not supported', http.client.BAD_REQUEST
+        raise FailedOpen('File type not supported', http.client.BAD_REQUEST)
     WB.log.debug('msg="Processing open in supported app" app="%s" plugin="%s"' % (app, WB.plugins[app]))
     app = WB.plugins[app]
 
@@ -169,7 +178,7 @@ def appopen(wopisrc, acctok):
     except app.AppFailure as e:
         # this can be raised by loadfromstorage
         usermsg = str(e) if str(e) else 'Unable to load the app, please try again later or contact support'
-        return usermsg, http.client.INTERNAL_SERVER_ERROR
+        raise FailedOpen(usermsg, http.client.INTERNAL_SERVER_ERROR)
 
     redirurl = app.getredirecturl(filemd['UserCanWrite'], wopisrc, acctok, wopilock,
                                   urlparse.quote_plus(filemd['UserFriendlyName']))
