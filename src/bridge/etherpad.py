@@ -84,7 +84,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
     # WOPI GetFile
     res = wopic.request(wopisrc, acctok, 'GET', contents=True)
     if res.status_code != http.client.OK:
-        raise ValueError(res.status_code)
+        raise AppFailure('Unable to fetch file from storage, got HTTP %d' % res.status_code)
     epfile = res.content
     # compute its SHA1 hash for later checks if the file was modified
     h = hashlib.sha1()

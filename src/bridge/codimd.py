@@ -131,7 +131,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
     # WOPI GetFile
     res = wopic.request(wopisrc, acctok, 'GET', contents=True)
     if res.status_code != http.client.OK:
-        raise ValueError(res.status_code)
+        raise AppFailure('Unable to fetch file from storage, got HTTP %d' % res.status_code)
     mdfile = res.content
     wasbundle = os.path.splitext(filemd['BaseFileName'])[1] == '.zmd'
 
@@ -154,7 +154,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
             if res.status_code == http.client.REQUEST_ENTITY_TOO_LARGE:
                 log.error('msg="File is too large to be edited in CodiMD" token="%s"')
                 raise AppFailure('File is too large to be edited in CodiMD. Please reduce its size with a regular text editor and try again.')
-            elif res.status_code != http.client.FOUND:
+            if res.status_code != http.client.FOUND:
                 log.error('msg="Unable to push read-only document to CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
                 raise AppFailure
@@ -173,7 +173,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
             if res.status_code == http.client.FOUND:
                 newdocid = urlparse.urlsplit(res.next.url).path.split('/')[-1]
                 log.info('msg="Document got aliased in CodiMD" olddocid="%s" docid="%s" token="%s"' %
-                        (docid, newdocid, acctok[-20:]))
+                         (docid, newdocid, acctok[-20:]))
                 docid = newdocid
             else:
                 log.debug('msg="Got note hash from CodiMD" docid="%s"' % docid)
