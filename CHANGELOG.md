@@ -1,5 +1,10 @@
 ## Changelog for the WOPI server
 
+### v7.1.1
+- Fixed WOPI GetFile to return HTTP 500
+  in case of failures fetching the file
+  from the backend
+
 ### Fri Aug  6 2021 - v7.1.0
 - Handled cases of too large files as well as
   invalid UTF encoding in CodiMD
