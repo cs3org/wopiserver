@@ -259,7 +259,7 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
     # WOPI PutFile for the file or the bundle if it already existed
     if (wasbundle ^ (not bundlefile)) or not isclose:
         res = wopic.request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock)},
-                           contents=(bundlefile if wasbundle else mddoc))
+                            contents=(bundlefile if wasbundle else mddoc))
         reply = wopic.handleputfile('PutFile', wopisrc, res)
         if reply:
             return reply

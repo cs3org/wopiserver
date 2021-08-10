@@ -50,7 +50,7 @@ def _apicall(method, params, data=None, acctok=None, raiseonnonzerocode=True):
         res = requests.post(appurl + '/api/1/' + method, params=params, data=data, verify=sslverify)
         if res.status_code != http.client.OK:
             log.error('msg="Failed to call Etherpad" method="%s" token="%s" response="%d: %s"' %
-                        (method, acctok[-20:] if acctok else 'N/A', res.status_code, res.content.decode()))
+                      (method, acctok[-20:] if acctok else 'N/A', res.status_code, res.content.decode()))
             raise AppFailure
     except requests.exceptions.ConnectionError as e:
         log.error('msg="Exception raised attempting to connect to CodiMD" exception="%s"' % e)
@@ -58,7 +58,7 @@ def _apicall(method, params, data=None, acctok=None, raiseonnonzerocode=True):
     res = res.json()
     if res['code'] != 0 and raiseonnonzerocode:
         log.error('msg="Error response from Etherpad" method="%s" token="%s" response="%s"' %
-                    (method, acctok[-20:] if acctok else 'N/A', res['message']))
+                  (method, acctok[-20:] if acctok else 'N/A', res['message']))
         raise AppFailure
     log.debug('msg="Called Etherpad API" method="%s" token="%s" result="%s"' %
               (method, acctok[-20:] if acctok else 'N/A', res))
