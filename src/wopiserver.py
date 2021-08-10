@@ -363,7 +363,7 @@ def iopOpenInApp():
     else:
         res['app-url'] = '%s&WOPISrc=%s' % \
                          (appurl if viewmode == utils.ViewMode.READ_WRITE else appviewurl, utils.generateWopiSrc(inode))
-        res['form-parameters'] = {'access_token' : acctok.decode()}
+        res['form-parameters'] = {'access_token' : acctok}
     return flask.Response(json.dumps(res), mimetype='application/json')
 
 
