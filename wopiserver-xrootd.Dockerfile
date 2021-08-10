@@ -34,7 +34,7 @@ RUN yum clean all && yum -y install \
         gcc-c++
 
 RUN pip3 install --upgrade pip setuptools && \
-    pip3 install --upgrade flask pyOpenSSL PyJWT requests prometheus-flask-exporter wheel && \
+    pip3 install --upgrade flask pyOpenSSL PyJWT requests more_itertools prometheus-flask-exporter wheel && \
     pip3 install xrootd
 
 # install software

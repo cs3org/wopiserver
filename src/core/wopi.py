@@ -12,6 +12,7 @@ import json
 import http.client
 from urllib.parse import quote_plus as url_quote_plus
 from urllib.parse import unquote as url_unquote
+from more_itertools import peekable
 import jwt
 import flask
 import core.wopiutils as utils
@@ -31,7 +32,7 @@ def checkFileInfo(fileid):
         if acctok['exp'] < time.time():
             raise jwt.exceptions.ExpiredSignatureError
         log.info('msg="CheckFileInfo" user="%s" filename="%s" fileid="%s" token="%s"' %
-                      (acctok['userid'], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
+                 (acctok['userid'], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
         statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
         # compute some entities for the response
         wopiSrc = 'WOPISrc=%s&access_token=%s' % (utils.generateWopiSrc(fileid), flask.request.args['access_token'])
@@ -86,11 +87,11 @@ def checkFileInfo(fileid):
         return flask.Response(json.dumps(filemd), mimetype='application/json')
     except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
         log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" token="%s"' %
-                         (flask.request.remote_addr, flask.request.base_url, flask.request.args['access_token']))
+                    (flask.request.remote_addr, flask.request.base_url, flask.request.args['access_token']))
         return 'Invalid access token', http.client.NOT_FOUND
     except IOError as e:
         log.info('msg="Requested file not found" filename="%s" token="%s" error="%s"' %
-                      (acctok['filename'], flask.request.args['access_token'][-20:], e))
+                 (acctok['filename'], flask.request.args['access_token'][-20:], e))
         return 'File not found', http.client.NOT_FOUND
     except KeyError as e:
         log.warning('msg="Invalid access token or request argument" missingkey="%s"' % e)
@@ -106,9 +107,13 @@ def getFile(fileid):
             raise jwt.exceptions.ExpiredSignatureError
         log.info('msg="GetFile" user="%s" filename="%s" fileid="%s" token="%s"' %
                  (acctok['userid'], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
+        # get the file reader generator
+        f = st.readfile(acctok['endpoint'], acctok['filename'], acctok['userid'])
+        firstchunk = peekable(f).peek()
+        if isinstance(firstchunk, IOError):
+            return ('Failed to fetch file from storage: %s' % firstchunk), http.client.INTERNAL_SERVER_ERROR
         # stream file from storage to client
-        resp = flask.Response(st.readfile(acctok['endpoint'], acctok['filename'], acctok['userid']), \
-                              mimetype='application/octet-stream')
+        resp = flask.Response(f, mimetype='application/octet-stream')
         resp.status_code = http.client.OK
         return resp
     except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
@@ -177,7 +182,7 @@ def setLock(fileid, reqheaders, acctok):
     if retrievedLock and not utils.compareWopiLocks(retrievedLock, (oldLock if oldLock else lock)):
         return utils.makeConflictResponse(op, retrievedLock, lock, oldLock, acctok['filename'], \
                                           'The file was locked by another WOPI application')
- 
+
     # LOCK or REFRESH_LOCK: set the lock to the given one, including the expiration time
     try:
         utils.storeWopiLock(op, lock, acctok, os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes)
@@ -232,7 +237,7 @@ def getLock(fileid, _reqheaders_unused, acctok):
         except KeyError:
             # existing lock but missing srv.openfiles[acctok['filename']] ?
             log.warning('msg="Repopulating missing metadata" filename="%s" token="%s" user="%s"' %
-                             (acctok['filename'], flask.request.args['access_token'][-20:], acctok['username']))
+                        (acctok['filename'], flask.request.args['access_token'][-20:], acctok['username']))
             srv.openfiles[acctok['filename']] = (time.asctime(), set([acctok['username']]))
     # we might want to check if a non-WOPI lock exists for this file:
     #try:
@@ -298,13 +303,14 @@ def putRelative(fileid, reqheaders, acctok):
         utils.storeWopiFile(flask.request, acctok, utils.LASTSAVETIMEKEY, targetName)
     except IOError as e:
         log.info('msg="Error writing file" filename="%s" token="%s" error="%s"' %
-                      (targetName, flask.request.args['access_token'][-20:], e))
+                 (targetName, flask.request.args['access_token'][-20:], e))
         return 'I/O Error', http.client.INTERNAL_SERVER_ERROR
     # generate an access token for the new file
     log.info('msg="PutRelative: generating new access token" user="%s" filename="%s" ' \
              'mode="ViewMode.READ_WRITE" friendlyname="%s"' %
              (acctok['userid'], targetName, acctok['username']))
-    inode, newacctok = utils.generateAccessToken(acctok['userid'], targetName, utils.ViewMode.READ_WRITE, acctok['username'], \
+    inode, newacctok = utils.generateAccessToken(acctok['userid'], targetName, \
+                                                 utils.ViewMode.READ_WRITE, acctok['username'], \
                                                  acctok['folderurl'], acctok['endpoint'], acctok['appname'], \
                                                  acctok['appediturl'], acctok['appviewurl'])
     # prepare and send the response as JSON
@@ -342,7 +348,7 @@ def renameFile(fileid, reqheaders, acctok):
         # the destination name comes without base path and without extension
         targetName = os.path.dirname(acctok['filename']) + '/' + targetName + os.path.splitext(acctok['filename'])[1]
         log.info('msg="RenameFile" user="%s" filename="%s" token="%s" targetname="%s"' %
-                      (acctok['userid'], acctok['filename'], flask.request.args['access_token'][-20:], targetName))
+                 (acctok['userid'], acctok['filename'], flask.request.args['access_token'][-20:], targetName))
         st.renamefile(acctok['endpoint'], acctok['filename'], targetName, acctok['userid'])
         # also rename the locks
         st.renamefile(acctok['endpoint'], utils.getLockName(acctok['filename']), \
@@ -365,14 +371,14 @@ def renameFile(fileid, reqheaders, acctok):
 def _createNewFile(fileid, acctok):
     '''Implements the editnew action as part of the PutFile WOPI call.'''
     log.info('msg="PutFile" user="%s" filename="%s" fileid="%s" action="editnew" token="%s"' %
-                  (acctok['userid'], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
+             (acctok['userid'], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
     try:
         # try to stat the file and raise IOError if not there
         if st.stat(acctok['endpoint'], acctok['filename'], acctok['userid'])['size'] == 0:
             # a 0-size file is equivalent to not existing
             raise IOError
         log.warning('msg="PutFile" error="File exists but no WOPI lock provided" filename="%s" token="%s"' %
-                         (acctok['filename'], flask.request.args['access_token']))
+                    (acctok['filename'], flask.request.args['access_token']))
         return 'File exists', http.client.CONFLICT
     except IOError:
         # indeed the file did not exist, so we write it for the first time
