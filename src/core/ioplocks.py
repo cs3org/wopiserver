@@ -17,7 +17,7 @@ log = None
 def ioplock(filename, userid, endpoint, isquery):
     '''Lock or query a given filename, see below for the specs of these APIs'''
     log.info('msg="cboxLock: start processing" filename="%s" request="%s" userid="%s"' %
-                  (filename, "query" if isquery else "create", userid))
+             (filename, "query" if isquery else "create", userid))
 
     # first make sure the file itself exists
     try:
@@ -38,7 +38,7 @@ def ioplock(filename, userid, endpoint, isquery):
     try:
         mslockstat = st.stat(endpoint, utils.getMicrosoftOfficeLockName(filename), userid)
         log.info('msg="cboxLock: found existing Microsoft Office lock" filename="%s" lockmtime="%ld"' %
-                      (filename, mslockstat['mtime']))
+                 (filename, mslockstat['mtime']))
         return 'Previous lock exists', http.client.CONFLICT
     except IOError:
         pass
@@ -73,7 +73,7 @@ def queryLock(filestat, filename, userid, endpoint):
     except (IOError, StopIteration) as e:
         # be optimistic, any error here (including no content in the lock file) is like ENOENT
         log.info('msg="cboxLock: lock being queried not found" filename="%s" reason="%s"' %
-                        (filename, 'empty lock' if isinstance(e, StopIteration) else str(e)))
+                 (filename, 'empty lock' if isinstance(e, StopIteration) else str(e)))
         return 'Previous lock not found', http.client.NOT_FOUND
     if filestat['mtime'] > lockstat['mtime']:
         # we were asked to query an existing lock, but the file was modified in between (e.g. by a sync client):

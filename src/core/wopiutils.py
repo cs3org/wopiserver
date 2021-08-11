@@ -139,7 +139,7 @@ def generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint,
     acctok = jwt.encode({'userid': userid, 'filename': statinfo['filepath'], 'username': username,
                          'viewmode': viewmode.value, 'folderurl': folderurl, 'endpoint': endpoint,
                          'appname': appname, 'appediturl': appediturl, 'appviewurl': appviewurl, 'exp': exptime},
-                         srv.wopisecret, algorithm='HS256')
+                        srv.wopisecret, algorithm='HS256')
     log.info('msg="Access token generated" userid="%s" mode="%s" endpoint="%s" filename="%s" inode="%s" ' \
              'mtime="%s" folderurl="%s" appname="%s" expiration="%d" token="%s"' %
              (userid, viewmode, endpoint, statinfo['filepath'], statinfo['inode'], statinfo['mtime'], \

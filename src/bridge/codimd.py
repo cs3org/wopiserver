@@ -19,6 +19,7 @@ import requests
 import bridge.wopiclient as wopic
 
 
+TOOLARGE = 'File is too large to be edited in CodiMD. Please reduce its size with a regular text editor and try again.'
 class AppFailure(Exception):
     '''A custom exception to represent a fatal failure when contacting CodiMD'''
 
@@ -153,7 +154,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
                                 verify=sslverify)
             if res.status_code == http.client.REQUEST_ENTITY_TOO_LARGE:
                 log.error('msg="File is too large to be edited in CodiMD" token="%s"')
-                raise AppFailure('File is too large to be edited in CodiMD. Please reduce its size with a regular text editor and try again.')
+                raise AppFailure(TOOLARGE)
             if res.status_code != http.client.FOUND:
                 log.error('msg="Unable to push read-only document to CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
@@ -187,8 +188,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
                 log.warning('msg="Document was being edited in CodiMD, redirecting user" token"%s"' % acctok[-20:])
             elif res.status_code == http.client.REQUEST_ENTITY_TOO_LARGE:
                 log.error('msg="File is too large to be edited in CodiMD" token="%s"')
-                raise AppFailure('File is too large to be edited in CodiMD. ' + \
-                                 'Please reduce its size with a regular text editor and try again.')
+                raise AppFailure(TOOLARGE)
             elif res.status_code != http.client.OK:
                 log.error('msg="Unable to push document to CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))

@@ -83,13 +83,12 @@ def stat(endpoint, fileid, userid, versioninv=0):
             raise IOError('Unexpected type %d' % statInfo.info.type)
         # we base64-encode the inode so it can be used in a WOPISrc
         inode = urlsafe_b64encode(statInfo.info.id.opaque_id.encode())
-        return {
-                'inode': statInfo.info.id.storage_id + '-' + inode.decode(),
+        return {'inode': statInfo.info.id.storage_id + '-' + inode.decode(),
                 'filepath': statInfo.info.path,
                 'userid': statInfo.info.owner.opaque_id,
                 'size': statInfo.info.size,
                 'mtime': statInfo.info.mtime.seconds
-                }
+               }
     ctx['log'].info('msg="Failed stat" fileid="%s" reason="%s"' % (fileid, statInfo.status.message))
     raise IOError('No such file or directory' if statInfo.status.code == cs3code.CODE_NOT_FOUND else statInfo.status.message)
 
