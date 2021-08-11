@@ -19,6 +19,7 @@ import http.client
 import flask
 import jwt
 
+
 # this is the xattr key used for conflicts resolution on the remote storage
 LASTSAVETIMEKEY = 'iop.wopi.lastwritetime'
 
@@ -29,6 +30,7 @@ EXCL_ERROR = 'File exists and islock flag requested'
 st = None
 srv = None
 log = None
+
 
 class ViewMode(Enum):
     '''File view mode: reference is `ViewMode` at
@@ -142,7 +144,7 @@ def generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint,
                         srv.wopisecret, algorithm='HS256')
     log.info('msg="Access token generated" userid="%s" mode="%s" endpoint="%s" filename="%s" inode="%s" ' \
              'mtime="%s" folderurl="%s" appname="%s" expiration="%d" token="%s"' %
-             (userid, viewmode, endpoint, statinfo['filepath'], statinfo['inode'], statinfo['mtime'], \
+             (userid[-20:], viewmode, endpoint, statinfo['filepath'], statinfo['inode'], statinfo['mtime'], \
               folderurl, appname, exptime, acctok[-20:]))
     # return the inode == fileid, the filepath and the access token
     return statinfo['inode'], acctok
@@ -180,7 +182,7 @@ def retrieveWopiLock(fileid, operation, lock, acctok, overridefilename=None):
             raise jwt.exceptions.ExpiredSignatureError
     except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
         log.warning('msg="%s" user="%s" filename="%s" token="%s" error="WOPI lock expired or invalid, ignoring" ' \
-                    'exception="%s"' % (operation.title(), acctok['userid'], acctok['filename'], encacctok, type(e)))
+                    'exception="%s"' % (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, type(e)))
         # the retrieved lock is not valid any longer, discard and remove it from the backend
         try:
             st.removefile(acctok['endpoint'], getLockName(acctok['filename']), acctok['userid'], 1)
@@ -199,7 +201,7 @@ def retrieveWopiLock(fileid, operation, lock, acctok, overridefilename=None):
                         ('empty lock' if isinstance(e, StopIteration) else str(e)))
         return None
     log.info('msg="%s" user="%s" filename="%s" fileid="%s" lock="%s" retrievedLock="%s" expTime="%s" token="%s"' %
-             (operation.title(), acctok['userid'], acctok['filename'], fileid, lock, retrievedLock['wopilock'],
+             (operation.title(), acctok['userid'][-20:], acctok['filename'], fileid, lock, retrievedLock['wopilock'],
               time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(retrievedLock['exp'])), encacctok))
     return retrievedLock['wopilock']
 

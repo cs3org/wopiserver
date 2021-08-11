@@ -32,7 +32,7 @@ def checkFileInfo(fileid):
         if acctok['exp'] < time.time():
             raise jwt.exceptions.ExpiredSignatureError
         log.info('msg="CheckFileInfo" user="%s" filename="%s" fileid="%s" token="%s"' %
-                 (acctok['userid'], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
+                 (acctok['userid'][-20:], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
         statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
         # compute some entities for the response
         wopiSrc = 'WOPISrc=%s&access_token=%s' % (utils.generateWopiSrc(fileid), flask.request.args['access_token'])
@@ -106,7 +106,7 @@ def getFile(fileid):
         if acctok['exp'] < time.time():
             raise jwt.exceptions.ExpiredSignatureError
         log.info('msg="GetFile" user="%s" filename="%s" fileid="%s" token="%s"' %
-                 (acctok['userid'], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
+                 (acctok['userid'][-20:], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
         # get the file reader generator
         f = st.readfile(acctok['endpoint'], acctok['filename'], acctok['userid'])
         firstchunk = peekable(f).peek()
@@ -207,7 +207,7 @@ def setLock(fileid, reqheaders, acctok):
         except IOError as e:
             # not fatal, but will generate a conflict file later on, so log a warning
             log.warning('msg="Unable to set lastwritetime xattr" user="%s" filename="%s" token="%s" reason="%s"' %
-                        (acctok['userid'], acctok['filename'], flask.request.args['access_token'][-20:], e))
+                        (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:], e))
         # also, keep track of files that have been opened for write: this is for statistical purposes only
         # (cf. the GetLock WOPI call and the /wopi/cbox/open/list action)
         if acctok['filename'] not in srv.openfiles:
@@ -215,7 +215,7 @@ def setLock(fileid, reqheaders, acctok):
         else:
             # the file was already opened but without lock: this happens on new files (cf. editnew action), just log
             log.info('msg="First lock for new file" user="%s" filename="%s" token="%s"' %
-                     (acctok['userid'], acctok['filename'], flask.request.args['access_token'][-20:]))
+                     (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:]))
     return 'OK', http.client.OK
 
 
@@ -239,7 +239,7 @@ def getLock(fileid, _reqheaders_unused, acctok):
                               list(srv.openfiles[acctok['filename']][1])))
         except KeyError:
             # existing lock but missing srv.openfiles[acctok['filename']] ?
-            log.warning('msg="Repopulating missing metadata" filename="%s" token="%s" user="%s"' %
+            log.warning('msg="Repopulating missing metadata" filename="%s" token="%s" friendlyname="%s"' %
                         (acctok['filename'], flask.request.args['access_token'][-20:], acctok['username']))
             srv.openfiles[acctok['filename']] = (time.asctime(), set([acctok['username']]))
     # we might want to check if a non-WOPI lock exists for this file:
@@ -285,7 +285,7 @@ def putRelative(fileid, reqheaders, acctok):
                     break
                 # we got another error with this file, fail
                 log.info('msg="PutRelative" user="%s" filename="%s" token="%s" suggTarget="%s" error="%s"' %
-                         (acctok['userid'], targetName, flask.request.args['access_token'][-20:], \
+                         (acctok['userid'][-20:], targetName, flask.request.args['access_token'][-20:], \
                           suggTarget, str(e)))
                 return 'Illegal filename %s: %s' % (targetName, e), http.client.BAD_REQUEST
     else:
@@ -311,7 +311,7 @@ def putRelative(fileid, reqheaders, acctok):
     # generate an access token for the new file
     log.info('msg="PutRelative: generating new access token" user="%s" filename="%s" ' \
              'mode="ViewMode.READ_WRITE" friendlyname="%s"' %
-             (acctok['userid'], targetName, acctok['username']))
+             (acctok['userid'][-20:], targetName, acctok['username']))
     inode, newacctok = utils.generateAccessToken(acctok['userid'], targetName, \
                                                  utils.ViewMode.READ_WRITE, acctok['username'], \
                                                  acctok['folderurl'], acctok['endpoint'], acctok['appname'], \
@@ -351,7 +351,7 @@ def renameFile(fileid, reqheaders, acctok):
         # the destination name comes without base path and without extension
         targetName = os.path.dirname(acctok['filename']) + '/' + targetName + os.path.splitext(acctok['filename'])[1]
         log.info('msg="RenameFile" user="%s" filename="%s" token="%s" targetname="%s"' %
-                 (acctok['userid'], acctok['filename'], flask.request.args['access_token'][-20:], targetName))
+                 (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:], targetName))
         st.renamefile(acctok['endpoint'], acctok['filename'], targetName, acctok['userid'])
         # also rename the locks
         st.renamefile(acctok['endpoint'], utils.getLockName(acctok['filename']), \
@@ -374,7 +374,7 @@ def renameFile(fileid, reqheaders, acctok):
 def _createNewFile(fileid, acctok):
     '''Implements the editnew action as part of the PutFile WOPI call.'''
     log.info('msg="PutFile" user="%s" filename="%s" fileid="%s" action="editnew" token="%s"' %
-             (acctok['userid'], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
+             (acctok['userid'][-20:], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
     try:
         # try to stat the file and raise IOError if not there
         if st.stat(acctok['endpoint'], acctok['filename'], acctok['userid'])['size'] == 0:
@@ -387,7 +387,7 @@ def _createNewFile(fileid, acctok):
         # indeed the file did not exist, so we write it for the first time
         utils.storeWopiFile(flask.request, acctok, utils.LASTSAVETIMEKEY)
         log.info('msg="File stored successfully" action="editnew" user="%s" filename="%s" token="%s"' %
-                 (acctok['userid'], acctok['filename'], flask.request.args['access_token']))
+                 (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token']))
         # and we keep track of it as an open file with timestamp = Epoch, despite not having any lock yet.
         # XXX this is to work around an issue with concurrent editing of newly created files (cf. iopOpen)
         srv.openfiles[acctok['filename']] = ('0', set([acctok['username']]))
@@ -415,7 +415,7 @@ def putFile(fileid):
                                               'Cannot overwrite file locked by another application')
         # OK, we can save the file now
         log.info('msg="PutFile" user="%s" filename="%s" fileid="%s" action="edit" token="%s"' %
-                 (acctok['userid'], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
+                 (acctok['userid'][-20:], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
         try:
             # check now the destination file against conflicts
             savetime = st.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY)
@@ -427,10 +427,10 @@ def putFile(fileid):
                 # Note we can't get a time resolution better than one second!
                 log.info('msg="Forcing conflict based on lastWopiSaveTime" user="%s" filename="%s" ' \
                          'savetime="%s" lastmtime="%s" token="%s"' %
-                         (acctok['userid'], acctok['filename'], savetime, mtime, flask.request.args['access_token'][-20:]))
+                         (acctok['userid'][-20:], acctok['filename'], savetime, mtime, flask.request.args['access_token'][-20:]))
                 raise IOError
             log.debug('msg="Got lastWopiSaveTime" user="%s" filename="%s" savetime="%s" lastmtime="%s" token="%s"' %
-                      (acctok['userid'], acctok['filename'], savetime, mtime, flask.request.args['access_token'][-20:]))
+                      (acctok['userid'][-20:], acctok['filename'], savetime, mtime, flask.request.args['access_token'][-20:]))
 
         except IOError:
             # either the file was deleted or it was updated/overwritten by others: force conflict
@@ -441,7 +441,7 @@ def putFile(fileid):
             # keep track of this action in the original file's xattr, to avoid looping (see below)
             st.setxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY, 0)
             log.info('msg="Conflicting copy created" user="%s" savetime="%s" lastmtime="%s" newfilename="%s" token="%s"' %
-                     (acctok['userid'], savetime, mtime, newname, flask.request.args['access_token'][-20:]))
+                     (acctok['userid'][-20:], savetime, mtime, newname, flask.request.args['access_token'][-20:]))
             # and report failure to the application: note we use a CONFLICT response as it is better handled by the app
             return utils.makeConflictResponse('PUTFILE', 'External', lock, '', acctok['filename'], \
                                               'The file being edited got moved or overwritten, conflict copy created')
@@ -451,7 +451,7 @@ def putFile(fileid):
         # Anyhow, the EFSS should support versioning for such cases.
         utils.storeWopiFile(flask.request, acctok, utils.LASTSAVETIMEKEY)
         log.info('msg="File stored successfully" action="edit" user="%s" filename="%s" token="%s"' %
-                 (acctok['userid'], acctok['filename'], flask.request.args['access_token'][-20:]))
+                 (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:]))
         return 'OK', http.client.OK
 
     except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:

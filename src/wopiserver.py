@@ -260,7 +260,7 @@ def iopOpen():
         # generate the URL-encoded payload for the app engine
         return '%s&access_token=%s' % (utils.generateWopiSrc(inode), acctok)      # no need to URL-encode the JWT token
     except IOError as e:
-        Wopi.log.info('msg="iopOpen: remote error on generating token" client="%s" user="%s" ' \
+        Wopi.log.info('msg="iopOpen: remote error when generating token" client="%s" user="%s" ' \
                       'friendlyname="%s" mode="%s" endpoint="%s" reason="%s"' %
                       (req.remote_addr, userid, username, viewmode, endpoint, e))
         return 'Remote error, file or app not found or file is a directory', http.client.NOT_FOUND
@@ -311,8 +311,7 @@ def iopOpenInApp():
     try:
         userid = req.headers['TokenHeader']
     except KeyError:
-        Wopi.log.warning('msg="iopOpenInApp: invalid or missing token in request" client="%s" user="%s"' %
-                         (req.remote_addr, userid))
+        Wopi.log.warning('msg="iopOpenInApp: missing TokenHeader in request" client="%s"' % req.remote_addr)
         return UNAUTHORIZED
     fileid = req.args.get('fileid', '')
     if not fileid:
@@ -351,7 +350,7 @@ def iopOpenInApp():
     except IOError as e:
         Wopi.log.info('msg="iopOpenInApp: remote error on generating token" client="%s" user="%s" ' \
                       'friendlyname="%s" mode="%s" endpoint="%s" reason="%s"' %
-                      (req.remote_addr, userid, username, viewmode, endpoint, e))
+                      (req.remote_addr, userid[-20:], username, viewmode, endpoint, e))
         return 'Remote error, file not found or file is a directory', http.client.NOT_FOUND
 
     res = {}
@@ -582,7 +581,7 @@ def cboxDownload():
         resp.headers['Content-Disposition'] = 'attachment; filename="%s"' % os.path.basename(acctok['filename'])
         resp.status_code = http.client.OK
         Wopi.log.info('msg="cboxDownload: direct download succeeded" filename="%s" user="%s" token="%s"' %
-                      (acctok['filename'], acctok['userid'], flask.request.args['access_token'][-20:]))
+                      (acctok['filename'], acctok['userid'][-20:], flask.request.args['access_token'][-20:]))
         return resp
     except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
         Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" token="%s"' %
