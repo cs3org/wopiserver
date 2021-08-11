@@ -33,6 +33,7 @@ class FailedOpen(Exception):
 
     def __init__(self, msg, statuscode):
         '''Initialize the exception with the arguments for an HTTP Response'''
+        super().__init__()
         self.msg = msg
         self.statuscode = statuscode
         self.args = (msg, statuscode)
