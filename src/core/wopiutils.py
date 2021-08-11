@@ -81,10 +81,10 @@ class JsonLogger:
 def logGeneralExceptionAndReturn(ex, req):
     '''Convenience function to log a stack trace and return HTTP 500'''
     ex_type, ex_value, ex_traceback = sys.exc_info()
-    log.error('msg="Unexpected exception caught" exception="%s" type="%s" traceback="%s" client="%s" ' \
-              'requestedUrl="%s" token="%s"' %
-              (ex, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback), req.remote_addr,
-               req.url, req.args['access_token'][-20:] if 'access_token' in req.args else 'N/A'))
+    log.critical('msg="Unexpected exception caught" exception="%s" type="%s" traceback="%s" client="%s" ' \
+                 'requestedUrl="%s" token="%s"' %
+                 (ex, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback), req.remote_addr,
+                  req.url, req.args['access_token'][-20:] if 'access_token' in req.args else 'N/A'))
     return 'Internal error, please contact support', http.client.INTERNAL_SERVER_ERROR
 
 
@@ -250,8 +250,8 @@ def storeWopiLock(operation, lock, acctok, isoffice):
                     retrievedlock = 'WOPIServer'     # could not read the lock, assume it expired
                 if 'WOPIServer' not in retrievedlock:
                     # the file was externally locked, make this call fail
-                    log.info('msg="WOPI lock denied because of an existing LibreOffice lock" filename="%s" holder="%s"' %
-                             (acctok['filename'], retrievedlock.split(',')[1] if ',' in retrievedlock else retrievedlock))
+                    log.warning('msg="WOPI lock denied because of an existing LibreOffice lock" filename="%s" holder="%s"' %
+                                (acctok['filename'], retrievedlock.split(',')[1] if ',' in retrievedlock else retrievedlock))
                     raise
                 #else it's our previous lock or it had expired: all right, move on
             else:
@@ -315,9 +315,9 @@ def makeConflictResponse(operation, retrievedlock, lock, oldlock, filename, reas
     if reason:
         resp.headers['X-WOPI-LockFailureReason'] = resp.data = reason
     resp.status_code = http.client.CONFLICT
-    log.info('msg="%s" filename="%s" token="%s" lock="%s" oldLock="%s" retrievedLock="%s" %s' %
-             (operation.title(), filename, flask.request.args['access_token'][-20:], \
-              lock, oldlock, retrievedlock, ('reason="%s"' % reason if reason else 'result="conflict"')))
+    log.warning('msg="%s" filename="%s" token="%s" lock="%s" oldLock="%s" retrievedLock="%s" %s' %
+                (operation.title(), filename, flask.request.args['access_token'][-20:], \
+                 lock, oldlock, retrievedlock, ('reason="%s"' % reason if reason else 'result="conflict"')))
     return resp
 
 

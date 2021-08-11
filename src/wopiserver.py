@@ -433,6 +433,10 @@ def wopiFilesPost(fileid):
         Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" error="%s" token="%s"' %
                          (flask.request.remote_addr, flask.request.base_url, e, flask.request.args['access_token']))
         return 'Invalid access token', http.client.NOT_FOUND
+    except KeyError as e:
+        Wopi.log.warning('msg="Missing argument" client="%s" requestedUrl="%s" error="%s" token="%s"' %
+                         (flask.request.remote_addr, flask.request.base_url, e, flask.request.args.get('access_token')))
+        return 'Missing argument: %s' % e, http.client.BAD_REQUEST
 
 
 @Wopi.app.route("/wopi/files/<fileid>/contents", methods=['POST'])
