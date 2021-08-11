@@ -116,6 +116,9 @@ def getFile(fileid):
         resp = flask.Response(f, mimetype='application/octet-stream')
         resp.status_code = http.client.OK
         return resp
+    except StopIteration as e:
+        # File is empty, still return OK (strictly speaking, we should return 204 NO_CONTENT)
+        return '', http.client.OK
     except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
         log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" error="%s" token="%s"' %
                     (flask.request.remote_addr, flask.request.base_url, e, flask.request.args['access_token']))
