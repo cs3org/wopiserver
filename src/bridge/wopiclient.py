@@ -12,6 +12,7 @@ import http.client
 import requests
 from flask import Response
 
+
 class InvalidLock(Exception):
     '''A custom exception to represent an invalid or missing WOPI lock'''
 

@@ -125,16 +125,17 @@ def statx(endpoint, filepath, userid, versioninv=0):
     '''Get extended stat info (inode, filepath, userid, size, mtime) via an xroot opaque query on behalf of the given userid.
     If versioninv=1, the logic to support the version folder is not triggered.'''
     tstart = time.time()
-    rc, info = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(filepath, encodeamp=True) + _eosargs(userid) + '&mgm.pcmd=stat')
+    rc, statInfo = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(filepath, encodeamp=True) + \
+                                              _eosargs(userid) + '&mgm.pcmd=stat')
     log.info('msg="Invoked stat" filepath="%s"' % _getfilepath(filepath))
-    if '[SUCCESS]' not in str(rc) or info is None:
+    if '[SUCCESS]' not in str(rc) or not statInfo:
         raise IOError(str(rc).strip('\n'))
-    info = info.decode()
-    if 'retc=2\\x00' in info:
+    statInfo = statInfo.decode()
+    if 'retc=2\\x00' in statInfo:
         raise IOError('No such file or directory')     # convert ENOENT
-    if 'retc=' in info:
-        raise IOError(info.strip('\n'))
-    statxdata = info.split()
+    if 'retc=' in statInfo:
+        raise IOError(statInfo.strip('\n'))
+    statxdata = statInfo.split()
     # we got now a full record according to https://gitlab.cern.ch/dss/eos/-/blob/master/mgm/XrdMgmOfs/fsctl/Stat.cc#L53
     if S_ISDIR(int(statxdata[3])):
         raise IOError('Is a directory')            # EISDIR

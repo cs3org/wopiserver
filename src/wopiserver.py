@@ -34,14 +34,15 @@ import core.ioplocks
 import core.wopiutils as utils
 import bridge
 
+
 # the following constant is replaced on the fly when generating the docker image
 WOPISERVERVERSION = 'git'
 
-# alias of the storage layer module, see function below
-storage = None
-
 # convenience constant for returning 401
 UNAUTHORIZED = 'Client not authorized', http.client.UNAUTHORIZED
+
+# alias of the storage layer module, see function below
+storage = None
 
 def storage_layer_import(storagetype):
     '''A convenience function to import the storage layer module specified in the config and make it globally available'''

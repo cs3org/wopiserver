@@ -17,10 +17,12 @@ import jwt
 import flask
 import core.wopiutils as utils
 
+
 # convenience references to global entities
 st = None
 srv = None
 log = None
+
 
 def checkFileInfo(fileid):
     '''Implements the CheckFileInfo WOPI call'''

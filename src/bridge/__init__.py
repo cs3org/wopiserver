@@ -21,12 +21,14 @@ from base64 import urlsafe_b64encode
 import flask
 import bridge.wopiclient as wopic
 
+
 # The supported plugins integrated with this WOPI Bridge
 BRIDGE_EXT_PLUGINS = {'md': 'codimd', 'zmd': 'codimd', 'mds': 'codimd', 'epd': 'etherpad'}
 
 # a standard message to be displayed by the app when some content might be lost: this would only
 # appear in case of uncaught exceptions or bugs handling the webhook callbacks
 RECOVER_MSG = 'Please copy the content to a safe place and reopen the document again to paste it back.'
+
 
 class FailedOpen(Exception):
     '''A custom exception raised by appopen() in case of failures'''
