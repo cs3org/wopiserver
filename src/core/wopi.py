@@ -96,7 +96,7 @@ def checkFileInfo(fileid):
                  (acctok['filename'], flask.request.args['access_token'][-20:], e))
         return 'File not found', http.client.NOT_FOUND
     except KeyError as e:
-        log.warning('msg="Invalid access token or request argument" missingkey="%s"' % e)
+        log.warning('msg="Invalid access token or request argument" error="%s" host="%s"' % (e, flask.request.remote_addr))
         return 'Invalid access token', http.client.UNAUTHORIZED
 
 
