@@ -1,9 +1,13 @@
 ## Changelog for the WOPI server
 
-### v7.1.1
+### Mon Aug 16 2021 - v7.2.0
 - Fixed WOPI GetFile to return HTTP 500
   in case of failures fetching the file
   from the backend
+- Increased some log levels corresponding
+  to unexpected user actions
+- Improved logs readability when userids
+  are long Reva JWT tokens
 
 ### Fri Aug  6 2021 - v7.1.0
 - Handled cases of too large files as well as
