@@ -289,24 +289,28 @@ def compareWopiLocks(lock1, lock2):
     if lock1 == lock2:
         log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="True"' % (lock1, lock2))
         return True
-    # XXX before giving up, attempt to parse the lock as a JSON dictionary
+    if srv.config.get('general', 'wopilockstrictcheck', fallback='False').upper() == 'TRUE':
+        log.debug('msg="compareLocks" lock1="%s" lock2="%s" strict="True" result="False"' % (lock1, lock2))
+        return False
+
+    # before giving up, attempt to parse the lock as a JSON dictionary if allowed by the config
     try:
         l1 = json.loads(lock1)
         try:
             l2 = json.loads(lock2)
             if 'S' in l1 and 'S' in l2:
-                log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="%r"' % (lock1, lock2, l1['S'] == l2['S']))
+                log.debug('msg="compareLocks" lock1="%s" lock2="%s" strict="False" result="%r"' % (lock1, lock2, l1['S'] == l2['S']))
                 return l1['S'] == l2['S']         # used by Word
-            log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="False"' % (lock1, lock2))
+            log.debug('msg="compareLocks" lock1="%s" lock2="%s" strict="False" result="False"' % (lock1, lock2))
             return False
         except (TypeError, ValueError):
             # lock2 is not a JSON dictionary
             if 'S' in l1:
-                log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="%r"' % (lock1, lock2, l1['S'] == lock2))
+                log.debug('msg="compareLocks" lock1="%s" lock2="%s" strict="False" result="%r"' % (lock1, lock2, l1['S'] == lock2))
                 return l1['S'] == lock2                    # also used by Word (BUG!)
     except (TypeError, ValueError):
         # lock1 is not a JSON dictionary: log the lock values and fail the comparison
-        log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="False"' % (lock1, lock2))
+        log.debug('msg="compareLocks" lock1="%s" lock2="%s" strict="False" result="False"' % (lock1, lock2))
         return False
 
 
