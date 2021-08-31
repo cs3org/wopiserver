@@ -110,8 +110,8 @@ def getFile(fileid):
         log.info('msg="GetFile" user="%s" filename="%s" fileid="%s" token="%s"' %
                  (acctok['userid'][-20:], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
         # get the file reader generator
-        f = st.readfile(acctok['endpoint'], acctok['filename'], acctok['userid'])
-        firstchunk = peekable(f).peek()
+        f = peekable(st.readfile(acctok['endpoint'], acctok['filename'], acctok['userid']))
+        firstchunk = f.peek()
         if isinstance(firstchunk, IOError):
             return ('Failed to fetch file from storage: %s' % firstchunk), http.client.INTERNAL_SERVER_ERROR
         # stream file from storage to client
