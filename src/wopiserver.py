@@ -329,7 +329,8 @@ def iopOpenInApp():
     endpoint = req.args.get('endpoint', 'default')
     appname = url_unquote(req.args.get('appname', ''))
     appurl = url_unquote(req.args.get('appurl', ''))
-    appviewurl = url_unquote(req.args.get('appviewurl', ''))
+    appviewurl = url_unquote(req.args.get('appviewurl', appurl))
+
     if not appname or not appurl:
         Wopi.log.warning('msg="iopOpenInApp: app-related arguments must be provided" client="%s"' % req.remote_addr)
         return 'Missing appname or appurl arguments', http.client.BAD_REQUEST
