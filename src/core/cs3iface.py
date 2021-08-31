@@ -107,7 +107,7 @@ def setxattr(_endpoint, filepath, userid, key, value):
     res = ctx['cs3stub'].SetArbitraryMetadata(request=req,
                                               metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
-        ctx['log'].warning('msg="Failed to getxattr" filepath="%s" key="%s" reason="%s"' % (filepath, key, res.status.message))
+        ctx['log'].error('msg="Failed to getxattr" filepath="%s" key="%s" reason="%s"' % (filepath, key, res.status.message))
         raise IOError(res.status.message)
     ctx['log'].debug('msg="Invoked setxattr" result="%s"' % res)
 
@@ -120,7 +120,7 @@ def getxattr(_endpoint, filepath, userid, key):
                                    metadata=[('x-access-token', userid)])
     tend = time.time()
     if statInfo.status.code != cs3code.CODE_OK:
-        ctx['log'].warning('msg="Failed to stat" filepath="%s" key="%s" reason="%s"' % (filepath, key, statInfo.status.message))
+        ctx['log'].error('msg="Failed to stat" filepath="%s" key="%s" reason="%s"' % (filepath, key, statInfo.status.message))
         raise IOError(statInfo.status.message)
     try:
         xattrvalue = statInfo.info.arbitrary_metadata.metadata[key]
@@ -139,7 +139,7 @@ def rmxattr(_endpoint, filepath, userid, key):
     req = cs3sp.UnsetArbitraryMetadataRequest(ref=reference, arbitrary_metadata_keys=[key])
     res = ctx['cs3stub'].UnsetArbitraryMetadata(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
-        ctx['log'].warning('msg="Failed to rmxattr" filepath="%s" key="%s" exception="%s"' % (filepath, key, res.status.message))
+        ctx['log'].error('msg="Failed to rmxattr" filepath="%s" key="%s" exception="%s"' % (filepath, key, res.status.message))
         raise IOError(res.status.message)
     ctx['log'].debug('msg="Invoked rmxattr" result="%s"' % res)
 
@@ -197,7 +197,7 @@ def writefile(_endpoint, filepath, userid, content, islock=False):
     req = cs3sp.InitiateFileUploadRequest(ref=cs3spr.Reference(path=filepath), opaque=metadata)
     initfileuploadres = ctx['cs3stub'].InitiateFileUpload(request=req, metadata=[('x-access-token', userid)])
     if initfileuploadres.status.code != cs3code.CODE_OK:
-        ctx['log'].debug('msg="Failed to initiateFileUpload on write" filepath="%s" reason="%s"' % \
+        ctx['log'].error('msg="Failed to initiateFileUpload on write" filepath="%s" reason="%s"' % \
                          (filepath, initfileuploadres.status.message))
         raise IOError(initfileuploadres.status.message)
     ctx['log'].debug('msg="writefile: InitiateFileUploadRes returned" protocols="%s"' % initfileuploadres.protocols)
@@ -231,7 +231,7 @@ def renamefile(_endpoint, filepath, newfilepath, userid):
     req = cs3sp.MoveRequest(source=source, destination=destination)
     res = ctx['cs3stub'].Move(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
-        ctx['log'].warning('msg="Failed to rename file" filepath="%s" error="%s"' % (filepath, res.status.message))
+        ctx['log'].error('msg="Failed to rename file" filepath="%s" error="%s"' % (filepath, res.status.message))
         raise IOError(res.status.message)
     ctx['log'].debug('msg="Invoked renamefile" result="%s"' % res)
 
@@ -243,6 +243,6 @@ def removefile(_endpoint, filepath, userid, _force=0):
     req = cs3sp.DeleteRequest(ref=reference)
     res = ctx['cs3stub'].Delete(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
-        ctx['log'].warning('msg="Failed to remove file" filepath="%s" error="%s"' % (filepath, res))
+        ctx['log'].error('msg="Failed to remove file" filepath="%s" error="%s"' % (filepath, res))
         raise IOError(res.status.message)
     ctx['log'].debug('msg="Invoked removefile" result="%s"' % res)

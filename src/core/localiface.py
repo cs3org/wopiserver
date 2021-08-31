@@ -71,7 +71,7 @@ def setxattr(_endpoint, filepath, _userid, key, value):
     try:
         os.setxattr(_getfilepath(filepath), 'user.' + key, str(value).encode())
     except (FileNotFoundError, PermissionError, OSError) as e:
-        log.warning('msg="Failed to setxattr" filepath="%s" key="%s" exception="%s"' % (filepath, key, e))
+        log.error('msg="Failed to setxattr" filepath="%s" key="%s" exception="%s"' % (filepath, key, e))
         raise IOError(e)
 
 
@@ -81,7 +81,7 @@ def getxattr(_endpoint, filepath, _userid, key):
         filepath = _getfilepath(filepath)
         return os.getxattr(filepath, 'user.' + key).decode('UTF-8')
     except (FileNotFoundError, PermissionError, OSError) as e:
-        log.warning('msg="Failed to getxattr" filepath="%s" key="%s" exception="%s"' % (filepath, key, e))
+        log.error('msg="Failed to getxattr" filepath="%s" key="%s" exception="%s"' % (filepath, key, e))
         return None
 
 
@@ -90,7 +90,7 @@ def rmxattr(_endpoint, filepath, _userid, key):
     try:
         os.removexattr(_getfilepath(filepath), 'user.' + key)
     except (FileNotFoundError, PermissionError, OSError) as e:
-        log.warning('msg="Failed to rmxattr" filepath="%s" key="%s" exception="%s"' % (filepath, key, e))
+        log.error('msg="Failed to rmxattr" filepath="%s" key="%s" exception="%s"' % (filepath, key, e))
         raise IOError(e)
 
 
@@ -114,7 +114,7 @@ def readfile(_endpoint, filepath, _userid):
         yield IOError('No such file or directory')
     except OSError as e:
         # general case, issue a warning
-        log.warning('msg="Error opening the file for read" filepath="%s" error="%s"' % (filepath, e))
+        log.error('msg="Error opening the file for read" filepath="%s" error="%s"' % (filepath, e))
         yield IOError(e)
 
 
@@ -150,13 +150,13 @@ def writefile(_endpoint, filepath, _userid, content, islock=False):
             with open(filepath, mode='wb') as f:
                 written = f.write(content)
         except OSError as e:
-            log.warning('msg="Error writing file" filepath="%s" error="%s"' % (filepath, e))
+            log.error('msg="Error writing file" filepath="%s" error="%s"' % (filepath, e))
             raise IOError(e)
     tend = time.time()
     if written != size:
         raise IOError('Written %d bytes but content is %d bytes' % (written, size))
     log.info('msg="File written successfully" filepath="%s" elapsedTimems="%.1f" islock="%s"' % \
-                     (filepath, (tend-tstart)*1000, islock))
+             (filepath, (tend-tstart)*1000, islock))
 
 
 def renamefile(_endpoint, origfilepath, newfilepath, _userid):

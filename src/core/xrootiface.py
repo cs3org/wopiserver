@@ -62,15 +62,13 @@ def _eosargs(userid, atomicwrite=0, bookingsize=0):
 
 def _xrootcmd(endpoint, cmd, subcmd, userid, args):
     '''Perform the <cmd>/<subcmd> action on the special /proc/user path on behalf of the given userid.
-         Note that this is entirely EOS-specific.'''
+       Note that this is entirely EOS-specific.'''
     with XrdClient.File() as f:
         url = _geturlfor(endpoint) + '//proc/user/' + _eosargs(userid) + '&mgm.cmd=' + cmd + \
               ('&mgm.subcmd=' + subcmd if subcmd else '') + '&' + args
         tstart = time.time()
         rc, statInfo_unused = f.open(url, OpenFlags.READ)
         tend = time.time()
-        log.info('msg="Invoked _xrootcmd" cmd="%s%s" url="%s" elapsedTimems="%.1f"' %
-                 (cmd, ('/' + subcmd if subcmd else ''), url, (tend-tstart)*1000))
         res = f.readline().decode('UTF-8').strip('\n').split('&')
         if len(res) == 3:        # we may only just get stdout: in that case, assume it's all OK
             rc = res[2]
@@ -78,10 +76,12 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args):
             if rc != '0':
                 # failure: get info from stderr, log and raise
                 msg = res[1][res[1].find('=')+1:]
-                log.info('msg="Error with xroot command" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' % \
-                         (cmd, subcmd, args, msg, rc.strip('\00')))
+                log.error('msg="Error with xroot" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' % \
+                          (cmd, subcmd, args, msg, rc.strip('\00')))
                 raise IOError(msg)
     # all right, return everything that came in stdout
+    log.debug('msg="Invoked xroot" cmd="%s%s" url="%s" res="%s" elapsedTimems="%.1f"' %
+              (cmd, ('/' + subcmd if subcmd else ''), url, res, (tend-tstart)*1000))
     return res[0][res[0].find('stdout=')+7:]
 
 
