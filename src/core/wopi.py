@@ -438,7 +438,7 @@ def putFile(fileid):
             # either the file was deleted or it was updated/overwritten by others: force conflict
             newname, ext = os.path.splitext(acctok['filename'])
             # !!! typical EFSS formats are like '<filename>_conflict-<date>-<time>', but they're not synchronized back !!!
-            newname = '%s-conflict-%s%s' % (newname, time.strftime('%Y%m%d-%H%M%S'), ext.strip())
+            newname = '%s-webconflict-%s%s' % (newname, time.strftime('%Y%m%d-%H'), ext.strip())
             utils.storeWopiFile(flask.request, acctok, utils.LASTSAVETIMEKEY, newname)
             # keep track of this action in the original file's xattr, to avoid looping (see below)
             st.setxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY, 0)
