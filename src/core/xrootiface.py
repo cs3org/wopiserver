@@ -69,20 +69,20 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args):
         tstart = time.time()
         rc, statInfo_unused = f.open(url, OpenFlags.READ)
         tend = time.time()
-        res = f.readline().decode('UTF-8').strip('\n').split('&')
+        res = b''.join(f.readlines()).decode().split('&')
         if len(res) == 3:        # we may only just get stdout: in that case, assume it's all OK
-            rc = res[2]
+            rc = res[2].strip('\n')
             rc = rc[rc.find('=')+1:]
             if rc != '0':
                 # failure: get info from stderr, log and raise
-                msg = res[1][res[1].find('=')+1:]
+                msg = res[1][res[1].find('=')+1:].strip('\n')
                 log.error('msg="Error with xroot" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' % \
                           (cmd, subcmd, args, msg, rc.strip('\00')))
                 raise IOError(msg)
     # all right, return everything that came in stdout
     log.debug('msg="Invoked xroot" cmd="%s%s" url="%s" res="%s" elapsedTimems="%.1f"' %
               (cmd, ('/' + subcmd if subcmd else ''), url, res, (tend-tstart)*1000))
-    return res[0][res[0].find('stdout=')+7:]
+    return res[0][res[0].find('stdout=')+7:].strip('\n')
 
 
 def _getfilepath(filepath, encodeamp=False):
