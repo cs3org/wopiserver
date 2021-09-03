@@ -298,7 +298,7 @@ def iopOpenInApp():
     - enum viewmode: how the user should access the file, according to utils.ViewMode/the CS3 app provider API
     - string username (optional): user's full display name, typically shown by the Office app
     - string filename OR fileid: the full path of the filename to be opened, or its fileid
-    - string folderurl: the URL to come back to the containing folder for this file, typically shown by the Office app
+    - string folderurl (optional): the URL to come back to the containing folder for this file, typically shown by the Office app
     - string endpoint (optional): the storage endpoint to be used to look up the file or the storage id, in case of
       multi-instance underlying storage; defaults to 'default'
     - string appname: the identifier of the end-user application to be served
@@ -335,7 +335,7 @@ def iopOpenInApp():
                          (req.remote_addr, req.args.get('viewmode'), e))
         return 'Missing or invalid viewmode argument', http.client.BAD_REQUEST
     username = req.args.get('username', '')
-    folderurl = url_unquote(req.args.get('folderurl', '%%2F'))   # defaults to `/`
+    folderurl = url_unquote(req.args.get('folderurl', '%2F'))   # defaults to `/`
     endpoint = req.args.get('endpoint', 'default')
     appname = url_unquote(req.args.get('appname', ''))
     appurl = url_unquote(req.args.get('appurl', ''))
@@ -348,7 +348,7 @@ def iopOpenInApp():
     if bridge.issupported(appname):
         # This is a bridge-supported application, get the extra info to enable it
         apikey = req.headers.get('ApiKey')
-        appinturl = req.headers.get('appinturl', appurl)     # defaults to the external appurl
+        appinturl = url_unquote(req.args.get('appinturl', appurl))     # defaults to the external appurl
         try:
             bridge.WB.loadplugin(appname, appurl, appinturl, apikey)
         except ValueError:

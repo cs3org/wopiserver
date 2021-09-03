@@ -43,7 +43,7 @@ def checkFileInfo(fileid):
         filemd['BaseFileName'] = filemd['BreadcrumbDocName'] = os.path.basename(acctok['filename'])
         furl = acctok['folderurl']
         # encode the path part as it is going to be an URL GET argument
-        filemd['BreadcrumbFolderUrl'] = furl[:furl.find('=')+1] + url_quote_plus(furl[furl.find('=')+1:])
+        filemd['BreadcrumbFolderUrl'] = furl[:furl.find('=')+1] + url_quote_plus(furl[furl.find('=')+1:]) if furl != '/' else ''
         if acctok['username'] == '':
             filemd['UserFriendlyName'] = 'Guest ' + utils.randomString(3)
             if '?path' in furl and furl[-1] != '/' and furl[-1] != '=':
@@ -55,6 +55,8 @@ def checkFileInfo(fileid):
         else:
             filemd['UserFriendlyName'] = acctok['username']
             filemd['BreadcrumbFolderName'] = 'Back to ' + os.path.dirname(acctok['filename'])
+        if furl == '/':    # if no target folder URL was given, override the above and completely hide it
+            filemd['BreadcrumbFolderName'] = ''
         if acctok['viewmode'] in (utils.ViewMode.READ_ONLY, utils.ViewMode.READ_WRITE):
             filemd['DownloadUrl'] = '%s?access_token=%s' % \
                                     (srv.config.get('general', 'downloadurl'), flask.request.args['access_token'])
