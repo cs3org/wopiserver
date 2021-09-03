@@ -110,6 +110,16 @@ class Wopi:
             cls.tokenvalidity = cls.config.getint('general', 'tokenvalidity')
             storage.init(cls.config, cls.log)                          # initialize the storage layer
             cls.useHttps = cls.config.get('security', 'usehttps').lower() == 'yes'
+            # validate the certificates exist if running in https mode
+            if cls.useHttps:
+                try:
+                    with open(cls.config.get('security', 'wopicert')) as _:
+                        pass
+                    with open(cls.config.get('security', 'wopikey')) as _:
+                        pass
+                except OSError as e:
+                    cls.log.error('msg="Failed to open the provided certificate or key to start in https mode"')
+                    raise
             cls.wopiurl = cls.config.get('general', 'wopiurl')
             if cls.config.has_option('general', 'lockpath'):
                 cls.lockpath = cls.config.get('general', 'lockpath')
