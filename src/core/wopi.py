@@ -69,8 +69,8 @@ def checkFileInfo(fileid):
         filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = filemd['SupportsRename'] = \
             filemd['SupportsDeleteFile'] = filemd['UserCanRename'] = acctok['viewmode'] == utils.ViewMode.READ_WRITE
         filemd['UserCanNotWriteRelative'] = acctok['viewmode'] != utils.ViewMode.READ_WRITE
-        filemd['HostViewUrl'] = '%s&%s' % (acctok['appviewurl'], wopiSrc)
-        filemd['HostEditUrl'] = '%s&%s' % (acctok['appediturl'], wopiSrc)
+        filemd['HostViewUrl'] = '%s%s%s' % (acctok['appviewurl'], '&' if '?' in acctok['appviewurl'] else '?', wopiSrc)
+        filemd['HostEditUrl'] = '%s%s%s' % (acctok['appediturl'], '&' if '?' in acctok['appediturl'] else '?', wopiSrc)
 
         # populate app-specific metadata
         if acctok['appname'].find('Microsoft') > 0:
@@ -324,8 +324,9 @@ def putRelative(fileid, reqheaders, acctok):
     putrelmd = {}
     putrelmd['Name'] = os.path.basename(targetName)
     putrelmd['Url'] = '%s?access_token=%s' % (url_unquote(utils.generateWopiSrc(inode)), newacctok)
-    putrelmd['HostEditUrl'] = '%s&WOPISrc=%s&access_token=%s' % \
-                              (acctok['appediturl'], utils.generateWopiSrc(inode), newacctok)
+    putrelmd['HostEditUrl'] = '%s%sWOPISrc=%s&access_token=%s' % \
+                              (acctok['appediturl'], '&' if '?' in acctok['appediturl'] else '?',
+                               utils.generateWopiSrc(inode), newacctok)
     log.debug('msg="PutRelative response" token="%s" metadata="%s"' % (newacctok[-20:], putrelmd))
     return flask.Response(json.dumps(putrelmd), mimetype='application/json')
 

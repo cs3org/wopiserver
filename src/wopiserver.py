@@ -372,8 +372,8 @@ def iopOpenInApp():
         except bridge.FailedOpen as foe:
             return foe.msg, foe.statuscode
     else:
-        res['app-url'] = '%s&WOPISrc=%s' % \
-                         (appurl if viewmode == utils.ViewMode.READ_WRITE else appviewurl, utils.generateWopiSrc(inode))
+        res['app-url'] = appurl if viewmode == utils.ViewMode.READ_WRITE else appviewurl
+        res['app-url'] += '%sWOPISrc=%s' % ('&' if '?' in res['app-url'] else '?', utils.generateWopiSrc(inode))
         res['form-parameters'] = {'access_token' : acctok}
     return flask.Response(json.dumps(res), mimetype='application/json')
 
