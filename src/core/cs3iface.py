@@ -108,7 +108,7 @@ def setxattr(_endpoint, filepath, userid, key, value):
     res = ctx['cs3stub'].SetArbitraryMetadata(request=req,
                                               metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
-        ctx['log'].error('msg="Failed to getxattr" filepath="%s" key="%s" reason="%s"' % (filepath, key, res.status.message))
+        ctx['log'].error('msg="Failed to setxattr" filepath="%s" key="%s" reason="%s"' % (filepath, key, res.status.message))
         raise IOError(res.status.message)
     ctx['log'].debug('msg="Invoked setxattr" result="%s"' % res)
 
