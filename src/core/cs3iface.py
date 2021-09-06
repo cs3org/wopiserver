@@ -21,6 +21,7 @@ import cs3.gateway.v1beta1.gateway_api_pb2 as cs3gw
 import cs3.rpc.v1beta1.code_pb2 as cs3code
 import cs3.types.v1beta1.types_pb2 as types
 
+ENOENT_MSG = 'No such file or directory'
 
 # module-wide state
 ctx = {}            # "map" to store some module context: cf. init()
@@ -73,7 +74,7 @@ def stat(endpoint, fileid, userid, versioninv=0):
     statInfo = ctx['cs3stub'].Stat(request=cs3sp.StatRequest(ref=ref),
                                    metadata=[('x-access-token', userid)])
     tend = time.time()
-    ctx['log'].info('msg="Invoked stat" fileid="%s" elapsedTimems="%.1f"' % (fileid, (tend-tstart)*1000))
+    ctx['log'].info('msg="Invoked stat" inode="%s" elapsedTimems="%.1f"' % (fileid, (tend-tstart)*1000))
     if statInfo.status.code == cs3code.CODE_OK:
         ctx['log'].debug('msg="Stat result" data="%s"' % statInfo)
         if statInfo.info.type == cs3spr.RESOURCE_TYPE_CONTAINER:
@@ -89,8 +90,8 @@ def stat(endpoint, fileid, userid, versioninv=0):
                 'size': statInfo.info.size,
                 'mtime': statInfo.info.mtime.seconds
                }
-    ctx['log'].info('msg="Failed stat" fileid="%s" reason="%s"' % (fileid, statInfo.status.message))
-    raise IOError('No such file or directory' if statInfo.status.code == cs3code.CODE_NOT_FOUND else statInfo.status.message)
+    ctx['log'].info('msg="Failed stat" inode="%s" reason="%s"' % (fileid, statInfo.status.message))
+    raise IOError(ENOENT_MSG if statInfo.status.code == cs3code.CODE_NOT_FOUND else statInfo.status.message)
 
 
 def statx(endpoint, fileid, userid, versioninv=0):
@@ -113,7 +114,7 @@ def setxattr(_endpoint, filepath, userid, key, value):
 
 
 def getxattr(_endpoint, filepath, userid, key):
-    '''Get the extended attribute <key> using the given userid as access token. Do not raise exceptions'''
+    '''Get the extended attribute <key> using the given userid as access token'''
     tstart = time.time()
     reference = cs3spr.Reference(path=filepath)
     statInfo = ctx['cs3stub'].Stat(request=cs3sp.StatRequest(ref=reference),
@@ -152,9 +153,9 @@ def readfile(_endpoint, filepath, userid):
     initfiledownloadres = ctx['cs3stub'].InitiateFileDownload(request=req, metadata=[('x-access-token', userid)])
     if initfiledownloadres.status.code == cs3code.CODE_NOT_FOUND:
         ctx['log'].info('msg="File not found on read" filepath="%s"' % filepath)
-        yield IOError('No such file or directory')
+        yield IOError(ENOENT_MSG)
     elif initfiledownloadres.status.code != cs3code.CODE_OK:
-        ctx['log'].debug('msg="Failed to initiateFileDownload on read" filepath="%s" reason="%s"' %
+        ctx['log'].error('msg="Failed to initiateFileDownload on read" filepath="%s" reason="%s"' %
                          (filepath, initfiledownloadres.status.message))
         yield IOError(initfiledownloadres.status.message)
     ctx['log'].debug('msg="readfile: InitiateFileDownloadRes returned" protocols="%s"' % initfiledownloadres.protocols)
@@ -243,6 +244,9 @@ def removefile(_endpoint, filepath, userid, _force=0):
     req = cs3sp.DeleteRequest(ref=reference)
     res = ctx['cs3stub'].Delete(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
-        ctx['log'].error('msg="Failed to remove file" filepath="%s" error="%s"' % (filepath, res))
+        if str(res) == ENOENT_MSG:
+            ctx['log'].info('msg="Invoked removefile on non-existing file" filepath="%s"' % filepath)
+        else:
+            ctx['log'].error('msg="Failed to remove file" filepath="%s" error="%s"' % (filepath, res))
         raise IOError(res.status.message)
     ctx['log'].debug('msg="Invoked removefile" result="%s"' % res)

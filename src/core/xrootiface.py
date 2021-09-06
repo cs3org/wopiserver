@@ -15,6 +15,8 @@ from XRootD.client.flags import OpenFlags, QueryCode, MkDirFlags, StatInfoFlags
 
 EOSVERSIONPREFIX = '.sys.v#.'
 
+ENOENT_MSG = 'No such file or directory'
+
 # module-wide state
 config = None
 log = None
@@ -76,8 +78,12 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args):
             if rc != '0':
                 # failure: get info from stderr, log and raise
                 msg = res[1][res[1].find('=')+1:].strip('\n')
-                log.error('msg="Error with xroot" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' % \
-                          (cmd, subcmd, args, msg, rc.strip('\00')))
+                if ENOENT_MSG in msg:
+                    log.info('msg="Invoked xroot on non-existing file" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' % \
+                             (cmd, subcmd, args, msg, rc.strip('\00')))
+                else:
+                    log.error('msg="Error with xroot" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' % \
+                              (cmd, subcmd, args, msg, rc.strip('\00')))
                 raise IOError(msg)
     # all right, return everything that came in stdout
     log.debug('msg="Invoked xroot" cmd="%s%s" url="%s" res="%s" elapsedTimems="%.1f"' %
@@ -132,7 +138,7 @@ def statx(endpoint, filepath, userid, versioninv=0):
         raise IOError(str(rc).strip('\n'))
     statInfo = statInfo.decode()
     if 'retc=2\\x00' in statInfo:
-        raise IOError('No such file or directory')     # convert ENOENT
+        raise IOError(ENOENT_MSG)     # convert ENOENT
     if 'retc=' in statInfo:
         raise IOError(statInfo.strip('\n'))
     statxdata = statInfo.split()
@@ -212,9 +218,9 @@ def readfile(endpoint, filepath, userid):
         tend = time.time()
         if not rc.ok:
             # the file could not be opened: check the case of ENOENT and log it as info to keep the logs cleaner
-            if 'No such file or directory' in rc.message:
+            if ENOENT_MSG in rc.message:
                 log.info('msg="File not found on read" filepath="%s"' % filepath)
-                yield IOError('No such file or directory')
+                yield IOError(ENOENT_MSG)
             else:
                 log.warning('msg="Error opening the file for read" filepath="%s" code="%d" error="%s"' % \
                             (filepath, rc.shellcode, rc.message.strip('\n')))
