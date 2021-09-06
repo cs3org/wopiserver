@@ -10,6 +10,7 @@ Contributions: Michael.DSilva@aarnet.edu.au
 import time
 import os
 from stat import S_ISDIR
+from base64 import b64encode
 from XRootD import client as XrdClient
 from XRootD.client.flags import OpenFlags, QueryCode, MkDirFlags, StatInfoFlags
 
@@ -146,8 +147,12 @@ def statx(endpoint, filepath, userid, versioninv=0):
     if S_ISDIR(int(statxdata[3])):
         raise IOError('Is a directory')            # EISDIR
     if versioninv == 0:
-        # classic statx info of the given file; endpoint is in the form `root://...` here, so we strip the protocol and the domain
-        return {'inode': endpoint[7:-8] + '.' + statxdata[2],
+        # classic statx info of the given file:
+        # the inode is base64-encoded to match the format issued by the CS3APIs and ensure interoperability,
+        # and we extract the eosinstance from endpoint, which looks like e.g. root://eosinstance.cern.ch
+        inode = endpoint[7:endpoint.find('.')] + '-' + b64encode(statxvdata[2].encode()).decode()
+        log.debug('msg="Invoked stat return" inode="%s" filepath="%s"' % (inode, _getfilepath(verFolder)))
+        return {'inode': inode,
                 'filepath': filepath,
                 'userid': statxdata[5] + ':' + statxdata[6],
                 'size': int(statxdata[8]),
@@ -176,10 +181,10 @@ def statx(endpoint, filepath, userid, versioninv=0):
     except IOError:
         log.warn('msg="Failed to mkdir/stat version folder" rc="%s"' % rcv)
         statxvdata = statxdata
-    # return the metadata of the given file, except for the inode that is taken from the version folder
-    log.debug('msg="Invoked stat return" fileid="%s" filepath="%s"' % \
-              (endpoint[7:-8] + '.' + statxvdata[2], _getfilepath(verFolder)))
-    return {'inode': endpoint[7:-8] + '.' + statxvdata[2],
+    # return the metadata of the given file, with the inode taken from the version folder (see above for the encoding)
+    inode = endpoint[7:endpoint.find('.')] + '-' + b64encode(statxvdata[2].encode()).decode()
+    log.debug('msg="Invoked stat return" inode="%s" filepath="%s"' % (inode, _getfilepath(verFolder)))
+    return {'inode': inode,
             'filepath': filepath,
             'userid': statxdata[5] + ':' + statxdata[6],
             'size': int(statxdata[8]),
