@@ -70,7 +70,7 @@ class JsonLogger:
                     msg = dict([tuple(kv.split('="')) for kv in msg.split('" ')[:-1]])
                     # then convert dict -> json -> str + strip `{` and `}`
                     return getattr(self.logger, name)(str(json.dumps(msg))[1:-1], **kwargs)
-                except Exception:
+                except Exception:    # pylint: disable=broad-except
                     # if the above assumptions do not hold, keep the log in its original format but with the enriched args
                     return getattr(self.logger, name)(*args, **kwargs)
             elif hasattr(self.logger, name):

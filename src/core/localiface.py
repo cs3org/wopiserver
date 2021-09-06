@@ -18,7 +18,7 @@ homepath = None
 
 
 def _getfilepath(filepath):
-    '''map the given filepath into the target namespace by prepending the homepath (see storagehomepath in wopiserver.conf)'''
+    '''map the given filepath into the target fs by prepending the homepath (see storagehomepath in wopiserver.conf)'''
     return os.path.normpath(homepath + os.sep + filepath)
 
 

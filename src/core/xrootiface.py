@@ -49,7 +49,8 @@ def _geturlfor(endpoint):
 
 
 def _eosargs(userid, atomicwrite=0, bookingsize=0):
-    '''Assume userid is in the form uid:gid and split userid into uid,gid and generate extra EOS-specific arguments for the xroot URL'''
+    '''Assume userid is in the form uid:gid and split userid into uid,gid
+       plus generate extra EOS-specific arguments for the xroot URL'''
     try:
         # try to assert that userid must follow a '%d:%d' format
         userid = userid.split(':')
@@ -94,7 +95,8 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args):
 
 def _getfilepath(filepath, encodeamp=False):
     '''Map the given filepath into the target namespace by prepending the homepath (see storagehomepath in wopiserver.conf)'''
-    return homepath + (filepath if not encodeamp else filepath.replace('&', '#AND#'))         # this is a special legacy encoding by eos
+    # use a special legacy encoding by eos for '&'
+    return homepath + (filepath if not encodeamp else filepath.replace('&', '#AND#'))
 
 
 def init(inconfig, inlog):
@@ -172,7 +174,8 @@ def statx(endpoint, filepath, userid, versioninv=0):
             log.debug('msg="Invoked mkdir on version folder" filepath="%s" rc="%s"' % (_getfilepath(verFolder), rcmkdir))
             if '[SUCCESS]' not in str(rcmkdir):
                 raise IOError
-            rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder) + _eosargs(userid) + '&mgm.pcmd=stat')
+            rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder) + \
+                                                    _eosargs(userid) + '&mgm.pcmd=stat')
             infov = infov.decode()
             log.debug('msg="Invoked stat on version folder" filepath="%s" result="%s"' % (_getfilepath(verFolder), infov))
             if '[SUCCESS]' not in str(rcv) or 'retc=' in infov:
