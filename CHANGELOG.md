@@ -1,5 +1,17 @@
 ## Changelog for the WOPI server
 
+### Mon Sep  6 2021 - v7.4.0
+- Changed the inode scheme for the xrootd
+  storage interface to match the cs3 one and
+  enable co-operation in mixed deployments
+- Made `folderurl` argument fully optional
+  in /wopi/iop/openinapp
+- Improved logging and error reporting
+  from the storage layers
+- Added minimal validation of cert/key files
+  prior to starting the Flask server
+  in https mode
+
 ### Wed Sep  1 2021 - v7.3.0
 - Fixed WOPI GetFile to return HTTP 500
   in case of failures fetching the file
