@@ -27,7 +27,7 @@ def registerapp(appname, appurl, appinturl, apikey=None):
     try:
         discReq = requests.get(appurl + '/hosting/discovery', verify=False)
     except requests.exceptions.ConnectionError as e:
-        log.error('msg="iopRegisterApp: failed to probe application" appurl="%s" response="%s"' % (appurl, e))
+        log.error('msg="Failed to probe application" appurl="%s" response="%s"' % (appurl, e))
         return
 
     if discReq.status_code == http.client.OK:
@@ -76,7 +76,7 @@ def registerapp(appname, appurl, appinturl, apikey=None):
                 endpoints['.zmd']['view'] = endpoints['.zmd']['edit'] = bridgeurl
                 endpoints['.txt'] = {}
                 endpoints['.txt']['view'] = endpoints['.txt']['edit'] = bridgeurl
-                log.info('msg="iopRegisterApp: CodiMD endpoints successfully configured" BridgeURL="%s"' % bridgeurl)
+                log.info('msg="CodiMD endpoints successfully configured" BridgeURL="%s"' % bridgeurl)
                 return
 
             if discReq.find('Etherpad') > 0:
@@ -84,7 +84,7 @@ def registerapp(appname, appurl, appinturl, apikey=None):
                 bridgeurl = config.get('general', 'wopiurl') + '/wopi/bridge/open'
                 endpoints['.epd'] = {}
                 endpoints['.epd']['view'] = endpoints['.epd']['edit'] = bridgeurl
-                log.info('msg="iopRegisterApp: Etherpad endpoints successfully configured" BridgeURL="%s"' % bridgeurl)
+                log.info('msg="Etherpad endpoints successfully configured" BridgeURL="%s"' % bridgeurl)
                 return
         except ValueError:
             # bridge plugin could not be initialized
@@ -92,8 +92,8 @@ def registerapp(appname, appurl, appinturl, apikey=None):
         except requests.exceptions.ConnectionError:
             pass
 
-    # in all other cases, fail
-    log.error('msg="iopRegisterApp: app is not WOPI-compatible" appurl="%s"' % appurl)
+    # in all other cases, log failure
+    log.error('msg="Attempted to register a non WOPI-compatible app" appurl="%s"' % appurl)
 
 
 def initappsregistry():

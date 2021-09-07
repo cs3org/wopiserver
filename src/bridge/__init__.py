@@ -117,7 +117,7 @@ def appopen(wopisrc, acctok):
     # WOPI GetFileInfo
     res = wopic.request(wopisrc, acctok, 'GET')
     if res.status_code != http.client.OK:
-        WB.log.warning('msg="Open: unable to fetch file WOPI metadata" response="%d"' % res.status_code)
+        WB.log.warning('msg="BridgeOpen: unable to fetch file WOPI metadata" response="%d"' % res.status_code)
         raise FailedOpen('Invalid WOPI context', http.client.NOT_FOUND)
     filemd = res.json()
     app = BRIDGE_EXT_PLUGINS.get(os.path.splitext(filemd['BaseFileName'])[1][1:])
@@ -195,10 +195,10 @@ def appsave(docid):
         isclose = flask.request.args.get('close') == 'true'
         if not docid:
             raise ValueError
-        WB.log.info('msg="Save: requested action" isclose="%s" docid="%s" wopisrc="%s" token="%s"' %
+        WB.log.info('msg="BridgeSave: requested action" isclose="%s" docid="%s" wopisrc="%s" token="%s"' %
                     (isclose, docid, wopisrc, acctok[-20:]))
     except (KeyError, ValueError) as e:
-        WB.log.error('msg="Save: malformed or missing metadata" client="%s" headers="%s" exception="%s" error="%s"' %
+        WB.log.error('msg="BridgeSave: malformed or missing metadata" client="%s" headers="%s" exception="%s" error="%s"' %
                      (flask.request.remote_addr, flask.request.headers, type(e), e))
         return wopic.jsonify('Malformed or missing metadata, could not save. %s' % RECOVER_MSG), http.client.INTERNAL_SERVER_ERROR
 
@@ -227,10 +227,10 @@ def appsave(docid):
         # return latest known state for this document
         if wopisrc in WB.saveresponses:
             resp = WB.saveresponses[wopisrc]
-            WB.log.info('msg="Save: returned response" response="%s" token="%s"' % (resp, acctok[-20:]))
+            WB.log.info('msg="BridgeSave: returned response" response="%s" token="%s"' % (resp, acctok[-20:]))
             del WB.saveresponses[wopisrc]
             return resp
-        WB.log.info('msg="Save: enqueued action" immediate="%s" token="%s"' % (donotify, acctok[-20:]))
+        WB.log.info('msg="BridgeSave: enqueued action" immediate="%s" token="%s"' % (donotify, acctok[-20:]))
         return '{}', http.client.ACCEPTED
 
 
@@ -238,10 +238,10 @@ def applist():
     '''Return a list of all currently opened files, for operators only'''
     if (flask.request.headers.get('Authorization') != 'Bearer ' + WB.hashsecret) and \
        (flask.request.args.get('apikey') != WB.hashsecret):     # added for convenience
-        WB.log.warning('msg="List: unauthorized access attempt, missing authorization token" '
+        WB.log.warning('msg="BridgeList: unauthorized access attempt, missing authorization token" '
                        'client="%s"' % flask.request.remote_addr)
         return 'Client not authorized', http.client.UNAUTHORIZED
-    WB.log.info('msg="List: returning list of open files" client="%s"' % flask.request.remote_addr)
+    WB.log.info('msg="BridgeList: returning list of open files" client="%s"' % flask.request.remote_addr)
     return flask.Response(json.dumps(WB.openfiles), mimetype='application/json')
 
 
