@@ -122,7 +122,7 @@ def appopen(wopisrc, acctok):
     filemd = res.json()
     app = BRIDGE_EXT_PLUGINS.get(os.path.splitext(filemd['BaseFileName'])[1][1:])
     if not app or not WB.plugins[app]:
-        WB.log.warning('msg="Open: file type not supported or missing plugin" filename="%s" token="%s"' % (filemd['FileName'], acctok[-20:]))
+        WB.log.warning('msg="Open: file type not supported or missing plugin" filename="%s" token="%s"' % (filemd['BaseFileName'], acctok[-20:]))
         raise FailedOpen('File type not supported', http.client.BAD_REQUEST)
     WB.log.debug('msg="Processing open in supported app" app="%s" plugin="%s"' % (app, WB.plugins[app]))
     app = WB.plugins[app]
