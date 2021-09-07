@@ -152,8 +152,8 @@ def statx(endpoint, filepath, userid, versioninv=0):
         # classic statx info of the given file:
         # the inode is base64-encoded to match the format issued by the CS3APIs and ensure interoperability,
         # and we extract the eosinstance from endpoint, which looks like e.g. root://eosinstance.cern.ch
-        inode = endpoint[7:endpoint.find('.')] + '-' + b64encode(statxvdata[2].encode()).decode()
-        log.debug('msg="Invoked stat return" inode="%s" filepath="%s"' % (inode, _getfilepath(verFolder)))
+        inode = endpoint[7:endpoint.find('.')] + '-' + b64encode(statxdata[2].encode()).decode()
+        log.debug('msg="Invoked stat return" inode="%s" filepath="%s"' % (inode, _getfilepath(filepath)))
         return {'inode': inode,
                 'filepath': filepath,
                 'userid': statxdata[5] + ':' + statxdata[6],
