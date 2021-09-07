@@ -124,13 +124,13 @@ def getxattr(_endpoint, filepath, userid, key):
         ctx['log'].error('msg="Failed to stat" filepath="%s" key="%s" reason="%s"' % (filepath, key, statInfo.status.message))
         raise IOError(statInfo.status.message)
     try:
-        xattrvalue = statInfo.info.arbitrary_metadata.metadata[key]
+        xattrvalue = statInfo.info.arbitrary_metadata.metadata['user.' + key]   # TODO remove 'user.' once Stat() is fixed in Reva
         if xattrvalue == '':
             raise KeyError
         ctx['log'].debug('msg="Invoked stat for getxattr" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
         return xattrvalue
     except KeyError:
-        ctx['log'].info('msg="Key not found in getxattr" filepath="%s" key="%s"' % (filepath, key))
+        ctx['log'].info('msg="Key not found in getxattr" filepath="%s" key="%s" metadata="%s"' % (filepath, key, statInfo.info.arbitrary_metadata.metadata))
         return None
 
 
