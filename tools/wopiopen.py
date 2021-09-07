@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 '''
 This tool is now deprecated. An alternative is the CLI open-in-app command in Reva.
-Call the /wopi/iop/open REST API on the given file and return a URL for direct editing it.
+Call the /wopi/cbox/open REST API on the given file and return a URL for direct editing it.
 Meant to be used from a WOPI server for opreations purposes, not externally.
 
 Author: Giuseppe.LoPresti@cern.ch
@@ -91,7 +91,7 @@ if len(userid.split(':')) == 2:
 else:
   # assume we've got an x-access-token
   wopiheaders['TokenHeader'] = userid
-wopisrc = requests.get(wopiurl + '/wopi/iop/open', verify=False,
+wopisrc = requests.get(wopiurl + '/wopi/cbox/open', verify=False,
                        headers=wopiheaders, params=wopiparams)
 if wopisrc.status_code != 200:
   print('WOPI open request failed:\n%s' % wopisrc.content.decode())

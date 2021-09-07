@@ -12,8 +12,12 @@ import requests
 import bridge
 
 # convenience references to global entities
-srv = None
+config = None
 log = None
+
+# map of all registered apps' endpoints
+endpoints = {}
+
 
 def registerapp(appname, appurl, appinturl, apikey=None):
     '''Registers the given app in the internal endpoints list
@@ -32,31 +36,31 @@ def registerapp(appname, appurl, appinturl, apikey=None):
         urlsrc = discXml.find('net-zone/app')[0].attrib['urlsrc']
         if urlsrc.find('loleaflet') > 0:
             # this is Collabora
-            codetypes = srv.config.get('general', 'codeofficetypes', fallback='.odt .ods .odp').split()
+            codetypes = config.get('general', 'codeofficetypes', fallback='.odt .ods .odp').split()
             for t in codetypes:
-                srv.endpoints[t] = {}
-                srv.endpoints[t]['view'] = urlsrc + 'permission=readonly'
-                srv.endpoints[t]['edit'] = urlsrc + 'permission=edit'
-                srv.endpoints[t]['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace
+                endpoints[t] = {}
+                endpoints[t]['view'] = urlsrc + 'permission=readonly'
+                endpoints[t]['edit'] = urlsrc + 'permission=edit'
+                endpoints[t]['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace
             log.info('msg="Collabora Online endpoints successfully configured" count="%d" CODEURL="%s"' %
-                     (len(codetypes), srv.endpoints['.odt']['edit']))
+                     (len(codetypes), endpoints['.odt']['edit']))
             return
 
         # else this must be Microsoft Office Online
-        srv.endpoints['.docx'] = {}
-        srv.endpoints['.docx']['view'] = appurl + '/wv/wordviewerframe.aspx?edit=0'
-        srv.endpoints['.docx']['edit'] = appurl + '/we/wordeditorframe.aspx?edit=1'
-        srv.endpoints['.docx']['new']  = appurl + '/we/wordeditorframe.aspx?new=1'                         # pylint: disable=bad-whitespace
-        srv.endpoints['.xlsx'] = {}
-        srv.endpoints['.xlsx']['view'] = appurl + '/x/_layouts/xlviewerinternal.aspx?edit=0'
-        srv.endpoints['.xlsx']['edit'] = appurl + '/x/_layouts/xlviewerinternal.aspx?edit=1'
-        srv.endpoints['.xlsx']['new']  = appurl + '/x/_layouts/xlviewerinternal.aspx?edit=1&new=1'         # pylint: disable=bad-whitespace
-        srv.endpoints['.pptx'] = {}
-        srv.endpoints['.pptx']['view'] = appurl + '/p/PowerPointFrame.aspx?PowerPointView=ReadingView'
-        srv.endpoints['.pptx']['edit'] = appurl + '/p/PowerPointFrame.aspx?PowerPointView=EditView'
-        srv.endpoints['.pptx']['new']  = appurl + '/p/PowerPointFrame.aspx?PowerPointView=EditView&New=1'  # pylint: disable=bad-whitespace
+        endpoints['.docx'] = {}
+        endpoints['.docx']['view'] = appurl + '/wv/wordviewerframe.aspx?edit=0'
+        endpoints['.docx']['edit'] = appurl + '/we/wordeditorframe.aspx?edit=1'
+        endpoints['.docx']['new']  = appurl + '/we/wordeditorframe.aspx?new=1'                         # pylint: disable=bad-whitespace
+        endpoints['.xlsx'] = {}
+        endpoints['.xlsx']['view'] = appurl + '/x/_layouts/xlviewerinternal.aspx?edit=0'
+        endpoints['.xlsx']['edit'] = appurl + '/x/_layouts/xlviewerinternal.aspx?edit=1'
+        endpoints['.xlsx']['new']  = appurl + '/x/_layouts/xlviewerinternal.aspx?edit=1&new=1'         # pylint: disable=bad-whitespace
+        endpoints['.pptx'] = {}
+        endpoints['.pptx']['view'] = appurl + '/p/PowerPointFrame.aspx?PowerPointView=ReadingView'
+        endpoints['.pptx']['edit'] = appurl + '/p/PowerPointFrame.aspx?PowerPointView=EditView'
+        endpoints['.pptx']['new']  = appurl + '/p/PowerPointFrame.aspx?PowerPointView=EditView&New=1'  # pylint: disable=bad-whitespace
         log.info('msg="Microsoft Office Online endpoints successfully configured" OfficeURL="%s"' %
-                 srv.endpoints['.docx']['edit'])
+                 endpoints['.docx']['edit'])
         return
 
     if discReq.status_code == http.client.NOT_FOUND:
@@ -65,21 +69,21 @@ def registerapp(appname, appurl, appinturl, apikey=None):
             discReq = requests.get(appurl, verify=False).content.decode()
             if discReq.find('CodiMD') > 0:
                 bridge.WB.loadplugin(appname, appurl, appinturl, apikey)
-                bridgeurl = srv.config.get('general', 'wopiurl') + '/wopi/bridge/open'
-                srv.endpoints['.md'] = {}
-                srv.endpoints['.md']['view'] = srv.endpoints['.md']['edit'] = bridgeurl
-                srv.endpoints['.zmd'] = {}
-                srv.endpoints['.zmd']['view'] = srv.endpoints['.zmd']['edit'] = bridgeurl
-                srv.endpoints['.txt'] = {}
-                srv.endpoints['.txt']['view'] = srv.endpoints['.txt']['edit'] = bridgeurl
+                bridgeurl = config.get('general', 'wopiurl') + '/wopi/bridge/open'
+                endpoints['.md'] = {}
+                endpoints['.md']['view'] = endpoints['.md']['edit'] = bridgeurl
+                endpoints['.zmd'] = {}
+                endpoints['.zmd']['view'] = endpoints['.zmd']['edit'] = bridgeurl
+                endpoints['.txt'] = {}
+                endpoints['.txt']['view'] = endpoints['.txt']['edit'] = bridgeurl
                 log.info('msg="iopRegisterApp: CodiMD endpoints successfully configured" BridgeURL="%s"' % bridgeurl)
                 return
 
             if discReq.find('Etherpad') > 0:
                 bridge.WB.loadplugin(appname, appurl, appinturl, apikey)
-                bridgeurl = srv.config.get('general', 'wopiurl') + '/wopi/bridge/open'
-                srv.endpoints['.epd'] = {}
-                srv.endpoints['.epd']['view'] = srv.endpoints['.epd']['edit'] = bridgeurl
+                bridgeurl = config.get('general', 'wopiurl') + '/wopi/bridge/open'
+                endpoints['.epd'] = {}
+                endpoints['.epd']['view'] = endpoints['.epd']['edit'] = bridgeurl
                 log.info('msg="iopRegisterApp: Etherpad endpoints successfully configured" BridgeURL="%s"' % bridgeurl)
                 return
         except ValueError:
@@ -94,20 +98,20 @@ def registerapp(appname, appurl, appinturl, apikey=None):
 
 def initappsregistry():
     '''Initializes the CERNBox Office-like Apps Registry'''
-    oos = srv.config.get('general', 'oosurl', fallback=None)
+    oos = config.get('general', 'oosurl', fallback=None)
     if oos:
         registerapp('MSOffice', oos, oos)
-    code = srv.config.get('general', 'codeurl', fallback=None)
+    code = config.get('general', 'codeurl', fallback=None)
     if code:
         registerapp('Collabora', code, code)
-    codimd = srv.config.get('general', 'codimdurl', fallback=None)
-    codimdint = srv.config.get('general', 'codimdinturl', fallback=None)
+    codimd = config.get('general', 'codimdurl', fallback=None)
+    codimdint = config.get('general', 'codimdinturl', fallback=None)
     if codimd:
         with open('/var/run/secrets/codimd_apikey') as f:
             apikey = f.readline().strip('\n')
             registerapp('CodiMD', codimd, codimdint, apikey)
-    etherpad = srv.config.get('general', 'etherpadurl', fallback=None)
-    etherpadint = srv.config.get('general', 'etherpadinturl', fallback=None)
+    etherpad = config.get('general', 'etherpadurl', fallback=None)
+    etherpadint = config.get('general', 'etherpadinturl', fallback=None)
     if etherpad:
         with open('/var/run/secrets/etherpad_apikey') as f:
             apikey = f.readline().strip('\n')

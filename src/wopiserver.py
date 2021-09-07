@@ -72,7 +72,6 @@ class Wopi:
                 }
     log = utils.JsonLogger(app.logger)
     openfiles = {}
-    endpoints = {}
 
     @classmethod
     def init(cls):
@@ -130,9 +129,11 @@ class Wopi:
             bridge.WB.init(cls.config, cls.log, cls.wopisecret)
             # initialize the submodules
             # TODO improve handling of globals across the whole code base
-            utils.srv = core.ioplocks.srv = core.wopi.srv = core.discovery.srv = cls
+            utils.srv = core.ioplocks.srv = core.wopi.srv = cls
             utils.log = core.ioplocks.log = core.wopi.log = core.discovery.log = cls.log
             utils.st = core.ioplocks.st = core.wopi.st = storage
+            core.discovery.config = cls.config
+            utils.endpoints = core.discovery.endpoints
         except (configparser.NoOptionError, OSError) as e:
             # any error we get here with the configuration is fatal
             cls.log.fatal('msg="Failed to initialize the service, aborting" error="%s"' % e)
@@ -198,109 +199,26 @@ def index():
 
 
 #
-# open-in-app endpoints
+# IOP endpoints
 #
-@Wopi.app.route("/wopi/iop/open", methods=['GET'])
-@Wopi.metrics.do_not_track()
-@Wopi.metrics.counter('open_by_ext', 'Number of /open calls by file extension',
-                      labels={'open_type': lambda:
-                         flask.request.args['filename'].split('.')[-1] \
-                         if 'filename' in flask.request.args and '.' in flask.request.args['filename'] \
-                         else ('noext' if 'filename' in flask.request.args else 'fileid')
-                      })
-def iopOpen():
-    '''Generates a WOPISrc target and an access token to be passed to a WOPI-compatible Office-like app
-    for accessing a given file for a given user.
-    Required headers:
-    - Authorization: a bearer shared secret to protect this call as it provides direct access to any user's file
-    - TokenHeader: an x-access-token to serve as user identity towards Reva
-      - OR int ruid, rgid as query parameters: a real Unix user identity (id:group); this is for legacy compatibility
-    Request arguments:
-    - enum viewmode: how the user should access the file, according to utils.ViewMode/the CS3 app provider API
-      - OR bool canedit: True if full access should be given to the user, otherwise read-only access is granted
-    - string username (optional): user's full display name, typically shown by the Office app
-    - string filename OR fileid: the full path of the filename to be opened, or its fileid
-    - string folderurl: the URL to come back to the containing folder for this file, typically shown by the Office app
-    - string endpoint (optional): the storage endpoint to be used to look up the file or the storage id, in case of
-      multi-instance underlying storage; defaults to 'default'
-    Returns: a single string with the application URL, or a message and a 4xx/5xx HTTP code in case of errors
-    '''
-    Wopi.refreshconfig()
-    req = flask.request
-    # if running in https mode, first check if the shared secret matches ours
-    if req.headers.get('Authorization') != 'Bearer ' + Wopi.iopsecret:
-        Wopi.log.warning('msg="iopOpen: unauthorized access attempt, missing authorization token" ' \
-                         'client="%s" clientAuth="%s"' % (req.remote_addr, req.headers.get('Authorization')))
-        return UNAUTHORIZED
-    # now validate the user identity and deny root access
-    try:
-        if 'TokenHeader' in req.headers:
-            userid = req.headers['TokenHeader']
-        else:
-            # backwards compatibility
-            userid = 'N/A'
-            ruid = int(req.args['ruid'])
-            rgid = int(req.args['rgid'])
-            userid = '%d:%d' % (ruid, rgid)
-            if ruid == 0 or rgid == 0:
-                raise ValueError
-    except ValueError:
-        Wopi.log.warning('msg="iopOpen: invalid or missing user/token in request" client="%s" user="%s"' %
-                         (req.remote_addr, userid))
-        return UNAUTHORIZED
-    fileid = url_unquote(req.args['filename']) if 'filename' in req.args else req.args.get('fileid', '')
-    if fileid == '':
-        Wopi.log.warning('msg="iopOpen: either filename or fileid must be provided" client="%s"' % req.remote_addr)
-        return 'Invalid argument', http.client.BAD_REQUEST
-    if 'viewmode' in req.args:
-        try:
-            viewmode = utils.ViewMode(req.args['viewmode'])
-        except ValueError:
-            Wopi.log.warning('msg="iopOpen: invalid viewmode parameter" client="%s" viewmode="%s"' %
-                             (req.remote_addr, req.args['viewmode']))
-            return 'Invalid argument', http.client.BAD_REQUEST
-    else:
-        # backwards compatibility
-        viewmode = utils.ViewMode.READ_WRITE if 'canedit' in req.args and req.args['canedit'].lower() == 'true' \
-                   else utils.ViewMode.READ_ONLY
-    username = req.args.get('username', '')
-    folderurl = url_unquote(req.args.get('folderurl', '%%2F'))   # defaults to `/`
-    endpoint = req.args.get('endpoint', 'default')
-    try:
-        inode, acctok = utils.generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint, '', '', '')
-        # generate the URL-encoded payload for the app engine
-        return '%s&access_token=%s' % (utils.generateWopiSrc(inode), acctok)      # no need to URL-encode the JWT token
-    except IOError as e:
-        Wopi.log.info('msg="iopOpen: remote error when generating token" client="%s" user="%s" ' \
-                      'friendlyname="%s" mode="%s" endpoint="%s" reason="%s"' %
-                      (req.remote_addr, userid, username, viewmode, endpoint, e))
-        return 'Remote error, file or app not found or file is a directory', http.client.NOT_FOUND
-
-
-@Wopi.app.route("/wopi/cbox/open", methods=['GET'])
-def cboxOpen():
-    '''CERNBox-specific endpoint for /open, provided for backwards compatibility'''
-    return iopOpen()
-
-
 @Wopi.app.route("/wopi/iop/openinapp", methods=['GET'])
 @Wopi.metrics.do_not_track()
 @Wopi.metrics.counter('open_by_app', 'Number of /open calls by appname',
-                      labels={ 'open_type': lambda: flask.request.args['appname'] })
+                      labels={ 'open_type': lambda: flask.request.args.get('appname') })
 def iopOpenInApp():
     '''Generates a WOPISrc target and an access token to be passed to a WOPI-compatible Office-like app
     for accessing a given file for a given user.
-    Required headers:
+    Headers:
     - Authorization: a bearer shared secret to protect this call as it provides direct access to any user's file
     - TokenHeader: an x-access-token to serve as user identity towards Reva
     - ApiKey (optional): a shared secret to be used with the end-user application if required
     Request arguments:
     - enum viewmode: how the user should access the file, according to utils.ViewMode/the CS3 app provider API
-    - string username (optional): user's full display name, typically shown by the Office app
-    - string filename OR fileid: the full path of the filename to be opened, or its fileid
-    - string folderurl (optional): the URL to come back to the containing folder for this file, typically shown by the Office app
+    - string fileid: the Reva fileid of the file to be opened
     - string endpoint (optional): the storage endpoint to be used to look up the file or the storage id, in case of
       multi-instance underlying storage; defaults to 'default'
+    - string username (optional): user's full display name, typically shown by the Office app
+    - string folderurl (optional): the URL to come back to the containing folder for this file, typically shown by the Office app
     - string appname: the identifier of the end-user application to be served
     - string appurl: the URL of the end-user application
     - string appviewurl (optional): the URL of the end-user application in view mode when different (defaults to appurl)
@@ -378,10 +296,38 @@ def iopOpenInApp():
     return flask.Response(json.dumps(res), mimetype='application/json')
 
 
-@Wopi.app.route("/wopi/iop/open/list", methods=['GET'])
+@Wopi.app.route("/wopi/iop/download", methods=['GET'])
+def iopDownload():
+    '''Returns the file's content for a given valid access token. Used as a download URL,
+       so that the path and possibly the x-access-token are never explicitly visible.'''
+    try:
+        acctok = jwt.decode(flask.request.args['access_token'], Wopi.wopisecret, algorithms=['HS256'])
+        if acctok['exp'] < time.time():
+            raise jwt.exceptions.ExpiredSignatureError
+        resp = flask.Response(storage.readfile(acctok['endpoint'], acctok['filename'], acctok['userid']), \
+                              mimetype='application/octet-stream')
+        resp.headers['Content-Disposition'] = 'attachment; filename="%s"' % os.path.basename(acctok['filename'])
+        resp.status_code = http.client.OK
+        Wopi.log.info('msg="cboxDownload: direct download succeeded" filename="%s" user="%s" token="%s"' %
+                      (acctok['filename'], acctok['userid'][-20:], flask.request.args['access_token'][-20:]))
+        return resp
+    except IOError as e:
+        Wopi.log.info('msg="Requested file not found" filename="%s" token="%s" error="%s"' %
+                      (acctok['filename'], flask.request.args['access_token'][-20:], e))
+        return 'File not found', http.client.NOT_FOUND
+    except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
+        Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" token="%s"' %
+                         (flask.request.remote_addr, flask.request.base_url, flask.request.args['access_token']))
+        return 'Invalid access token', http.client.UNAUTHORIZED
+    except KeyError as e:
+        Wopi.log.warning('msg="Invalid access token or request argument" error="%s"' % e)
+        return 'Invalid access token', http.client.UNAUTHORIZED
+
+
+@Wopi.app.route("/wopi/iop/list", methods=['GET'])
 def iopGetOpenFiles():
-    '''Returns a list of all currently opened files, for operations purposes only.
-    This call is protected by the same shared secret as the /wopi/iop/open call.'''
+    '''Returns a list of all currently open files, for operators only.
+    This call is protected by the same shared secret as the /wopi/iop/openinapp call.'''
     req = flask.request
     if req.headers.get('Authorization') != 'Bearer ' + Wopi.iopsecret:
         Wopi.log.warning('msg="iopGetOpenFiles: unauthorized access attempt, missing authorization token" ' \
@@ -443,7 +389,7 @@ def wopiFilesPost(fileid):
     except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
         Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" error="%s" token="%s"' %
                          (flask.request.remote_addr, flask.request.base_url, e, flask.request.args['access_token']))
-        return 'Invalid access token', http.client.NOT_FOUND
+        return 'Invalid access token', http.client.UNAUTHORIZED
     except KeyError as e:
         Wopi.log.warning('msg="Missing argument" client="%s" requestedUrl="%s" error="%s" token="%s"' %
                          (flask.request.remote_addr, flask.request.base_url, e, flask.request.args.get('access_token')))
@@ -457,7 +403,7 @@ def wopiPutFile(fileid):
 
 
 #
-# iop lock endpoints
+# IOP lock endpoints
 #
 @Wopi.app.route("/wopi/cbox/lock", methods=['GET', 'POST'])
 @Wopi.metrics.counter('lock_by_ext', 'Number of /lock calls by file extension',
@@ -559,53 +505,109 @@ def bridgeSave_deprecated():
 
 @Wopi.app.route("/wopi/bridge/list", methods=["GET"])
 def bridgeList():
-    '''The WOPI bridge list call'''
+    '''Return a list of all currently opened files in bridge mode, for operators only'''
     return bridge.applist()
 
 
 #
-# deprecated
+# Deprecated cbox endpoints
 #
+@Wopi.app.route("/wopi/cbox/open", methods=['GET'])
+@Wopi.metrics.do_not_track()
+@Wopi.metrics.counter('open_by_ext', 'Number of /open calls by file extension',
+                      labels={'open_type': lambda:
+                          flask.request.args['filename'].split('.')[-1] \
+                          if 'filename' in flask.request.args and '.' in flask.request.args['filename'] \
+                          else ('noext' if 'filename' in flask.request.args else 'fileid')
+                      })
+def cboxOpen_deprecated():
+    '''Generates a WOPISrc target and an access token to be passed to a WOPI-compatible Office-like app
+    for accessing a given file for a given user.
+    Required headers:
+    - Authorization: a bearer shared secret to protect this call as it provides direct access to any user's file
+    - TokenHeader: an x-access-token to serve as user identity towards Reva
+      - OR int ruid, rgid as query parameters: a real Unix user identity (id:group); this is for legacy compatibility
+    Request arguments:
+    - enum viewmode: how the user should access the file, according to utils.ViewMode/the CS3 app provider API
+      - OR bool canedit: True if full access should be given to the user, otherwise read-only access is granted
+    - string username (optional): user's full display name, typically shown by the Office app
+    - string filename OR fileid: the full path of the filename to be opened, or its fileid
+    - string endpoint (optional): the storage endpoint to be used to look up the file or the storage id, in case of
+      multi-instance underlying storage; defaults to 'default'
+    - string folderurl (optional): the URL to come back to the containing folder for this file, typically shown by the Office app
+    Returns: a single string with the application URL, or a message and a 4xx/5xx HTTP code in case of errors
+    '''
+    Wopi.refreshconfig()
+    req = flask.request
+    # if running in https mode, first check if the shared secret matches ours
+    if req.headers.get('Authorization') != 'Bearer ' + Wopi.iopsecret:
+        Wopi.log.warning('msg="iopOpen: unauthorized access attempt, missing authorization token" ' \
+                         'client="%s" clientAuth="%s"' % (req.remote_addr, req.headers.get('Authorization')))
+        return UNAUTHORIZED
+    # now validate the user identity and deny root access
+    try:
+        if 'TokenHeader' in req.headers:
+            userid = req.headers['TokenHeader']
+        else:
+            # backwards compatibility
+            userid = 'N/A'
+            ruid = int(req.args['ruid'])
+            rgid = int(req.args['rgid'])
+            userid = '%d:%d' % (ruid, rgid)
+            if ruid == 0 or rgid == 0:
+                raise ValueError
+    except ValueError:
+        Wopi.log.warning('msg="iopOpen: invalid or missing user/token in request" client="%s" user="%s"' %
+                         (req.remote_addr, userid))
+        return UNAUTHORIZED
+    fileid = url_unquote(req.args['filename']) if 'filename' in req.args else req.args.get('fileid', '')
+    if fileid == '':
+        Wopi.log.warning('msg="iopOpen: either filename or fileid must be provided" client="%s"' % req.remote_addr)
+        return 'Invalid argument', http.client.BAD_REQUEST
+    if 'viewmode' in req.args:
+        try:
+            viewmode = utils.ViewMode(req.args['viewmode'])
+        except ValueError:
+            Wopi.log.warning('msg="iopOpen: invalid viewmode parameter" client="%s" viewmode="%s"' %
+                             (req.remote_addr, req.args['viewmode']))
+            return 'Invalid argument', http.client.BAD_REQUEST
+    else:
+        # backwards compatibility
+        viewmode = utils.ViewMode.READ_WRITE if 'canedit' in req.args and req.args['canedit'].lower() == 'true' \
+                   else utils.ViewMode.READ_ONLY
+    username = req.args.get('username', '')
+    folderurl = url_unquote(req.args.get('folderurl', '%2F'))   # defaults to `/`
+    endpoint = req.args.get('endpoint', 'default')
+    try:
+        inode, acctok = utils.generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint, '', '', '')
+        # generate the URL-encoded payload for the app engine
+        return '%s&access_token=%s' % (utils.generateWopiSrc(inode), acctok)      # no need to URL-encode the JWT token
+    except IOError as e:
+        Wopi.log.info('msg="iopOpen: remote error when generating token" client="%s" user="%s" ' \
+                      'friendlyname="%s" mode="%s" endpoint="%s" reason="%s"' %
+                      (req.remote_addr, userid, username, viewmode, endpoint, e))
+        return 'Remote error, file or app not found or file is a directory', http.client.NOT_FOUND
+
+
 @Wopi.app.route("/wopi/cbox/endpoints", methods=['GET'])
 @Wopi.metrics.do_not_track()
-def cboxEndPoints():
-    '''Returns the office apps end-points registered with this WOPI server. This is used by the EFSS
-    client to discover which Apps frontends can be used with this WOPI server.
+def cboxAppEndPoints_deprecated():
+    '''Returns the office apps end-points registered with this WOPI server. This is used by the old Reva
+    to discover which Apps frontends can be used with this WOPI server. The new Reva/IOP
+    includes this logic in the AppProvider and AppRegistry, and once it's fully adopted this logic
+    will be removed from the WOPI server.
     Note that if the end-points are relocated and the corresponding configuration entry updated,
     the WOPI server must be restarted.'''
     # TODO this endpoint should be moved to the Apps Registry service in Reva
-    Wopi.log.info('msg="cboxEndPoints: returning all registered office apps end-points" client="%s" mimetypesCount="%d"' %
-                  (flask.request.remote_addr, len(Wopi.endpoints)))
-    return flask.Response(json.dumps(Wopi.endpoints), mimetype='application/json')
+    Wopi.log.info('msg="cboxEndPoints: returning all registered office apps end-points" client="%s" mimetypescount="%d"' %
+                  (flask.request.remote_addr, len(core.discovery.endpoints)))
+    return flask.Response(json.dumps(core.discovery.endpoints), mimetype='application/json')
 
 
 @Wopi.app.route("/wopi/cbox/download", methods=['GET'])
-def cboxDownload():
-    '''Returns the file's content for a given valid access token. Used as a download URL,
-       so that the file's path is never explicitly visible.'''
-    # TODO this endpoint should be removed altogether: the download should be directly served by Reva
-    try:
-        acctok = jwt.decode(flask.request.args['access_token'], Wopi.wopisecret, algorithms=['HS256'])
-        if acctok['exp'] < time.time():
-            raise jwt.exceptions.ExpiredSignatureError
-        resp = flask.Response(storage.readfile(acctok['endpoint'], acctok['filename'], acctok['userid']), \
-                              mimetype='application/octet-stream')
-        resp.headers['Content-Disposition'] = 'attachment; filename="%s"' % os.path.basename(acctok['filename'])
-        resp.status_code = http.client.OK
-        Wopi.log.info('msg="cboxDownload: direct download succeeded" filename="%s" user="%s" token="%s"' %
-                      (acctok['filename'], acctok['userid'][-20:], flask.request.args['access_token'][-20:]))
-        return resp
-    except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
-        Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" token="%s"' %
-                         (flask.request.remote_addr, flask.request.base_url, flask.request.args['access_token']))
-        return 'Invalid access token', http.client.NOT_FOUND
-    except IOError as e:
-        Wopi.log.info('msg="Requested file not found" filename="%s" token="%s" error="%s"' %
-                      (acctok['filename'], flask.request.args['access_token'][-20:], e))
-        return 'File not found', http.client.NOT_FOUND
-    except KeyError as e:
-        Wopi.log.warning('msg="Invalid access token or request argument" error="%s"' % e)
-        return 'Invalid access token', http.client.UNAUTHORIZED
+def cboxDownload_deprecated():
+    '''The deprecated endpoint for download'''
+    return iopDownload()
 
 
 

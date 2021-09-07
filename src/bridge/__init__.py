@@ -235,7 +235,7 @@ def appsave(docid):
 
 
 def applist():
-    '''Return a list of all currently opened files'''
+    '''Return a list of all currently opened files, for operators only'''
     if (flask.request.headers.get('Authorization') != 'Bearer ' + WB.hashsecret) and \
        (flask.request.args.get('apikey') != WB.hashsecret):     # added for convenience
         WB.log.warning('msg="List: unauthorized access attempt, missing authorization token" '

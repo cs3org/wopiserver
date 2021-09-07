@@ -19,7 +19,6 @@ import http.client
 import flask
 import jwt
 
-
 # this is the xattr key used for conflicts resolution on the remote storage
 LASTSAVETIMEKEY = 'iop.wopi.lastwritetime'
 
@@ -30,7 +29,7 @@ EXCL_ERROR = 'File exists and islock flag requested'
 st = None
 srv = None
 log = None
-
+endpoints = None
 
 class ViewMode(Enum):
     '''File view mode: reference is `ViewMode` at
@@ -130,13 +129,14 @@ def generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint,
     # if write access is requested, probe whether there's already a lock file coming from Desktop applications
     exptime = int(time.time()) + srv.tokenvalidity
     if not appediturl:
-        # for backwards compatibility
+        # deprecated: for backwards compatibility, work out the URLs from the discovered app endpoints
         fext = os.path.splitext(statinfo['filepath'])[1]
         try:
-            appediturl = srv.endpoints[fext]['edit']
-            appviewurl = srv.endpoints[fext]['view']
+            appediturl = endpoints[fext]['edit']
+            appviewurl = endpoints[fext]['view']
         except KeyError as e:
-            log.critical('msg="No app URLs registered for the given file" fileExtension="%s"' % fext)
+            log.critical('msg="No app URLs registered for the given file type" fileext="%s" mimetypescount="%d"' %
+                         (fext, len(endpoints) if endpoints else 0))
             raise IOError
     acctok = jwt.encode({'userid': userid, 'filename': statinfo['filepath'], 'username': username,
                          'viewmode': viewmode.value, 'folderurl': folderurl, 'endpoint': endpoint,

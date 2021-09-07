@@ -77,7 +77,7 @@ try:
     instance = 'eoshome-' + filename[10] + '.cern.ch'
   statInfo = storage.statx(instance, filename, '0:0')
   try:
-    wopiTime = storage.getxattr(instance, filename, '0:0', 'oc.wopi.lastwritetime')
+    wopiTime = storage.getxattr(instance, filename, '0:0', 'iop.wopi.lastwritetime')
     try:
       lockcontent = b''
       for line in storage.readfile(instance, _getLockName(filename), '0:0'):
