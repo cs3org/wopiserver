@@ -1,6 +1,6 @@
 ## Changelog for the WOPI server
 
-### Mon Sep  6 2021 - v7.4.0
+### Tue Sep  7 2021 - v7.4.0
 - Changed the inode scheme for the xrootd
   storage interface to match the cs3 one and
   enable co-operation in mixed deployments
@@ -11,6 +11,10 @@
 - Added minimal validation of cert/key files
   prior to starting the Flask server
   in https mode
+- Fixed some return codes in case of
+  invalid access token
+- Refactoring: deprecated REST endpoints
+  under /wopi/cbox were all clearly marked
 
 ### Wed Sep  1 2021 - v7.3.0
 - Fixed WOPI GetFile to return HTTP 500
