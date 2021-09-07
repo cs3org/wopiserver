@@ -196,13 +196,13 @@ def statx(endpoint, filepath, userid, versioninv=0):
 
 def setxattr(endpoint, filepath, userid, key, value):
     '''Set the extended attribute <key> to <value> via a special open on behalf of the given userid'''
-    _xrootcmd(endpoint, 'attr', 'set', userid, 'mgm.attr.key=' + key + '&mgm.attr.value=' + str(value) + \
+    _xrootcmd(endpoint, 'attr', 'set', userid, 'mgm.attr.key=user.' + key + '&mgm.attr.value=' + str(value) + \
               '&mgm.path=' + _getfilepath(filepath, encodeamp=True))
 
 
 def getxattr(endpoint, filepath, userid, key):
     '''Get the extended attribute <key> via a special open on behalf of the given userid'''
-    res = _xrootcmd(endpoint, 'attr', 'get', userid, 'mgm.attr.key=' + key + '&mgm.path=' + _getfilepath(filepath, encodeamp=True))
+    res = _xrootcmd(endpoint, 'attr', 'get', userid, 'mgm.attr.key=user.' + key + '&mgm.path=' + _getfilepath(filepath, encodeamp=True))
     # if no error, the response comes in the format <key>="<value>"
     try:
         return res.split('"')[1]
@@ -213,7 +213,7 @@ def getxattr(endpoint, filepath, userid, key):
 
 def rmxattr(endpoint, filepath, userid, key):
     '''Remove the extended attribute <key> via a special open on behalf of the given userid'''
-    _xrootcmd(endpoint, 'attr', 'rm', userid, 'mgm.attr.key=' + key + '&mgm.path=' + _getfilepath(filepath, encodeamp=True))
+    _xrootcmd(endpoint, 'attr', 'rm', userid, 'mgm.attr.key=user.' + key + '&mgm.path=' + _getfilepath(filepath, encodeamp=True))
 
 
 def readfile(endpoint, filepath, userid):
