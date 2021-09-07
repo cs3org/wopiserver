@@ -46,13 +46,7 @@ class WB:
     log = None
     hashsecret = None
     sslverify = True
-    loglevels = {"Critical": logging.CRITICAL,  # 50
-                 "Error":    logging.ERROR,     # 40
-                 "Warning":  logging.WARNING,   # 30
-                 "Info":     logging.INFO,      # 20
-                 "Debug":    logging.DEBUG      # 10
-                }
-    active = True
+    active = False
     # a map of all open documents: wopisrc -> (acctok, tosave, lastsave, toclose)
     # where acctok is one of the access tokens for the given doc, and
     # toclose is a dict {shorttok -> isclose} with shorttok = 20 last chars of all known tokens
@@ -98,6 +92,7 @@ class WB:
 
         # start the thread to perform async save operations if not yet started
         if not cls.savethread:
+            cls.active = True
             cls.savethread = SaveThread()
             cls.savethread.start()
 
