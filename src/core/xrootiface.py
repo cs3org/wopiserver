@@ -80,7 +80,7 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args):
             if rc != '0':
                 # failure: get info from stderr, log and raise
                 msg = res[1][res[1].find('=')+1:].strip('\n')
-                if ENOENT_MSG in msg:
+                if ENOENT_MSG.lower() in msg:
                     log.info('msg="Invoked xroot on non-existing file" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' % \
                              (cmd, subcmd, args, msg, rc.strip('\00')))
                 else:
