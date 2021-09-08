@@ -256,8 +256,8 @@ def iopOpenInApp():
     folderurl = url_unquote(req.args.get('folderurl', '%2F'))   # defaults to `/`
     endpoint = req.args.get('endpoint', 'default')
     appname = url_unquote(req.args.get('appname', ''))
-    appurl = url_unquote(req.args.get('appurl', ''))
-    appviewurl = url_unquote(req.args.get('appviewurl', appurl))
+    appurl = url_unquote(req.args.get('appurl', '')).strip('/')
+    appviewurl = url_unquote(req.args.get('appviewurl', appurl)).strip('/')
 
     if not appname or not appurl:
         Wopi.log.warning('msg="iopOpenInApp: app-related arguments must be provided" client="%s"' % req.remote_addr)
