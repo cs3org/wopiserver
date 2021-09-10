@@ -61,7 +61,21 @@ def checkFileInfo(fileid):
             filemd['DownloadUrl'] = '%s?access_token=%s' % \
                                     (srv.config.get('general', 'downloadurl'), flask.request.args['access_token'])
         filemd['OwnerId'] = statInfo['userid']
-        filemd['UserId'] = acctok['userid']     # typically same as OwnerId; different when accessing shared documents
+        userId = acctok['userid']
+        try:
+            revaToken = jwt.decode(acctok['userid'], options={"verify_signature": False})
+            if revaToken.get('user') and revaToken.get('user').get('id') and \
+                revaToken.get('user').get('id').get('opaque_id'):
+                userId = json.dumps(revaToken['user']['id']['opaque_id'])
+        except:
+            pass
+        # userid should be
+        # - unique to a single user
+        # - constent over time
+        # according to the WOPI spec https://docs.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/rest/files/checkfileinfo#requirements-for-user-identity-properties
+        # known limitations
+        # - onlyoffice supports only userid with up to 128 characters (https://api.onlyoffice.com/editors/config/editor#user)
+        filemd['UserId'] = userId[:128]
         filemd['Size'] = statInfo['size']
         # TODO the version is generated like this in ownCloud: 'V' . $file->getEtag() . \md5($file->getChecksum());
         filemd['Version'] = statInfo['mtime']   # mtime is used as version here
