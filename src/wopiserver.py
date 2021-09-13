@@ -320,8 +320,8 @@ def iopDownload():
                          (flask.request.remote_addr, flask.request.base_url, flask.request.args['access_token']))
         return 'Invalid access token', http.client.UNAUTHORIZED
     except KeyError as e:
-        Wopi.log.warning('msg="Invalid access token or request argument" error="%s"' % e)
-        return 'Invalid access token', http.client.UNAUTHORIZED
+        Wopi.log.warning('msg="Invalid access token or request argument" error="%s" request="%s"' % (e, flask.request.__dict__))
+        return 'Invalid request', http.client.UNAUTHORIZED
 
 
 @Wopi.app.route("/wopi/iop/list", methods=['GET'])

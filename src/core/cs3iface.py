@@ -130,7 +130,7 @@ def getxattr(_endpoint, filepath, userid, key):
         ctx['log'].debug('msg="Invoked stat for getxattr" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
         return xattrvalue
     except KeyError:
-        ctx['log'].info('msg="Key not found in getxattr" filepath="%s" key="%s"' % (filepath, key))
+        ctx['log'].warning('msg="Empty value or key not found in getxattr" filepath="%s" key="%s" metadata="%s"' % (filepath, key, statInfo.info.arbitrary_metadata.metadata))
         return None
 
 

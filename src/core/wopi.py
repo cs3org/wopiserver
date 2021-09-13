@@ -89,17 +89,17 @@ def checkFileInfo(fileid):
 
         log.info('msg="File metadata response" token="%s" metadata="%s"' % (flask.request.args['access_token'][-20:], filemd))
         return flask.Response(json.dumps(filemd), mimetype='application/json')
-    except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
-        log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" token="%s"' %
-                    (flask.request.remote_addr, flask.request.base_url, flask.request.args['access_token']))
-        return 'Invalid access token', http.client.UNAUTHORIZED
     except IOError as e:
         log.info('msg="Requested file not found" filename="%s" token="%s" error="%s"' %
                  (acctok['filename'], flask.request.args['access_token'][-20:], e))
         return 'File not found', http.client.NOT_FOUND
-    except KeyError as e:
-        log.warning('msg="Invalid access token or request argument" error="%s" host="%s"' % (e, flask.request.remote_addr))
+    except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
+        log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" token="%s"' %
+                    (flask.request.remote_addr, flask.request.base_url, flask.request.args['access_token']))
         return 'Invalid access token', http.client.UNAUTHORIZED
+    except KeyError as e:
+        log.warning('msg="Invalid access token or request argument" error="%s" request="%s"' % (e, flask.request.__dict__))
+        return 'Invalid request', http.client.UNAUTHORIZED
 
 
 def getFile(fileid):
