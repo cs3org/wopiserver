@@ -1,8 +1,13 @@
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+ [![Gitter chat](https://badges.gitter.im/cs3org/wopiserver.svg)](https://gitter.im/cs3org/wopiserver) [![Build Status](https://drone.cernbox.cern.ch/api/badges/cs3org/wopiserver/status.svg)](https://drone.cernbox.cern.ch/cs3org/wopiserver)
+ [![codecov](https://codecov.io/gh/cs3org/wopiserver/branch/master/graph/badge.svg)](https://codecov.io/gh/cs3org/wopiserver)
+========
+
 # WOPI Server
 
-This service is part of the ScienceMesh Interoperability Platform (IOP) and implements a Vendor-neutral application gateway compatible with the Web-application Open Platform Interface (WOPI) specifications.
+This service is part of the ScienceMesh Interoperability Platform (IOP) and implements a Vendor-neutral application gateway compatible with the Web-application Open Platform Interface ([WOPI](https://docs.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/online)) specifications.
 
-It enables ScienceMesh EFSS storages to integrate Office Online platforms including Microsoft Office Online and Collabora Online, as well as other apps like CodiMD with dedicated extensions.
+It enables ScienceMesh EFSS storages to integrate Office Online platforms including Microsoft Office Online and Collabora Online. In addition it implements a [bridge](src/bridge/readme.md) module with dedicated extensions to support apps like CodiMD and Etherpad.
 
 Author: Giuseppe Lo Presti (@glpatcern) <br/>
 Contributions: Michael DSilva (@madsi1m), Lovisa Lugnegaard (@LovisaLugnegard), Samuel Alfageme (@SamuAlfageme), Ishank Arora (@ishank011), Willy Kloucek (@wkloucek)

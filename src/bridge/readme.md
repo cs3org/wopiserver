@@ -4,7 +4,7 @@ This module includes the code once prototyped at https://github.com/cs3org/wopib
 
 The module provides two endpoints:
 - `/wopi/bridge/open`   meant to be called by the EFSS with a WOPISrc and a WOPI access token, returns a file displayed in CodiMD
-- `/wopi/bridge/save`   auto-called by the CodiMD backend when some changes are detected on the open document
+- `/wopi/bridge/<docid>`   auto-called by the CodiMD backend when some changes are detected on the open document referenced as `<docid>`
 
 The module implements a stateless server, as all context information is stored in WOPI locks or passed through arguments. Collaborative editing and locking of files is supported by means of the following WOPI APIs:
 * `GetFileInfo`: get all file metadata
@@ -38,3 +38,4 @@ The module implements a stateless server, as all context information is stored i
 ### Etherpad specifics
 * Support for readonly and read-write files
 * Automatic save still work-in-progress
+
