@@ -471,7 +471,7 @@ def _guireturn(msg):
     return '<div align="center" style="color:#808080; padding-top:50px; font-family:Verdana">%s</div>' % msg
 
 @Wopi.app.route("/wopi/bridge/open", methods=["GET"])
-def bridgeOpen():
+def bridgeOpen_deprecated():
     '''The WOPI bridge open call'''
     try:
         wopisrc = url_unquote(flask.request.args['WOPISrc'])
@@ -492,14 +492,6 @@ def bridgeOpen():
 @Wopi.metrics.do_not_track()
 def bridgeSave(docid):
     '''The WOPI bridge save call'''
-    return bridge.appsave(docid)
-
-
-@Wopi.app.route("/wopi/bridge/save", methods=["GET"])
-@Wopi.metrics.do_not_track()
-def bridgeSave_deprecated():
-    '''The WOPI bridge save call (deprecated)'''
-    docid = flask.request.args.get('id')
     return bridge.appsave(docid)
 
 
