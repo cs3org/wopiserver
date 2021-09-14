@@ -57,7 +57,7 @@ def checkFileInfo(fileid):
             filemd['BreadcrumbFolderName'] = 'Back to ' + os.path.dirname(acctok['filename'])
         if furl == '/':    # if no target folder URL was given, override the above and completely hide it
             filemd['BreadcrumbFolderName'] = ''
-        if acctok['viewmode'] in (utils.ViewMode.READ_ONLY, utils.ViewMode.READ_WRITE):
+        if acctok['viewmode'] in (utils.ViewMode.READ_ONLY, utils.ViewMode.READ_WRITE) and len(wopiSrc) < 2000:
             filemd['DownloadUrl'] = '%s?access_token=%s' % \
                                     (srv.config.get('general', 'downloadurl'), flask.request.args['access_token'])
         filemd['OwnerId'] = statInfo['userid']
@@ -69,8 +69,9 @@ def checkFileInfo(fileid):
         filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = filemd['SupportsRename'] = \
             filemd['SupportsDeleteFile'] = filemd['UserCanRename'] = acctok['viewmode'] == utils.ViewMode.READ_WRITE
         filemd['UserCanNotWriteRelative'] = acctok['viewmode'] != utils.ViewMode.READ_WRITE
-        filemd['HostViewUrl'] = '%s%s%s' % (acctok['appviewurl'], '&' if '?' in acctok['appviewurl'] else '?', wopiSrc)
-        filemd['HostEditUrl'] = '%s%s%s' % (acctok['appediturl'], '&' if '?' in acctok['appediturl'] else '?', wopiSrc)
+        if len(wopiSrc) < 2000:
+            filemd['HostViewUrl'] = '%s%s%s' % (acctok['appviewurl'], '&' if '?' in acctok['appviewurl'] else '?', wopiSrc)
+            filemd['HostEditUrl'] = '%s%s%s' % (acctok['appediturl'], '&' if '?' in acctok['appediturl'] else '?', wopiSrc)
 
         # populate app-specific metadata
         if acctok['appname'].find('Microsoft') > 0:
