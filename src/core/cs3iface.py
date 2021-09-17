@@ -90,7 +90,7 @@ def stat(endpoint, fileid, userid, versioninv=0):
                 'size': statInfo.info.size,
                 'mtime': statInfo.info.mtime.seconds
                }
-    ctx['log'].info('msg="Failed stat" inode="%s" reason="%s"' % (fileid, statInfo.status.message))
+    ctx['log'].info('msg="Failed stat" inode="%s" reason="%s"' % (fileid, statInfo.status.message.replace('"', "'")))
     raise IOError(ENOENT_MSG if statInfo.status.code == cs3code.CODE_NOT_FOUND else statInfo.status.message)
 
 
@@ -108,7 +108,7 @@ def setxattr(_endpoint, filepath, userid, key, value):
     res = ctx['cs3stub'].SetArbitraryMetadata(request=req,
                                               metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
-        ctx['log'].error('msg="Failed to setxattr" filepath="%s" key="%s" reason="%s"' % (filepath, key, res.status.message))
+        ctx['log'].error('msg="Failed to setxattr" filepath="%s" key="%s" reason="%s"' % (filepath, key, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
     ctx['log'].debug('msg="Invoked setxattr" result="%s"' % res)
 
@@ -121,7 +121,7 @@ def getxattr(_endpoint, filepath, userid, key):
                                    metadata=[('x-access-token', userid)])
     tend = time.time()
     if statInfo.status.code != cs3code.CODE_OK:
-        ctx['log'].error('msg="Failed to stat" filepath="%s" key="%s" reason="%s"' % (filepath, key, statInfo.status.message))
+        ctx['log'].error('msg="Failed to stat" filepath="%s" key="%s" reason="%s"' % (filepath, key, statInfo.status.message.replace('"', "'")))
         raise IOError(statInfo.status.message)
     try:
         xattrvalue = statInfo.info.arbitrary_metadata.metadata[key]
@@ -140,7 +140,7 @@ def rmxattr(_endpoint, filepath, userid, key):
     req = cs3sp.UnsetArbitraryMetadataRequest(ref=reference, arbitrary_metadata_keys=[key])
     res = ctx['cs3stub'].UnsetArbitraryMetadata(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
-        ctx['log'].error('msg="Failed to rmxattr" filepath="%s" key="%s" exception="%s"' % (filepath, key, res.status.message))
+        ctx['log'].error('msg="Failed to rmxattr" filepath="%s" key="%s" reason="%s"' % (filepath, key, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
     ctx['log'].debug('msg="Invoked rmxattr" result="%s"' % res)
 
@@ -156,7 +156,7 @@ def readfile(_endpoint, filepath, userid):
         yield IOError(ENOENT_MSG)
     elif initfiledownloadres.status.code != cs3code.CODE_OK:
         ctx['log'].error('msg="Failed to initiateFileDownload on read" filepath="%s" reason="%s"' %
-                         (filepath, initfiledownloadres.status.message))
+                         (filepath, initfiledownloadres.status.message.replace('"', "'")))
         yield IOError(initfiledownloadres.status.message)
     ctx['log'].debug('msg="readfile: InitiateFileDownloadRes returned" protocols="%s"' % initfiledownloadres.protocols)
 
@@ -174,7 +174,7 @@ def readfile(_endpoint, filepath, userid):
     tend = time.time()
     data = fileget.content
     if fileget.status_code != http.client.OK:
-        ctx['log'].error('msg="Error downloading file from Reva" code="%d" reason="%s"' % (fileget.status_code, fileget.reason))
+        ctx['log'].error('msg="Error downloading file from Reva" code="%d" reason="%s"' % (fileget.status_code, fileget.reason.replace('"', "'")))
         yield IOError(fileget.reason)
     else:
         ctx['log'].info('msg="File open for read" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
@@ -199,7 +199,7 @@ def writefile(_endpoint, filepath, userid, content, islock=False):
     initfileuploadres = ctx['cs3stub'].InitiateFileUpload(request=req, metadata=[('x-access-token', userid)])
     if initfileuploadres.status.code != cs3code.CODE_OK:
         ctx['log'].error('msg="Failed to initiateFileUpload on write" filepath="%s" reason="%s"' % \
-                         (filepath, initfileuploadres.status.message))
+                         (filepath, initfileuploadres.status.message.replace('"', "'")))
         raise IOError(initfileuploadres.status.message)
     ctx['log'].debug('msg="writefile: InitiateFileUploadRes returned" protocols="%s"' % initfileuploadres.protocols)
 
@@ -232,7 +232,7 @@ def renamefile(_endpoint, filepath, newfilepath, userid):
     req = cs3sp.MoveRequest(source=source, destination=destination)
     res = ctx['cs3stub'].Move(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
-        ctx['log'].error('msg="Failed to rename file" filepath="%s" error="%s"' % (filepath, res.status.message))
+        ctx['log'].error('msg="Failed to rename file" filepath="%s" reason="%s"' % (filepath, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
     ctx['log'].debug('msg="Invoked renamefile" result="%s"' % res)
 
@@ -247,6 +247,6 @@ def removefile(_endpoint, filepath, userid, _force=0):
         if str(res) == ENOENT_MSG:
             ctx['log'].info('msg="Invoked removefile on non-existing file" filepath="%s"' % filepath)
         else:
-            ctx['log'].error('msg="Failed to remove file" filepath="%s" error="%s"' % (filepath, res))
+            ctx['log'].error('msg="Failed to remove file" filepath="%s" reason="%s"' % (filepath, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
     ctx['log'].debug('msg="Invoked removefile" result="%s"' % res)
