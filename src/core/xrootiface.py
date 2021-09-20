@@ -182,7 +182,7 @@ def statx(endpoint, filepath, userid, versioninv=0):
                 raise IOError
         statxvdata = infov.split()
     except IOError:
-        log.warn('msg="Failed to mkdir/stat version folder" rc="%s"' % rcv)
+        log.warning('msg="Failed to mkdir/stat version folder" rc="%s"' % rcv)
         statxvdata = statxdata
     # return the metadata of the given file, with the inode taken from the version folder (see above for the encoding)
     inode = endpoint[7:endpoint.find('.')] + '-' + b64encode(statxvdata[2].encode()).decode()

@@ -52,30 +52,31 @@ class JsonLogger:
     def __getattr__(self, name):
         '''Facade method'''
         def facade(*args, **kwargs):
-            '''internal method returned by getattr and wrapping the original one'''
+            '''internal method returned by __getattr__ and wrapping the original one'''
+            if not hasattr(self.logger, name):
+                raise NotImplementedError
             if name in ['debug', 'info', 'warning', 'error', 'fatal']:
                 # resolve the current module
                 f = traceback.extract_stack()[-2].filename
                 m = f[f.rfind('/')+1:f.rfind('.')]
                 if m == '__init__':
+                    # take 'module' out of '/path/to/module/__init__.py'
                     f = f[:f.rfind('/')]
                     m = f[f.rfind('/')+1:]
-                # as we use a `key="value" ...` format in all logs, we only have args[0]
-                args = ('module="%s" ' % m + args[0],)
                 try:
-                    msg = args[0] + ' '
-                    # now convert the msg to a dictionary assuming no `="` nor `" ` is present inside any key or value!
+                    # as we use a `key="value" ...` format in all logs, we only have args[0]
+                    payload = 'module="%s" %s ' % (m, args[0])
+                    # now convert the payload to a dictionary assuming no `="` nor `" ` is present inside any key or value!
                     # the added trailing space matches the `" ` split, so we remove the last element of that list
-                    msg = dict([tuple(kv.split('="')) for kv in msg.split('" ')[:-1]])
+                    payload = dict([tuple(kv.split('="')) for kv in payload.split('" ')[:-1]])
                     # then convert dict -> json -> str + strip `{` and `}`
-                    return getattr(self.logger, name)(str(json.dumps(msg))[1:-1], **kwargs)
+                    payload = str(json.dumps(payload))[1:-1]
                 except Exception:    # pylint: disable=broad-except
-                    # if the above assumptions do not hold, keep the log in its original format but with the enriched args
-                    return getattr(self.logger, name)(*args, **kwargs)
-            elif hasattr(self.logger, name):
-                # pass-through facade
-                return getattr(self.logger, name)(*args, **kwargs)
-            raise NotImplementedError
+                    # if the above assumptions do not hold, just json-escape the original log
+                    payload = '"module": "%s", "payload": "%s"' % (m, json.dumps(args[0]))
+                args = (payload,)
+            # pass-through facade
+            return getattr(self.logger, name)(*args, **kwargs)
         return facade
 
 

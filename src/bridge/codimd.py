@@ -198,8 +198,8 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
         log.error('msg="Exception raised attempting to connect to CodiMD" exception="%s"' % e)
         raise AppFailure
     except UnicodeDecodeError as e:
-        log.warn('msg="Invalid UTF content found in file" error="%s"' % e)
-        raise AppFailure('File contains an invalid UTF character, was it corrupted? ' + \
+        log.warning('msg="Invalid UTF-8 content found in file" exception="%s"' % e)
+        raise AppFailure('File contains an invalid UTF-8 character, was it corrupted? ' + \
                          'Please fix it in a regular editor before opening it in CodiMD.')
     # generate and return a WOPI lock structure for this document
     return wopic.generatelock(docid, filemd, h.hexdigest(), 'mds' if _isslides(mddoc) else 'md', acctok, False)
