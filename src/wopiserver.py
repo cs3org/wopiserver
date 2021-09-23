@@ -469,7 +469,7 @@ def cboxUnlock():
 # Bridge functionality
 #
 def _guireturn(msg):
-    '''One-liner to better render messages that are visible in the UI. Only used by Revaold'''
+    '''One-liner to better render messages that are visible in the UI'''
     return '<div align="center" style="color:#808080; padding-top:50px; font-family:Verdana">%s</div>' % msg
 
 @Wopi.app.route("/wopi/bridge/open", methods=["GET"])
@@ -525,7 +525,7 @@ def cboxOpen_deprecated():
     - enum viewmode: how the user should access the file, according to utils.ViewMode/the CS3 app provider API
       - OR bool canedit: True if full access should be given to the user, otherwise read-only access is granted
     - string username (optional): user's full display name, typically shown by the Office app
-    - string filename OR fileid: the full path of the filename to be opened, or its fileid
+    - string filename: the full path of the filename to be opened
     - string endpoint (optional): the storage endpoint to be used to look up the file or the storage id, in case of
       multi-instance underlying storage; defaults to 'default'
     - string folderurl (optional): the URL to come back to the containing folder for this file, typically shown by the Office app
@@ -535,7 +535,7 @@ def cboxOpen_deprecated():
     req = flask.request
     # if running in https mode, first check if the shared secret matches ours
     if req.headers.get('Authorization') != 'Bearer ' + Wopi.iopsecret:
-        Wopi.log.warning('msg="iopOpen: unauthorized access attempt, missing authorization token" ' \
+        Wopi.log.warning('msg="cboxOpen: unauthorized access attempt, missing authorization token" ' \
                          'client="%s" clientAuth="%s"' % (req.remote_addr, req.headers.get('Authorization')))
         return UNAUTHORIZED
     # now validate the user identity and deny root access
@@ -551,18 +551,18 @@ def cboxOpen_deprecated():
             if ruid == 0 or rgid == 0:
                 raise ValueError
     except ValueError:
-        Wopi.log.warning('msg="iopOpen: invalid or missing user/token in request" client="%s" user="%s"' %
+        Wopi.log.warning('msg="cboxOpen: invalid or missing user/token in request" client="%s" user="%s"' %
                          (req.remote_addr, userid))
         return UNAUTHORIZED
-    fileid = url_unquote(req.args['filename']) if 'filename' in req.args else req.args.get('fileid', '')
-    if fileid == '':
-        Wopi.log.warning('msg="iopOpen: either filename or fileid must be provided" client="%s"' % req.remote_addr)
+    filename = url_unquote(req.args.get('filename', ''))
+    if filename == '':
+        Wopi.log.warning('msg="cboxOpen: the filename must be provided" client="%s"' % req.remote_addr)
         return 'Invalid argument', http.client.BAD_REQUEST
     if 'viewmode' in req.args:
         try:
             viewmode = utils.ViewMode(req.args['viewmode'])
         except ValueError:
-            Wopi.log.warning('msg="iopOpen: invalid viewmode parameter" client="%s" viewmode="%s"' %
+            Wopi.log.warning('msg="cboxOpen: invalid viewmode parameter" client="%s" viewmode="%s"' %
                              (req.remote_addr, req.args['viewmode']))
             return 'Invalid argument', http.client.BAD_REQUEST
     else:
@@ -573,14 +573,23 @@ def cboxOpen_deprecated():
     folderurl = url_unquote(req.args.get('folderurl', '%2F'))   # defaults to `/`
     endpoint = req.args.get('endpoint', 'default')
     try:
-        inode, acctok = utils.generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint, '', '', '')
-        # generate the URL-encoded payload for the app engine
-        return '%s&access_token=%s' % (utils.generateWopiSrc(inode), acctok)      # no need to URL-encode the JWT token
+        inode, acctok = utils.generateAccessToken(userid, filename, viewmode, username, folderurl, endpoint, '', '', '')
     except IOError as e:
-        Wopi.log.info('msg="iopOpen: remote error when generating token" client="%s" user="%s" ' \
-                      'friendlyname="%s" mode="%s" endpoint="%s" reason="%s"' %
-                      (req.remote_addr, userid, username, viewmode, endpoint, e))
+        Wopi.log.warning('msg="cboxOpen: remote error on generating token" client="%s" user="%s" ' \
+                         'friendlyname="%s" mode="%s" endpoint="%s" reason="%s"' %
+                         (req.remote_addr, userid, username, viewmode, endpoint, e))
         return 'Remote error, file or app not found or file is a directory', http.client.NOT_FOUND
+    if bridge.isextsupported(os.path.splitext(filename)[1][1:]):
+        # call the bridgeOpen right away, to not expose the WOPI URL to the user (it might be behind firewall)
+        try:
+            appurl, _ = bridge.appopen(url_unquote(utils.generateWopiSrc(inode)), acctok)
+            Wopi.log.debug('msg="cboxOpen: returning bridged app" URL="%s"' % appurl[appurl.rfind('/'):])
+            return appurl[appurl.rfind('/'):]    # return the payload as the appurl is already known via discovery
+        except bridge.FailedOpen as foe:
+            Wopi.log.warning('msg="cboxOpen: open via bridge failed" reason="%s"' % foe.msg)
+            return foe.msg, foe.statuscode
+    # generate the URL-encoded payload for the app engine
+    return '%s&access_token=%s' % (utils.generateWopiSrc(inode), acctok)      # no need to URL-encode the JWT token
 
 
 @Wopi.app.route("/wopi/cbox/endpoints", methods=['GET'])

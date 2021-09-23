@@ -102,6 +102,11 @@ def issupported(appname):
     return appname.lower() in set(BRIDGE_EXT_PLUGINS.values())
 
 
+def isextsupported(fileext):
+    '''One-liner to return if a given file extension is supported by one of the bridge extensions'''
+    return fileext.lower() in set(BRIDGE_EXT_PLUGINS.keys())
+
+
 def _gendocid(wopisrc):
     '''Generate a URL safe hash of the wopisrc to be used as document id by the app'''
     dig = hmac.new(WB.hashsecret.encode(), msg=wopisrc.split('/')[-1].encode(), digestmod=hashlib.sha1).digest()

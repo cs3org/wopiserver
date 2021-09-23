@@ -69,22 +69,20 @@ def registerapp(appname, appurl, appinturl, apikey=None):
             discReq = requests.get(appurl, verify=False).content.decode()
             if discReq.find('CodiMD') > 0:
                 bridge.WB.loadplugin(appname, appurl, appinturl, apikey)
-                bridgeurl = config.get('general', 'wopiurl') + '/wopi/bridge/open'
                 endpoints['.md'] = {}
-                endpoints['.md']['view'] = endpoints['.md']['edit'] = bridgeurl
+                endpoints['.md']['view'] = endpoints['.md']['edit'] = appurl
                 endpoints['.zmd'] = {}
-                endpoints['.zmd']['view'] = endpoints['.zmd']['edit'] = bridgeurl
+                endpoints['.zmd']['view'] = endpoints['.zmd']['edit'] = appurl
                 endpoints['.txt'] = {}
-                endpoints['.txt']['view'] = endpoints['.txt']['edit'] = bridgeurl
-                log.info('msg="CodiMD endpoints successfully configured" BridgeURL="%s"' % bridgeurl)
+                endpoints['.txt']['view'] = endpoints['.txt']['edit'] = appurl
+                log.info('msg="CodiMD endpoints successfully configured" CodiMDURL="%s"' % appurl)
                 return
 
             if discReq.find('Etherpad') > 0:
                 bridge.WB.loadplugin(appname, appurl, appinturl, apikey)
-                bridgeurl = config.get('general', 'wopiurl') + '/wopi/bridge/open'
                 endpoints['.epd'] = {}
-                endpoints['.epd']['view'] = endpoints['.epd']['edit'] = bridgeurl
-                log.info('msg="Etherpad endpoints successfully configured" BridgeURL="%s"' % bridgeurl)
+                endpoints['.epd']['view'] = endpoints['.epd']['edit'] = appurl
+                log.info('msg="Etherpad endpoints successfully configured" EtherpadURL="%s"' % appurl)
                 return
         except ValueError:
             # bridge plugin could not be initialized
