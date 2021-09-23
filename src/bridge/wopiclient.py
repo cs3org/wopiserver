@@ -41,7 +41,7 @@ def request(wopisrc, acctok, method, contents=None, headers=None):
         if method == 'POST':
             return requests.post('%s?access_token=%s' % (wopiurl, acctok), verify=sslverify,
                                  headers=headers, data=contents)
-    except requests.exceptions.ConnectionError as e:
+    except (requests.exceptions.ConnectionError, IOError) as e:
         log.error('msg="Unable to contact WOPI" wopiurl="%s" acctok="%s" response="%s"' % (wopiurl, acctok, e))
         res = Response()
         res.status_code = http.client.INTERNAL_SERVER_ERROR

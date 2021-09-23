@@ -218,7 +218,7 @@ def iopOpenInApp():
     - string endpoint (optional): the storage endpoint to be used to look up the file or the storage id, in case of
       multi-instance underlying storage; defaults to 'default'
     - string username (optional): user's full display name, typically shown by the Office app
-    - string folderurl (optional): the URL to come back to the containing folder for this file, typically shown by the Office app
+    - string folderurl (optional): the URL to come back to the containing folder for this file, typically shown by the app
     - string appname: the identifier of the end-user application to be served
     - string appurl: the URL of the end-user application
     - string appviewurl (optional): the URL of the end-user application in view mode when different (defaults to appurl)
@@ -228,20 +228,23 @@ def iopOpenInApp():
       "app-url" : "<URL of the target application with query parameters>",
       "form-parameters" : { "access_token" : "<WOPI access token>" }
     }
-    or a message and a 4xx/5xx HTTP code in case of errors
+    or a message and a 4xx/5xx HTTP code in case of errors (TODO: return JSON also in case of errors?)
     '''
     Wopi.refreshconfig()
     req = flask.request
+
+    # validate tokens
     if req.headers.get('Authorization') != 'Bearer ' + Wopi.iopsecret:
         Wopi.log.warning('msg="iopOpenInApp: unauthorized access attempt, missing authorization token" ' \
                          'client="%s" clientAuth="%s"' % (req.remote_addr, req.headers.get('Authorization')))
         return UNAUTHORIZED
-    # now validate the user identity and deny root access
     try:
         userid = req.headers['TokenHeader']
     except KeyError:
         Wopi.log.warning('msg="iopOpenInApp: missing TokenHeader in request" client="%s"' % req.remote_addr)
         return UNAUTHORIZED
+
+    # validate all parameters
     fileid = req.args.get('fileid', '')
     if not fileid:
         Wopi.log.warning('msg="iopOpenInApp: fileid must be provided" client="%s"' % req.remote_addr)
@@ -258,7 +261,6 @@ def iopOpenInApp():
     appname = url_unquote(req.args.get('appname', ''))
     appurl = url_unquote(req.args.get('appurl', '')).strip('/')
     appviewurl = url_unquote(req.args.get('appviewurl', appurl)).strip('/')
-
     if not appname or not appurl:
         Wopi.log.warning('msg="iopOpenInApp: app-related arguments must be provided" client="%s"' % req.remote_addr)
         return 'Missing appname or appurl arguments', http.client.BAD_REQUEST
@@ -271,7 +273,7 @@ def iopOpenInApp():
             bridge.WB.loadplugin(appname, appurl, appinturl, apikey)
         except ValueError:
             return 'Failed to load WOPI bridge plugin for %s' % appname, http.client.INTERNAL_SERVER_ERROR
-        # for the WOPI context, bridge-supported app URLs look like this
+        # for the WOPI context, bridge-supported app URLs look like this, though they are not used
         appurl = appviewurl = Wopi.wopiurl + '/wopi/bridge/open'
 
     try:
@@ -471,7 +473,7 @@ def _guireturn(msg):
     return '<div align="center" style="color:#808080; padding-top:50px; font-family:Verdana">%s</div>' % msg
 
 @Wopi.app.route("/wopi/bridge/open", methods=["GET"])
-def bridgeOpen_deprecated():
+def bridgeOpen():
     '''The WOPI bridge open call'''
     try:
         wopisrc = url_unquote(flask.request.args['WOPISrc'])
