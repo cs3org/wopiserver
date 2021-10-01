@@ -188,7 +188,7 @@ def setLock(fileid, reqheaders, acctok):
                                               'The file was not locked' + ' and got modified' if validateTarget else '')
     if retrievedLock and not utils.compareWopiLocks(retrievedLock, (oldLock if oldLock else lock)):
         return utils.makeConflictResponse(op, retrievedLock, lock, oldLock, acctok['filename'], \
-                                          'The file was locked by another WOPI application')
+                                          'The file was locked by another online editor')
 
     # LOCK or REFRESH_LOCK: set the lock to the given one, including the expiration time
     try:
