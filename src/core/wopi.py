@@ -150,8 +150,9 @@ def unlock(fileid, reqheaders, acctok, force=False):
         # same as above
         pass
     try:
-        # also remove the LibreOffice-compatible lock file
-        st.removefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), acctok['userid'], 1)
+        # also remove the LibreOffice-compatible lock file when relevant
+        if os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes:
+            st.removefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), acctok['userid'], 1)
     except IOError:
         # same as above
         pass
@@ -247,12 +248,13 @@ def getLock(fileid, _reqheaders_unused, acctok):
                         (acctok['filename'], flask.request.args['access_token'][-20:], acctok['username']))
             srv.openfiles[acctok['filename']] = (time.asctime(), set([acctok['username']]))
     # we might want to check if a non-WOPI lock exists for this file:
-    #try:
-    #  lockstat = st.stat(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), acctok['userid'])
-    #  return utils.makeConflictResponse('GetLock', 'External App', '', '', acctok['filename'], \
-    #                                    'The file was locked by another application')
-    #except IOError:
-    #  pass
+    #if os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes:
+    #  try:
+    #    lockstat = st.stat(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), acctok['userid'])
+    #    return utils.makeConflictResponse('GetLock', 'External App', '', '', acctok['filename'], \
+    #                                      'The file was locked by LibreOffice for Desktop')
+    #  except IOError:
+    #    pass
     # however implications have to be properly understood as we've seen cases of locks left behind
     return resp
 
@@ -362,8 +364,9 @@ def renameFile(fileid, reqheaders, acctok):
         # also rename the locks
         st.renamefile(acctok['endpoint'], utils.getLockName(acctok['filename']), \
                       utils.getLockName(targetName), acctok['userid'])
-        st.renamefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), \
-                      utils.getLibreOfficeLockName(targetName), acctok['userid'])
+        if os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes:
+            st.renamefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), \
+                          utils.getLibreOfficeLockName(targetName), acctok['userid'])
         # prepare and send the response as JSON
         renamemd = {}
         renamemd['Name'] = reqheaders['X-WOPI-RequestedName']
