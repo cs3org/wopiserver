@@ -66,6 +66,7 @@ class WB:
         cls.sslverify = config.get('bridge', 'sslverify', fallback='True').upper() in ('TRUE', 'YES')
         cls.saveinterval = int(config.get('bridge', 'saveinterval', fallback='200'))
         cls.unlockinterval = int(config.get('bridge', 'unlockinterval', fallback='90'))
+        cls.disablezip = config.get('bridge', 'disablezip', fallback='False').upper() in ('TRUE', 'YES')
         cls.hashsecret = secret
         cls.log = wopic.log = log
         wopic.sslverify = cls.sslverify
@@ -83,6 +84,7 @@ class WB:
             cls.plugins[p] = __import__('bridge.' + p, globals(), locals(), [p])
             cls.plugins[p].log = cls.log
             cls.plugins[p].sslverify = cls.sslverify
+            cls.plugins[p].disablezip = cls.disablezip
             cls.plugins[p].init(appurl, appinturl, apikey)
             cls.log.info('msg="Imported plugin for application" app="%s" plugin="%s"' % (p, cls.plugins[p]))
         except Exception as e:
