@@ -32,6 +32,7 @@ appexturl = None
 apikey = None
 log = None
 sslverify = None
+disablezip = None
 
 
 def init(_appurl, _appinturl, _apikey):
@@ -253,8 +254,10 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
 
     # check if we have attachments
     wasbundle = os.path.splitext(wopilock['filename'])[1] == '.zmd'
-    bundlefile, attresponse = _getattachments(mddoc.decode(), wopilock['filename'].replace('.zmd', '.md'),
-                                              (wasbundle and not isclose))
+    bundlefile = attresponse = None
+    if not disablezip or wasbundle:     # in disablezip mode, preserve existing .zmd files but don't create new ones
+        bundlefile, attresponse = _getattachments(mddoc.decode(), wopilock['filename'].replace('.zmd', '.md'),
+                                                  (wasbundle and not isclose))
 
     # WOPI PutFile for the file or the bundle if it already existed
     if (wasbundle ^ (not bundlefile)) or not isclose:
