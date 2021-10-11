@@ -29,7 +29,7 @@ EXCL_ERROR = 'File exists and islock flag requested'
 st = None
 srv = None
 log = None
-endpoints = None
+endpoints = {}
 
 class ViewMode(Enum):
     '''File view mode: reference is `ViewMode` at
@@ -117,9 +117,11 @@ def randomString(size):
     return ''.join([choice(ascii_lowercase) for _ in range(size)])
 
 
-def generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint, appname, appediturl, appviewurl):
+def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app):
     '''Generates an access token for a given file and a given user, and returns a tuple with
     the file's inode and the URL-encoded access token.'''
+    appname, appediturl, appviewurl = app
+    username, wopiuser = user
     try:
         # stat the file to check for existence and get a version-invariant inode and modification time:
         # the inode serves as fileid (and must not change across save operations), the mtime is used for version information.
@@ -139,13 +141,14 @@ def generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint,
             log.critical('msg="No app URLs registered for the given file type" fileext="%s" mimetypescount="%d"' %
                          (fext, len(endpoints) if endpoints else 0))
             raise IOError
-    acctok = jwt.encode({'userid': userid, 'filename': statinfo['filepath'], 'username': username,
+    acctok = jwt.encode({'userid': userid, 'wopiuser': wopiuser, 'filename': statinfo['filepath'], 'username': username,
                          'viewmode': viewmode.value, 'folderurl': folderurl, 'endpoint': endpoint,
                          'appname': appname, 'appediturl': appediturl, 'appviewurl': appviewurl, 'exp': exptime},
                         srv.wopisecret, algorithm='HS256')
-    log.info('msg="Access token generated" userid="%s" mode="%s" endpoint="%s" filename="%s" inode="%s" ' \
+    log.info('msg="Access token generated" userid="%s" wopiuser="%s" mode="%s" endpoint="%s" filename="%s" inode="%s" ' \
              'mtime="%s" folderurl="%s" appname="%s" expiration="%d" token="%s"' %
-             (userid[-20:], viewmode, endpoint, statinfo['filepath'], statinfo['inode'], statinfo['mtime'], \
+             (userid[-20:], wopiuser if wopiuser != userid else username, viewmode, endpoint, \
+              statinfo['filepath'], statinfo['inode'], statinfo['mtime'], \
               folderurl, appname, exptime, acctok[-20:]))
     # return the inode == fileid, the filepath and the access token
     return statinfo['inode'], acctok

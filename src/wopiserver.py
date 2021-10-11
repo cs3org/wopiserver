@@ -217,7 +217,10 @@ def iopOpenInApp():
     - string fileid: the Reva fileid of the file to be opened
     - string endpoint (optional): the storage endpoint to be used to look up the file or the storage id, in case of
       multi-instance underlying storage; defaults to 'default'
-    - string username (optional): user's full display name, typically shown by the Office app
+    - string username (optional): user's full display name, typically shown by the app; defaults to
+      'Guest ' + 3 random letters to represent anonymous users
+    - string userid (optional): an unique identifier for the user, used internally by the app; defaults to
+      a random string of 10 characters to represent anonymous users
     - string folderurl (optional): the URL to come back to the containing folder for this file, typically shown by the app
     - string appname: the identifier of the end-user application to be served
     - string appurl: the URL of the end-user application
@@ -239,7 +242,7 @@ def iopOpenInApp():
                          'client="%s" clientAuth="%s"' % (req.remote_addr, req.headers.get('Authorization')))
         return UNAUTHORIZED
     try:
-        userid = req.headers['TokenHeader']
+        usertoken = req.headers['TokenHeader']
     except KeyError:
         Wopi.log.warning('msg="iopOpenInApp: missing TokenHeader in request" client="%s"' % req.remote_addr)
         return UNAUTHORIZED
@@ -256,6 +259,8 @@ def iopOpenInApp():
                          (req.remote_addr, req.args.get('viewmode'), e))
         return 'Missing or invalid viewmode argument', http.client.BAD_REQUEST
     username = req.args.get('username', '')
+    # this needs to be a unique identifier: if missing (case of anonymous users), just generate a random string
+    wopiuser = req.args.get('userid', utils.randomString(10))
     folderurl = url_unquote(req.args.get('folderurl', '%2F'))   # defaults to `/`
     endpoint = req.args.get('endpoint', 'default')
     appname = url_unquote(req.args.get('appname', ''))
@@ -277,12 +282,12 @@ def iopOpenInApp():
         appurl = appviewurl = Wopi.wopiurl + '/wopi/bridge/open'
 
     try:
-        inode, acctok = utils.generateAccessToken(userid, fileid, viewmode, username, folderurl, endpoint,
-                                                  appname, appurl, appviewurl)
+        inode, acctok = utils.generateAccessToken(usertoken, fileid, viewmode, (username, wopiuser), folderurl, endpoint,
+                                                  (appname, appurl, appviewurl))
     except IOError as e:
         Wopi.log.info('msg="iopOpenInApp: remote error on generating token" client="%s" user="%s" ' \
                       'friendlyname="%s" mode="%s" endpoint="%s" reason="%s"' %
-                      (req.remote_addr, userid[-20:], username, viewmode, endpoint, e))
+                      (req.remote_addr, usertoken[-20:], username, viewmode, endpoint, e))
         return 'Remote error, file not found or file is a directory', http.client.NOT_FOUND
 
     res = {}
@@ -540,16 +545,12 @@ def cboxOpen_deprecated():
         return UNAUTHORIZED
     # now validate the user identity and deny root access
     try:
-        if 'TokenHeader' in req.headers:
-            userid = req.headers['TokenHeader']
-        else:
-            # backwards compatibility
-            userid = 'N/A'
-            ruid = int(req.args['ruid'])
-            rgid = int(req.args['rgid'])
-            userid = '%d:%d' % (ruid, rgid)
-            if ruid == 0 or rgid == 0:
-                raise ValueError
+        userid = 'N/A'
+        ruid = int(req.args['ruid'])
+        rgid = int(req.args['rgid'])
+        userid = '%d:%d' % (ruid, rgid)
+        if ruid == 0 or rgid == 0:
+            raise ValueError
     except ValueError:
         Wopi.log.warning('msg="cboxOpen: invalid or missing user/token in request" client="%s" user="%s"' %
                          (req.remote_addr, userid))
@@ -573,7 +574,9 @@ def cboxOpen_deprecated():
     folderurl = url_unquote(req.args.get('folderurl', '%2F'))   # defaults to `/`
     endpoint = req.args.get('endpoint', 'default')
     try:
-        inode, acctok = utils.generateAccessToken(userid, filename, viewmode, username, folderurl, endpoint, '', '', '')
+        # here we leave wopiuser empty as `userid` (i.e. uid:gid) is known to be consistent over time
+        inode, acctok = utils.generateAccessToken(userid, filename, viewmode, (username, userid), \
+                                                  folderurl, endpoint, ('', '', ''))
     except IOError as e:
         Wopi.log.warning('msg="cboxOpen: remote error on generating token" client="%s" user="%s" ' \
                          'friendlyname="%s" mode="%s" endpoint="%s" reason="%s"' %

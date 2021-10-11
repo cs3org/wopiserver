@@ -61,7 +61,7 @@ def checkFileInfo(fileid):
             filemd['DownloadUrl'] = '%s?access_token=%s' % \
                                     (srv.config.get('general', 'downloadurl'), flask.request.args['access_token'])
         filemd['OwnerId'] = statInfo['userid']
-        filemd['UserId'] = acctok['userid']     # typically same as OwnerId; different when accessing shared documents
+        filemd['UserId'] = acctok['wopiuser']     # typically same as OwnerId; different when accessing shared documents
         filemd['Size'] = statInfo['size']
         # TODO the version is generated like this in ownCloud: 'V' . $file->getEtag() . \md5($file->getChecksum());
         filemd['Version'] = statInfo['mtime']   # mtime is used as version here
@@ -319,10 +319,10 @@ def putRelative(fileid, reqheaders, acctok):
     log.info('msg="PutRelative: generating new access token" user="%s" filename="%s" ' \
              'mode="ViewMode.READ_WRITE" friendlyname="%s"' %
              (acctok['userid'][-20:], targetName, acctok['username']))
-    inode, newacctok = utils.generateAccessToken(acctok['userid'], targetName, \
-                                                 utils.ViewMode.READ_WRITE, acctok['username'], \
-                                                 acctok['folderurl'], acctok['endpoint'], acctok['appname'], \
-                                                 acctok['appediturl'], acctok['appviewurl'])
+    inode, newacctok = utils.generateAccessToken(acctok['userid'], targetName, utils.ViewMode.READ_WRITE,
+                                                 (acctok['username'], acctok['wopiuser']), \
+                                                 acctok['folderurl'], acctok['endpoint'], \
+                                                 (acctok['appname'], acctok['appediturl'], acctok['appviewurl']))
     # prepare and send the response as JSON
     putrelmd = {}
     putrelmd['Name'] = os.path.basename(targetName)

@@ -86,7 +86,7 @@ def stat(endpoint, fileid, userid, versioninv=0):
         inode = urlsafe_b64encode(statInfo.info.id.opaque_id.encode())
         return {'inode': statInfo.info.id.storage_id + '-' + inode.decode(),
                 'filepath': statInfo.info.path,
-                'userid': statInfo.info.owner.opaque_id,
+                'userid': statInfo.info.owner.opaque_id + '@' + statInfo.info.owner.idp,
                 'size': statInfo.info.size,
                 'mtime': statInfo.info.mtime.seconds
                }
