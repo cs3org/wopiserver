@@ -53,7 +53,7 @@ def stat(_endpoint, filepath, _userid):
         return {
             'inode': str(statInfo.st_ino),
             'filepath': filepath,
-            'userid': str(statInfo.st_uid) + ':' + str(statInfo.st_gid),
+            'ownerid': str(statInfo.st_uid) + ':' + str(statInfo.st_gid),
             'size': statInfo.st_size,
             'mtime': statInfo.st_mtime
             }

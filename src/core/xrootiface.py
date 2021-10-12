@@ -156,7 +156,7 @@ def statx(endpoint, filepath, userid, versioninv=0):
         log.debug('msg="Invoked stat return" inode="%s" filepath="%s"' % (inode, _getfilepath(filepath)))
         return {'inode': inode,
                 'filepath': filepath,
-                'userid': statxdata[5] + ':' + statxdata[6],
+                'ownerid': statxdata[5] + ':' + statxdata[6],
                 'size': int(statxdata[8]),
                 'mtime': int(statxdata[12])}
     # now stat the corresponding version folder to get an inode invariant to save operations, see CERNBOX-1216
@@ -189,7 +189,7 @@ def statx(endpoint, filepath, userid, versioninv=0):
     log.debug('msg="Invoked stat return" inode="%s" filepath="%s"' % (inode, _getfilepath(verFolder)))
     return {'inode': inode,
             'filepath': filepath,
-            'userid': statxdata[5] + ':' + statxdata[6],
+            'ownerid': statxdata[5] + ':' + statxdata[6],
             'size': int(statxdata[8]),
             'mtime': int(statxdata[12])}
 
