@@ -574,7 +574,7 @@ def cboxOpen_deprecated():
     folderurl = url_unquote(req.args.get('folderurl', '%2F'))   # defaults to `/`
     endpoint = req.args.get('endpoint', 'default')
     try:
-        # here we leave wopiuser empty as `userid` (i.e. uid:gid) is known to be consistent over time
+        # here we set wopiuser = userid (i.e. uid:gid) as that's well known to be consistent over time
         inode, acctok = utils.generateAccessToken(userid, filename, viewmode, (username, userid), \
                                                   folderurl, endpoint, ('', '', ''))
     except IOError as e:
