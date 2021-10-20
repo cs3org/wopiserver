@@ -111,7 +111,7 @@ def isextsupported(fileext):
 
 def _gendocid(wopisrc):
     '''Generate a URL safe hash of the wopisrc to be used as document id by the app'''
-    dig = hmac.new(WB.hashsecret.encode(), msg=wopisrc.split('/')[-1].encode(), digestmod=hashlib.sha1).digest()
+    dig = hmac.new(WB.hashsecret.encode(), msg=wopisrc.split('/')[-1].encode(), digestmod=hashlib.blake2b).digest()
     return urlsafe_b64encode(dig).decode()[:-1]
 
 
