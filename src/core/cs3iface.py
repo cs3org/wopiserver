@@ -55,15 +55,12 @@ def authenticate_for_test(userid, userpwd):
     return authRes.token
 
 
-def stat(endpoint, fileid, userid, versioninv=0):
+def stat(endpoint, fileid, userid, _versioninv=1):
     '''Stat a file and returns (size, mtime) as well as other extended info using the given userid as access token.
     Note that endpoint here means the storage id. Note that fileid can be either a path (which MUST begin with /),
-    or an id (which MUST NOT start with a /).
-    The versioninv flag is currently not supported, see CERNBOX-1216.'''
+    or an id (which MUST NOT start with a /). The versioninv flag is natively supported by Reva.'''
     if endpoint == 'default':
         raise IOError('A CS3API-compatible storage endpoint must be identified by a storage UUID')
-    if versioninv == 1:
-        ctx['log'].warning('msg="Version-invariant Stat not yet supported, going for standard Stat"')
     tstart = time.time()
     if fileid[0] == '/':
         # assume this is a filepath
@@ -83,13 +80,14 @@ def stat(endpoint, fileid, userid, versioninv=0):
             ctx['log'].warning('msg="Stat: unexpected type" type="%d"' % statInfo.info.type)
             raise IOError('Unexpected type %d' % statInfo.info.type)
         # we base64-encode the inode so it can be used in a WOPISrc
-        inode = urlsafe_b64encode(statInfo.info.id.opaque_id.encode())
-        return {'inode': statInfo.info.id.storage_id + '-' + inode.decode(),
-                'filepath': statInfo.info.path,
-                'ownerid': statInfo.info.owner.opaque_id + '@' + statInfo.info.owner.idp,
-                'size': statInfo.info.size,
-                'mtime': statInfo.info.mtime.seconds
-               }
+        inode = urlsafe_b64encode(statInfo.info.id.opaque_id.encode()).decode()
+        return {
+            'inode': statInfo.info.id.storage_id + '-' + inode,
+            'filepath': statInfo.info.path,
+            'ownerid': statInfo.info.owner.opaque_id + '@' + statInfo.info.owner.idp,
+            'size': statInfo.info.size,
+            'mtime': statInfo.info.mtime.seconds
+        }
     ctx['log'].info('msg="Failed stat" inode="%s" reason="%s"' % (fileid, statInfo.status.message.replace('"', "'")))
     raise IOError(ENOENT_MSG if statInfo.status.code == cs3code.CODE_NOT_FOUND else statInfo.status.message)
 
