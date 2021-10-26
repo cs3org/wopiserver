@@ -56,12 +56,12 @@ def stat(_endpoint, filepath, _userid):
             'ownerid': str(statInfo.st_uid) + ':' + str(statInfo.st_gid),
             'size': statInfo.st_size,
             'mtime': statInfo.st_mtime
-            }
+        }
     except (FileNotFoundError, PermissionError) as e:
         raise IOError(e)
 
 
-def statx(endpoint, filepath, userid, versioninv=1):        # pylint: disable=unused-argument
+def statx(endpoint, filepath, userid, _versioninv=1):
     '''Get extended stat info (inode, filepath, userid, size, mtime). Equivalent to stat in the case of local storage.
     The versioninv flag is ignored as local storage always supports version-invariant inodes (cf. CERNBOX-1216).'''
     return stat(endpoint, filepath, userid)

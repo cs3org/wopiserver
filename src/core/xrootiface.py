@@ -154,11 +154,13 @@ def statx(endpoint, filepath, userid, versioninv=0):
         # and we extract the eosinstance from endpoint, which looks like e.g. root://eosinstance.cern.ch
         inode = endpoint[7:endpoint.find('.')] + '-' + b64encode(statxdata[2].encode()).decode()
         log.debug('msg="Invoked stat return" inode="%s" filepath="%s"' % (inode, _getfilepath(filepath)))
-        return {'inode': inode,
-                'filepath': filepath,
-                'ownerid': statxdata[5] + ':' + statxdata[6],
-                'size': int(statxdata[8]),
-                'mtime': int(statxdata[12])}
+        return {
+            'inode': inode,
+            'filepath': filepath,
+            'ownerid': statxdata[5] + ':' + statxdata[6],
+            'size': int(statxdata[8]),
+            'mtime': int(statxdata[12])
+        }
     # now stat the corresponding version folder to get an inode invariant to save operations, see CERNBOX-1216
     verFolder = os.path.dirname(filepath) + os.path.sep + EOSVERSIONPREFIX + os.path.basename(filepath)
     rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder) + _eosargs(userid) + '&mgm.pcmd=stat')
@@ -187,11 +189,13 @@ def statx(endpoint, filepath, userid, versioninv=0):
     # return the metadata of the given file, with the inode taken from the version folder (see above for the encoding)
     inode = endpoint[7:endpoint.find('.')] + '-' + b64encode(statxvdata[2].encode()).decode()
     log.debug('msg="Invoked stat return" inode="%s" filepath="%s"' % (inode, _getfilepath(verFolder)))
-    return {'inode': inode,
-            'filepath': filepath,
-            'ownerid': statxdata[5] + ':' + statxdata[6],
-            'size': int(statxdata[8]),
-            'mtime': int(statxdata[12])}
+    return {
+        'inode': inode,
+        'filepath': filepath,
+        'ownerid': statxdata[5] + ':' + statxdata[6],
+        'size': int(statxdata[8]),
+        'mtime': int(statxdata[12])
+    }
 
 
 def setxattr(endpoint, filepath, userid, key, value):

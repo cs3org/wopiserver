@@ -252,13 +252,13 @@ def applist():
 
 #############################################################################################################
 
-def _intersection(boolsd):
+def _intersection(boolsdict):
     '''Given a dictionary of booleans, returns the intersection (AND) of all'''
-    return functools.reduce(lambda x, y: x and y, list(boolsd.values()))
+    return functools.reduce(lambda x, y: x and y, list(boolsdict.values()))
 
-def _union(boolsd):
+def _union(boolsdict):
     '''Given a dictionary of booleans, returns the union (OR) of all'''
-    return functools.reduce(lambda x, y: x or y, list(boolsd.values()))
+    return functools.reduce(lambda x, y: x or y, list(boolsdict.values()))
 
 class SaveThread(threading.Thread):
     '''Async thread for save operations'''
