@@ -1,5 +1,16 @@
 ## Changelog for the WOPI server
 
+### Wed Oct 27 2021 - v7.5.0
+- Improved support for bridged apps when opened
+  in legacy mode via /cbox/open
+- Improved JSON representation of log messages
+- Ensure the `UserId` WOPI property is
+  consistent over multiple sessions for
+  any given user (#48)
+- Added support for disabling zipped bundles
+  in CodiMD (#49)
+- Added support for disabling renames from apps
+
 ### Tue Sep  7 2021 - v7.4.0
 - Changed the inode scheme for the xrootd
   storage interface to match the cs3 one and
