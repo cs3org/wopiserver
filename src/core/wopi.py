@@ -22,7 +22,7 @@ import core.wopiutils as utils
 st = None
 srv = None
 log = None
-
+enablerename = False
 
 def checkFileInfo(fileid):
     '''Implements the CheckFileInfo WOPI call'''
@@ -66,16 +66,14 @@ def checkFileInfo(fileid):
         # TODO the version is generated like this in ownCloud: 'V' . $file->getEtag() . \md5($file->getChecksum());
         filemd['Version'] = statInfo['mtime']   # mtime is used as version here
         filemd['SupportsExtendedLockLength'] = filemd['SupportsGetLock'] = True
-        filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = filemd['SupportsRename'] = \
-            filemd['SupportsDeleteFile'] = filemd['UserCanRename'] = acctok['viewmode'] == utils.ViewMode.READ_WRITE
+        filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = \
+            filemd['SupportsDeleteFile'] = acctok['viewmode'] == utils.ViewMode.READ_WRITE
         filemd['UserCanNotWriteRelative'] = acctok['viewmode'] != utils.ViewMode.READ_WRITE
         filemd['HostViewUrl'] = '%s%s%s' % (acctok['appviewurl'], '&' if '?' in acctok['appviewurl'] else '?', wopiSrc)
         filemd['HostEditUrl'] = '%s%s%s' % (acctok['appediturl'], '&' if '?' in acctok['appediturl'] else '?', wopiSrc)
-
+        filemd['SupportsRename'] = filemd['UserCanRename'] = enablerename and utils.ViewMode.READ_WRITE
         # populate app-specific metadata
         if acctok['appname'].find('Microsoft') > 0:
-            # the following actions are broken in MS Office Online, therefore they are disabled
-            filemd['SupportsRename'] = filemd['UserCanRename'] = False
             # the following is to enable the 'Edit in Word/Excel/PowerPoint' (desktop) action (probably broken)
             try:
                 filemd['ClientUrl'] = srv.config.get('general', 'webdavurl') + '/' + acctok['filename']

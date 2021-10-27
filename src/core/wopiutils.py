@@ -29,7 +29,7 @@ EXCL_ERROR = 'File exists and islock flag requested'
 st = None
 srv = None
 log = None
-endpoints = {}
+endpoints = None
 
 class ViewMode(Enum):
     '''File view mode: reference is `ViewMode` at

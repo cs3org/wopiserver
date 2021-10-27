@@ -107,6 +107,7 @@ class Wopi:
             with open(cls.config.get('security', 'iopsecretfile')) as s:
                 cls.iopsecret = s.read().strip('\n')
             cls.tokenvalidity = cls.config.getint('general', 'tokenvalidity')
+            core.wopi.enablerename = cls.config.get('general', 'enablerename', fallback='False').upper() in ('TRUE', 'YES')
             storage.init(cls.config, cls.log)                          # initialize the storage layer
             cls.useHttps = cls.config.get('security', 'usehttps').lower() == 'yes'
             # validate the certificates exist if running in https mode
