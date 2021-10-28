@@ -204,7 +204,6 @@ def writefile(_endpoint, filepath, userid, content, islock=False):
     # Upload
     try:
         # Get the endpoint for simple protocol
-        # TODO: configure TUS client
         protocol = [p for p in initfileuploadres.protocols if p.protocol == "simple"][0]
         headers = {
             'x-access-token': userid,

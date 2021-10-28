@@ -121,9 +121,7 @@ def createLock(filestat, filename, userid, endpoint):
 
     # create or refresh a LibreOffice-compatible lock, but with an extra line that contains the timestamp when it was
     # first created (i.e. now or whatever was found on the previous one, provided it's more recent than the token validity).
-    # This is used by the OnlyOffice integration.
-    # TODO once OnlyOffice supports locking, we may create an OnlyOffice-compatible lock here (cf. CERNBOX-1051)
-    # provided we can extend it in a similar way.
+    # This is used by the classical (non-WOPI) OnlyOffice integration.
     try:
         lockid = int(time.time())
         lolockcontent = ',OnlyOffice Online Editor,%s,%s,ExtWebApp;\n%d;' % \

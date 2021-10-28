@@ -22,9 +22,9 @@ sslverify = None
 
 
 def jsonify(msg):
-    '''One-liner to consistently json-ify a given message'''
-    # a delay = 0 means the user has to click on it to dismiss it, good for longer messages:
-    # this is an extended feature of CodiMD only, TODO have it supported on Etherpad as well
+    '''One-liner to consistently json-ify a given message and pass a delay.
+    If delay = 0 means the user has to click on it to dismiss it, good for longer messages'''
+    # this is part of the EFSS webhook specs (to be) implemented by the bridged apps
     return '{"message": "%s", "delay": "%.1f"}' % (msg, 0 if len(msg) > 60 else 0.5 + len(msg)/20)
 
 

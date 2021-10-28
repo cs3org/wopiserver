@@ -232,7 +232,7 @@ def iopOpenInApp():
       "app-url" : "<URL of the target application with query parameters>",
       "form-parameters" : { "access_token" : "<WOPI access token>" }
     }
-    or a message and a 4xx/5xx HTTP code in case of errors (TODO: return JSON also in case of errors?)
+    or a message and a 4xx/5xx HTTP code in case of errors
     '''
     Wopi.refreshconfig()
     req = flask.request
@@ -605,7 +605,6 @@ def cboxAppEndPoints_deprecated():
     will be removed from the WOPI server.
     Note that if the end-points are relocated and the corresponding configuration entry updated,
     the WOPI server must be restarted.'''
-    # TODO this endpoint should be moved to the Apps Registry service in Reva
     Wopi.log.info('msg="cboxEndPoints: returning all registered office apps end-points" client="%s" mimetypescount="%d"' %
                   (flask.request.remote_addr, len(core.discovery.endpoints)))
     return flask.Response(json.dumps(core.discovery.endpoints), mimetype='application/json')
@@ -623,5 +622,5 @@ def cboxDownload_deprecated():
 #
 if __name__ == '__main__':
     Wopi.init()
-    core.discovery.initappsregistry()    # TODO to be removed
+    core.discovery.initappsregistry()    # deprecated
     Wopi.run()
