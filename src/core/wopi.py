@@ -61,7 +61,7 @@ def checkFileInfo(fileid):
             filemd['DownloadUrl'] = '%s?access_token=%s' % \
                                     (srv.config.get('general', 'downloadurl'), flask.request.args['access_token'])
         filemd['OwnerId'] = statInfo['ownerid']
-        filemd['UserId'] = acctok['wopiuser'] if 'wopiuser' in acctok else statInfo['ownerid']     # typically same as OwnerId; different when accessing shared documents
+        filemd['UserId'] = acctok['wopiuser']     # typically same as OwnerId; different when accessing shared documents
         filemd['Size'] = statInfo['size']
         # TODO the version is generated like this in ownCloud: 'V' . $file->getEtag() . \md5($file->getChecksum());
         filemd['Version'] = statInfo['mtime']   # mtime is used as version here
