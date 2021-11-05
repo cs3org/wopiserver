@@ -138,10 +138,18 @@ def stat(endpoint, filepath, userid):
     return {'size': statInfo.size, 'mtime': statInfo.modtime}
 
 
-def statx(endpoint, filepath, userid, versioninv=0):
+def statx(endpoint, fileid, userid, versioninv=0):
     '''Get extended stat info (inode, filepath, userid, size, mtime) via an xroot opaque query on behalf of the given userid.
-    If versioninv=1, the logic to support the version folder is not triggered.'''
+    If versioninv=0, the logic to support the version folder is not triggered.
+    If the given fileid is an inode, it is resolved to a full path.'''
     tstart = time.time()
+    if fileid[0] != '/':
+        # we got the fileid of a version folder (typically from Reva), get the path of the corresponding file
+        rc = _xrootcmd(endpoint, 'fileinfo', '', userid, 'mgm.path=pid:' + fileid)
+        log.info('msg="Invoked stat" fileid="%s"' % fileid)
+        filepath = rc[rc.find('Directory:')+12:rc.find('Treesize')-4].replace(EOSVERSIONPREFIX, '')
+    else:
+        filepath = fileid
     rc, statInfo = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(filepath, encodeamp=True) + \
                                               _eosargs(userid) + '&mgm.pcmd=stat')
     log.info('msg="Invoked stat" filepath="%s"' % _getfilepath(filepath))
