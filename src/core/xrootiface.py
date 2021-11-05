@@ -11,6 +11,7 @@ import time
 import os
 from stat import S_ISDIR
 from base64 import b64encode
+from pwd import getpwnam
 from XRootD import client as XrdClient
 from XRootD.client.flags import OpenFlags, QueryCode, MkDirFlags, StatInfoFlags
 
@@ -114,6 +115,13 @@ def init(inconfig, inlog):
         homepath = config.get('xroot', 'storagehomepath')
     else:
         homepath = ''
+
+
+def getuseridfromcreds(_token, wopiuser):
+    '''Maps a Reva token and wopiuser to the credentials to be used to access the storage.
+    For the xrootd case, we have to resolve the username to uid:gid'''
+    userid = getpwnam(wopiuser.split('@')[0])    # a wopiuser has the form username@idp
+    return str(userid.pw_uid) + ':' + str(userid.pw_gid)
 
 
 def stat(endpoint, filepath, userid):

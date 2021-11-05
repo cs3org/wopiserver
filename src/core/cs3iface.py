@@ -44,6 +44,11 @@ def init(config, log):
     ctx['cs3stub'] = cs3gw_grpc.GatewayAPIStub(ch)
 
 
+def getuseridfromcreds(token, _wopiuser):
+    '''Maps a Reva token and wopiuser to the credentials to be used to access the storage.
+    For the CS3 API case, this is just the token'''
+    return token
+
 
 def authenticate_for_test(userid, userpwd):
     '''Use basic authentication against Reva for testing purposes'''

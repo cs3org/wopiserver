@@ -39,6 +39,12 @@ def init(inconfig, inlog):
         raise IOError('Could not stat storagehomepath folder %s: %s' % (homepath, e))
 
 
+def getuseridfromcreds(_token, _wopiuser):
+    '''Maps a Reva token and wopiuser to the credentials to be used to access the storage.
+    For the localfs case, this is trivially hardcoded'''
+    return '0:0'
+
+
 def stat(_endpoint, filepath, _userid):
     '''Stat a file and returns (size, mtime) as well as other extended info.
     This method assumes that the given userid has access.'''
