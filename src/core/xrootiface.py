@@ -24,14 +24,17 @@ config = None
 log = None
 xrdfs = {}        # this is to map each endpoint [string] to its XrdClient
 defaultstorage = None
+endpointoverride = None
 homepath = None
 
 
 def _getxrdfor(endpoint):
     '''Look up the xrootd client for the given endpoint, create it if missing.
-         Supports "default" for the defaultstorage endpoint.'''
-    global xrdfs                     # pylint: disable=global-statement
+    Supports "default" for the defaultstorage endpoint.'''
+    global xrdfs             # pylint: disable=global-statement
     global defaultstorage    # pylint: disable=global-statement
+    if endpointoverride:
+       endpoint = endpointoverride
     if endpoint == 'default':
         return xrdfs[defaultstorage]
     try:
@@ -43,10 +46,13 @@ def _getxrdfor(endpoint):
 
 
 def _geturlfor(endpoint):
-    '''Look up the URL for a given endpoint: "default" corresponds to the defaultstorage one'''
+    '''Look up the URL for a given endpoint: "default" corresponds to the defaultstorage one.
+    Supports overriding it via configuration.'''
+    if endpointoverride:
+        return endpointoverride
     if endpoint == 'default':
         return defaultstorage
-    return endpoint
+    return endpoint if endpoint.find('root://') == 0 else 'root://' + endpoint
 
 
 def _eosargs(userid, atomicwrite=0, bookingsize=0):
@@ -102,12 +108,14 @@ def _getfilepath(filepath, encodeamp=False):
 
 def init(inconfig, inlog):
     '''Init module-level variables'''
-    global config                 # pylint: disable=global-statement
-    global log                        # pylint: disable=global-statement
-    global defaultstorage # pylint: disable=global-statement
+    global config               # pylint: disable=global-statement
+    global log                  # pylint: disable=global-statement
+    global endpointoverride     # pylint: disable=global-statement
+    global defaultstorage       # pylint: disable=global-statement
     global homepath             # pylint: disable=global-statement
     config = inconfig
     log = inlog
+    endpointoverride = config.get('xroot', 'endpointoverride', fallback='')
     defaultstorage = config.get('xroot', 'storageserver')
     # prepare the xroot client for the default storageserver
     _getxrdfor(defaultstorage)
@@ -167,8 +175,10 @@ def statx(endpoint, fileid, userid, versioninv=0):
     if versioninv == 0:
         # classic statx info of the given file:
         # the inode is base64-encoded to match the format issued by the CS3APIs and ensure interoperability,
-        # and we extract the eosinstance from endpoint, which looks like e.g. root://eosinstance.cern.ch
-        inode = endpoint[7:endpoint.find('.')] + '-' + b64encode(statxdata[2].encode()).decode()
+        # and we extract the eosinstance from endpoint, which looks like e.g. root://eosinstance[.cern.ch]
+        endpoint = _geturlfor(endpoint)
+        inode = endpoint[7:] if endpoint.find('.') == -1 else endpoint[7:endpoint.find('.')]
+        inode += '-' + b64encode(statxdata[2].encode()).decode()
         log.debug('msg="Invoked stat return" inode="%s" filepath="%s"' % (inode, _getfilepath(filepath)))
         return {
             'inode': inode,
@@ -203,7 +213,9 @@ def statx(endpoint, fileid, userid, versioninv=0):
         log.warning('msg="Failed to mkdir/stat version folder" rc="%s"' % rcv)
         statxvdata = statxdata
     # return the metadata of the given file, with the inode taken from the version folder (see above for the encoding)
-    inode = endpoint[7:endpoint.find('.')] + '-' + b64encode(statxvdata[2].encode()).decode()
+    endpoint = _geturlfor(endpoint)
+    inode = endpoint[7:] if endpoint.find('.') == -1 else endpoint[7:endpoint.find('.')]
+    inode += '-' + b64encode(statxvdata[2].encode()).decode()
     log.debug('msg="Invoked stat return" inode="%s" filepath="%s"' % (inode, _getfilepath(verFolder)))
     return {
         'inode': inode,
