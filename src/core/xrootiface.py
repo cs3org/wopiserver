@@ -155,6 +155,16 @@ def statx(endpoint, fileid, userid, versioninv=0):
         # we got the fileid of a version folder (typically from Reva), get the path of the corresponding file
         rc = _xrootcmd(endpoint, 'fileinfo', '', userid, 'mgm.path=pid:' + fileid)
         log.info('msg="Invoked stat" fileid="%s"' % fileid)
+        # output looks like:
+        # ```
+        # Directory: '/eos/.../.sys.v#.filename/'  Treesize: 562\\n  Container: 0  Files: 9  Flags: 40700  Clock: 16b4ea335b36bb06
+        # Modify: Sat Nov  6 10:14:27 2021 Timestamp: 1636190067.768903475
+        # Change: Tue Oct 12 17:11:58 2021 Timestamp: 1634051518.588282898
+        # Sync  : Sat Nov  6 10:14:27 2021 Timestamp: 1636190067.768903475
+        # Birth : Tue Oct 12 17:11:58 2021 Timestamp: 1634051518.588282898
+        # CUid: 4179 CGid: 2763 Fxid: 000b80fe Fid: 753918 Pid: 2571 Pxid: 00000a0b
+        # ETAG: b80fe:1636190067.768
+        # ```
         filepath = rc[rc.find('Directory:')+12:rc.find('Treesize')-4].replace(EOSVERSIONPREFIX, '')
     else:
         filepath = fileid
