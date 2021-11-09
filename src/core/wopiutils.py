@@ -91,8 +91,8 @@ def logGeneralExceptionAndReturn(ex, req):
 
 
 def generateWopiSrc(fileid):
-    '''Returns a valid URL-encoded WOPISrc for the given fileid'''
-    return url_quote_plus('%s/wopi/files/%s' % (srv.wopiurl, fileid))
+    '''Returns a valid URL-encoded WOPISrc for the given fileid. Note we URL-encode `-` to `%2D` as well'''
+    return url_quote_plus('%s/wopi/files/%s' % (srv.wopiurl, fileid)).replace('-', '%2D')
 
 
 def getLibreOfficeLockName(filename):
