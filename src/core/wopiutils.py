@@ -91,8 +91,12 @@ def logGeneralExceptionAndReturn(ex, req):
 
 
 def generateWopiSrc(fileid):
-    '''Returns a valid URL-encoded WOPISrc for the given fileid. Note we URL-encode `-` to `%2D` as well'''
-    return url_quote_plus('%s/wopi/files/%s' % (srv.wopiurl, fileid)).replace('-', '%2D')
+    '''Returns a WOPISrc for the given fileid.
+    Note we'd need to URL-encode it per spec (including `-` to `%2D`), but it turns out that MS Office breaks
+    with URL-encoded WOPISrc values via GET (it works via POST), whereas it works with plain WOPISrc values.
+    And luckily enough, other known apps (Collabora and OnlyOffice) also work with non-encoded URLs.'''
+    #return url_quote_plus('%s/wopi/files/%s' % (srv.wopiurl, fileid)).replace('-', '%2D')
+    return '%s/wopi/files/%s' % (srv.wopiurl, fileid)
 
 
 def getLibreOfficeLockName(filename):

@@ -295,7 +295,7 @@ def iopOpenInApp():
     res = {}
     if bridge.issupported(appname):
         try:
-            res['app-url'], res['form-parameters'] = bridge.appopen(url_unquote(utils.generateWopiSrc(inode)), acctok)
+            res['app-url'], res['form-parameters'] = bridge.appopen(utils.generateWopiSrc(inode), acctok)
         except bridge.FailedOpen as foe:
             return foe.msg, foe.statuscode
     else:
@@ -587,14 +587,14 @@ def cboxOpen_deprecated():
     if bridge.isextsupported(os.path.splitext(filename)[1][1:]):
         # call the bridgeOpen right away, to not expose the WOPI URL to the user (it might be behind firewall)
         try:
-            appurl, _ = bridge.appopen(url_unquote(utils.generateWopiSrc(inode)), acctok)
+            appurl, _ = bridge.appopen(utils.generateWopiSrc(inode), acctok)
             Wopi.log.debug('msg="cboxOpen: returning bridged app" URL="%s"' % appurl[appurl.rfind('/'):])
             return appurl[appurl.rfind('/'):]    # return the payload as the appurl is already known via discovery
         except bridge.FailedOpen as foe:
             Wopi.log.warning('msg="cboxOpen: open via bridge failed" reason="%s"' % foe.msg)
             return foe.msg, foe.statuscode
-    # generate the URL-encoded payload for the app engine
-    return '%s&access_token=%s' % (utils.generateWopiSrc(inode), acctok)      # no need to URL-encode the JWT token
+    # generate the target for the app engine
+    return '%s&access_token=%s' % (utils.generateWopiSrc(inode), acctok)
 
 
 @Wopi.app.route("/wopi/cbox/endpoints", methods=['GET'])

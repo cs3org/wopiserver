@@ -324,7 +324,7 @@ def putRelative(fileid, reqheaders, acctok):
     # prepare and send the response as JSON
     putrelmd = {}
     putrelmd['Name'] = os.path.basename(targetName)
-    putrelmd['Url'] = '%s?access_token=%s' % (url_unquote(utils.generateWopiSrc(inode)), newacctok)
+    putrelmd['Url'] = '%s?access_token=%s' % (utils.generateWopiSrc(inode), newacctok)
     putrelmd['HostEditUrl'] = '%s%sWOPISrc=%s&access_token=%s' % \
                               (acctok['appediturl'], '&' if '?' in acctok['appediturl'] else '?',
                                utils.generateWopiSrc(inode), newacctok)
