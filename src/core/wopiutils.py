@@ -83,10 +83,8 @@ class JsonLogger:
 def logGeneralExceptionAndReturn(ex, req):
     '''Convenience function to log a stack trace and return HTTP 500'''
     ex_type, ex_value, ex_traceback = sys.exc_info()
-    log.critical('msg="Unexpected exception caught" exception="%s" type="%s" traceback="%s" client="%s" ' \
-                 'requestedUrl="%s" token="%s"' %
-                 (ex, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback), req.remote_addr,
-                  req.url, req.args['access_token'][-20:] if 'access_token' in req.args else 'N/A'))
+    log.critical('msg="Unexpected exception caught" exception="%s" type="%s" traceback="%s" client="%s" requestedUrl="%s"' %
+                 (ex, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback), req.remote_addr, req.url))
     return 'Internal error, please contact support', http.client.INTERNAL_SERVER_ERROR
 
 
