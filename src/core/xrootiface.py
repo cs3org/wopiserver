@@ -41,18 +41,18 @@ def _getxrdfor(endpoint):
         return xrdfs[endpoint]
     except KeyError:
         # not found, create it
-        xrdfs[endpoint] = XrdClient.FileSystem(endpoint)
+        xrdfs[endpoint] = XrdClient.FileSystem(_geturlfor(endpoint))
         return xrdfs[endpoint]
 
 
 def _geturlfor(endpoint):
     '''Look up the URL for a given endpoint: "default" corresponds to the defaultstorage one.
-    Supports overriding it via configuration.'''
+    Supports overriding it via configuration, as well as overriding a legacy scheme for project endpoints.'''
     if endpointoverride:
         return endpointoverride
     if endpoint == 'default':
         return defaultstorage
-    return endpoint if endpoint.find('root://') == 0 else 'root://' + endpoint
+    return endpoint if endpoint.find('root://') == 0 else ('root://' + endpoint.replace('newproject', 'eosproject') + '.cern.ch')
 
 
 def _eosargs(userid, atomicwrite=0, bookingsize=0):
