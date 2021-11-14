@@ -24,6 +24,9 @@ LASTSAVETIMEKEY = 'iop.wopi.lastwritetime'
 # standard error thrown when attempting to overwrite a file in O_EXCL mode
 EXCL_ERROR = 'File exists and islock flag requested'
 
+# standard error thrown when attempting an operation without the required access rights
+ACCESS_ERROR = 'Operation not permitted'
+
 # convenience references to global entities
 st = None
 srv = None
@@ -266,11 +269,22 @@ def storeWopiLock(operation, lock, acctok, isoffice):
                                 (acctok['filename'], retrievedlock.split(',')[1] if ',' in retrievedlock else retrievedlock))
                     raise
                 #else it's our previous lock or it had expired: all right, move on
+            elif ACCESS_ERROR in str(e):
+                # user has no access to the lock file, typically because of accessing a single-file share:
+                # in this case, stat the lock and if exists assume it is valid (i.e. raise error)
+                try:
+                    lockstat = st.stat(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'])
+                    log.info('msg="WOPI lock denied because of an existing LibreOffice lock" filename="%s" mtime="%ld"' %
+                             (acctok['filename'], lockstat['mtime']))
+                    raise IOError(EXCL_ERROR)
+                except IOError as e:
+                    if EXCL_ERROR in str(e):
+                        raise
+                    # else lock not found, assume we're clear
             else:
-                # any other error is logged and raised
-                log.error('msg="%s: unable to store LibreOffice-compatible lock" filename="%s" token="%s" lock="%s" reason="%s"' %
-                          (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
-                raise
+                # any other error is logged but not raised as this is optimistically not blocking WOPI operations
+                log.warning('msg="%s: unable to store LibreOffice-compatible lock" filename="%s" token="%s" lock="%s" reason="%s"' %
+                            (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
 
     try:
         # now store the lock as encoded JWT: note that we do not use islock=True, because the WOPI specs require
