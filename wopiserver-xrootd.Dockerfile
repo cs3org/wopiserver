@@ -12,7 +12,7 @@ LABEL maintainer="cernbox-admins@cern.ch" \
   org.opencontainers.image.version="$VERSION"
 
 # The following is needed for now to keep compatibility with MS Office Online
-RUN update-crypto-policies --set LEGACY
+#RUN update-crypto-policies --set LEGACY
 
 ADD ./docker/etc/epel8.repo /etc/yum.repos.d/
 
