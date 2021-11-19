@@ -185,7 +185,7 @@ def redir():
 def index():
     '''Return a default index page with some user-friendly information about this service'''
     Wopi.log.debug('msg="Accessed index page" client="%s"' % flask.request.remote_addr)
-    return """
+    resp = flask.Response("""
       <html><head><title>ScienceMesh WOPI Server</title></head>
       <body>
       <div align="center" style="color:#000080; padding-top:50px; font-family:Verdana; size:11">
@@ -196,7 +196,10 @@ def index():
       <i>ScienceMesh WOPI Server %s at %s. Powered by Flask %s for Python %s</i>.
       </body>
       </html>
-      """ % (WOPISERVERVERSION, socket.getfqdn(), flask.__version__, python_version())
+      """ % (WOPISERVERVERSION, socket.getfqdn(), flask.__version__, python_version()))
+    resp.headers['X-Frame-Options'] = 'sameorigin'
+    resp.headers['X-XSS-Protection'] = '1; mode=block'
+    return resp
 
 
 #
@@ -316,6 +319,8 @@ def iopDownload():
         resp = flask.Response(storage.readfile(acctok['endpoint'], acctok['filename'], acctok['userid']), \
                               mimetype='application/octet-stream')
         resp.headers['Content-Disposition'] = 'attachment; filename="%s"' % os.path.basename(acctok['filename'])
+        resp.headers['X-Frame-Options'] = 'sameorigin'
+        resp.headers['X-XSS-Protection'] = '1; mode=block'
         resp.status_code = http.client.OK
         Wopi.log.info('msg="cboxDownload: direct download succeeded" filename="%s" user="%s" token="%s"' %
                       (acctok['filename'], acctok['userid'][-20:], flask.request.args['access_token'][-20:]))
@@ -526,9 +531,8 @@ def cboxOpen_deprecated():
     for accessing a given file for a given user.
     Required headers:
     - Authorization: a bearer shared secret to protect this call as it provides direct access to any user's file
-    - TokenHeader: an x-access-token to serve as user identity towards Reva
-      - OR int ruid, rgid as query parameters: a real Unix user identity (id:group); this is for legacy compatibility
     Request arguments:
+    - int ruid, rgid: a real Unix user identity (id:group) representing the user accessing the file
     - enum viewmode: how the user should access the file, according to utils.ViewMode/the CS3 app provider API
       - OR bool canedit: True if full access should be given to the user, otherwise read-only access is granted
     - string username (optional): user's full display name, typically shown by the Office app
