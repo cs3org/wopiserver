@@ -11,7 +11,6 @@ import traceback
 import hashlib
 import json
 from enum import Enum
-from urllib.parse import quote_plus as url_quote_plus
 from random import choice
 from string import ascii_lowercase
 from datetime import datetime
@@ -29,7 +28,7 @@ EXCL_ERROR = 'File exists and islock flag requested'
 st = None
 srv = None
 log = None
-endpoints = None
+endpoints = {}
 
 class ViewMode(Enum):
     '''File view mode: reference is `ViewMode` at
