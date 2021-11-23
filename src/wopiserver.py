@@ -126,6 +126,10 @@ class Wopi:
             else:
                 cls.lockpath = ''
             _ = cls.config.get('general', 'downloadurl')   # make sure this is defined
+            # WOPI proxy configuration (optional)
+            cls.wopiproxy = cls.config.get('general', 'wopiproxy', fallback='')
+            cls.wopiproxykey = cls.config.get('general', 'wopiproxykey', fallback='x')
+            cls.proxiedappname = cls.config.get('general', 'proxiedappname', fallback='')
             # initialize the bridge
             bridge.WB.init(cls.config, cls.log, cls.wopisecret)
             # initialize the submodules
@@ -303,7 +307,8 @@ def iopOpenInApp():
             return foe.msg, foe.statuscode
     else:
         res['app-url'] = appurl if viewmode == utils.ViewMode.READ_WRITE else appviewurl
-        res['app-url'] += '%sWOPISrc=%s' % ('&' if '?' in res['app-url'] else '?', utils.generateWopiSrc(inode))
+        res['app-url'] += '%sWOPISrc=%s' % ('&' if '?' in res['app-url'] else '?', \
+                                            utils.generateWopiSrc(inode, appname == Wopi.proxiedappname))
         res['form-parameters'] = {'access_token' : acctok}
     return flask.Response(json.dumps(res), mimetype='application/json')
 

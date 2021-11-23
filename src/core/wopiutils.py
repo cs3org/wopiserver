@@ -87,13 +87,18 @@ def logGeneralExceptionAndReturn(ex, req):
     return 'Internal error, please contact support', http.client.INTERNAL_SERVER_ERROR
 
 
-def generateWopiSrc(fileid):
+def generateWopiSrc(fileid, proxy=False):
     '''Returns a WOPISrc for the given fileid.
     Note we'd need to URL-encode it per spec (including `-` to `%2D`), but it turns out that MS Office breaks
     with URL-encoded WOPISrc values via GET (it works via POST), whereas it works with plain WOPISrc values.
     And luckily enough, other known apps (Collabora and OnlyOffice) also work with non-encoded URLs.'''
-    #return url_quote_plus('%s/wopi/files/%s' % (srv.wopiurl, fileid)).replace('-', '%2D')
-    return '%s/wopi/files/%s' % (srv.wopiurl, fileid)
+    #return urllib.parse.quote_plus('%s/wopi/files/%s' % (srv.wopiurl, fileid)).replace('-', '%2D')
+    if not proxy or not srv.wopiproxy:
+        return '%s/wopi/files/%s' % (srv.wopiurl, fileid)
+    # proxy the WOPI request through an external WOPI proxy service
+    proxied_fileid = jwt.encode({'u': srv.wopiurl + '/wopi/files/', 'f': fileid}, srv.wopiproxykey, algorithm='HS256')
+    log.debug('msg="Generated proxied WOPISrc" proxy="%s" proxiedfileid="%s"' % (srv.wopiproxy, proxied_fileid))
+    return '%s/wopi/files/%s' % (srv.wopiproxy, proxied_fileid)
 
 
 def getLibreOfficeLockName(filename):
