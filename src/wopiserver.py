@@ -290,8 +290,12 @@ def iopOpenInApp():
         appurl = appviewurl = Wopi.wopiurl + '/wopi/bridge/open'
 
     try:
-        inode, acctok = utils.generateAccessToken(storage.getuseridfromcreds(usertoken, wopiuser),
-                                                  fileid, viewmode, (username, wopiuser), folderurl, endpoint,
+        userid = storage.getuseridfromcreds(usertoken, wopiuser)
+        if userid != usertoken:
+            # this happens in hybrid deployments with xrootd as storage interface:
+            # in this case we override the wopiuser with the resolved uid:gid
+            wopiuser = userid
+        inode, acctok = utils.generateAccessToken(userid, fileid, viewmode, (username, wopiuser), folderurl, endpoint,
                                                   (appname, appurl, appviewurl))
     except IOError as e:
         Wopi.log.info('msg="iopOpenInApp: remote error on generating token" client="%s" user="%s" ' \
