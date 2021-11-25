@@ -394,7 +394,7 @@ def _createNewFile(fileid, acctok):
         # indeed the file did not exist, so we write it for the first time
         utils.storeWopiFile(flask.request, acctok, utils.LASTSAVETIMEKEY)
         log.info('msg="File stored successfully" action="editnew" user="%s" filename="%s" token="%s"' %
-                 (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token']))
+                 (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:]))
         # and we keep track of it as an open file with timestamp = Epoch, despite not having any lock yet.
         # XXX this is to work around an issue with concurrent editing of newly created files (cf. iopOpen)
         srv.openfiles[acctok['filename']] = ('0', set([acctok['username']]))
