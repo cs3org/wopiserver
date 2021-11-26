@@ -188,7 +188,7 @@ class TestStorage(unittest.TestCase):
     self.storage.removefile(self.endpoint, self.homepath + '/testwriterace', self.userid)
 
   def test_lock(self):
-    '''Test setting locks'''
+    '''Test setting lock'''
     buf = b'ebe5tresbsrdthbrdhvdtr'
     try:
       self.storage.removefile(self.endpoint, self.homepath + '/testlock', self.userid)
@@ -206,7 +206,7 @@ class TestStorage(unittest.TestCase):
     self.storage.removefile(self.endpoint, self.homepath + '/testlock', self.userid)
 
   def test_lock_race(self):
-    '''Test multithreaded setting locks'''
+    '''Test multithreaded setting lock'''
     buf = b'ebe5tresbsrdthbrdhvdtr'
     try:
       self.storage.removefile(self.endpoint, self.homepath + '/testlockrace', self.userid)
@@ -222,6 +222,25 @@ class TestStorage(unittest.TestCase):
       self.storage.setlock(self.endpoint, self.homepath + '/testlockrace', self.userid, 'testlock2')
     self.assertIn(EXCL_ERROR, str(context.exception))
     self.storage.removefile(self.endpoint, self.homepath + '/testlockrace', self.userid)
+
+  def test_refresh_lock(self):
+    '''Test setting and refreshing a lock'''
+    buf = b'ebe5tresbsrdthbrdhvdtr'
+    try:
+      self.storage.removefile(self.endpoint, self.homepath + '/testlock', self.userid)
+    except IOError:
+      pass
+    self.storage.writefile(self.endpoint, self.homepath + '/testlock', self.userid, buf)
+    statInfo = self.storage.stat(self.endpoint, self.homepath + '/testlock', self.userid)
+    self.assertIsInstance(statInfo, dict)
+    with self.assertRaises(IOError) as context:
+      self.storage.refreshlock(self.endpoint, self.homepath + '/testlock', self.userid, 'testlock')
+    self.assertIn('File was not locked', str(context.exception))
+    self.storage.setlock(self.endpoint, self.homepath + '/testlock', self.userid, 'testlock')
+    self.storage.refreshlock(self.endpoint, self.homepath + '/testlock', self.userid, 'testlock2')
+    l = self.storage.getlock(self.endpoint, self.homepath + '/testlock', self.userid)
+    self.assertEqual(l, 'testlock2')
+    self.storage.removefile(self.endpoint, self.homepath + '/testlock', self.userid)
 
   def test_remove_nofile(self):
     '''Test removal of a non-existing file'''

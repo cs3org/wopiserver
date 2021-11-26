@@ -158,6 +158,11 @@ def getlock(endpoint, filepath, userid):
     raise NotImplementedError
 
 
+def refreshlock(endpoint, filepath, userid):
+    '''Refresh the lock metadata on behalf of the given userid'''
+    raise NotImplementedError
+
+
 def unlock(endpoint, filepath, userid):
     '''Remove the lock on behalf of the given userid'''
     raise NotImplementedError

@@ -117,6 +117,14 @@ def getlock(endpoint, filepath, userid):
     return getxattr(endpoint, filepath, userid, LOCKKEY)
 
 
+def refreshlock(endpoint, filepath, userid, value):
+    '''Refresh the lock value as an xattr on behalf of the given userid'''
+    if getxattr(endpoint, filepath, userid, LOCKKEY):
+        setxattr(endpoint, filepath, userid, LOCKKEY, value)   # non-atomic, but the lock is already held
+    else:
+        raise IOError('File was not locked')
+
+
 def unlock(endpoint, filepath, userid):
     '''Remove the lock as an xattr on behalf of the given userid'''
     rmxattr(endpoint, filepath, userid, LOCKKEY)
