@@ -204,27 +204,27 @@ def retrieveWopiLock(fileid, operation, lock, acctok, overridefilename=None):
     return retrievedLock['wopilock']
 
 
-def storeWopiLock(operation, lock, acctok, isoffice):
-    '''Stores the lock for a given file in the form of an encoded JSON string (cf. the access token)'''
+def storeWopiLock(fileid, operation, lock, oldlock, acctok, isoffice):
+    '''Stores the lock for a given file in the form of an encoded JSON string'''
     try:
         # validate that the underlying file is still there (it might have been moved/deleted)
         st.stat(acctok['endpoint'], acctok['filename'], acctok['userid'])
     except IOError as e:
         log.warning('msg="%s: target file not found any longer" filename="%s" token="%s" reason="%s"' %
                     (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], e))
-        raise
+        return makeConflictResponse(operation, 'External App', lock, oldlock, acctok['filename'], \
+                                    'The file got moved or deleted')
 
     if isoffice:
         try:
             # first try to look for a MS Office lock
             lockstat = st.stat(acctok['endpoint'], getMicrosoftOfficeLockName(acctok['filename']), acctok['userid'])
-            log.info('msg="WOPI lock denied because of an existing Microsoft Office lock" filename="%s" mtime="%ld"' %
-                     (acctok['filename'], lockstat['mtime']))
-            raise IOError(EXCL_ERROR)
-        except IOError as e:
-            if EXCL_ERROR in str(e):
-                raise
-            #else any other error is ignored here, move on
+            log.info('msg="WOPI lock denied because of an existing Microsoft Office lock" filename="%s" fileid="%s" mtime="%ld"' %
+                     (acctok['filename'], fileid, lockstat['mtime']))
+            return makeConflictResponse(operation, 'External App', lock, oldlock, acctok['filename'], \
+                                        'The file was locked by a Microsoft Office user')    # TODO resolve lockstat['ownerid']
+        except IOError:
+            pass      # any other error is ignored here, move on
 
         try:
             # then create a LibreOffice-compatible lock file for interoperability purposes, making sure to
@@ -237,42 +237,42 @@ def storeWopiLock(operation, lock, acctok, isoffice):
             if EXCL_ERROR in str(e):
                 # retrieve the LibreOffice-compatible lock just found
                 try:
-                    retrievedlock = next(st.readfile(acctok['endpoint'], \
-                                         getLibreOfficeLockName(acctok['filename']), acctok['userid']))
-                    if isinstance(retrievedlock, IOError):
-                        raise retrievedlock
-                    retrievedlock = retrievedlock.decode('UTF-8')
+                    retrievedlolock = next(st.readfile(acctok['endpoint'], \
+                                           getLibreOfficeLockName(acctok['filename']), acctok['userid']))
+                    if isinstance(retrievedlolock, IOError):
+                        raise retrievedlolock
+                    retrievedlolock = retrievedlolock.decode('UTF-8')
                     # check that the lock is not stale
-                    if datetime.strptime(retrievedlock.split(',')[3], '%d.%m.%Y %H:%M').timestamp() + \
+                    if datetime.strptime(retrievedlolock.split(',')[3], '%d.%m.%Y %H:%M').timestamp() + \
                                          srv.config.getint('general', 'wopilockexpiration') < time.time():
-                        retrievedlock = 'WOPIServer'
+                        retrievedlolock = 'WOPIServer'
                 except (IOError, StopIteration, IndexError, ValueError) as e:
-                    retrievedlock = 'WOPIServer'     # could not read the lock, assume it expired
-                if 'WOPIServer' not in retrievedlock:
+                    retrievedlolock = 'WOPIServer'     # could not read the lock, assume it expired
+                if 'WOPIServer' not in retrievedlolock:
                     # the file was externally locked, make this call fail
                     log.warning('msg="WOPI lock denied because of an existing LibreOffice lock" filename="%s" holder="%s"' %
-                                (acctok['filename'], retrievedlock.split(',')[1] if ',' in retrievedlock else retrievedlock))
-                    raise
+                                (acctok['filename'], retrievedlolock.split(',')[1] if ',' in retrievedlolock else retrievedlolock))
+                    return makeConflictResponse(operation, 'External App', lock, oldlock, acctok['filename'], \
+                                                'The file was locked by %s using LibreOffice' % retrievedlolock.split(',')[1])
                 #else it's our previous lock or it had expired: all right, move on
             elif ACCESS_ERROR in str(e):
                 # user has no access to the lock file, typically because of accessing a single-file share:
-                # in this case, stat the lock and if exists assume it is valid (i.e. raise error)
+                # in this case, stat the lock and if it exists assume it is valid (i.e. raise error)
                 try:
                     lockstat = st.stat(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'])
                     log.info('msg="WOPI lock denied because of an existing LibreOffice lock" filename="%s" mtime="%ld"' %
                              (acctok['filename'], lockstat['mtime']))
-                    raise IOError(EXCL_ERROR)
+                    return makeConflictResponse(operation, 'External App', lock, oldlock, acctok['filename'], \
+                                                'The file was locked by a LibreOffice user')   # TODO resolve lockstat['ownerid']
                 except IOError as e:
-                    if EXCL_ERROR in str(e):
-                        raise
-                    # else lock not found, assume we're clear
+                    pass      # lock not found, assume we're clear
             else:
                 # any other error is logged but not raised as this is optimistically not blocking WOPI operations
                 log.warning('msg="%s: unable to store LibreOffice-compatible lock" filename="%s" token="%s" lock="%s" reason="%s"' %
                             (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
 
     try:
-        # now store the lock as encoded JWT. TODO handle race condition when creating the lock
+        # now atomically store the lock as encoded JWT
         lockcontent = {}
         lockcontent['wopilock'] = lock
         # append or overwrite the expiration time
@@ -281,7 +281,38 @@ def storeWopiLock(operation, lock, acctok, isoffice):
                    jwt.encode(lockcontent, srv.wopisecret, algorithm='HS256'))
         log.info('msg="%s" filename="%s" token="%s" lock="%s" result="success"' %
                  (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
+
+        # on first lock, set an xattr with the current time for later conflicts checking
+        try:
+            st.setxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], LASTSAVETIMEKEY, int(time.time()))
+        except IOError as e:
+            # not fatal, but will generate a conflict file later on, so log a warning
+            log.warning('msg="Unable to set lastwritetime xattr" user="%s" filename="%s" token="%s" reason="%s"' %
+                        (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:], e))
+        # also, keep track of files that have been opened for write: this is for statistical purposes only
+        # (cf. the GetLock WOPI call and the /wopi/cbox/open/list action)
+        if acctok['filename'] not in srv.openfiles:
+            srv.openfiles[acctok['filename']] = (time.asctime(), set([acctok['username']]))
+        else:
+            # the file was already opened but without lock: this happens on new files (cf. editnew action), just log
+            log.info('msg="First lock for new file" user="%s" filename="%s" token="%s"' %
+                     (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:]))
+        return 'OK', http.client.OK
+
     except IOError as e:
+        if EXCL_ERROR in str(e):
+            # another session was faster than us, or the file was already WOPI-locked:
+            # get the lock that was set
+            retrievedLock = retrieveWopiLock(fileid, operation, lock, acctok)
+            if not compareWopiLocks(retrievedLock, (oldlock if oldlock else lock)):
+                return makeConflictResponse(operation, retrievedLock, lock, oldlock, acctok['filename'], \
+                                            'The file was locked by another online editor')
+            # else it's our lock, refresh it and return
+            st.refreshlock(acctok['endpoint'], acctok['filename'], acctok['userid'], \
+                           jwt.encode(lockcontent, srv.wopisecret, algorithm='HS256'))
+            log.info('msg="%s" filename="%s" token="%s" lock="%s" result="success"' %
+                     (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
+            return 'OK', http.client.OK
         # any other error is logged and raised
         log.error('msg="%s: unable to store WOPI lock" filename="%s" token="%s" lock="%s" reason="%s"' %
                   (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
@@ -328,7 +359,7 @@ def makeConflictResponse(operation, retrievedlock, lock, oldlock, filename, reas
     if reason:
         resp.headers['X-WOPI-LockFailureReason'] = resp.data = reason
     resp.status_code = http.client.CONFLICT
-    log.warning('msg="%s" filename="%s" token="%s" lock="%s" oldLock="%s" retrievedLock="%s" %s' %
+    log.warning('msg="%s" filename="%s" token="%s" lock="%s" oldlock="%s" retrievedLock="%s" %s' %
                 (operation.title(), filename, flask.request.args['access_token'][-20:], \
                  lock, oldlock, retrievedlock, ('reason="%s"' % reason if reason else 'result="conflict"')))
     return resp

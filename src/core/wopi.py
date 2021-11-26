@@ -150,41 +150,15 @@ def setLock(fileid, reqheaders, acctok):
         if not savetime or not savetime.isdigit():
             return utils.makeConflictResponse(op, '', lock, oldLock, acctok['filename'],
                                               'The file was not locked' + ' and got modified' if validateTarget else '')
-    if retrievedLock and not utils.compareWopiLocks(retrievedLock, (oldLock if oldLock else lock)):
-        return utils.makeConflictResponse(op, retrievedLock, lock, oldLock, acctok['filename'], \
-                                          'The file was locked by another online editor')
 
-    # LOCK or REFRESH_LOCK: set the lock to the given one, including the expiration time
+    # LOCK or REFRESH_LOCK: atomically set the lock to the given one, including the expiration time,
+    # and return conflict response if the file was already locked
     try:
-        utils.storeWopiLock(op, lock, acctok, os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes)
+        return utils.storeWopiLock(fileid, op, lock, oldLock, acctok, \
+                                   os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes)
     except IOError as e:
-        if utils.EXCL_ERROR in str(e):
-            # this file was already locked externally: storeWopiLock looks at LibreOffice-compatible locks
-            return utils.makeConflictResponse(op, 'External App', lock, oldLock, acctok['filename'], \
-                                              'The file was locked by another application')
-        if 'No such file or directory' in str(e):
-            # the file got renamed/deleted: this is equivalent to a conflict
-            return utils.makeConflictResponse(op, 'External App', lock, oldLock, acctok['filename'], \
-                                              'The file got moved or deleted')
-        # any other failure
+        # expected failures are handled in storeWopiLock
         return str(e), http.client.INTERNAL_SERVER_ERROR
-    if not retrievedLock:
-        # on first lock, set an xattr with the current time for later conflicts checking
-        try:
-            st.setxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY, int(time.time()))
-        except IOError as e:
-            # not fatal, but will generate a conflict file later on, so log a warning
-            log.warning('msg="Unable to set lastwritetime xattr" user="%s" filename="%s" token="%s" reason="%s"' %
-                        (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:], e))
-        # also, keep track of files that have been opened for write: this is for statistical purposes only
-        # (cf. the GetLock WOPI call and the /wopi/cbox/open/list action)
-        if acctok['filename'] not in srv.openfiles:
-            srv.openfiles[acctok['filename']] = (time.asctime(), set([acctok['username']]))
-        else:
-            # the file was already opened but without lock: this happens on new files (cf. editnew action), just log
-            log.info('msg="First lock for new file" user="%s" filename="%s" token="%s"' %
-                     (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:]))
-    return 'OK', http.client.OK
 
 
 def getLock(fileid, _reqheaders_unused, acctok):
