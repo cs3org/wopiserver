@@ -14,7 +14,7 @@ import os
 from threading import Thread
 sys.path.append('src/core')  # for tests out of the git repo
 sys.path.append('/app')    # for tests within the Docker image
-
+from wopiutils import EXCL_ERROR
 
 class TestStorage(unittest.TestCase):
   '''Simple tests for the storage layers of the WOPI server. See README for how to run the tests for each storage provider'''
@@ -168,7 +168,7 @@ class TestStorage(unittest.TestCase):
     self.assertIsInstance(statInfo, dict)
     with self.assertRaises(IOError) as context:
       self.storage.writefile(self.endpoint, self.homepath + '/testoverwrite', self.userid, buf, islock=True)
-    self.assertIn('File exists and islock flag requested', str(context.exception))
+    self.assertIn(EXCL_ERROR, str(context.exception))
     self.storage.removefile(self.endpoint, self.homepath + '/testoverwrite', self.userid)
 
   def test_write_race(self):
@@ -183,9 +183,45 @@ class TestStorage(unittest.TestCase):
     t.start()
     with self.assertRaises(IOError) as context:
       self.storage.writefile(self.endpoint, self.homepath + '/testwriterace', self.userid, buf, islock=True)
-    self.assertIn('File exists and islock flag requested', str(context.exception))
+    self.assertIn(EXCL_ERROR, str(context.exception))
     t.join()
     self.storage.removefile(self.endpoint, self.homepath + '/testwriterace', self.userid)
+
+  def test_lock(self):
+    '''Test setting locks'''
+    buf = b'ebe5tresbsrdthbrdhvdtr'
+    try:
+      self.storage.removefile(self.endpoint, self.homepath + '/testlock', self.userid)
+    except IOError:
+      pass
+    self.storage.writefile(self.endpoint, self.homepath + '/testlock', self.userid, buf)
+    statInfo = self.storage.stat(self.endpoint, self.homepath + '/testlock', self.userid)
+    self.assertIsInstance(statInfo, dict)
+    self.storage.setlock(self.endpoint, self.homepath + '/testlock', self.userid, 'testlock')
+    l = self.storage.getlock(self.endpoint, self.homepath + '/testlock', self.userid)
+    self.assertEqual(l, 'testlock')
+    with self.assertRaises(IOError) as context:
+      self.storage.setlock(self.endpoint, self.homepath + '/testlock', self.userid, 'testlock2')
+    self.assertIn(EXCL_ERROR, str(context.exception))
+    self.storage.removefile(self.endpoint, self.homepath + '/testlock', self.userid)
+
+  def test_lock_race(self):
+    '''Test multithreaded setting locks'''
+    buf = b'ebe5tresbsrdthbrdhvdtr'
+    try:
+      self.storage.removefile(self.endpoint, self.homepath + '/testlockrace', self.userid)
+    except IOError:
+      pass
+    self.storage.writefile(self.endpoint, self.homepath + '/testlockrace', self.userid, buf)
+    statInfo = self.storage.stat(self.endpoint, self.homepath + '/testlockrace', self.userid)
+    self.assertIsInstance(statInfo, dict)
+    t = Thread(target=self.storage.setlock,
+               args=[self.endpoint, self.homepath + '/testlockrace', self.userid, 'testlock'])
+    t.start()
+    with self.assertRaises(IOError) as context:
+      self.storage.setlock(self.endpoint, self.homepath + '/testlockrace', self.userid, 'testlock2')
+    self.assertIn(EXCL_ERROR, str(context.exception))
+    self.storage.removefile(self.endpoint, self.homepath + '/testlockrace', self.userid)
 
   def test_remove_nofile(self):
     '''Test removal of a non-existing file'''

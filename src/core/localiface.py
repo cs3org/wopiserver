@@ -13,6 +13,8 @@ from stat import S_ISDIR
 import json
 import core.commoniface as common
 
+LOCKKEY = 'user.iop.lock'    # this is to be compatible with the (future) Lock API in Reva
+
 # module-wide state
 config = None
 log = None
