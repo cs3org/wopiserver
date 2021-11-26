@@ -204,6 +204,15 @@ def retrieveWopiLock(fileid, operation, lock, acctok, overridefilename=None):
     return retrievedLock['wopilock']
 
 
+def _makeLock(lock):
+    '''Generates the lock payload given the raw data'''
+    lockcontent = {}
+    lockcontent['wopilock'] = lock
+    # append or overwrite the expiration time
+    lockcontent['exp'] = int(time.time()) + srv.config.getint('general', 'wopilockexpiration')
+    return jwt.encode(lockcontent, srv.wopisecret, algorithm='HS256')
+
+
 def storeWopiLock(fileid, operation, lock, oldlock, acctok, isoffice):
     '''Stores the lock for a given file in the form of an encoded JSON string'''
     try:
@@ -273,12 +282,7 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok, isoffice):
 
     try:
         # now atomically store the lock as encoded JWT
-        lockcontent = {}
-        lockcontent['wopilock'] = lock
-        # append or overwrite the expiration time
-        lockcontent['exp'] = int(time.time()) + srv.config.getint('general', 'wopilockexpiration')
-        st.setlock(acctok['endpoint'], acctok['filename'], acctok['userid'], \
-                   jwt.encode(lockcontent, srv.wopisecret, algorithm='HS256'))
+        st.setlock(acctok['endpoint'], acctok['filename'], acctok['userid'], _makeLock(lock))
         log.info('msg="%s" filename="%s" token="%s" lock="%s" result="success"' %
                  (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
 
@@ -308,8 +312,7 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok, isoffice):
                 return makeConflictResponse(operation, retrievedLock, lock, oldlock, acctok['filename'], \
                                             'The file was locked by another online editor')
             # else it's our lock, refresh it and return
-            st.refreshlock(acctok['endpoint'], acctok['filename'], acctok['userid'], \
-                           jwt.encode(lockcontent, srv.wopisecret, algorithm='HS256'))
+            st.refreshlock(acctok['endpoint'], acctok['filename'], acctok['userid'], _makeLock(lock))
             log.info('msg="%s" filename="%s" token="%s" lock="%s" result="refreshed"' %
                      (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
             return 'OK', http.client.OK
@@ -365,7 +368,7 @@ def makeConflictResponse(operation, retrievedlock, lock, oldlock, filename, reas
     return resp
 
 
-def storeWopiFile(request, acctok, xakey, targetname=''):
+def storeWopiFile(request, retrievedlock, acctok, xakey, targetname=''):
     '''Saves a file from an HTTP request to the given target filename (defaulting to the access token's one),
          and stores the save time as an xattr. Throws IOError in case of any failure'''
     if not targetname:
@@ -373,3 +376,6 @@ def storeWopiFile(request, acctok, xakey, targetname=''):
     st.writefile(acctok['endpoint'], targetname, acctok['userid'], request.get_data())
     # save the current time for later conflict checking: this is never older than the mtime of the file
     st.setxattr(acctok['endpoint'], targetname, acctok['userid'], xakey, int(time.time()))
+    # and reinstate the lock if existing
+    if retrievedlock:
+        st.setlock(acctok['endpoint'], targetname, acctok['userid'], _makeLock(retrievedlock))

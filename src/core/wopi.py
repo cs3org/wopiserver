@@ -280,7 +280,7 @@ def putRelative(fileid, reqheaders, acctok):
         targetName = relTarget
     # either way, we now have a targetName to save the file: attempt to do so
     try:
-        utils.storeWopiFile(flask.request, acctok, utils.LASTSAVETIMEKEY, targetName)
+        utils.storeWopiFile(flask.request, None, acctok, utils.LASTSAVETIMEKEY, targetName)
     except IOError as e:
         log.info('msg="Error writing file" filename="%s" token="%s" error="%s"' %
                  (targetName, flask.request.args['access_token'][-20:], e))
@@ -362,7 +362,7 @@ def _createNewFile(fileid, acctok):
         return 'File exists', http.client.CONFLICT
     except IOError:
         # indeed the file did not exist, so we write it for the first time
-        utils.storeWopiFile(flask.request, acctok, utils.LASTSAVETIMEKEY)
+        utils.storeWopiFile(flask.request, None, acctok, utils.LASTSAVETIMEKEY)
         log.info('msg="File stored successfully" action="editnew" user="%s" filename="%s" token="%s"' %
                  (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:]))
         # and we keep track of it as an open file with timestamp = Epoch, despite not having any lock yet.
@@ -414,7 +414,7 @@ def putFile(fileid):
             newname, ext = os.path.splitext(acctok['filename'])
             # !!! typical EFSS formats are like '<filename>_conflict-<date>-<time>', but they're not synchronized back !!!
             newname = '%s-webconflict-%s%s' % (newname, time.strftime('%Y%m%d-%H'), ext.strip())
-            utils.storeWopiFile(flask.request, acctok, utils.LASTSAVETIMEKEY, newname)
+            utils.storeWopiFile(flask.request, retrievedLock, acctok, utils.LASTSAVETIMEKEY, newname)
             # keep track of this action in the original file's xattr, to avoid looping (see below)
             st.setxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY, 0)
             log.info('msg="Conflicting copy created" user="%s" savetime="%s" lastmtime="%s" newfilename="%s" token="%s"' %
@@ -426,7 +426,7 @@ def putFile(fileid):
         # Go for overwriting the file. Note that the entire check+write operation should be atomic,
         # but the previous check still gives the opportunity of a race condition. We just live with it.
         # Anyhow, the EFSS should support versioning for such cases.
-        utils.storeWopiFile(flask.request, acctok, utils.LASTSAVETIMEKEY)
+        utils.storeWopiFile(flask.request, retrievedLock, acctok, utils.LASTSAVETIMEKEY)
         log.info('msg="File stored successfully" action="edit" user="%s" filename="%s" token="%s"' %
                  (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:]))
         return 'OK', http.client.OK
