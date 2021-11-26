@@ -11,7 +11,6 @@ import configparser
 import json
 import http.client
 from urllib.parse import quote_plus as url_quote_plus
-from urllib.parse import unquote as url_unquote
 from more_itertools import peekable
 import jwt
 import flask
@@ -39,54 +38,54 @@ def checkFileInfo(fileid):
         # compute some entities for the response
         wopiSrc = 'WOPISrc=%s&access_token=%s' % (utils.generateWopiSrc(fileid), flask.request.args['access_token'])
         # populate metadata for this file
-        filemd = {}
-        filemd['BaseFileName'] = filemd['BreadcrumbDocName'] = os.path.basename(acctok['filename'])
+        fmd = {}
+        fmd['BaseFileName'] = fmd['BreadcrumbDocName'] = os.path.basename(acctok['filename'])
         furl = acctok['folderurl']
         # encode the path part as it is going to be an URL GET argument
-        filemd['BreadcrumbFolderUrl'] = furl[:furl.find('=')+1] + url_quote_plus(furl[furl.find('=')+1:]) if furl != '/' else ''
+        fmd['BreadcrumbFolderUrl'] = furl[:furl.find('=')+1] + url_quote_plus(furl[furl.find('=')+1:]) if furl != '/' else ''
         if acctok['username'] == '':
-            filemd['UserFriendlyName'] = 'Guest ' + utils.randomString(3)
+            fmd['UserFriendlyName'] = 'Guest ' + utils.randomString(3)
             if '?path' in furl and furl[-1] != '/' and furl[-1] != '=':
                 # this is a subfolder of a public share, show it
-                filemd['BreadcrumbFolderName'] = 'Back to ' + furl[furl.find('?path'):].split('/')[-1]
+                fmd['BreadcrumbFolderName'] = 'Back to ' + furl[furl.find('?path'):].split('/')[-1]
             else:
                 # this is the top level public share, which is anonymous
-                filemd['BreadcrumbFolderName'] = 'Back to the public share'
+                fmd['BreadcrumbFolderName'] = 'Back to the public share'
         else:
-            filemd['UserFriendlyName'] = acctok['username']
-            filemd['BreadcrumbFolderName'] = 'Back to ' + os.path.dirname(acctok['filename'])
+            fmd['UserFriendlyName'] = acctok['username']
+            fmd['BreadcrumbFolderName'] = 'Back to ' + os.path.dirname(acctok['filename'])
         if furl == '/':    # if no target folder URL was given, override the above and completely hide it
-            filemd['BreadcrumbFolderName'] = ''
+            fmd['BreadcrumbFolderName'] = ''
         if acctok['viewmode'] in (utils.ViewMode.READ_ONLY, utils.ViewMode.READ_WRITE):
-            filemd['DownloadUrl'] = '%s?access_token=%s' % \
+            fmd['DownloadUrl'] = '%s?access_token=%s' % \
                                     (srv.config.get('general', 'downloadurl'), flask.request.args['access_token'])
-        filemd['OwnerId'] = statInfo['ownerid']
-        filemd['UserId'] = acctok['wopiuser']     # typically same as OwnerId; different when accessing shared documents
-        filemd['Size'] = statInfo['size']
+        fmd['OwnerId'] = statInfo['ownerid']
+        fmd['UserId'] = acctok['wopiuser']     # typically same as OwnerId; different when accessing shared documents
+        fmd['Size'] = statInfo['size']
         # TODO the version is generated like this in ownCloud: 'V' . $file->getEtag() . \md5($file->getChecksum());
-        filemd['Version'] = statInfo['mtime']   # mtime is used as version here
-        filemd['SupportsExtendedLockLength'] = filemd['SupportsGetLock'] = True
-        filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = \
-            filemd['SupportsDeleteFile'] = acctok['viewmode'] == utils.ViewMode.READ_WRITE
-        filemd['UserCanNotWriteRelative'] = acctok['viewmode'] != utils.ViewMode.READ_WRITE
-        filemd['HostViewUrl'] = '%s%s%s' % (acctok['appviewurl'], '&' if '?' in acctok['appviewurl'] else '?', wopiSrc)
-        filemd['HostEditUrl'] = '%s%s%s' % (acctok['appediturl'], '&' if '?' in acctok['appediturl'] else '?', wopiSrc)
-        filemd['SupportsRename'] = filemd['UserCanRename'] = enablerename and utils.ViewMode.READ_WRITE
+        fmd['Version'] = statInfo['mtime']   # mtime is used as version here
+        fmd['SupportsExtendedLockLength'] = fmd['SupportsGetLock'] = True
+        fmd['SupportsUpdate'] = fmd['UserCanWrite'] = fmd['SupportsLocks'] = \
+            fmd['SupportsDeleteFile'] = acctok['viewmode'] == utils.ViewMode.READ_WRITE
+        fmd['UserCanNotWriteRelative'] = acctok['viewmode'] != utils.ViewMode.READ_WRITE
+        fmd['HostViewUrl'] = '%s%s%s' % (acctok['appviewurl'], '&' if '?' in acctok['appviewurl'] else '?', wopiSrc)
+        fmd['HostEditUrl'] = '%s%s%s' % (acctok['appediturl'], '&' if '?' in acctok['appediturl'] else '?', wopiSrc)
+        fmd['SupportsRename'] = fmd['UserCanRename'] = enablerename and utils.ViewMode.READ_WRITE
         # populate app-specific metadata
         if acctok['appname'].find('Microsoft') > 0:
             # the following is to enable the 'Edit in Word/Excel/PowerPoint' (desktop) action (probably broken)
             try:
-                filemd['ClientUrl'] = srv.config.get('general', 'webdavurl') + '/' + acctok['filename']
+                fmd['ClientUrl'] = srv.config.get('general', 'webdavurl') + '/' + acctok['filename']
             except configparser.NoOptionError:
                 # if no WebDAV URL is provided, ignore this setting
                 pass
         # extensions for Collabora Online
-        filemd['EnableOwnerTermination'] = True
-        filemd['DisableExport'] = filemd['DisableCopy'] = filemd['DisablePrint'] = acctok['viewmode'] == utils.ViewMode.VIEW_ONLY
-        #filemd['LastModifiedTime'] = datetime.fromtimestamp(int(statInfo['mtime'])).isoformat()   # this currently breaks
+        fmd['EnableOwnerTermination'] = True
+        fmd['DisableExport'] = fmd['DisableCopy'] = fmd['DisablePrint'] = acctok['viewmode'] == utils.ViewMode.VIEW_ONLY
+        #fmd['LastModifiedTime'] = datetime.fromtimestamp(int(statInfo['mtime'])).isoformat()   # this currently breaks
 
-        log.info('msg="File metadata response" token="%s" metadata="%s"' % (flask.request.args['access_token'][-20:], filemd))
-        return flask.Response(json.dumps(filemd), mimetype='application/json')
+        log.info('msg="File metadata response" token="%s" metadata="%s"' % (flask.request.args['access_token'][-20:], fmd))
+        return flask.Response(json.dumps(fmd), mimetype='application/json')
     except IOError as e:
         log.info('msg="Requested file not found" filename="%s" token="%s" error="%s"' %
                  (acctok['filename'], flask.request.args['access_token'][-20:], e))
@@ -140,7 +139,7 @@ def setLock(fileid, reqheaders, acctok):
     retrievedLock = utils.retrieveWopiLock(fileid, op, lock, acctok)
 
     # perform the required checks for the validity of the new lock
-    if not retrievedLock and op == 'REFRESH_LOCK':
+    if op == 'REFRESH_LOCK' and not retrievedLock:
         if validateTarget:
             # this is an extension of the API: a REFRESH_LOCK without previous lock but with a Validate-Target header
             # is allowed provided that the target file was last saved by WOPI and not overwritten by external actions,
@@ -223,11 +222,11 @@ def getLock(fileid, _reqheaders_unused, acctok):
     return resp
 
 
-def unlock(fileid, reqheaders, acctok, force=False):
+def unlock(fileid, reqheaders, acctok):
     '''Implements the Unlock WOPI call'''
     lock = reqheaders['X-WOPI-Lock']
     retrievedLock = utils.retrieveWopiLock(fileid, 'UNLOCK', lock, acctok)
-    if not force and not utils.compareWopiLocks(retrievedLock, lock):
+    if not utils.compareWopiLocks(retrievedLock, lock):
         return utils.makeConflictResponse('UNLOCK', retrievedLock, lock, '', acctok['filename'])
     # OK, the lock matches. Remove any extended attribute related to locks and conflicts handling
     try:
@@ -243,17 +242,16 @@ def unlock(fileid, reqheaders, acctok, force=False):
     try:
         # also remove the LibreOffice-compatible lock file when relevant
         if os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes:
-            st.removefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), acctok['userid'], 1)
+            st.removefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), acctok['userid'], force=True)
     except IOError:
         # same as above
         pass
     # and update our internal list of opened files
-    if not force:
-        try:
-            del srv.openfiles[acctok['filename']]
-        except KeyError:
-            # already removed?
-            pass
+    try:
+        del srv.openfiles[acctok['filename']]
+    except KeyError:
+        # already removed?
+        pass
     return 'OK', http.client.OK
 
 

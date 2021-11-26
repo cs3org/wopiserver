@@ -358,9 +358,9 @@ def renamefile(endpoint, origfilepath, newfilepath, userid):
               '&mgm.file.target=' + _getfilepath(newfilepath, encodeamp=True))
 
 
-def removefile(endpoint, filepath, userid, force=0):
+def removefile(endpoint, filepath, userid, force=False):
     '''Remove a file via a special open on behalf of the given userid.
-    If force=1 or True, then pass the f option, that is skip the recycle bin.
+    If force then pass the f option, that is skip the recycle bin.
     This is useful for lock files, but as it requires root access the userid is overridden.'''
     if force:
         userid = '0:0'

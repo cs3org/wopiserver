@@ -203,7 +203,7 @@ def renamefile(_endpoint, origfilepath, newfilepath, _userid):
         raise IOError(e)
 
 
-def removefile(_endpoint, filepath, _userid, _force=0):
+def removefile(_endpoint, filepath, _userid, force=False):
     '''Remove a file on behalf of the given userid.
          The force argument is irrelevant and ignored for local storage.'''
     try:

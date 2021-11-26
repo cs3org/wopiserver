@@ -259,7 +259,7 @@ def renamefile(_endpoint, filepath, newfilepath, userid):
     ctx['log'].debug('msg="Invoked renamefile" result="%s"' % res)
 
 
-def removefile(_endpoint, filepath, userid, _force=0):
+def removefile(_endpoint, filepath, userid, force=False):
     '''Remove a file using the given userid as access token.
        The force argument is ignored for now for CS3 storage.'''
     reference = cs3spr.Reference(path=filepath)
