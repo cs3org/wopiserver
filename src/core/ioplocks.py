@@ -133,7 +133,7 @@ def createLock(filestat, filename, userid, endpoint):
                  (filename, filestat['inode'], lockid))
         return str(lockid), http.client.OK
     except IOError as e:
-        if 'File exists and islock flag requested' not in str(e):
+        if utils.EXCL_ERROR not in str(e):
             # writing failed
             log.error('msg="cboxLock: unable to store LibreOffice-compatible lock file" filename="%s" reason="%s"' %
                       (filename, e))

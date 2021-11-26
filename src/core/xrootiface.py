@@ -19,6 +19,8 @@ EOSVERSIONPREFIX = '.sys.v#.'
 
 ENOENT_MSG = 'No such file or directory'
 
+LOCKKEY = 'iop.lock'    # this is to be compatible with the (future) Lock API in Reva
+
 # module-wide state
 config = None
 log = None
@@ -34,7 +36,7 @@ def _getxrdfor(endpoint):
     global xrdfs             # pylint: disable=global-statement
     global defaultstorage    # pylint: disable=global-statement
     if endpointoverride:
-       endpoint = endpointoverride
+        endpoint = endpointoverride
     if endpoint == 'default':
         return xrdfs[defaultstorage]
     try:
@@ -256,6 +258,25 @@ def getxattr(endpoint, filepath, userid, key):
 def rmxattr(endpoint, filepath, userid, key):
     '''Remove the extended attribute <key> via a special open on behalf of the given userid'''
     _xrootcmd(endpoint, 'attr', 'rm', userid, 'mgm.attr.key=user.' + key + '&mgm.path=' + _getfilepath(filepath, encodeamp=True))
+
+
+def setlock(endpoint, filepath, userid, value):
+    '''Set the lock as an xattr with the special option "c" (create-if-not-exists) on behalf of the given userid'''
+    try:
+        setxattr(endpoint, filepath, userid, LOCKKEY, str(value) + '&mgm.option=c')
+    except IOError as e:
+        if 'exclusive set for exsisting attribute' in str(e):
+            raise IOError('File exists and islock flag requested')
+
+
+def getlock(endpoint, filepath, userid):
+    '''Get the lock metadata as an xattr on behalf of the given userid'''
+    return getxattr(endpoint, filepath, userid, LOCKKEY)
+
+
+def unlock(endpoint, filepath, userid):
+    '''Remove the lock as an xattr on behalf of the given userid'''
+    rmxattr(endpoint, filepath, userid, LOCKKEY)
 
 
 def readfile(endpoint, filepath, userid):

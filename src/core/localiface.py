@@ -11,6 +11,8 @@ import os
 import warnings
 from stat import S_ISDIR
 
+LOCKKEY = 'user.iop.lock'    # this is to be compatible with the (future) Lock API in Reva
+
 # module-wide state
 config = None
 log = None
@@ -67,7 +69,7 @@ def stat(_endpoint, filepath, _userid):
         raise IOError(e)
 
 
-def statx(endpoint, filepath, userid, _versioninv=1):
+def statx(endpoint, filepath, userid, versioninv=1):
     '''Get extended stat info (inode, filepath, userid, size, mtime). Equivalent to stat in the case of local storage.
     The versioninv flag is ignored as local storage always supports version-invariant inodes (cf. CERNBOX-1216).'''
     return stat(endpoint, filepath, userid)
@@ -99,6 +101,25 @@ def rmxattr(_endpoint, filepath, _userid, key):
     except (FileNotFoundError, PermissionError, OSError) as e:
         log.error('msg="Failed to rmxattr" filepath="%s" key="%s" exception="%s"' % (filepath, key, e))
         raise IOError(e)
+
+
+def setlock(endpoint, filepath, userid, value):
+    '''Set the lock as an xattr on behalf of the given userid'''
+    if not getxattr(endpoint, filepath, userid, LOCKKEY):
+        # we do not protect from race conditions here
+        setxattr(endpoint, filepath, userid, LOCKKEY, value)
+    else:
+        raise IOError('File exists and islock flag requested')
+
+
+def getlock(endpoint, filepath, userid):
+    '''Get the lock metadata as an xattr on behalf of the given userid'''
+    return getxattr(endpoint, filepath, userid, LOCKKEY)
+
+
+def unlock(endpoint, filepath, userid):
+    '''Remove the lock as an xattr on behalf of the given userid'''
+    rmxattr(endpoint, filepath, userid, LOCKKEY)
 
 
 def readfile(_endpoint, filepath, _userid):

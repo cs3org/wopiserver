@@ -148,6 +148,21 @@ def rmxattr(_endpoint, filepath, userid, key):
     ctx['log'].debug('msg="Invoked rmxattr" result="%s"' % res)
 
 
+def setlock(endpoint, filepath, userid, value):
+    '''Set the lock on behalf of the given userid'''
+    raise NotImplementedError
+
+
+def getlock(endpoint, filepath, userid):
+    '''Get the lock metadata on behalf of the given userid'''
+    raise NotImplementedError
+
+
+def unlock(endpoint, filepath, userid):
+    '''Remove the lock on behalf of the given userid'''
+    raise NotImplementedError
+
+
 def readfile(_endpoint, filepath, userid):
     '''Read a file using the given userid as access token. Note that the function is a generator, managed by Flask.'''
     tstart = time.time()
