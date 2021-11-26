@@ -18,6 +18,7 @@ from XRootD.client.flags import OpenFlags, QueryCode, MkDirFlags, StatInfoFlags
 EOSVERSIONPREFIX = '.sys.v#.'
 
 ENOENT_MSG = 'No such file or directory'
+EXCL_XATTR_MSG = 'exclusive set for existing attribute'
 
 LOCKKEY = 'iop.lock'    # this is to be compatible with the (future) Lock API in Reva
 
@@ -89,8 +90,8 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args):
             if rc != '0':
                 # failure: get info from stderr, log and raise
                 msg = res[1][res[1].find('=')+1:].strip('\n')
-                if ENOENT_MSG.lower() in msg:
-                    log.info('msg="Invoked xroot on non-existing file" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' % \
+                if ENOENT_MSG.lower() in msg or 'unable to get attribute' in msg or EXCL_XATTR_MSG in msg:
+                    log.info('msg="Invoked xroot on non-existing entity" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' % \
                              (cmd, subcmd, args, msg, rc.strip('\00')))
                 else:
                     log.error('msg="Error with xroot" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' % \
@@ -246,12 +247,11 @@ def setxattr(endpoint, filepath, userid, key, value):
 
 def getxattr(endpoint, filepath, userid, key):
     '''Get the extended attribute <key> via a special open on behalf of the given userid'''
-    res = _xrootcmd(endpoint, 'attr', 'get', userid, 'mgm.attr.key=user.' + key + '&mgm.path=' + _getfilepath(filepath, encodeamp=True))
-    # if no error, the response comes in the format <key>="<value>"
     try:
+        res = _xrootcmd(endpoint, 'attr', 'get', userid, 'mgm.attr.key=user.' + key + '&mgm.path=' + _getfilepath(filepath, encodeamp=True))
+        # if no error, the response comes in the format <key>="<value>"
         return res.split('"')[1]
-    except IndexError:
-        log.warning('msg="Failed to getxattr" filepath="%s" key="%s" res="%s"' % (filepath, key, res))
+    except (IndexError, IOError):
         return None
 
 
@@ -261,11 +261,11 @@ def rmxattr(endpoint, filepath, userid, key):
 
 
 def setlock(endpoint, filepath, userid, value):
-    '''Set the lock as an xattr with the special option "c" (create-if-not-exists) on behalf of the given userid'''
+    '''Set a lock as an xattr with the special option "c" (create-if-not-exists) on behalf of the given userid'''
     try:
         setxattr(endpoint, filepath, userid, LOCKKEY, str(value) + '&mgm.option=c')
     except IOError as e:
-        if 'exclusive set for exsisting attribute' in str(e):
+        if EXCL_XATTR_MSG in str(e):
             raise IOError('File exists and islock flag requested')
 
 
@@ -283,7 +283,7 @@ def refreshlock(endpoint, filepath, userid, value):
 
 
 def unlock(endpoint, filepath, userid):
-    '''Remove the lock as an xattr on behalf of the given userid'''
+    '''Remove a lock as an xattr on behalf of the given userid'''
     rmxattr(endpoint, filepath, userid, LOCKKEY)
 
 

@@ -198,7 +198,7 @@ def retrieveWopiLock(fileid, operation, lock, acctok, overridefilename=None):
             log.warning('msg="Unable to delete the LibreOffice-compatible lock file" error="%s"' %
                         ('empty lock' if isinstance(e, StopIteration) else str(e)))
         return None
-    log.info('msg="%s" user="%s" filename="%s" fileid="%s" lock="%s" retrievedLock="%s" expTime="%s" token="%s"' %
+    log.info('msg="%s" user="%s" filename="%s" fileid="%s" lock="%s" retrievedlock="%s" expTime="%s" token="%s"' %
              (operation.title(), acctok['userid'][-20:], acctok['filename'], fileid, lock, retrievedLock['wopilock'],
               time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(retrievedLock['exp'])), encacctok))
     return retrievedLock['wopilock']
@@ -310,7 +310,7 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok, isoffice):
             # else it's our lock, refresh it and return
             st.refreshlock(acctok['endpoint'], acctok['filename'], acctok['userid'], \
                            jwt.encode(lockcontent, srv.wopisecret, algorithm='HS256'))
-            log.info('msg="%s" filename="%s" token="%s" lock="%s" result="success"' %
+            log.info('msg="%s" filename="%s" token="%s" lock="%s" result="refreshed"' %
                      (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
             return 'OK', http.client.OK
         # any other error is logged and raised
@@ -359,9 +359,9 @@ def makeConflictResponse(operation, retrievedlock, lock, oldlock, filename, reas
     if reason:
         resp.headers['X-WOPI-LockFailureReason'] = resp.data = reason
     resp.status_code = http.client.CONFLICT
-    log.warning('msg="%s" filename="%s" token="%s" lock="%s" oldlock="%s" retrievedLock="%s" %s' %
+    log.warning('msg="%s: returning conflict" filename="%s" token="%s" lock="%s" oldlock="%s" retrievedlock="%s" reason="%s"' %
                 (operation.title(), filename, flask.request.args['access_token'][-20:], \
-                 lock, oldlock, retrievedlock, ('reason="%s"' % reason if reason else 'result="conflict"')))
+                 lock, oldlock, retrievedlock, (reason if reason else 'N/A')))
     return resp
 
 
