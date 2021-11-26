@@ -130,40 +130,6 @@ def getFile(fileid):
 #
 # The following operations are all called on POST /wopi/files/<fileid>
 #
-def unlock(fileid, reqheaders, acctok, force=False):
-    '''Implements the Unlock WOPI call'''
-    lock = reqheaders['X-WOPI-Lock']
-    retrievedLock = utils.retrieveWopiLock(fileid, 'UNLOCK', lock, acctok)
-    if not force and not utils.compareWopiLocks(retrievedLock, lock):
-        return utils.makeConflictResponse('UNLOCK', retrievedLock, lock, '', acctok['filename'])
-    # OK, the lock matches. Remove any extended attribute related to locks and conflicts handling
-    try:
-        st.removefile(acctok['endpoint'], utils.getLockName(acctok['filename']), acctok['userid'], 1)
-    except IOError:
-        # ignore, it's not worth to report anything here
-        pass
-    try:
-        st.rmxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY)
-    except IOError:
-        # same as above
-        pass
-    try:
-        # also remove the LibreOffice-compatible lock file when relevant
-        if os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes:
-            st.removefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), acctok['userid'], 1)
-    except IOError:
-        # same as above
-        pass
-    # and update our internal list of opened files
-    if not force:
-        try:
-            del srv.openfiles[acctok['filename']]
-        except KeyError:
-            # already removed?
-            pass
-    return 'OK', http.client.OK
-
-
 def setLock(fileid, reqheaders, acctok):
     '''Implements the Lock, RefreshLock, and UnlockAndRelock WOPI calls'''
     # cf. http://wopi.readthedocs.io/projects/wopirest/en/latest/files/Lock.html
@@ -255,6 +221,40 @@ def getLock(fileid, _reqheaders_unused, acctok):
     #    pass
     # however implications have to be properly understood as we've seen cases of locks left behind
     return resp
+
+
+def unlock(fileid, reqheaders, acctok, force=False):
+    '''Implements the Unlock WOPI call'''
+    lock = reqheaders['X-WOPI-Lock']
+    retrievedLock = utils.retrieveWopiLock(fileid, 'UNLOCK', lock, acctok)
+    if not force and not utils.compareWopiLocks(retrievedLock, lock):
+        return utils.makeConflictResponse('UNLOCK', retrievedLock, lock, '', acctok['filename'])
+    # OK, the lock matches. Remove any extended attribute related to locks and conflicts handling
+    try:
+        st.unlock(acctok['endpoint'], acctok['filename'], acctok['userid'])
+    except IOError:
+        # ignore, it's not worth to report anything here
+        pass
+    try:
+        st.rmxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY)
+    except IOError:
+        # same as above
+        pass
+    try:
+        # also remove the LibreOffice-compatible lock file when relevant
+        if os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes:
+            st.removefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), acctok['userid'], 1)
+    except IOError:
+        # same as above
+        pass
+    # and update our internal list of opened files
+    if not force:
+        try:
+            del srv.openfiles[acctok['filename']]
+        except KeyError:
+            # already removed?
+            pass
+    return 'OK', http.client.OK
 
 
 def putRelative(fileid, reqheaders, acctok):
@@ -360,8 +360,6 @@ def renameFile(fileid, reqheaders, acctok):
                  (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:], targetName))
         st.renamefile(acctok['endpoint'], acctok['filename'], targetName, acctok['userid'])
         # also rename the locks
-        st.renamefile(acctok['endpoint'], utils.getLockName(acctok['filename']), \
-                      utils.getLockName(targetName), acctok['userid'])
         if os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes:
             st.renamefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), \
                           utils.getLibreOfficeLockName(targetName), acctok['userid'])

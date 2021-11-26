@@ -8,7 +8,6 @@ import sys
 import os
 import time
 import traceback
-import hashlib
 import json
 from enum import Enum
 from random import choice
@@ -163,26 +162,12 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
     return statinfo['inode'], acctok
 
 
-def getLockName(filename):
-    '''Generates a hidden filename used to store the WOPI locks'''
-    if srv.lockpath:
-        lockfile = filename.split("/files/", 1)[0] + srv.lockpath + 'wopilock.' + \
-                                  hashlib.sha1(filename).hexdigest() + '.' + os.path.basename(filename)
-    else:
-        lockfile = os.path.dirname(filename) + os.path.sep + '.sys.wopilock.' + os.path.basename(filename) + '.'
-    return lockfile
-
-
 def retrieveWopiLock(fileid, operation, lock, acctok, overridefilename=None):
     '''Retrieves and logs an existing lock for a given file'''
     encacctok = flask.request.args['access_token'][-20:] if 'access_token' in flask.request.args else 'N/A'
-    lockcontent = b''
-    for line in st.readfile(acctok['endpoint'], getLockName(overridefilename if overridefilename else acctok['filename']),
-                            acctok['userid']):
-        if isinstance(line, IOError):
-            return None         # no pre-existing lock found, or error attempting to read it: assume it does not exist
-        # the following check is necessary as it happens to get a str instead of bytes
-        lockcontent += line if isinstance(line, type(lockcontent)) else line.encode()
+    lockcontent = st.getlock(acctok['endpoint'], overridefilename if overridefilename else acctok['filename'], acctok['userid'])
+    if not lockcontent:
+        return None         # no pre-existing lock found, or error attempting to read it: assume it does not exist
     try:
         # check validity: a lock is deemed expired if the most recent between its expiration time and the last
         # save time by WOPI has passed
@@ -198,7 +183,7 @@ def retrieveWopiLock(fileid, operation, lock, acctok, overridefilename=None):
                     'exception="%s"' % (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, type(e)))
         # the retrieved lock is not valid any longer, discard and remove it from the backend
         try:
-            st.removefile(acctok['endpoint'], getLockName(acctok['filename']), acctok['userid'], 1)
+            st.unlock(acctok['endpoint'], acctok['filename'], acctok['userid'])
         except IOError:
             # ignore, it's not worth to report anything here
             pass
@@ -287,15 +272,13 @@ def storeWopiLock(operation, lock, acctok, isoffice):
                             (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
 
     try:
-        # now store the lock as encoded JWT: note that we do not use islock=True, because the WOPI specs require
-        # this operation to be essentially idempotent, so it should not fail if the lock was there or is being
-        # created by another thread.
+        # now store the lock as encoded JWT. TODO handle race condition when creating the lock
         lockcontent = {}
         lockcontent['wopilock'] = lock
         # append or overwrite the expiration time
         lockcontent['exp'] = int(time.time()) + srv.config.getint('general', 'wopilockexpiration')
-        st.writefile(acctok['endpoint'], getLockName(acctok['filename']), acctok['userid'], \
-                     jwt.encode(lockcontent, srv.wopisecret, algorithm='HS256'))
+        st.setlock(acctok['endpoint'], acctok['filename'], acctok['userid'], \
+                   jwt.encode(lockcontent, srv.wopisecret, algorithm='HS256'))
         log.info('msg="%s" filename="%s" token="%s" lock="%s" result="success"' %
                  (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
     except IOError as e:
