@@ -382,3 +382,8 @@ def storeWopiFile(request, retrievedlock, acctok, xakey, targetname=''):
     # and reinstate the lock if existing
     if retrievedlock:
         st.setlock(acctok['endpoint'], targetname, acctok['userid'], _makeLock(retrievedlock))
+
+
+def getuserhome(username):
+    '''Returns the path to the "home" directory for a given user. CERN/EOS-specific, to be removed once locking is fully implemented.'''
+    return '/eos/user/%s/%s' % (username[0], username)

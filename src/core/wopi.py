@@ -414,7 +414,14 @@ def putFile(fileid):
             newname, ext = os.path.splitext(acctok['filename'])
             # !!! typical EFSS formats are like '<filename>_conflict-<date>-<time>', but they're not synchronized back !!!
             newname = '%s-webconflict-%s%s' % (newname, time.strftime('%Y%m%d-%H'), ext.strip())
-            utils.storeWopiFile(flask.request, retrievedLock, acctok, utils.LASTSAVETIMEKEY, newname)
+            try:
+                utils.storeWopiFile(flask.request, retrievedLock, acctok, utils.LASTSAVETIMEKEY, newname)
+            except IOError as e:
+                if utils.ACCESS_ERROR in str(e):
+                    # let's try the user's home instead of the current folder
+                    newname = utils.getuserhome(acctok['username']) + os.path.sep + os.path.basename(newname)
+                    utils.storeWopiFile(flask.request, retrievedLock, acctok, utils.LASTSAVETIMEKEY, newname)
+
             # keep track of this action in the original file's xattr, to avoid looping (see below)
             st.setxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY, 0)
             log.info('msg="Conflicting copy created" user="%s" savetime="%s" lastmtime="%s" newfilename="%s" token="%s"' %
