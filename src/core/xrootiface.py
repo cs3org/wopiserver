@@ -142,7 +142,9 @@ def stat(endpoint, filepath, userid):
     rc, statInfo = _getxrdfor(endpoint).stat(filepath + _eosargs(userid))
     tend = time.time()
     log.info('msg="Invoked stat" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
-    if statInfo is None:
+    if not statInfo:
+        if ENOENT_MSG in rc.message:
+            raise IOError(ENOENT_MSG)
         raise IOError(rc.message.strip('\n'))
     if statInfo.flags & StatInfoFlags.IS_DIR > 0:
         raise IOError('Is a directory')
@@ -177,7 +179,7 @@ def statx(endpoint, fileid, userid, versioninv=0):
     if '[SUCCESS]' not in str(rc) or not statInfo:
         raise IOError(str(rc).strip('\n'))
     statInfo = statInfo.decode()
-    if 'retc=2\\x00' in statInfo:
+    if 'stat: retc=2' in statInfo:
         raise IOError(ENOENT_MSG)     # convert ENOENT
     if 'retc=' in statInfo:
         raise IOError(statInfo.strip('\n'))
