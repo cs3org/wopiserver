@@ -59,7 +59,7 @@ def _geturlfor(endpoint):
 
 
 def _eosargs(userid, atomicwrite=0, bookingsize=0):
-    '''Assume userid is in the form uid:gid and split userid into uid,gid
+    '''Assume userid is in the form uid:gid and split it into uid, gid
        plus generate extra EOS-specific arguments for the xroot URL'''
     try:
         # try to assert that userid must follow a '%d:%d' format
@@ -90,8 +90,11 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args):
             if rc != '0':
                 # failure: get info from stderr, log and raise
                 msg = res[1][res[1].find('=')+1:].strip('\n')
-                if ENOENT_MSG.lower() in msg or 'unable to get attribute' in msg or EXCL_XATTR_MSG in msg:
+                if ENOENT_MSG.lower() in msg or 'unable to get attribute' in msg:
                     log.info('msg="Invoked xroot on non-existing entity" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' % \
+                             (cmd, subcmd, args, msg, rc.strip('\00')))
+                elif EXCL_XATTR_MSG in msg:
+                    log.info('msg="Invoked setxattr on an already locked entity" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' % \
                              (cmd, subcmd, args, msg, rc.strip('\00')))
                 else:
                     log.error('msg="Error with xroot" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' % \

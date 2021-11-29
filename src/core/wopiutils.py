@@ -167,6 +167,8 @@ def retrieveWopiLock(fileid, operation, lock, acctok, overridefilename=None):
     encacctok = flask.request.args['access_token'][-20:] if 'access_token' in flask.request.args else 'N/A'
     lockcontent = st.getlock(acctok['endpoint'], overridefilename if overridefilename else acctok['filename'], acctok['userid'])
     if not lockcontent:
+        log.warning('msg="%s" user="%s" filename="%s" token="%s" error="WOPI lock not found, ignoring"' %
+                    (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok))
         return None         # no pre-existing lock found, or error attempting to read it: assume it does not exist
     try:
         # check validity: a lock is deemed expired if the most recent between its expiration time and the last
@@ -256,13 +258,14 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok, isoffice):
                                          srv.config.getint('general', 'wopilockexpiration') < time.time():
                         retrievedlolock = 'WOPIServer'
                 except (IOError, StopIteration, IndexError, ValueError) as e:
-                    retrievedlolock = 'WOPIServer'     # could not read the lock, assume it expired
+                    retrievedlolock = 'WOPIServer'     # could not read the lock, assume it expired and take ownership
                 if 'WOPIServer' not in retrievedlolock:
                     # the file was externally locked, make this call fail
+                    lockholder = retrievedlolock.split(',')[1] if ',' in retrievedlolock else ''
                     log.warning('msg="WOPI lock denied because of an existing LibreOffice lock" filename="%s" holder="%s"' %
-                                (acctok['filename'], retrievedlolock.split(',')[1] if ',' in retrievedlolock else retrievedlolock))
+                                (acctok['filename'], lockholder if lockholder else retrievedlolock))
                     return makeConflictResponse(operation, 'External App', lock, oldlock, acctok['filename'], \
-                                                'The file was locked by %s using LibreOffice' % retrievedlolock.split(',')[1])
+                        'The file was locked by ' + ((lockholder + ' via LibreOffice') if lockholder else 'a LibreOffice user'))
                 #else it's our previous lock or it had expired: all right, move on
             elif ACCESS_ERROR in str(e):
                 # user has no access to the lock file, typically because of accessing a single-file share:
@@ -308,10 +311,10 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok, isoffice):
             # another session was faster than us, or the file was already WOPI-locked:
             # get the lock that was set
             retrievedLock = retrieveWopiLock(fileid, operation, lock, acctok)
-            if not compareWopiLocks(retrievedLock, (oldlock if oldlock else lock)):
+            if retrievedLock and not compareWopiLocks(retrievedLock, (oldlock if oldlock else lock)):
                 return makeConflictResponse(operation, retrievedLock, lock, oldlock, acctok['filename'], \
                                             'The file was locked by another online editor')
-            # else it's our lock, refresh it and return
+            # else it's our lock or it had expired, refresh it and return
             st.refreshlock(acctok['endpoint'], acctok['filename'], acctok['userid'], _makeLock(lock))
             log.info('msg="%s" filename="%s" token="%s" lock="%s" result="refreshed"' %
                      (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
