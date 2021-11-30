@@ -244,25 +244,28 @@ def statx(endpoint, fileid, userid, versioninv=0):
     }
 
 
-def setxattr(endpoint, filepath, userid, key, value):
-    '''Set the extended attribute <key> to <value> via a special open on behalf of the given userid'''
-    _xrootcmd(endpoint, 'attr', 'set', userid, 'mgm.attr.key=user.' + key + '&mgm.attr.value=' + str(value) + \
+def setxattr(endpoint, filepath, _userid, key, value):
+    '''Set the extended attribute <key> to <value> via a special open.
+    The userid is overridden to make sure it also works on shared files.'''
+    _xrootcmd(endpoint, 'attr', 'set', '0:0', 'mgm.attr.key=user.' + key + '&mgm.attr.value=' + str(value) + \
               '&mgm.path=' + _getfilepath(filepath, encodeamp=True))
 
 
-def getxattr(endpoint, filepath, userid, key):
-    '''Get the extended attribute <key> via a special open on behalf of the given userid'''
+def getxattr(endpoint, filepath, _userid, key):
+    '''Get the extended attribute <key> via a special open.
+    The userid is overridden to make sure it also works on shared files.'''
     try:
-        res = _xrootcmd(endpoint, 'attr', 'get', userid, 'mgm.attr.key=user.' + key + '&mgm.path=' + _getfilepath(filepath, encodeamp=True))
+        res = _xrootcmd(endpoint, 'attr', 'get', '0:0', 'mgm.attr.key=user.' + key + '&mgm.path=' + _getfilepath(filepath, encodeamp=True))
         # if no error, the response comes in the format <key>="<value>"
         return res.split('"')[1]
     except (IndexError, IOError):
         return None
 
 
-def rmxattr(endpoint, filepath, userid, key):
-    '''Remove the extended attribute <key> via a special open on behalf of the given userid'''
-    _xrootcmd(endpoint, 'attr', 'rm', userid, 'mgm.attr.key=user.' + key + '&mgm.path=' + _getfilepath(filepath, encodeamp=True))
+def rmxattr(endpoint, filepath, _userid, key):
+    '''Remove the extended attribute <key> via a special open.
+    The userid is overridden to make sure it also works on shared files.'''
+    _xrootcmd(endpoint, 'attr', 'rm', '0:0', 'mgm.attr.key=user.' + key + '&mgm.path=' + _getfilepath(filepath, encodeamp=True))
 
 
 def setlock(endpoint, filepath, userid, value):
@@ -277,7 +280,6 @@ def setlock(endpoint, filepath, userid, value):
 
 def getlock(endpoint, filepath, userid):
     '''Get the lock metadata as an xattr on behalf of the given userid'''
-    log.debug('msg="Invoked getlock" filepath="%s"' % filepath)
     return getxattr(endpoint, filepath, userid, LOCKKEY)
 
 

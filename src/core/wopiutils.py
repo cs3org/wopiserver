@@ -383,5 +383,7 @@ def storeWopiFile(request, retrievedlock, acctok, xakey, targetname=''):
 
 
 def getuserhome(username):
-    '''Returns the path to the "home" directory for a given user. CERN/EOS-specific, to be removed once locking is fully implemented.'''
+    '''Returns the path to the "home" directory for a given user.
+    TODO This is CERN/EOS-specific, to be removed once locking is fully implemented
+    and the logic to store webconflict files can be dropped.'''
     return '/eos/user/%s/%s' % (username[0], username)
