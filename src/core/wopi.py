@@ -16,6 +16,7 @@ import jwt
 import flask
 import core.wopiutils as utils
 
+IO_ERROR = 'I/O Error'
 
 # convenience references to global entities
 st = None
@@ -158,7 +159,9 @@ def setLock(fileid, reqheaders, acctok):
                                    os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes)
     except IOError as e:
         # expected failures are handled in storeWopiLock
-        return str(e), http.client.INTERNAL_SERVER_ERROR
+        log.error('msg="%s: unable to store WOPI lock" filename="%s" token="%s" lock="%s" reason="%s"' %
+                  (op.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
+        return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
 
 
 def getLock(fileid, _reqheaders_unused, acctok):
@@ -284,7 +287,7 @@ def putRelative(fileid, reqheaders, acctok):
     except IOError as e:
         log.info('msg="Error writing file" filename="%s" token="%s" error="%s"' %
                  (targetName, flask.request.args['access_token'][-20:], e))
-        return 'I/O Error', http.client.INTERNAL_SERVER_ERROR
+        return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
     # generate an access token for the new file
     log.info('msg="PutRelative: generating new access token" user="%s" filename="%s" ' \
              'mode="ViewMode.READ_WRITE" friendlyname="%s"' %
@@ -315,7 +318,7 @@ def deleteFile(fileid, _reqheaders_unused, acctok):
         return 'OK', http.client.OK
     except IOError as e:
         log.info('msg="DeleteFile" token="%s" error="%s"' % (flask.request.args['access_token'][-20:], e))
-        return 'Internal error', http.client.INTERNAL_SERVER_ERROR
+        return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
 
 
 def renameFile(fileid, reqheaders, acctok):
@@ -446,4 +449,4 @@ def putFile(fileid):
     except IOError as e:
         log.error('msg="Error writing file" filename="%s" token="%s" error="%s"' %
                   (acctok['filename'], flask.request.args['access_token'], e))
-        return 'I/O Error', http.client.INTERNAL_SERVER_ERROR
+        return IO_ERROR, http.client.INTERNAL_SERVER_ERROR

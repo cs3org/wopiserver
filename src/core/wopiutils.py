@@ -319,9 +319,7 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok, isoffice):
             log.info('msg="%s" filename="%s" token="%s" lock="%s" result="refreshed"' %
                      (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
             return 'OK', http.client.OK
-        # any other error is logged and raised
-        log.error('msg="%s: unable to store WOPI lock" filename="%s" token="%s" lock="%s" reason="%s"' %
-                  (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
+        # any other error is raised
         raise
 
 

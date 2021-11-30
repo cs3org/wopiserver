@@ -268,6 +268,7 @@ def rmxattr(endpoint, filepath, userid, key):
 def setlock(endpoint, filepath, userid, value):
     '''Set a lock as an xattr with the special option "c" (create-if-not-exists) on behalf of the given userid'''
     try:
+        log.debug('msg="Invoked setlock" filepath="%s"' % filepath)
         setxattr(endpoint, filepath, userid, LOCKKEY, str(value) + '&mgm.option=c')
     except IOError as e:
         if EXCL_XATTR_MSG in str(e):
@@ -276,19 +277,22 @@ def setlock(endpoint, filepath, userid, value):
 
 def getlock(endpoint, filepath, userid):
     '''Get the lock metadata as an xattr on behalf of the given userid'''
+    log.debug('msg="Invoked getlock" filepath="%s"' % filepath)
     return getxattr(endpoint, filepath, userid, LOCKKEY)
 
 
 def refreshlock(endpoint, filepath, userid, value):
     '''Refresh the lock value as an xattr on behalf of the given userid'''
+    log.debug('msg="Invoked refreshlock" filepath="%s"' % filepath)
     if getxattr(endpoint, filepath, userid, LOCKKEY):
-        setxattr(endpoint, filepath, userid, LOCKKEY, value)   # non-atomic, but the lock is already held
+        setxattr(endpoint, filepath, userid, LOCKKEY, value)   # non-atomic, but the lock was already held
     else:
         raise IOError('File was not locked')
 
 
 def unlock(endpoint, filepath, userid):
     '''Remove a lock as an xattr on behalf of the given userid'''
+    log.debug('msg="Invoked unlock" filepath="%s"' % filepath)
     rmxattr(endpoint, filepath, userid, LOCKKEY)
 
 
