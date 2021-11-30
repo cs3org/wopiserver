@@ -1,5 +1,16 @@
 ## Changelog for the WOPI server
 
+### Fri Dec  3 2021 - v8.0.0
+- Refactored the locking logic to use a new
+  Lock API (#53) and corresponding xattr support
+  in xrootd/EOS. Note that for this release,
+  the CS3APIs-compatible implementation of locking
+  is not yet available
+- Removed legacy crypto settings from docker image
+- Adapted the xrootd/EOS storage interface to
+  support the new `/openinapp` Reva workflow
+- Implemented support for ownCloud WOPI proxy
+
 ### Wed Oct 27 2021 - v7.5.0
 - Improved support for bridged apps when opened
   in legacy mode via /cbox/open
