@@ -255,7 +255,8 @@ def getxattr(endpoint, filepath, _userid, key):
     '''Get the extended attribute <key> via a special open.
     The userid is overridden to make sure it also works on shared files.'''
     try:
-        res = _xrootcmd(endpoint, 'attr', 'get', '0:0', 'mgm.attr.key=user.' + key + '&mgm.path=' + _getfilepath(filepath, encodeamp=True))
+        res = _xrootcmd(endpoint, 'attr', 'get', '0:0', \
+                        'mgm.attr.key=user.' + key + '&mgm.path=' + _getfilepath(filepath, encodeamp=True))
         # if no error, the response comes in the format <key>="<value>"
         return res.split('"')[1]
     except (IndexError, IOError):
@@ -266,6 +267,11 @@ def rmxattr(endpoint, filepath, _userid, key):
     '''Remove the extended attribute <key> via a special open.
     The userid is overridden to make sure it also works on shared files.'''
     _xrootcmd(endpoint, 'attr', 'rm', '0:0', 'mgm.attr.key=user.' + key + '&mgm.path=' + _getfilepath(filepath, encodeamp=True))
+
+
+def _getLegacyLockName(filename):
+    '''Generates the legacy hidden filename used to store the WOPI locks'''
+    return os.path.dirname(filename) + os.path.sep + '.sys.wopilock.' + os.path.basename(filename) + '.'
 
 
 def setlock(endpoint, filepath, userid, value):
@@ -280,13 +286,23 @@ def setlock(endpoint, filepath, userid, value):
 
 def getlock(endpoint, filepath, userid):
     '''Get the lock metadata as an xattr on behalf of the given userid'''
-    return getxattr(endpoint, filepath, userid, LOCKKEY)
+    l = getxattr(endpoint, filepath, userid, LOCKKEY)
+    if l:
+        return l
+    # try and read it from the legacy lock file for the time being
+    l = b''
+    for line in readfile(endpoint, _getLegacyLockName(filepath), userid):
+        if isinstance(line, IOError):
+            return None         # no pre-existing lock found, or error attempting to read it: assume it does not exist
+        # the following check is necessary as it happens to get a str instead of bytes
+        l += line if isinstance(line, type(l)) else line.encode()
+    return l
 
 
 def refreshlock(endpoint, filepath, userid, value):
     '''Refresh the lock value as an xattr on behalf of the given userid'''
     log.debug('msg="Invoked refreshlock" filepath="%s"' % filepath)
-    if getxattr(endpoint, filepath, userid, LOCKKEY):
+    if getlock(endpoint, filepath, userid):
         setxattr(endpoint, filepath, userid, LOCKKEY, value)   # non-atomic, but the lock was already held
     else:
         raise IOError('File was not locked')
@@ -295,6 +311,11 @@ def refreshlock(endpoint, filepath, userid, value):
 def unlock(endpoint, filepath, userid):
     '''Remove a lock as an xattr on behalf of the given userid'''
     log.debug('msg="Invoked unlock" filepath="%s"' % filepath)
+    try:
+        # try and remove the legacy lock file as well for the time being
+        removefile(endpoint, _getLegacyLockName(filepath), userid, force=True)
+    except IOError:
+        pass
     rmxattr(endpoint, filepath, userid, LOCKKEY)
 
 
