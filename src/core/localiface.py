@@ -10,6 +10,7 @@ import time
 import os
 import warnings
 from stat import S_ISDIR
+import json
 
 LOCKKEY = 'user.iop.lock'    # this is to be compatible with the (future) Lock API in Reva
 
@@ -103,31 +104,37 @@ def rmxattr(_endpoint, filepath, _userid, key):
         raise IOError(e)
 
 
-def setlock(endpoint, filepath, userid, value):
+def setlock(endpoint, filepath, _userid, appname, value):
     '''Set the lock as an xattr on behalf of the given userid'''
-    if not getxattr(endpoint, filepath, userid, LOCKKEY):
+    if not getxattr(endpoint, filepath, '0:0', LOCKKEY):
         # we do not protect from race conditions here
-        setxattr(endpoint, filepath, userid, LOCKKEY, value)
+        revalock = {'h': appname if appname else 'wopi', 't': time.time(), 'md': value}
+        setxattr(endpoint, filepath, '0:0', LOCKKEY, json.dumps(revalock))
     else:
         raise IOError('File exists and islock flag requested')
 
 
-def getlock(endpoint, filepath, userid):
+def getlock(endpoint, filepath, _userid):
     '''Get the lock metadata as an xattr on behalf of the given userid'''
-    return getxattr(endpoint, filepath, userid, LOCKKEY)
+    l = getxattr(endpoint, filepath, '0:0', LOCKKEY)
+    if l:
+        return json.loads(l)
+    return None
 
-
-def refreshlock(endpoint, filepath, userid, value):
+def refreshlock(endpoint, filepath, _userid, appname, value):
     '''Refresh the lock value as an xattr on behalf of the given userid'''
-    if getxattr(endpoint, filepath, userid, LOCKKEY):
-        setxattr(endpoint, filepath, userid, LOCKKEY, value)   # non-atomic, but the lock is already held
-    else:
+    l = getlock(endpoint, filepath, _userid)
+    if not l:
         raise IOError('File was not locked')
+    if l['h'] != appname and l['h'] != 'wopi':
+        raise IOError('File is locked by %s' % l['h'])
+    revalock = {'h': appname if appname else 'wopi', 't': time.time(), 'md': value}
+    setxattr(endpoint, filepath, '0:0', LOCKKEY, json.dumps(revalock))   # non-atomic, but the lock is already held
 
 
-def unlock(endpoint, filepath, userid):
+def unlock(endpoint, filepath, _userid, _appname):
     '''Remove the lock as an xattr on behalf of the given userid'''
-    rmxattr(endpoint, filepath, userid, LOCKKEY)
+    rmxattr(endpoint, filepath, '0:0', LOCKKEY)
 
 
 def readfile(_endpoint, filepath, _userid):

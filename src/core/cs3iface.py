@@ -148,23 +148,23 @@ def rmxattr(_endpoint, filepath, userid, key):
     ctx['log'].debug('msg="Invoked rmxattr" result="%s"' % res)
 
 
-def setlock(endpoint, filepath, userid, value):
-    '''Set the lock on behalf of the given userid'''
+def setlock(endpoint, filepath, userid, appname, value):
+    '''Set a lock to filepath with the given value metadata and appname as holder'''
     raise NotImplementedError
 
 
-def getlock(endpoint, filepath, userid):
-    '''Get the lock metadata on behalf of the given userid'''
+def getlock(endpoint, filepath, userid, appname):
+    '''Get the lock metadata for the given filepath'''
     raise NotImplementedError
 
 
-def refreshlock(endpoint, filepath, userid):
-    '''Refresh the lock metadata on behalf of the given userid'''
+def refreshlock(endpoint, filepath, userid, appname, value):
+    '''Refresh the lock metadata for the given filepath'''
     raise NotImplementedError
 
 
-def unlock(endpoint, filepath, userid):
-    '''Remove the lock on behalf of the given userid'''
+def unlock(endpoint, filepath, userid, appname):
+    '''Remove the lock for the given filepath'''
     raise NotImplementedError
 
 

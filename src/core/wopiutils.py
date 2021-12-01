@@ -173,7 +173,7 @@ def retrieveWopiLock(fileid, operation, lock, acctok, overridefilename=None):
     try:
         # check validity: a lock is deemed expired if the most recent between its expiration time and the last
         # save time by WOPI has passed
-        retrievedLock = jwt.decode(lockcontent, srv.wopisecret, algorithms=['HS256'])
+        retrievedLock = jwt.decode(lockcontent['md'], srv.wopisecret, algorithms=['HS256'])
         savetime = st.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], LASTSAVETIMEKEY)
         if max(0 if 'exp' not in retrievedLock else retrievedLock['exp'],
                0 if not savetime else int(savetime) + srv.config.getint('general', 'wopilockexpiration')) < time.time():
@@ -203,7 +203,7 @@ def retrieveWopiLock(fileid, operation, lock, acctok, overridefilename=None):
     log.info('msg="%s" user="%s" filename="%s" fileid="%s" lock="%s" retrievedlock="%s" expTime="%s" token="%s"' %
              (operation.title(), acctok['userid'][-20:], acctok['filename'], fileid, lock, retrievedLock['wopilock'],
               time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(retrievedLock['exp'])), encacctok))
-    return retrievedLock['wopilock']
+    return retrievedLock['wopilock'], lockcontent['h']
 
 
 def _makeLock(lock):
@@ -285,7 +285,7 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok, isoffice):
 
     try:
         # now atomically store the lock as encoded JWT
-        st.setlock(acctok['endpoint'], acctok['filename'], acctok['userid'], _makeLock(lock))
+        st.setlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'], _makeLock(lock))
         log.info('msg="%s" filename="%s" token="%s" lock="%s" result="success"' %
                  (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
 
@@ -310,12 +310,12 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok, isoffice):
         if EXCL_ERROR in str(e):
             # another session was faster than us, or the file was already WOPI-locked:
             # get the lock that was set
-            retrievedLock = retrieveWopiLock(fileid, operation, lock, acctok)
+            retrievedLock, lockHolder = retrieveWopiLock(fileid, operation, lock, acctok)
             if retrievedLock and not compareWopiLocks(retrievedLock, (oldlock if oldlock else lock)):
                 return makeConflictResponse(operation, retrievedLock, lock, oldlock, acctok['filename'], \
-                                            'The file was locked by another online editor')
+                            'The file is locked by %s' % (lockHolder if lockHolder != 'wopi' else 'another online editor'))
             # else it's our lock or it had expired, refresh it and return
-            st.refreshlock(acctok['endpoint'], acctok['filename'], acctok['userid'], _makeLock(lock))
+            st.refreshlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'], _makeLock(lock))
             log.info('msg="%s" filename="%s" token="%s" lock="%s" result="refreshed"' %
                      (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
             return 'OK', http.client.OK

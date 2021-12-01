@@ -137,7 +137,7 @@ def setLock(fileid, reqheaders, acctok):
     lock = reqheaders['X-WOPI-Lock']
     oldLock = reqheaders.get('X-WOPI-OldLock')
     validateTarget = reqheaders.get('X-WOPI-Validate-Target')
-    retrievedLock = utils.retrieveWopiLock(fileid, op, lock, acctok)
+    retrievedLock, _ = utils.retrieveWopiLock(fileid, op, lock, acctok)
 
     # perform the required checks for the validity of the new lock
     if op == 'REFRESH_LOCK' and not retrievedLock:
@@ -167,7 +167,7 @@ def setLock(fileid, reqheaders, acctok):
 def getLock(fileid, _reqheaders_unused, acctok):
     '''Implements the GetLock WOPI call'''
     resp = flask.Response()
-    lock = utils.retrieveWopiLock(fileid, 'GETLOCK', '', acctok)
+    lock, _ = utils.retrieveWopiLock(fileid, 'GETLOCK', '', acctok)
     resp.status_code = http.client.OK if lock else http.client.NOT_FOUND
     if lock:
         resp.headers['X-WOPI-Lock'] = lock
@@ -202,7 +202,7 @@ def getLock(fileid, _reqheaders_unused, acctok):
 def unlock(fileid, reqheaders, acctok):
     '''Implements the Unlock WOPI call'''
     lock = reqheaders['X-WOPI-Lock']
-    retrievedLock = utils.retrieveWopiLock(fileid, 'UNLOCK', lock, acctok)
+    retrievedLock, _ = utils.retrieveWopiLock(fileid, 'UNLOCK', lock, acctok)
     if not utils.compareWopiLocks(retrievedLock, lock):
         return utils.makeConflictResponse('UNLOCK', retrievedLock, lock, '', acctok['filename'])
     # OK, the lock matches. Remove any extended attribute related to locks and conflicts handling
@@ -273,7 +273,7 @@ def putRelative(fileid, reqheaders, acctok):
         try:
             # check for file existence + lock
             fileExists = st.stat(acctok['endpoint'], relTarget, acctok['userid'])
-            retrievedTargetLock = utils.retrieveWopiLock(fileid, 'PUT_RELATIVE', None, acctok, overridefilename=relTarget)
+            retrievedTargetLock, _ = utils.retrieveWopiLock(fileid, 'PUT_RELATIVE', None, acctok, overridefilename=relTarget)
         except IOError:
             fileExists = False
         if fileExists and (not overwriteTarget or retrievedTargetLock):
@@ -309,7 +309,7 @@ def putRelative(fileid, reqheaders, acctok):
 
 def deleteFile(fileid, _reqheaders_unused, acctok):
     '''Implements the DeleteFile WOPI call'''
-    retrievedLock = utils.retrieveWopiLock(fileid, 'DELETE', '', acctok)
+    retrievedLock, _ = utils.retrieveWopiLock(fileid, 'DELETE', '', acctok)
     if retrievedLock is not None:
         # file is locked and cannot be deleted
         return utils.makeConflictResponse('DELETE', retrievedLock, '', '', acctok['filename'])
@@ -325,7 +325,7 @@ def renameFile(fileid, reqheaders, acctok):
     '''Implements the RenameFile WOPI call.'''
     targetName = reqheaders['X-WOPI-RequestedName']
     lock = reqheaders['X-WOPI-Lock'] if 'X-WOPI-Lock' in reqheaders else None
-    retrievedLock = utils.retrieveWopiLock(fileid, 'RENAMEFILE', lock, acctok)
+    retrievedLock, _ = utils.retrieveWopiLock(fileid, 'RENAMEFILE', lock, acctok)
     if retrievedLock is not None and not utils.compareWopiLocks(retrievedLock, lock):
         return utils.makeConflictResponse('RENAMEFILE', retrievedLock, lock, '', acctok['filename'])
     try:
@@ -386,13 +386,14 @@ def putFile(fileid):
             return _createNewFile(fileid, acctok)
         # otherwise, check that the caller holds the current lock on the file
         lock = flask.request.headers['X-WOPI-Lock']
-        retrievedLock = utils.retrieveWopiLock(fileid, 'PUTFILE', lock, acctok)
+        retrievedLock, lockHolder = utils.retrieveWopiLock(fileid, 'PUTFILE', lock, acctok)
         if retrievedLock is None:
             return utils.makeConflictResponse('PUTFILE', retrievedLock, lock, '', acctok['filename'], \
                                               'Cannot overwrite unlocked file')
         if not utils.compareWopiLocks(retrievedLock, lock):
             return utils.makeConflictResponse('PUTFILE', retrievedLock, lock, '', acctok['filename'], \
-                                              'Cannot overwrite file locked by another application')
+                                              'Cannot overwrite file locked by %s' % \
+                                               (lockHolder if lockHolder != 'wopi' else 'another application'))
         # OK, we can save the file now
         log.info('msg="PutFile" user="%s" filename="%s" fileid="%s" action="edit" token="%s"' %
                  (acctok['userid'][-20:], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
