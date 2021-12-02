@@ -12,16 +12,16 @@ import configparser
 import sys
 import os
 from threading import Thread
-sys.path.append('src/core')  # for tests out of the git repo
+sys.path.append('src')     # for tests out of the git repo
 sys.path.append('/app')    # for tests within the Docker image
-from wopiutils import EXCL_ERROR
+from core.commoniface import EXCL_ERROR, ENOENT_MSG
 
 class TestStorage(unittest.TestCase):
   '''Simple tests for the storage layers of the WOPI server. See README for how to run the tests for each storage provider'''
 
-  def __init__(self, *args, **kwargs):
+  @classmethod
+  def globalinit(cls):
     '''One-off initialization of the test environment: create mock logging and import the library'''
-    super(TestStorage, self).__init__(*args, **kwargs)
     loghandler = logging.FileHandler('/tmp/wopiserver-test.log')
     loghandler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)s[%(process)d] %(levelname)-8s %(message)s',
                                               datefmt='%Y-%m-%dT%H:%M:%S'))
@@ -35,30 +35,40 @@ class TestStorage(unittest.TestCase):
       storagetype = os.environ.get('WOPI_STORAGE')
       if not storagetype:
         storagetype = config.get('general', 'storagetype')
-      self.userid = config.get(storagetype, 'userid')
-      self.endpoint = config.get(storagetype, 'endpoint')
+      cls.userid = config.get(storagetype, 'userid')
+      cls.endpoint = config.get(storagetype, 'endpoint')
     except (KeyError, configparser.NoOptionError):
       print("Missing option or missing configuration, check the wopiserver-test.conf file")
       raise
 
-    # this is taken from wopiserver.py::storage_layer_import
+    # this is adapted from wopiserver.py::storage_layer_import
     if storagetype in ['local', 'xroot', 'cs3']:
       storagetype += 'iface'
     else:
       raise ImportError('Unsupported/Unknown storage type %s' % storagetype)
     try:
-      self.storage = __import__(storagetype, globals(), locals())
-      self.storage.init(config, log)
-      self.homepath = ''
-      if storagetype == 'cs3iface':
+      cls.storage = __import__('core.' + storagetype, globals(), locals(), [storagetype])
+      cls.storage.init(config, log)
+      cls.homepath = ''
+      cls.username = ''
+      if 'cs3' in storagetype:
         # we need to login for this case
-        self.username = self.userid
-        self.userid = self.storage.authenticate_for_test(self.userid, config.get('cs3', 'userpwd'))
-        self.homepath = config.get('cs3', 'storagehomepath')
+        cls.username = cls.userid
+        cls.userid = cls.storage.authenticate_for_test(cls.userid, config.get('cs3', 'userpwd'))
+        cls.homepath = config.get('cs3', 'storagehomepath')
     except ImportError:
-      print("Missing module when attempting to import {}. Please make sure dependencies are met.", storagetype)
+      print("Missing module when attempting to import %s. Please make sure dependencies are met." % storagetype)
       raise
+    print('Global initialization succeded for storage interface %s, starting unit tests' % storagetype)
 
+  def __init__(self, *args, **kwargs):
+    '''Initialization of a test'''
+    super(TestStorage, self).__init__(*args, **kwargs)
+    self.userid = TestStorage.userid
+    self.endpoint = TestStorage.endpoint
+    self.storage = TestStorage.storage
+    self.homepath = TestStorage.homepath
+    self.username = TestStorage.username
 
   def test_stat(self):
     '''Call stat() and assert the path matches'''
@@ -100,13 +110,13 @@ class TestStorage(unittest.TestCase):
     '''Call stat() and assert the exception is as expected'''
     with self.assertRaises(IOError) as context:
       self.storage.stat(self.endpoint, self.homepath + '/hopefullynotexisting', self.userid)
-    self.assertIn('No such file or directory', str(context.exception))
+    self.assertIn(ENOENT_MSG, str(context.exception))
 
   def test_statx_nofile(self):
     '''Call statx() and assert the exception is as expected'''
     with self.assertRaises(IOError) as context:
       self.storage.statx(self.endpoint, self.homepath + '/hopefullynotexisting', self.userid)
-    self.assertIn('No such file or directory', str(context.exception))
+    self.assertIn(ENOENT_MSG, str(context.exception))
 
   def test_readfile_bin(self):
     '''Writes a binary file and reads it back, validating that the content matches'''
@@ -144,7 +154,7 @@ class TestStorage(unittest.TestCase):
     '''Test reading of a non-existing file'''
     readex = next(self.storage.readfile(self.endpoint, self.homepath + '/hopefullynotexisting', self.userid))
     self.assertIsInstance(readex, IOError, 'readfile returned %s' % readex)
-    self.assertEqual(str(readex), 'No such file or directory', 'readfile returned %s' % readex)
+    self.assertEqual(str(readex), ENOENT_MSG, 'readfile returned %s' % readex)
 
   def test_write_remove_specialchars(self):
     '''Test write and removal of a file with special chars'''
@@ -203,7 +213,32 @@ class TestStorage(unittest.TestCase):
     with self.assertRaises(IOError) as context:
       self.storage.setlock(self.endpoint, self.homepath + '/testlock', self.userid, 'testlock2')
     self.assertIn(EXCL_ERROR, str(context.exception))
+    self.storage.unlock(self.endpoint, self.homepath + '/testlock', self.userid, 'myapp')
     self.storage.removefile(self.endpoint, self.homepath + '/testlock', self.userid)
+
+  def test_refresh_lock(self):
+    '''Test refreshing lock'''
+    try:
+      self.storage.removefile(self.endpoint, self.homepath + '/testrlock', self.userid)
+    except IOError:
+      pass
+    self.storage.writefile(self.endpoint, self.homepath + '/testrlock', self.userid, databuf)
+    statInfo = self.storage.stat(self.endpoint, self.homepath + '/testrlock', self.userid)
+    self.assertIsInstance(statInfo, dict)
+    with self.assertRaises(IOError) as context:
+      self.storage.refreshlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'myapp', 'testlock')
+    self.assertIn('File was not locked', str(context.exception))
+    self.storage.setlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'myapp', 'testlock')
+    self.storage.refreshlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'myapp', 'testlock2')
+    l = self.storage.getlock(self.endpoint, self.homepath + '/testrlock', self.userid)
+    self.assertIsInstance(l, dict)
+    self.assertEqual(l['md'], 'testlock2')
+    self.assertEqual(l['h'], 'myapp')
+    with self.assertRaises(IOError) as context:
+      self.storage.refreshlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'myapp2', 'testlock2')
+    self.assertIn('File is locked by myapp', str(context.exception))
+    self.storage.removefile(self.endpoint, self.homepath + '/testrlock', self.userid)
+>>>>>>> Refactoring: introduced a common storage interface module
 
   def test_lock_race(self):
     '''Test multithreaded setting locks'''
@@ -254,4 +289,5 @@ class TestStorage(unittest.TestCase):
 
 
 if __name__ == '__main__':
+  TestStorage.globalinit()
   unittest.main()
