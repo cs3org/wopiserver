@@ -12,16 +12,16 @@ import os
 from stat import S_ISDIR
 from base64 import b64encode
 from pwd import getpwnam
+from base64 import urlsafe_b64encode, urlsafe_b64decode
 import json
 from XRootD import client as XrdClient
 from XRootD.client.flags import OpenFlags, QueryCode, MkDirFlags, StatInfoFlags
 
+import core.commoniface as commoniface
+
 EOSVERSIONPREFIX = '.sys.v#.'
 
-ENOENT_MSG = 'No such file or directory'
 EXCL_XATTR_MSG = 'exclusive set for existing attribute'
-
-LOCKKEY = 'iop.lock'    # this is to be compatible with the (future) Lock API in Reva
 
 # module-wide state
 config = None
@@ -72,7 +72,7 @@ def _eosargs(userid, atomicwrite=0, bookingsize=0):
         return '?eos.ruid=%d&eos.rgid=%d' % (ruid, rgid) + '&eos.app=' + ('fuse::wopi' if not atomicwrite else 'wopi') + \
                (('&eos.bookingsize='+str(bookingsize)) if bookingsize else '')
     except (ValueError, IndexError):
-        raise ValueError('Only Unix-based userid is supported with xrootd storage')
+        raise ValueError('Only Unix-based userid is supported with xrootd storage: %s' % userid)
 
 
 def _xrootcmd(endpoint, cmd, subcmd, userid, args):
@@ -91,7 +91,7 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args):
             if rc != '0':
                 # failure: get info from stderr, log and raise
                 msg = res[1][res[1].find('=')+1:].strip('\n')
-                if ENOENT_MSG.lower() in msg or 'unable to get attribute' in msg:
+                if commoniface.ENOENT_MSG.lower() in msg or 'unable to get attribute' in msg:
                     log.info('msg="Invoked xroot on non-existing entity" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' % \
                              (cmd, subcmd, args, msg, rc.strip('\00')))
                 elif EXCL_XATTR_MSG in msg:
@@ -147,8 +147,8 @@ def stat(endpoint, filepath, userid):
     tend = time.time()
     log.info('msg="Invoked stat" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
     if not statInfo:
-        if ENOENT_MSG in rc.message:
-            raise IOError(ENOENT_MSG)
+        if commoniface.ENOENT_MSG in rc.message:
+            raise IOError(commoniface.ENOENT_MSG)
         raise IOError(rc.message.strip('\n'))
     if statInfo.flags & StatInfoFlags.IS_DIR > 0:
         raise IOError('Is a directory')
@@ -184,7 +184,7 @@ def statx(endpoint, fileid, userid, versioninv=0):
         raise IOError(str(rc).strip('\n'))
     statInfo = statInfo.decode()
     if 'stat: retc=2' in statInfo:
-        raise IOError(ENOENT_MSG)     # convert ENOENT
+        raise IOError(commoniface.ENOENT_MSG)     # convert ENOENT
     if 'retc=' in statInfo:
         raise IOError(statInfo.strip('\n'))
     statxdata = statInfo.split()
@@ -275,23 +275,23 @@ def _getLegacyLockName(filename):
     return os.path.dirname(filename) + os.path.sep + '.sys.wopilock.' + os.path.basename(filename) + '.'
 
 
-def setlock(endpoint, filepath, _userid, appname, value):
+def setlock(endpoint, filepath, userid, appname, value):
     '''Set a lock as an xattr with the given value metadata and appname as holder.
     The special option "c" (create-if-not-exists) is used to be atomic'''
     try:
         log.debug('msg="Invoked setlock" filepath="%s"' % filepath)
-        revalock = {'h': appname if appname else 'wopi', 't': time.time(), 'md': value}
-        setxattr(endpoint, filepath, '0:0', LOCKKEY, json.dumps(revalock) + '&mgm.option=c')
+        setxattr(endpoint, filepath, userid, commoniface.LOCKKEY, \
+                 urlsafe_b64encode(commoniface.genrevalock(appname, value).encode()).decode() + '&mgm.option=c')
     except IOError as e:
         if EXCL_XATTR_MSG in str(e):
-            raise IOError('File exists and islock flag requested')
+            raise IOError(commoniface.EXCL_ERROR)
 
 
-def getlock(endpoint, filepath, _userid):
+def getlock(endpoint, filepath, userid):
     '''Get the lock metadata as an xattr'''
-    l = getxattr(endpoint, filepath, '0:0', LOCKKEY)
+    l = getxattr(endpoint, filepath, userid, commoniface.LOCKKEY)
     if l:
-        return json.loads(l)
+        return json.loads(urlsafe_b64decode(l).decode())
     # try and read it from the legacy lock file for the time being
     l = b''
     for line in readfile(endpoint, _getLegacyLockName(filepath), '0:0'):
@@ -302,27 +302,28 @@ def getlock(endpoint, filepath, _userid):
     return {'h': 'wopi', 'md' : l}     # this is temporary
 
 
-def refreshlock(endpoint, filepath, _userid, appname, value):
+def refreshlock(endpoint, filepath, userid, appname, value):
     '''Refresh the lock value as an xattr'''
     log.debug('msg="Invoked refreshlock" filepath="%s"' % filepath)
-    l = getlock(endpoint, filepath, _userid)
+    l = getlock(endpoint, filepath, userid)
     if not l:
         raise IOError('File was not locked')
     if l['h'] != appname and l['h'] != 'wopi':
         raise IOError('File is locked by %s' % l['h'])
-    revalock = {'h': appname if appname else 'wopi', 't': time.time(), 'md': value}
-    setxattr(endpoint, filepath, '0:0', LOCKKEY, json.dumps(revalock))   # non-atomic, but the lock was already held
+    # this is non-atomic, but the lock was already held
+    setxattr(endpoint, filepath, userid, commoniface.LOCKKEY, \
+             urlsafe_b64encode(commoniface.genrevalock(appname, value).encode()).decode())
 
 
-def unlock(endpoint, filepath, _userid, _appname):
+def unlock(endpoint, filepath, userid, _appname):
     '''Remove a lock as an xattr'''
     log.debug('msg="Invoked unlock" filepath="%s"' % filepath)
     try:
         # try and remove the legacy lock file as well for the time being
-        removefile(endpoint, _getLegacyLockName(filepath), '0:0', force=True)
+        removefile(endpoint, _getLegacyLockName(filepath), userid, force=True)
     except IOError:
         pass
-    rmxattr(endpoint, filepath, '0:0', LOCKKEY)
+    rmxattr(endpoint, filepath, userid, commoniface.LOCKKEY)
 
 
 def readfile(endpoint, filepath, userid):
@@ -335,9 +336,9 @@ def readfile(endpoint, filepath, userid):
         tend = time.time()
         if not rc.ok:
             # the file could not be opened: check the case of ENOENT and log it as info to keep the logs cleaner
-            if ENOENT_MSG in rc.message:
+            if commoniface.ENOENT_MSG in rc.message:
                 log.info('msg="File not found on read" filepath="%s"' % filepath)
-                yield IOError(ENOENT_MSG)
+                yield IOError(commoniface.ENOENT_MSG)
             else:
                 log.warning('msg="Error opening the file for read" filepath="%s" code="%d" error="%s"' % \
                             (filepath, rc.shellcode, rc.message.strip('\n')))
@@ -368,7 +369,7 @@ def writefile(endpoint, filepath, userid, content, islock=False):
         if islock and 'File exists' in rc.message:
             # racing against an existing file
             log.info('msg="File exists on write but islock flag requested" filepath="%s"' % filepath)
-            raise IOError('File exists and islock flag requested')
+            raise IOError(commoniface.EXCL_ERROR)
         # any other failure is reported as is
         log.warning('msg="Error opening the file for write" filepath="%s" error="%s"' % (filepath, rc.message.strip('\n')))
         raise IOError(rc.message.strip('\n'))

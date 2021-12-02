@@ -21,7 +21,7 @@ import cs3.gateway.v1beta1.gateway_api_pb2 as cs3gw
 import cs3.rpc.v1beta1.code_pb2 as cs3code
 import cs3.types.v1beta1.types_pb2 as types
 
-ENOENT_MSG = 'No such file or directory'
+import core.commoniface as commoniface
 
 # module-wide state
 ctx = {}            # "map" to store some module context: cf. init()
@@ -94,7 +94,7 @@ def stat(endpoint, fileid, userid, _versioninv=1):
             'mtime': statInfo.info.mtime.seconds
         }
     ctx['log'].info('msg="Failed stat" inode="%s" reason="%s"' % (fileid, statInfo.status.message.replace('"', "'")))
-    raise IOError(ENOENT_MSG if statInfo.status.code == cs3code.CODE_NOT_FOUND else statInfo.status.message)
+    raise IOError(commoniface.ENOENT_MSG if statInfo.status.code == cs3code.CODE_NOT_FOUND else statInfo.status.message)
 
 
 def statx(endpoint, fileid, userid, versioninv=0):
@@ -176,7 +176,7 @@ def readfile(_endpoint, filepath, userid):
     initfiledownloadres = ctx['cs3stub'].InitiateFileDownload(request=req, metadata=[('x-access-token', userid)])
     if initfiledownloadres.status.code == cs3code.CODE_NOT_FOUND:
         ctx['log'].info('msg="File not found on read" filepath="%s"' % filepath)
-        yield IOError(ENOENT_MSG)
+        yield IOError(commoniface.ENOENT_MSG)
     elif initfiledownloadres.status.code != cs3code.CODE_OK:
         ctx['log'].error('msg="Failed to initiateFileDownload on read" filepath="%s" reason="%s"' %
                          (filepath, initfiledownloadres.status.message.replace('"', "'")))
@@ -266,7 +266,7 @@ def removefile(_endpoint, filepath, userid, force=False):
     req = cs3sp.DeleteRequest(ref=reference)
     res = ctx['cs3stub'].Delete(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
-        if str(res) == ENOENT_MSG:
+        if str(res) == commoniface.ENOENT_MSG:
             ctx['log'].info('msg="Invoked removefile on non-existing file" filepath="%s"' % filepath)
         else:
             ctx['log'].error('msg="Failed to remove file" filepath="%s" reason="%s"' % (filepath, res.status.message.replace('"', "'")))

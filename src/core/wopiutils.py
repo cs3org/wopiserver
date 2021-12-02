@@ -16,15 +16,11 @@ from datetime import datetime
 import http.client
 import flask
 import jwt
+import commoniface
 
 # this is the xattr key used for conflicts resolution on the remote storage
 LASTSAVETIMEKEY = 'iop.wopi.lastwritetime'
 
-# standard error thrown when attempting to overwrite a file in O_EXCL mode
-EXCL_ERROR = 'File exists and islock flag requested'
-
-# standard error thrown when attempting an operation without the required access rights
-ACCESS_ERROR = 'Operation not permitted'
 
 # convenience references to global entities
 st = None
@@ -163,13 +159,13 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
 
 
 def retrieveWopiLock(fileid, operation, lock, acctok, overridefilename=None):
-    '''Retrieves and logs an existing lock for a given file'''
+    '''Retrieves and logs a lock for a given file: returns the lock and its holder, or (None, None) if missing'''
     encacctok = flask.request.args['access_token'][-20:] if 'access_token' in flask.request.args else 'N/A'
     lockcontent = st.getlock(acctok['endpoint'], overridefilename if overridefilename else acctok['filename'], acctok['userid'])
     if not lockcontent:
-        log.warning('msg="%s" user="%s" filename="%s" token="%s" error="WOPI lock not found, ignoring"' %
-                    (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok))
-        return None         # no pre-existing lock found, or error attempting to read it: assume it does not exist
+        log.info('msg="%s" user="%s" filename="%s" token="%s" error="No lock found"' %
+                 (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok))
+        return None, None
     try:
         # check validity: a lock is deemed expired if the most recent between its expiration time and the last
         # save time by WOPI has passed
@@ -185,7 +181,7 @@ def retrieveWopiLock(fileid, operation, lock, acctok, overridefilename=None):
                     'exception="%s"' % (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, type(e)))
         # the retrieved lock is not valid any longer, discard and remove it from the backend
         try:
-            st.unlock(acctok['endpoint'], acctok['filename'], acctok['userid'])
+            st.unlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'])
         except IOError:
             # ignore, it's not worth to report anything here
             pass
@@ -199,7 +195,7 @@ def retrieveWopiLock(fileid, operation, lock, acctok, overridefilename=None):
         except (IOError, StopIteration) as e:
             log.warning('msg="Unable to delete the LibreOffice-compatible lock file" error="%s"' %
                         ('empty lock' if isinstance(e, StopIteration) else str(e)))
-        return None
+        return None, None
     log.info('msg="%s" user="%s" filename="%s" fileid="%s" lock="%s" retrievedlock="%s" expTime="%s" token="%s"' %
              (operation.title(), acctok['userid'][-20:], acctok['filename'], fileid, lock, retrievedLock['wopilock'],
               time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(retrievedLock['exp'])), encacctok))
@@ -245,7 +241,7 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok, isoffice):
             st.writefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], \
                          lockcontent, islock=True)
         except IOError as e:
-            if EXCL_ERROR in str(e):
+            if commoniface.EXCL_ERROR in str(e):
                 # retrieve the LibreOffice-compatible lock just found
                 try:
                     retrievedlolock = next(st.readfile(acctok['endpoint'], \
@@ -267,7 +263,7 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok, isoffice):
                     return makeConflictResponse(operation, 'External App', lock, oldlock, acctok['filename'], \
                         'The file was locked by ' + ((lockholder + ' via LibreOffice') if lockholder else 'a LibreOffice user'))
                 #else it's our previous lock or it had expired: all right, move on
-            elif ACCESS_ERROR in str(e):
+            elif commoniface.ACCESS_ERROR in str(e):
                 # user has no access to the lock file, typically because of accessing a single-file share:
                 # in this case, stat the lock and if it exists assume it is valid (i.e. raise error)
                 try:
@@ -307,7 +303,7 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok, isoffice):
         return 'OK', http.client.OK
 
     except IOError as e:
-        if EXCL_ERROR in str(e):
+        if commoniface.EXCL_ERROR in str(e):
             # another session was faster than us, or the file was already WOPI-locked:
             # get the lock that was set
             retrievedLock, lockHolder = retrieveWopiLock(fileid, operation, lock, acctok)
@@ -379,7 +375,7 @@ def storeWopiFile(request, retrievedlock, acctok, xakey, targetname=''):
     st.setxattr(acctok['endpoint'], targetname, acctok['userid'], xakey, int(time.time()))
     # and reinstate the lock if existing
     if retrievedlock:
-        st.setlock(acctok['endpoint'], targetname, acctok['userid'], _makeLock(retrievedlock))
+        st.setlock(acctok['endpoint'], targetname, acctok['userid'], acctok['appname'], _makeLock(retrievedlock))
 
 
 def getuserhome(username):

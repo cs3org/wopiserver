@@ -15,6 +15,7 @@ from more_itertools import peekable
 import jwt
 import flask
 import core.wopiutils as utils
+import core.commoniface as commiface
 
 IO_ERROR = 'I/O Error'
 
@@ -207,7 +208,7 @@ def unlock(fileid, reqheaders, acctok):
         return utils.makeConflictResponse('UNLOCK', retrievedLock, lock, '', acctok['filename'])
     # OK, the lock matches. Remove any extended attribute related to locks and conflicts handling
     try:
-        st.unlock(acctok['endpoint'], acctok['filename'], acctok['userid'])
+        st.unlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'])
     except IOError:
         # ignore, it's not worth to report anything here
         pass
@@ -421,7 +422,7 @@ def putFile(fileid):
             try:
                 utils.storeWopiFile(flask.request, retrievedLock, acctok, utils.LASTSAVETIMEKEY, newname)
             except IOError as e:
-                if utils.ACCESS_ERROR in str(e):
+                if commiface.ACCESS_ERROR in str(e):
                     # let's try the user's home instead of the current folder
                     newname = utils.getuserhome(acctok['username']) + os.path.sep + os.path.basename(newname)
                     utils.storeWopiFile(flask.request, retrievedLock, acctok, utils.LASTSAVETIMEKEY, newname)
