@@ -97,7 +97,7 @@ def generateWopiSrc(fileid, proxy=False):
         return '%s/wopi/files/%s' % (srv.wopiurl, fileid)
     # proxy the WOPI request through an external WOPI proxy service
     proxied_fileid = jwt.encode({'u': srv.wopiurl + '/wopi/files/', 'f': fileid}, srv.wopiproxykey, algorithm='HS256')
-    log.debug('msg="Generated proxied WOPISrc" proxy="%s" proxiedfileid="%s"' % (srv.wopiproxy, proxied_fileid))
+    log.debug('msg="Generated proxied WOPISrc" fileid="%s" proxiedfileid="%s"' % (fileid, proxied_fileid))
     return '%s/wopi/files/%s' % (srv.wopiproxy, proxied_fileid)
 
 
