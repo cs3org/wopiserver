@@ -35,7 +35,7 @@ def checkFileInfo(fileid):
             raise jwt.exceptions.ExpiredSignatureError
         log.info('msg="CheckFileInfo" user="%s" filename="%s" fileid="%s" token="%s"' %
                  (acctok['userid'][-20:], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
-        statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
+        statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'], versioninv=1)
         # compute some entities for the response
         wopiSrc = 'WOPISrc=%s&access_token=%s' % (utils.generateWopiSrc(fileid), flask.request.args['access_token'])
         # populate metadata for this file
