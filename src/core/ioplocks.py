@@ -7,7 +7,7 @@ Implementation of the interoperable (iop) locking used for OnlyOffice and Office
 import time
 import http
 import core.wopiutils as utils
-import core.commoniface as commiface
+import core.commoniface as common
 
 # convenience references to global entities
 st = None
@@ -134,7 +134,7 @@ def createLock(filestat, filename, userid, endpoint):
                  (filename, filestat['inode'], lockid))
         return str(lockid), http.client.OK
     except IOError as e:
-        if commiface.EXCL_ERROR not in str(e):
+        if common.EXCL_ERROR not in str(e):
             # writing failed
             log.error('msg="cboxLock: unable to store LibreOffice-compatible lock file" filename="%s" reason="%s"' %
                       (filename, e))

@@ -11,7 +11,7 @@ import os
 import warnings
 from stat import S_ISDIR
 import json
-import core.commoniface as commoniface
+import core.commoniface as common
 
 # module-wide state
 config = None
@@ -105,16 +105,16 @@ def rmxattr(_endpoint, filepath, _userid, key):
 
 def setlock(endpoint, filepath, _userid, appname, value):
     '''Set the lock as an xattr on behalf of the given userid'''
-    if not getxattr(endpoint, filepath, '0:0', commoniface.LOCKKEY):
+    if not getxattr(endpoint, filepath, '0:0', common.LOCKKEY):
         # we do not protect from race conditions here
-        setxattr(endpoint, filepath, '0:0', commoniface.LOCKKEY, commoniface.genrevalock(appname, value))
+        setxattr(endpoint, filepath, '0:0', common.LOCKKEY, common.genrevalock(appname, value))
     else:
-        raise IOError(commoniface.EXCL_ERROR)
+        raise IOError(common.EXCL_ERROR)
 
 
 def getlock(endpoint, filepath, _userid):
     '''Get the lock metadata as an xattr on behalf of the given userid'''
-    l = getxattr(endpoint, filepath, '0:0', commoniface.LOCKKEY)
+    l = getxattr(endpoint, filepath, '0:0', common.LOCKKEY)
     if l:
         return json.loads(l)
     return None
@@ -127,12 +127,12 @@ def refreshlock(endpoint, filepath, _userid, appname, value):
     if l['h'] != appname and l['h'] != 'wopi':
         raise IOError('File is locked by %s' % l['h'])
     # this is non-atomic, but the lock was already held
-    setxattr(endpoint, filepath, '0:0', commoniface.LOCKKEY, commoniface.genrevalock(appname, value))
+    setxattr(endpoint, filepath, '0:0', common.LOCKKEY, common.genrevalock(appname, value))
 
 
 def unlock(endpoint, filepath, _userid, _appname):
     '''Remove the lock as an xattr on behalf of the given userid'''
-    rmxattr(endpoint, filepath, '0:0', commoniface.LOCKKEY)
+    rmxattr(endpoint, filepath, '0:0', common.LOCKKEY)
 
 
 def readfile(_endpoint, filepath, _userid):
@@ -182,7 +182,7 @@ def writefile(_endpoint, filepath, _userid, content, islock=False):
             # as f goes out of scope here, we'd get a false ResourceWarning, which is ignored by the above filter
         except FileExistsError:
             log.info('msg="File exists on write but islock flag requested" filepath="%s"' % filepath)
-            raise IOError(commoniface.EXCL_ERROR)
+            raise IOError(common.EXCL_ERROR)
         except OSError as e:
             log.warning('msg="Error writing file in O_EXCL mode" filepath="%s" error="%s"' % (filepath, e))
             raise IOError(e)

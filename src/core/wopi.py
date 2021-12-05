@@ -15,7 +15,7 @@ from more_itertools import peekable
 import jwt
 import flask
 import core.wopiutils as utils
-import core.commoniface as commiface
+import core.commoniface as common
 
 IO_ERROR = 'I/O Error'
 
@@ -417,7 +417,7 @@ def putFile(fileid):
             try:
                 utils.storeWopiFile(flask.request, retrievedLock, acctok, utils.LASTSAVETIMEKEY, newname)
             except IOError as e:
-                if commiface.ACCESS_ERROR in str(e):
+                if common.ACCESS_ERROR in str(e):
                     # let's try the user's home instead of the current folder
                     newname = utils.getuserhome(acctok['username']) + os.path.sep + os.path.basename(newname)
                     utils.storeWopiFile(flask.request, retrievedLock, acctok, utils.LASTSAVETIMEKEY, newname)

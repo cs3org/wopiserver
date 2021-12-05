@@ -16,7 +16,7 @@ from datetime import datetime
 import http.client
 import flask
 import jwt
-import commoniface
+import core.commoniface as common
 
 # this is the xattr key used for conflicts resolution on the remote storage
 LASTSAVETIMEKEY = 'iop.wopi.lastwritetime'
@@ -241,7 +241,7 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok, isoffice):
             st.writefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], \
                          lockcontent, islock=True)
         except IOError as e:
-            if commoniface.EXCL_ERROR in str(e):
+            if common.EXCL_ERROR in str(e):
                 # retrieve the LibreOffice-compatible lock just found
                 try:
                     retrievedlolock = next(st.readfile(acctok['endpoint'], \
@@ -263,7 +263,7 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok, isoffice):
                     return makeConflictResponse(operation, 'External App', lock, oldlock, acctok['filename'], \
                         'The file was locked by ' + ((lockholder + ' via LibreOffice') if lockholder else 'a LibreOffice user'))
                 #else it's our previous lock or it had expired: all right, move on
-            elif commoniface.ACCESS_ERROR in str(e):
+            elif common.ACCESS_ERROR in str(e):
                 # user has no access to the lock file, typically because of accessing a single-file share:
                 # in this case, stat the lock and if it exists assume it is valid (i.e. raise error)
                 try:
@@ -303,7 +303,7 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok, isoffice):
         return 'OK', http.client.OK
 
     except IOError as e:
-        if commoniface.EXCL_ERROR in str(e):
+        if common.EXCL_ERROR in str(e):
             # another session was faster than us, or the file was already WOPI-locked:
             # get the lock that was set
             retrievedLock, lockHolder = retrieveWopiLock(fileid, operation, lock, acctok)
