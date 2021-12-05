@@ -270,11 +270,6 @@ def rmxattr(endpoint, filepath, _userid, key):
     _xrootcmd(endpoint, 'attr', 'rm', '0:0', 'mgm.attr.key=user.' + key + '&mgm.path=' + _getfilepath(filepath, encodeamp=True))
 
 
-def _getLegacyLockName(filename):
-    '''Generates the legacy hidden filename used to store the WOPI locks'''
-    return os.path.dirname(filename) + os.path.sep + '.sys.wopilock.' + os.path.basename(filename) + '.'
-
-
 def setlock(endpoint, filepath, userid, appname, value):
     '''Set a lock as an xattr with the given value metadata and appname as holder.
     The special option "c" (create-if-not-exists) is used to be atomic'''
@@ -292,14 +287,7 @@ def getlock(endpoint, filepath, userid):
     l = getxattr(endpoint, filepath, userid, common.LOCKKEY)
     if l:
         return json.loads(urlsafe_b64decode(l).decode())
-    # try and read it from the legacy lock file for the time being
-    l = b''
-    for line in readfile(endpoint, _getLegacyLockName(filepath), '0:0'):
-        if isinstance(line, IOError):
-            return None         # no pre-existing lock found, or error attempting to read it: assume it does not exist
-        # the following check is necessary as it happens to get a str instead of bytes
-        l += line if isinstance(line, type(l)) else line.encode()
-    return {'h': 'wopi', 'md' : l}     # this is temporary
+    return None         # no pre-existing lock found, or error attempting to read it: assume it does not exist
 
 
 def refreshlock(endpoint, filepath, userid, appname, value):
@@ -318,11 +306,6 @@ def refreshlock(endpoint, filepath, userid, appname, value):
 def unlock(endpoint, filepath, userid, _appname):
     '''Remove a lock as an xattr'''
     log.debug('msg="Invoked unlock" filepath="%s"' % filepath)
-    try:
-        # try and remove the legacy lock file as well for the time being
-        removefile(endpoint, _getLegacyLockName(filepath), userid, force=True)
-    except IOError:
-        pass
     rmxattr(endpoint, filepath, userid, common.LOCKKEY)
 
 
