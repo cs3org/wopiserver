@@ -1,13 +1,16 @@
 '''
 commoniface.py
 
-common entities used by all storage interfaces for the IOP WOPI server
+Common entities used by all storage interfaces for the IOP WOPI server.
+Includes functions to store and retrieve Reva-compatible locks.
 
 Author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 '''
 
 import time
 import json
+from base64 import urlsafe_b64encode, urlsafe_b64decode
+
 
 # standard file missing message
 ENOENT_MSG = 'No such file or directory'
@@ -22,5 +25,15 @@ ACCESS_ERROR = 'Operation not permitted'
 LOCKKEY = 'user.iop.lock'
 
 def genrevalock(appname, value):
-    '''Return a JSON-formatted lock compatible with the Reva implementation of the CS3 Lock API'''
-    return json.dumps({'h': appname if appname else 'wopi', 't': int(time.time()), 'md': value})
+    '''Return a base64-encoded lock compatible with the Reva implementation of the CS3 Lock API
+       cf. https://github.com/cs3org/cs3apis/blob/main/cs3/storage/provider/v1beta1/resources.proto'''
+    return urlsafe_b64encode(json.dumps(
+        {'type': 'LOCK_TYPE_SHARED',
+         'h': appname if appname else 'wopi',
+         'md': value,
+         'mtime': int(time.time()),
+        }).encode()).decode()
+
+def retrieverevalock(rawlock):
+    '''Restores the JSON payload from a base64-encoded Reva lock'''
+    return json.loads(urlsafe_b64decode(rawlock).decode())

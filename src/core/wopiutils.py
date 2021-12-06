@@ -159,7 +159,8 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
 
 
 def retrieveWopiLock(fileid, operation, lock, acctok, overridefilename=None):
-    '''Retrieves and logs a lock for a given file: returns the lock and its holder, or (None, None) if missing'''
+    '''Retrieves and logs a lock for a given file: returns the lock and its holder, or (None, None) if missing
+       TODO use the native lock metadata (breaking change) such as the `mtime` and return the whole lock'''
     encacctok = flask.request.args['access_token'][-20:] if 'access_token' in flask.request.args else 'N/A'
     lockcontent = st.getlock(acctok['endpoint'], overridefilename if overridefilename else acctok['filename'], acctok['userid'])
     if not lockcontent:
@@ -203,7 +204,8 @@ def retrieveWopiLock(fileid, operation, lock, acctok, overridefilename=None):
 
 
 def _makeLock(lock):
-    '''Generates the lock payload given the raw data'''
+    '''Generates the lock payload given the raw data
+    TODO drop the expiration time in favour of the lock native metadata'''
     lockcontent = {}
     lockcontent['wopilock'] = lock
     # append or overwrite the expiration time
