@@ -10,7 +10,6 @@ import time
 import os
 import warnings
 from stat import S_ISDIR
-import json
 import core.commoniface as common
 
 LOCKKEY = 'user.iop.lock'    # this is to be compatible with the (future) Lock API in Reva
@@ -81,7 +80,7 @@ def setxattr(_endpoint, filepath, _userid, key, value):
     '''Set the extended attribute <key> to <value> on behalf of the given userid'''
     try:
         os.setxattr(_getfilepath(filepath), 'user.' + key, str(value).encode())
-    except (FileNotFoundError, PermissionError, OSError) as e:
+    except OSError as e:
         log.error('msg="Failed to setxattr" filepath="%s" key="%s" exception="%s"' % (filepath, key, e))
         raise IOError(e)
 
@@ -91,7 +90,7 @@ def getxattr(_endpoint, filepath, _userid, key):
     try:
         filepath = _getfilepath(filepath)
         return os.getxattr(filepath, 'user.' + key).decode('UTF-8')
-    except (FileNotFoundError, PermissionError, OSError) as e:
+    except OSError as e:
         log.error('msg="Failed to getxattr" filepath="%s" key="%s" exception="%s"' % (filepath, key, e))
         return None
 
@@ -100,7 +99,7 @@ def rmxattr(_endpoint, filepath, _userid, key):
     '''Remove the extended attribute <key> on behalf of the given userid'''
     try:
         os.removexattr(_getfilepath(filepath), 'user.' + key)
-    except (FileNotFoundError, PermissionError, OSError) as e:
+    except OSError as e:
         log.error('msg="Failed to rmxattr" filepath="%s" key="%s" exception="%s"' % (filepath, key, e))
         raise IOError(e)
 
@@ -118,7 +117,7 @@ def getlock(endpoint, filepath, _userid):
     '''Get the lock metadata as an xattr on behalf of the given userid'''
     l = getxattr(endpoint, filepath, '0:0', common.LOCKKEY)
     if l:
-        return json.loads(l)
+        return common.retrieverevalock(l)
     return None
 
 def refreshlock(endpoint, filepath, _userid, appname, value):

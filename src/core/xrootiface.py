@@ -12,8 +12,6 @@ import os
 from stat import S_ISDIR
 from base64 import b64encode
 from pwd import getpwnam
-from base64 import urlsafe_b64encode, urlsafe_b64decode
-import json
 from XRootD import client as XrdClient
 from XRootD.client.flags import OpenFlags, QueryCode, MkDirFlags, StatInfoFlags
 
@@ -275,8 +273,7 @@ def setlock(endpoint, filepath, userid, appname, value):
     The special option "c" (create-if-not-exists) is used to be atomic'''
     try:
         log.debug('msg="Invoked setlock" filepath="%s"' % filepath)
-        setxattr(endpoint, filepath, userid, common.LOCKKEY, \
-                 urlsafe_b64encode(common.genrevalock(appname, value).encode()).decode() + '&mgm.option=c')
+        setxattr(endpoint, filepath, userid, common.LOCKKEY, common.genrevalock(appname, value) + '&mgm.option=c')
     except IOError as e:
         if EXCL_XATTR_MSG in str(e):
             raise IOError(common.EXCL_ERROR)
@@ -286,7 +283,7 @@ def getlock(endpoint, filepath, userid):
     '''Get the lock metadata as an xattr'''
     l = getxattr(endpoint, filepath, userid, common.LOCKKEY)
     if l:
-        return json.loads(urlsafe_b64decode(l).decode())
+        return common.retrieverevalock(l)
     return None         # no pre-existing lock found, or error attempting to read it: assume it does not exist
 
 
@@ -299,8 +296,7 @@ def refreshlock(endpoint, filepath, userid, appname, value):
     if l['h'] != appname and l['h'] != 'wopi':
         raise IOError('File is locked by %s' % l['h'])
     # this is non-atomic, but the lock was already held
-    setxattr(endpoint, filepath, userid, common.LOCKKEY, \
-             urlsafe_b64encode(common.genrevalock(appname, value).encode()).decode())
+    setxattr(endpoint, filepath, userid, common.LOCKKEY, common.genrevalock(appname, value))
 
 
 def unlock(endpoint, filepath, userid, _appname):
