@@ -86,8 +86,11 @@ def checkFileInfo(fileid):
         fmd['DisableExport'] = fmd['DisableCopy'] = fmd['DisablePrint'] = acctok['viewmode'] == utils.ViewMode.VIEW_ONLY
         #fmd['LastModifiedTime'] = datetime.fromtimestamp(int(statInfo['mtime'])).isoformat()   # this currently breaks
 
+        res = flask.Response(json.dumps(fmd), mimetype='application/json')
+        # amend sensitive metadata for the logs
+        fmd['HostViewUrl'] = fmd['HostEditUrl'] = fmd['DownloadUrl'] = '_amended_'
         log.info('msg="File metadata response" token="%s" metadata="%s"' % (flask.request.args['access_token'][-20:], fmd))
-        return flask.Response(json.dumps(fmd), mimetype='application/json')
+        return res
     except IOError as e:
         log.info('msg="Requested file not found" filename="%s" token="%s" error="%s"' %
                  (acctok['filename'], flask.request.args['access_token'][-20:], e))
