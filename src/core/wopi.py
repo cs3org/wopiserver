@@ -213,11 +213,6 @@ def unlock(fileid, reqheaders, acctok):
         # ignore, it's not worth to report anything here
         pass
     try:
-        st.rmxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY)
-    except IOError:
-        # same as above
-        pass
-    try:
         # also remove the LibreOffice-compatible lock file when relevant
         if os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes:
             st.removefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), acctok['userid'], force=True)
