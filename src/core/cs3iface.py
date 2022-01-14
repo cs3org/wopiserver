@@ -150,22 +150,49 @@ def rmxattr(_endpoint, filepath, userid, key):
 
 def setlock(endpoint, filepath, userid, appname, value):
     '''Set a lock to filepath with the given value metadata and appname as holder'''
-    raise NotImplementedError
+    reference = cs3spr.Reference(path=filepath)
+    lock = cs3spr.Lock(type=cs3spr.LOCK_TYPE_SHARED, holder=appname, metadata=value)
+    req = cs3sp.SetLockRequest(ref=reference, lock=lock)
+    res = ctx['cs3stub'].SetLock(request=req, metadata=[('x-access-token', userid)])
+    if res.status.code != cs3code.CODE_OK:
+        ctx['log'].error('msg="Failed to set lock" filepath="%s" appname="%s" value="%s" reason="%s"' % (filepath, appname, value, res.status.message.replace('"', "'")))
+        raise IOError(res.status.message)
+    ctx['log'].debug('msg="Invoked set lock" result="%s"' % res)
 
 
 def getlock(endpoint, filepath, userid, appname):
     '''Get the lock metadata for the given filepath'''
-    raise NotImplementedError
+    reference = cs3spr.Reference(path=filepath)
+    req = cs3sp.GetLockRequest(ref=reference)
+    res = ctx['cs3stub'].GetLock(request=req, metadata=[('x-access-token', userid)])
+    if res.status.code != cs3code.CODE_OK:
+        ctx['log'].error('msg="Failed to get lock" filepath="%s" reason="%s"' % (filepath, res.status.message.replace('"', "'")))
+        raise IOError(res.status.message)
+    ctx['log'].debug('msg="Invoked get lock" result="%s"' % res)
+    return res.lock
 
 
 def refreshlock(endpoint, filepath, userid, appname, value):
     '''Refresh the lock metadata for the given filepath'''
-    raise NotImplementedError
+    reference = cs3spr.Reference(path=filepath)
+    lock = cs3spr.Lock(type=cs3spr.LOCK_TYPE_SHARED, holder=appname, metadata=value)
+    req = cs3sp.RefreshLockRequest(ref=reference, lock=lock)
+    res = ctx['cs3stub'].RefreshLock(request=req, metadata=[('x-access-token', userid)])
+    if res.status.code != cs3code.CODE_OK:
+        ctx['log'].error('msg="Failed to refresh lock" filepath="%s" appname="%s" value="%s" reason="%s"' % (filepath, appname, value, res.status.message.replace('"', "'")))
+        raise IOError(res.status.message)
+    ctx['log'].debug('msg="Invoked refresh lock" result="%s"' % res)
 
 
 def unlock(endpoint, filepath, userid, appname):
     '''Remove the lock for the given filepath'''
-    raise NotImplementedError
+    reference = cs3spr.Reference(path=filepath)
+    req = cs3sp.UnlockRequest(ref=reference)
+    res = ctx['cs3stub'].Unlock(request=req, metadata=[('x-access-token', userid)])
+    if res.status.code != cs3code.CODE_OK:
+        ctx['log'].error('msg="Failed to unlock" filepath="%s" reason="%s"' % (filepath, res.status.message.replace('"', "'")))
+        raise IOError(res.status.message)
+    ctx['log'].debug('msg="Invoked unlock" result="%s"' % res)
 
 
 def readfile(_endpoint, filepath, userid):
