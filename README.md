@@ -10,7 +10,14 @@ This service is part of the ScienceMesh Interoperability Platform (IOP) and impl
 It enables ScienceMesh EFSS storages to integrate Office Online platforms including Microsoft Office Online and Collabora Online. In addition it implements a [bridge](src/bridge/readme.md) module with dedicated extensions to support apps like CodiMD and Etherpad.
 
 Author: Giuseppe Lo Presti (@glpatcern) <br/>
-Contributions: Michael DSilva (@madsi1m), Lovisa Lugnegaard (@LovisaLugnegard), Samuel Alfageme (@SamuAlfageme), Ishank Arora (@ishank011), Willy Kloucek (@wkloucek)
+Contributors:
+- Michael DSilva (@madsi1m)
+- Lovisa Lugnegaard (@LovisaLugnegard)
+- Samuel Alfageme (@SamuAlfageme)
+- Ishank Arora (@ishank011)
+- Willy Kloucek (@wkloucek)
+- Gianmaria Del Monte (@gmgigi96)
+- Klaas Freitag (@dragotin)
 
 Initial revision: December 2016 <br/>
 First production version for CERNBox: September 2017 (presented at [oCCon17](https://occon17.owncloud.org) - [slides](https://www.slideshare.net/giuseppelopresti/collaborative-editing-and-more-in-cernbox))<br/>
