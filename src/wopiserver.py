@@ -25,9 +25,17 @@ try:
     from werkzeug.exceptions import MethodNotAllowed as Flask_MethodNotAllowed
     import jwt                     # JSON Web Tokens support
     from prometheus_flask_exporter import PrometheusMetrics    # Prometheus support
+
 except ImportError:
     print("Missing modules, please install dependencies with `pip3 install -f requirements.txt`")
     raise
+
+try:
+    from waitress import serve
+except ImportError:
+    print("Missing module waitress.")
+    raise
+
 import core.wopi
 import core.discovery
 import core.ioplocks
@@ -160,16 +168,21 @@ class Wopi:
     @classmethod
     def run(cls):
         '''Runs the Flask app in either standalone (https) or embedded (http) mode'''
+        cls.app.debug = cls.config.get('general', 'loglevel') == 'Debug'
+        cls.app.threaded = True
+
         if cls.useHttps:
+            cls.app.ssl_context = (cls.config.get('security', 'wopicert'), cls.config.get('security', 'wopikey'))
             cls.log.info('msg="WOPI Server starting in standalone secure mode" port="%d" wopiurl="%s" version="%s"' %
                          (cls.port, cls.wopiurl, WOPISERVERVERSION))
-            cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'),
-                        ssl_context=(cls.config.get('security', 'wopicert'), cls.config.get('security', 'wopikey')))
         else:
             cls.log.info('msg="WOPI Server starting in unsecure/embedded mode" port="%d" wopiurl="%s" version="%s"' %
                          (cls.port, cls.wopiurl, WOPISERVERVERSION))
-            cls.app.run(host='0.0.0.0', port=cls.port, threaded=True, debug=(cls.config.get('general', 'loglevel') == 'Debug'))
 
+        if cls.config.get('general', 'internalserver', fallback='flask') == 'waitress':
+            serve(cls.app, host='0.0.0.0', port=cls.port)
+        else:
+            cls.app.run(host='0.0.0.0', port=cls.port)
 
 
 @Wopi.app.errorhandler(Exception)
