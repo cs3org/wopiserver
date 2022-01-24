@@ -177,7 +177,8 @@ class Wopi:
             try:
                 from waitress import serve
             except ImportError:
-                print("Missing module waitress.")
+                cls.log.fatal('msg="Failed to initialize the service, aborting" error="missing module waitress"')
+                print("Missing module waitress, aborting")
                 raise
 
             serve(cls.app, host='0.0.0.0', port=cls.port)
