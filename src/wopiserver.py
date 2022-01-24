@@ -30,12 +30,6 @@ except ImportError:
     print("Missing modules, please install dependencies with `pip3 install -f requirements.txt`")
     raise
 
-try:
-    from waitress import serve
-except ImportError:
-    print("Missing module waitress.")
-    raise
-
 import core.wopi
 import core.discovery
 import core.ioplocks
@@ -180,6 +174,12 @@ class Wopi:
                          (cls.port, cls.wopiurl, WOPISERVERVERSION))
 
         if cls.config.get('general', 'internalserver', fallback='flask') == 'waitress':
+            try:
+                from waitress import serve
+            except ImportError:
+                print("Missing module waitress.")
+                raise
+
             serve(cls.app, host='0.0.0.0', port=cls.port)
         else:
             cls.app.run(host='0.0.0.0', port=cls.port)
