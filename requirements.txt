@@ -9,3 +9,4 @@ more_itertools
 tuspy
 prometheus-flask-exporter
 cs3apis>=0.1.dev66
+waitress
