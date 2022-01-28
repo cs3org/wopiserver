@@ -88,7 +88,7 @@ def checkFileInfo(fileid):
 
         res = flask.Response(json.dumps(fmd), mimetype='application/json')
         # amend sensitive metadata for the logs
-        fmd['HostViewUrl'] = fmd['HostEditUrl'] = fmd['DownloadUrl'] = '_amended_'
+        fmd['HostViewUrl'] = fmd['HostEditUrl'] = fmd['DownloadUrl'] = '_redacted_'
         log.info('msg="File metadata response" token="%s" metadata="%s"' % (flask.request.args['access_token'][-20:], fmd))
         return res
     except IOError as e:
