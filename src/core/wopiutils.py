@@ -159,9 +159,8 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
     return statinfo['inode'], acctok
 
 
-def retrieveWopiLock(fileid, operation, lock, acctok, overridefilename=None):
-    '''Retrieves and logs a lock for a given file: returns the lock and its holder, or (None, None) if missing
-       TODO use the native lock metadata (breaking change) such as the `mtime` and return the whole lock'''
+def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefilename=None):
+    '''Retrieves and logs a lock for a given file: returns the lock and its holder, or (None, None) if missing'''
     encacctok = flask.request.args['access_token'][-20:] if 'access_token' in flask.request.args else 'N/A'
     lockcontent = st.getlock(acctok['endpoint'], overridefilename if overridefilename else acctok['filename'], acctok['userid'])
     if not lockcontent:
@@ -171,10 +170,11 @@ def retrieveWopiLock(fileid, operation, lock, acctok, overridefilename=None):
     try:
         # check validity: a lock is deemed expired if the most recent between its expiration time and the last
         # save time by WOPI has passed
-        retrievedLock = jwt.decode(lockcontent['lock_id'], srv.wopisecret, algorithms=['HS256'])
+        rawlock = lockcontent['lock_id']
+        lockcontent['lock_id'] = jwt.decode(lockcontent['lock_id'], srv.wopisecret, algorithms=['HS256'])
         savetime = st.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], LASTSAVETIMEKEY)
-        if max(0 if 'exp' not in retrievedLock else retrievedLock['exp'],
-               0 if not savetime else int(savetime) + srv.config.getint('general', 'wopilockexpiration')) < time.time():
+        if max(lockcontent['expiration']['seconds'], int(savetime) + \
+               srv.config.getint('general', 'wopilockexpiration')) < time.time():
             # we got a malformed or expired lock, reject. Note that we may get an ExpiredSignatureError
             # by jwt.decode() as we had stored it with a timed signature.
             raise jwt.exceptions.ExpiredSignatureError
@@ -183,7 +183,7 @@ def retrieveWopiLock(fileid, operation, lock, acctok, overridefilename=None):
                     'exception="%s"' % (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, type(e)))
         # the retrieved lock is not valid any longer, discard and remove it from the backend
         try:
-            st.unlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'])
+            st.unlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'], rawlock)
         except IOError:
             # ignore, it's not worth to report anything here
             pass
@@ -199,19 +199,14 @@ def retrieveWopiLock(fileid, operation, lock, acctok, overridefilename=None):
                         ('empty lock' if isinstance(e, StopIteration) else str(e)))
         return None, None
     log.info('msg="%s" user="%s" filename="%s" fileid="%s" lock="%s" retrievedlock="%s" expTime="%s" token="%s"' %
-             (operation.title(), acctok['userid'][-20:], acctok['filename'], fileid, lock, retrievedLock['wopilock'],
-              time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(retrievedLock['exp'])), encacctok))
-    return retrievedLock['wopilock'], lockcontent['app_name']
+             (operation.title(), acctok['userid'][-20:], acctok['filename'], fileid, lockforlog, lockcontent['lock_id'],
+              time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(lockcontent['expiration']['seconds'])), encacctok))
+    return lockcontent['lock_id'], lockcontent['app_name']
 
 
-def _makeLock(lock):
-    '''Generates the lock payload given the raw data
-    TODO drop the expiration time in favour of the lock native metadata'''
-    lockcontent = {}
-    lockcontent['wopilock'] = lock
-    # append or overwrite the expiration time
-    lockcontent['exp'] = int(time.time()) + srv.config.getint('general', 'wopilockexpiration')
-    return jwt.encode(lockcontent, srv.wopisecret, algorithm='HS256')
+def encodeLock(lock):
+    '''Generates the lock payload given the raw data'''
+    return jwt.encode(lock, srv.wopisecret, algorithm='HS256')
 
 
 def storeWopiLock(fileid, operation, lock, oldlock, acctok, isoffice):
@@ -284,7 +279,7 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok, isoffice):
 
     try:
         # now atomically store the lock as encoded JWT
-        st.setlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'], _makeLock(lock))
+        st.setlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'], encodeLock(lock))
         log.info('msg="%s" filename="%s" token="%s" lock="%s" result="success"' %
                  (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
 
@@ -314,7 +309,7 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok, isoffice):
                 return makeConflictResponse(operation, retrievedLock, lock, oldlock, acctok['filename'], \
                             'The file is locked by %s' % (lockHolder if lockHolder != 'wopi' else 'another online editor'))
             # else it's our lock or it had expired, refresh it and return
-            st.refreshlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'], _makeLock(lock))
+            st.refreshlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'], encodeLock(lock))
             log.info('msg="%s" filename="%s" token="%s" lock="%s" result="refreshed"' %
                      (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
             return 'OK', http.client.OK
@@ -378,7 +373,7 @@ def storeWopiFile(request, retrievedlock, acctok, xakey, targetname=''):
     st.setxattr(acctok['endpoint'], targetname, acctok['userid'], xakey, int(time.time()))
     # and reinstate the lock if existing
     if retrievedlock:
-        st.setlock(acctok['endpoint'], targetname, acctok['userid'], acctok['appname'], _makeLock(retrievedlock))
+        st.setlock(acctok['endpoint'], targetname, acctok['userid'], acctok['appname'], encodeLock(retrievedlock))
 
 
 def getuserhome(username):

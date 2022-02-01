@@ -218,7 +218,7 @@ def readfile(_endpoint, filepath, userid):
         yield IOError(common.ENOENT_MSG)
     elif initfiledownloadres.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to initiateFileDownload on read" filepath="%s" reason="%s"' %
-                         (filepath, initfiledownloadres.status.message.replace('"', "'")))
+                  (filepath, initfiledownloadres.status.message.replace('"', "'")))
         yield IOError(initfiledownloadres.status.message)
     log.debug('msg="readfile: InitiateFileDownloadRes returned" protocols="%s"' % initfiledownloadres.protocols)
 
@@ -298,7 +298,7 @@ def renamefile(_endpoint, filepath, newfilepath, userid):
     log.debug('msg="Invoked renamefile" result="%s"' % res)
 
 
-def removefile(_endpoint, filepath, userid, force=False):
+def removefile(_endpoint, filepath, userid, _force=False):
     '''Remove a file using the given userid as access token.
        The force argument is ignored for now for CS3 storage.'''
     reference = cs3spr.Reference(path=filepath)
