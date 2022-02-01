@@ -209,11 +209,15 @@ class TestStorage(unittest.TestCase):
     self.assertIsInstance(statInfo, dict)
     self.storage.setlock(self.endpoint, self.homepath + '/testlock', self.userid, 'testlock')
     l = self.storage.getlock(self.endpoint, self.homepath + '/testlock', self.userid)
-    self.assertEqual(l, 'testlock')
+    self.assertIsInstance(l, dict)
+    self.assertEqual(l['lock_id'], 'testlock')
+    self.assertEqual(l['app_name'], 'myapp')
+    self.assertIsInstance(l['expiration'], dict)
+    self.assertIsInstance(l['expiration']['seconds'], int)
     with self.assertRaises(IOError) as context:
       self.storage.setlock(self.endpoint, self.homepath + '/testlock', self.userid, 'testlock2')
     self.assertIn(EXCL_ERROR, str(context.exception))
-    self.storage.unlock(self.endpoint, self.homepath + '/testlock', self.userid, 'myapp')
+    self.storage.unlock(self.endpoint, self.homepath + '/testlock', self.userid, 'myapp', 'testlock')
     self.storage.removefile(self.endpoint, self.homepath + '/testlock', self.userid)
 
   def test_refresh_lock(self):
@@ -232,8 +236,10 @@ class TestStorage(unittest.TestCase):
     self.storage.refreshlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'myapp', 'testlock2')
     l = self.storage.getlock(self.endpoint, self.homepath + '/testrlock', self.userid)
     self.assertIsInstance(l, dict)
-    self.assertEqual(l['md'], 'testlock2')
-    self.assertEqual(l['h'], 'myapp')
+    self.assertEqual(l['lock_id'], 'testlock2')
+    self.assertEqual(l['app_name'], 'myapp')
+    self.assertIsInstance(l['expiration'], dict)
+    self.assertIsInstance(l['expiration']['seconds'], int)
     with self.assertRaises(IOError) as context:
       self.storage.refreshlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'myapp2', 'testlock2')
     self.assertIn('File is locked by myapp', str(context.exception))

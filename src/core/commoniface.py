@@ -24,16 +24,46 @@ ACCESS_ERROR = 'Operation not permitted'
 # name of the xattr storing the Reva lock
 LOCKKEY = 'user.iop.lock'
 
+# reference to global config
+config = None
+
+
+# Manipulate Reva-compliant locks, i.e. JSON structs with the following format:
+#{
+#   "lock_id": "id1234",
+#   "type": 2,
+#   "user": {
+#      "idp": "https://your-idprovider.org",
+#      "opaque_id": "username",
+#      "type": 1
+#   },
+#   "app_name": "your_app",
+#   "expiration": {
+#      "seconds": 1665446400
+#   }
+#}
+
 def genrevalock(appname, value):
     '''Return a base64-encoded lock compatible with the Reva implementation of the CS3 Lock API
        cf. https://github.com/cs3org/cs3apis/blob/main/cs3/storage/provider/v1beta1/resources.proto'''
     return urlsafe_b64encode(json.dumps(
-        {'type': 'LOCK_TYPE_SHARED',
-         'h': appname if appname else 'wopi',
-         'md': value,
-         'mtime': int(time.time()),
+        {'lock_id': value,
+         'type': 2,    # LOCK_TYPE_WRITE
+         'app_name': appname if appname else 'wopi',
+         'user': {},
+         'expiration': {
+             'seconds': int(time.time()) + config.getint('general', 'wopilockexpiration')
+         },
         }).encode()).decode()
+
 
 def retrieverevalock(rawlock):
     '''Restores the JSON payload from a base64-encoded Reva lock'''
-    return json.loads(urlsafe_b64decode(rawlock).decode())
+    l = json.loads(urlsafe_b64decode(rawlock).decode())
+    if 'h' in l:
+        # temporary code to support the data structure from WOPI 8.0
+        l['app_name'] = l['h']
+        l['lock_id'] = l['md']
+        l['expiration'] = {}
+        l['expiration']['seconds'] = l['exp']
+    return l

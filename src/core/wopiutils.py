@@ -171,7 +171,7 @@ def retrieveWopiLock(fileid, operation, lock, acctok, overridefilename=None):
     try:
         # check validity: a lock is deemed expired if the most recent between its expiration time and the last
         # save time by WOPI has passed
-        retrievedLock = jwt.decode(lockcontent['md'], srv.wopisecret, algorithms=['HS256'])
+        retrievedLock = jwt.decode(lockcontent['lock_id'], srv.wopisecret, algorithms=['HS256'])
         savetime = st.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], LASTSAVETIMEKEY)
         if max(0 if 'exp' not in retrievedLock else retrievedLock['exp'],
                0 if not savetime else int(savetime) + srv.config.getint('general', 'wopilockexpiration')) < time.time():
@@ -201,7 +201,7 @@ def retrieveWopiLock(fileid, operation, lock, acctok, overridefilename=None):
     log.info('msg="%s" user="%s" filename="%s" fileid="%s" lock="%s" retrievedlock="%s" expTime="%s" token="%s"' %
              (operation.title(), acctok['userid'][-20:], acctok['filename'], fileid, lock, retrievedLock['wopilock'],
               time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(retrievedLock['exp'])), encacctok))
-    return retrievedLock['wopilock'], lockcontent['h']
+    return retrievedLock['wopilock'], lockcontent['app_name']
 
 
 def _makeLock(lock):
