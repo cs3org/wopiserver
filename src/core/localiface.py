@@ -30,7 +30,7 @@ def init(inconfig, inlog):
     global config                 # pylint: disable=global-statement
     global log                        # pylint: disable=global-statement
     global homepath             # pylint: disable=global-statement
-    config = inconfig
+    common.config = config = inconfig
     log = inlog
     homepath = config.get('local', 'storagehomepath')
     try:
@@ -106,6 +106,7 @@ def rmxattr(_endpoint, filepath, _userid, key):
 
 def setlock(endpoint, filepath, _userid, appname, value):
     '''Set the lock as an xattr on behalf of the given userid'''
+    log.debug('msg="Invoked setlock" filepath="%s" value="%s"' % (filepath, value))
     if not getxattr(endpoint, filepath, '0:0', common.LOCKKEY):
         # we do not protect from race conditions here
         setxattr(endpoint, filepath, '0:0', common.LOCKKEY, common.genrevalock(appname, value))
@@ -122,17 +123,19 @@ def getlock(endpoint, filepath, _userid):
 
 def refreshlock(endpoint, filepath, _userid, appname, value):
     '''Refresh the lock value as an xattr on behalf of the given userid'''
+    log.debug('msg="Invoked refreshlock" filepath="%s" value="%s"' % (filepath, value))
     l = getlock(endpoint, filepath, _userid)
     if not l:
         raise IOError('File was not locked')
-    if l['h'] != appname and l['h'] != 'wopi':
-        raise IOError('File is locked by %s' % l['h'])
+    if l['app_name'] != appname and l['app_name'] != 'wopi':
+        raise IOError('File is locked by %s' % l['app_name'])
     # this is non-atomic, but the lock was already held
     setxattr(endpoint, filepath, '0:0', common.LOCKKEY, common.genrevalock(appname, value))
 
 
-def unlock(endpoint, filepath, _userid, _appname):
+def unlock(endpoint, filepath, _userid, _appname, value):
     '''Remove the lock as an xattr on behalf of the given userid'''
+    log.debug('msg="Invoked unlock" filepath="%s" value="%s' % (filepath, value))
     rmxattr(endpoint, filepath, '0:0', common.LOCKKEY)
 
 
