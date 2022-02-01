@@ -211,7 +211,7 @@ def unlock(fileid, reqheaders, acctok):
         return utils.makeConflictResponse('UNLOCK', retrievedLock, lock, '', acctok['filename'])
     # OK, the lock matches. Remove any extended attribute related to locks and conflicts handling
     try:
-        st.unlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'])
+        st.unlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'], utils.encodeLock(lock))
     except IOError:
         # ignore, it's not worth to report anything here
         pass
