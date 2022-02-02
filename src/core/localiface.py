@@ -74,7 +74,7 @@ def statx(endpoint, filepath, userid, versioninv=1):
     return stat(endpoint, filepath, userid)
 
 
-def setxattr(_endpoint, filepath, _userid, key, value):
+def setxattr(_endpoint, filepath, _userid, key, value, _lockid):
     '''Set the extended attribute <key> to <value> on behalf of the given userid'''
     try:
         os.setxattr(_getfilepath(filepath), 'user.' + key, str(value).encode())
@@ -93,7 +93,7 @@ def getxattr(_endpoint, filepath, _userid, key):
         return None
 
 
-def rmxattr(_endpoint, filepath, _userid, key):
+def rmxattr(_endpoint, filepath, _userid, key, _lockid):
     '''Remove the extended attribute <key> on behalf of the given userid'''
     try:
         os.removexattr(_getfilepath(filepath), 'user.' + key)
@@ -107,7 +107,7 @@ def setlock(endpoint, filepath, _userid, appname, value):
     log.debug('msg="Invoked setlock" filepath="%s" value="%s"' % (filepath, value))
     if not getxattr(endpoint, filepath, '0:0', common.LOCKKEY):
         # we do not protect from race conditions here
-        setxattr(endpoint, filepath, '0:0', common.LOCKKEY, common.genrevalock(appname, value))
+        setxattr(endpoint, filepath, '0:0', common.LOCKKEY, common.genrevalock(appname, value), None)
     else:
         raise IOError(common.EXCL_ERROR)
 
@@ -128,13 +128,13 @@ def refreshlock(endpoint, filepath, _userid, appname, value):
     if l['app_name'] != appname and l['app_name'] != 'wopi':
         raise IOError('File is locked by %s' % l['app_name'])
     # this is non-atomic, but the lock was already held
-    setxattr(endpoint, filepath, '0:0', common.LOCKKEY, common.genrevalock(appname, value))
+    setxattr(endpoint, filepath, '0:0', common.LOCKKEY, common.genrevalock(appname, value), None)
 
 
 def unlock(endpoint, filepath, _userid, _appname, value):
     '''Remove the lock as an xattr on behalf of the given userid'''
     log.debug('msg="Invoked unlock" filepath="%s" value="%s' % (filepath, value))
-    rmxattr(endpoint, filepath, '0:0', common.LOCKKEY)
+    rmxattr(endpoint, filepath, '0:0', common.LOCKKEY, None)
 
 
 def readfile(_endpoint, filepath, _userid):
@@ -161,7 +161,7 @@ def readfile(_endpoint, filepath, _userid):
         yield IOError(e)
 
 
-def writefile(_endpoint, filepath, _userid, content, islock=False):
+def writefile(_endpoint, filepath, _userid, content, _lockid, islock=False):
     '''Write a file via xroot on behalf of the given userid. The entire content is written
     and any pre-existing file is deleted (or moved to the previous version if supported).
     With islock=True, the file is opened with O_CREAT|O_EXCL.'''
@@ -202,7 +202,7 @@ def writefile(_endpoint, filepath, _userid, content, islock=False):
              (filepath, (tend-tstart)*1000, islock))
 
 
-def renamefile(_endpoint, origfilepath, newfilepath, _userid):
+def renamefile(_endpoint, origfilepath, newfilepath, _userid, _lockid):
     '''Rename a file from origfilepath to newfilepath on behalf of the given userid.'''
     try:
         os.rename(_getfilepath(origfilepath), _getfilepath(newfilepath))
@@ -212,7 +212,7 @@ def renamefile(_endpoint, origfilepath, newfilepath, _userid):
 
 def removefile(_endpoint, filepath, _userid, force=False):
     '''Remove a file on behalf of the given userid.
-         The force argument is irrelevant and ignored for local storage.'''
+       The force argument is irrelevant and ignored for local storage.'''
     try:
         os.remove(_getfilepath(filepath))
     except (FileNotFoundError, PermissionError, IsADirectoryError, OSError) as e:

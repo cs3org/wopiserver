@@ -72,8 +72,7 @@ class TestStorage(unittest.TestCase):
 
   def test_stat(self):
     '''Call stat() and assert the path matches'''
-    buf = b'bla\n'
-    self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, buf)
+    self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, databuf, None)
     statInfo = self.storage.stat(self.endpoint, self.homepath + '/test.txt', self.userid)
     self.assertIsInstance(statInfo, dict)
     self.assertTrue('mtime' in statInfo, 'Missing mtime from stat output')
@@ -82,8 +81,7 @@ class TestStorage(unittest.TestCase):
 
   def test_statx_fileid(self):
     '''Call statx() and test if fileid-based stat is supported'''
-    buf = b'bla\n'
-    self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, buf)
+    self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, databuf, None)
     statInfo = self.storage.statx(self.endpoint, self.homepath + '/test.txt', self.userid)
     if self.endpoint in str(statInfo['inode']):
       # detected CS3 storage, test if fileid-based stat is supported
@@ -94,13 +92,11 @@ class TestStorage(unittest.TestCase):
 
   def test_statx_invariant_fileid(self):
     '''Call statx() before and after updating a file, and assert the inode did not change'''
-    buf = b'bla\n'
-    self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, buf)
+    self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, databuf, None)
     statInfo = self.storage.statx(self.endpoint, self.homepath + '/test.txt', self.userid, versioninv=1)
     self.assertIsInstance(statInfo, dict)
     inode = statInfo['inode']
-    buf = b'blabla\n'
-    self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, buf)
+    self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, databuf, None)
     statInfo = self.storage.statx(self.endpoint, self.homepath + '/test.txt', self.userid, versioninv=1)
     self.assertIsInstance(statInfo, dict)
     self.assertEqual(statInfo['inode'], inode, 'Fileid is not invariant to multiple write operations')
@@ -120,8 +116,7 @@ class TestStorage(unittest.TestCase):
 
   def test_readfile_bin(self):
     '''Writes a binary file and reads it back, validating that the content matches'''
-    content = b'bla'
-    self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, content)
+    self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, databuf, None)
     content = ''
     for chunk in self.storage.readfile(self.endpoint, self.homepath + '/test.txt', self.userid):
       self.assertNotIsInstance(chunk, IOError, 'raised by storage.readfile')
@@ -132,7 +127,7 @@ class TestStorage(unittest.TestCase):
   def test_readfile_text(self):
     '''Writes a text file and reads it back, validating that the content matches'''
     content = 'bla\n'
-    self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, content)
+    self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, content, None)
     content = ''
     for chunk in self.storage.readfile(self.endpoint, self.homepath + '/test.txt', self.userid):
       self.assertNotIsInstance(chunk, IOError, 'raised by storage.readfile')
@@ -143,7 +138,7 @@ class TestStorage(unittest.TestCase):
   def test_readfile_empty(self):
     '''Writes an empty file and reads it back, validating that the read does not fail'''
     content = ''
-    self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, content)
+    self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, content, None)
     for chunk in self.storage.readfile(self.endpoint, self.homepath + '/test.txt', self.userid):
       self.assertNotIsInstance(chunk, IOError, 'raised by storage.readfile')
       content += chunk.decode('utf-8')
@@ -158,8 +153,7 @@ class TestStorage(unittest.TestCase):
 
   def test_write_remove_specialchars(self):
     '''Test write and removal of a file with special chars'''
-    buf = b'ebe5tresbsrdthbrdhvdtr'
-    self.storage.writefile(self.endpoint, self.homepath + '/testwrite&rm', self.userid, buf)
+    self.storage.writefile(self.endpoint, self.homepath + '/testwrite&rm', self.userid, databuf, None)
     statInfo = self.storage.stat(self.endpoint, self.homepath + '/testwrite&rm', self.userid)
     self.assertIsInstance(statInfo, dict)
     self.storage.removefile(self.endpoint, self.homepath + '/testwrite&rm', self.userid)
@@ -168,22 +162,20 @@ class TestStorage(unittest.TestCase):
 
   def test_write_islock(self):
     '''Test double write with the islock flag'''
-    buf = b'ebe5tresbsrdthbrdhvdtr'
     try:
       self.storage.removefile(self.endpoint, self.homepath + '/testoverwrite', self.userid)
     except IOError:
       pass
-    self.storage.writefile(self.endpoint, self.homepath + '/testoverwrite', self.userid, buf, islock=True)
+    self.storage.writefile(self.endpoint, self.homepath + '/testoverwrite', self.userid, databuf, None, islock=True)
     statInfo = self.storage.stat(self.endpoint, self.homepath + '/testoverwrite', self.userid)
     self.assertIsInstance(statInfo, dict)
     with self.assertRaises(IOError) as context:
-      self.storage.writefile(self.endpoint, self.homepath + '/testoverwrite', self.userid, buf, islock=True)
+      self.storage.writefile(self.endpoint, self.homepath + '/testoverwrite', self.userid, databuf, None, islock=True)
     self.assertIn(EXCL_ERROR, str(context.exception))
     self.storage.removefile(self.endpoint, self.homepath + '/testoverwrite', self.userid)
 
   def test_write_race(self):
     '''Test multithreaded double write with the islock flag'''
-    buf = b'ebe5tresbsrdthbrdhvdtr'
     try:
       self.storage.removefile(self.endpoint, self.homepath + '/testwriterace', self.userid)
     except IOError:
@@ -199,12 +191,11 @@ class TestStorage(unittest.TestCase):
 
   def test_lock(self):
     '''Test setting locks'''
-    buf = b'ebe5tresbsrdthbrdhvdtr'
     try:
       self.storage.removefile(self.endpoint, self.homepath + '/testlock', self.userid)
     except IOError:
       pass
-    self.storage.writefile(self.endpoint, self.homepath + '/testlock', self.userid, buf)
+    self.storage.writefile(self.endpoint, self.homepath + '/testlock', self.userid, databuf, None)
     statInfo = self.storage.stat(self.endpoint, self.homepath + '/testlock', self.userid)
     self.assertIsInstance(statInfo, dict)
     self.storage.setlock(self.endpoint, self.homepath + '/testlock', self.userid, 'testlock')
@@ -226,7 +217,7 @@ class TestStorage(unittest.TestCase):
       self.storage.removefile(self.endpoint, self.homepath + '/testrlock', self.userid)
     except IOError:
       pass
-    self.storage.writefile(self.endpoint, self.homepath + '/testrlock', self.userid, databuf)
+    self.storage.writefile(self.endpoint, self.homepath + '/testrlock', self.userid, databuf, None)
     statInfo = self.storage.stat(self.endpoint, self.homepath + '/testrlock', self.userid)
     self.assertIsInstance(statInfo, dict)
     with self.assertRaises(IOError) as context:
@@ -248,12 +239,11 @@ class TestStorage(unittest.TestCase):
 
   def test_lock_race(self):
     '''Test multithreaded setting locks'''
-    buf = b'ebe5tresbsrdthbrdhvdtr'
     try:
       self.storage.removefile(self.endpoint, self.homepath + '/testlockrace', self.userid)
     except IOError:
       pass
-    self.storage.writefile(self.endpoint, self.homepath + '/testlockrace', self.userid, buf)
+    self.storage.writefile(self.endpoint, self.homepath + '/testlockrace', self.userid, databuf, None)
     statInfo = self.storage.stat(self.endpoint, self.homepath + '/testlockrace', self.userid)
     self.assertIsInstance(statInfo, dict)
     t = Thread(target=self.storage.setlock,
@@ -264,31 +254,52 @@ class TestStorage(unittest.TestCase):
     self.assertIn(EXCL_ERROR, str(context.exception))
     self.storage.removefile(self.endpoint, self.homepath + '/testlockrace', self.userid)
 
+  @unittest.expectedFailure
+  def test_lock_operations(self):
+    '''Test file operations on locked file (expected to fail until locks are enforced by the storage)'''
+    try:
+      self.storage.removefile(self.endpoint, self.homepath + '/testlockop', self.userid)
+    except IOError:
+      pass
+    self.storage.writefile(self.endpoint, self.homepath + '/testlockop', self.userid, databuf, None)
+    statInfo = self.storage.stat(self.endpoint, self.homepath + '/testlockop', self.userid)
+    self.assertIsInstance(statInfo, dict)
+    self.storage.setlock(self.endpoint, self.homepath + '/testlockop', self.userid, 'myapp', 'testlock')
+    self.storage.writefile(self.endpoint, self.homepath + '/testlockop', self.userid, databuf, 'testlock')
+    self.storage.setxattr(self.endpoint, self.homepath + '/testlockop', self.userid, 'testkey', 123, 'testlock')
+    self.storage.renamefile(self.endpoint, self.homepath + '/testlockop', self.homepath + '/testlockop_renamed', self.userid, 'testlock')
+    with self.assertRaises(IOError):
+        self.storage.writefile(self.endpoint, self.homepath + '/testlockop_renamed', self.userid, databuf, None)
+    with self.assertRaises(IOError):
+        self.storage.setxattr(self.endpoint, self.homepath + '/testlockop_renamed', self.userid, 'testkey', 123, None)
+    with self.assertRaises(IOError):
+        self.storage.renamefile(self.endpoint, self.homepath + '/testlockop_renamed', self.homepath + '/testlockop', self.userid, None)
+    self.storage.removefile(self.endpoint, self.homepath + '/testlockop_renamed', self.userid)
+
   def test_remove_nofile(self):
     '''Test removal of a non-existing file'''
-    with self.assertRaises(IOError):
+    with self.assertRaises(IOError) as context:
       self.storage.removefile(self.endpoint, self.homepath + '/hopefullynotexisting', self.userid)
+    self.assertIn(ENOENT_MSG, str(context.exception))
 
   def test_xattr(self):
     '''Test all xattr methods with special chars'''
-    buf = b'bla\n'
-    self.storage.writefile(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, buf)
-    self.storage.setxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey', 123)
+    self.storage.writefile(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, databuf, None)
+    self.storage.setxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey', 123, None)
     v = self.storage.getxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey')
     self.assertEqual(v, '123')
-    self.storage.rmxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey')
+    self.storage.rmxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey', None)
     v = self.storage.getxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey')
     self.assertEqual(v, None)
     self.storage.removefile(self.endpoint, self.homepath + '/test&xattr.txt', self.userid)
 
   def test_rename_statx(self):
     '''Test renaming and statx of a file with special chars'''
-    buf = b'bla\n'
-    self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, buf)
-    self.storage.renamefile(self.endpoint, self.homepath + '/test.txt', self.homepath + '/test&renamed.txt', self.userid)
+    self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, databuf, None)
+    self.storage.renamefile(self.endpoint, self.homepath + '/test.txt', self.homepath + '/test&renamed.txt', self.userid, None)
     statInfo = self.storage.statx(self.endpoint, self.homepath + '/test&renamed.txt', self.userid)
     self.assertEqual(statInfo['filepath'], self.homepath + '/test&renamed.txt')
-    self.storage.renamefile(self.endpoint, self.homepath + '/test&renamed.txt', self.homepath + '/test.txt', self.userid)
+    self.storage.renamefile(self.endpoint, self.homepath + '/test&renamed.txt', self.homepath + '/test.txt', self.userid, None)
     statInfo = self.storage.statx(self.endpoint, self.homepath + '/test.txt', self.userid)
     self.assertEqual(statInfo['filepath'], self.homepath + '/test.txt')
     self.storage.removefile(self.endpoint, self.homepath + '/test.txt', self.userid)

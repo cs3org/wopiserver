@@ -218,7 +218,7 @@ def unlock(fileid, reqheaders, acctok):
     try:
         # also remove the LibreOffice-compatible lock file when relevant
         if os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes:
-            st.removefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), acctok['userid'], force=True)
+            st.removefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), acctok['userid'], True)
     except IOError:
         # same as above
         pass
@@ -332,11 +332,11 @@ def renameFile(fileid, reqheaders, acctok):
         targetName = os.path.dirname(acctok['filename']) + '/' + targetName + os.path.splitext(acctok['filename'])[1]
         log.info('msg="RenameFile" user="%s" filename="%s" token="%s" targetname="%s"' %
                  (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:], targetName))
-        st.renamefile(acctok['endpoint'], acctok['filename'], targetName, acctok['userid'])
+        st.renamefile(acctok['endpoint'], acctok['filename'], targetName, acctok['userid'], utils.encodeLock(retrievedLock))
         # also rename the locks
         if os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes:
             st.renamefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), \
-                          utils.getLibreOfficeLockName(targetName), acctok['userid'])
+                          utils.getLibreOfficeLockName(targetName), acctok['userid'], None)
         # prepare and send the response as JSON
         renamemd = {}
         renamemd['Name'] = reqheaders['X-WOPI-RequestedName']
@@ -426,7 +426,7 @@ def putFile(fileid):
                     utils.storeWopiFile(flask.request, retrievedLock, acctok, utils.LASTSAVETIMEKEY, newname)
 
             # keep track of this action in the original file's xattr, to avoid looping (see below)
-            st.setxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY, 0)
+            st.setxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY, 0, utils.encodeLock(retrievedLock))
             log.info('msg="Conflicting copy created" user="%s" savetime="%s" lastmtime="%s" newfilename="%s" token="%s"' %
                      (acctok['userid'][-20:], savetime, mtime, newname, flask.request.args['access_token'][-20:]))
             # and report failure to the application: note we use a CONFLICT response as it is better handled by the app

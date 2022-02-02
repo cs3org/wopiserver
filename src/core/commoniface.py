@@ -22,7 +22,7 @@ EXCL_ERROR = 'File exists and islock flag requested'
 ACCESS_ERROR = 'Operation not permitted'
 
 # name of the xattr storing the Reva lock
-LOCKKEY = 'user.iop.lock'
+LOCKKEY = 'iop.lock'
 
 # reference to global config
 config = None
