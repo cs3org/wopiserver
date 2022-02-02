@@ -74,8 +74,7 @@ def stat(endpoint, fileid, userid, versioninv=1):
     else:
         # assume we have an opaque fileid
         ref = cs3spr.Reference(resource_id=cs3spr.ResourceId(storage_id=endpoint, opaque_id=fileid))
-    statInfo = ctx['cs3gw'].Stat(request=cs3sp.StatRequest(ref=ref),
-                                   metadata=[('X-Access-Token', userid)])
+    statInfo = ctx['cs3gw'].Stat(request=cs3sp.StatRequest(ref=ref), metadata=[('x-access-token', userid)])
     tend = time.time()
     log.info('msg="Invoked stat" inode="%s" elapsedTimems="%.1f"' % (fileid, (tend-tstart)*1000))
     if statInfo.status.code == cs3code.CODE_OK:
@@ -103,14 +102,13 @@ def statx(endpoint, fileid, userid, versioninv=0):
     return stat(endpoint, fileid, userid, versioninv)
 
 
-def setxattr(_endpoint, filepath, userid, key, value):
+def setxattr(_endpoint, filepath, userid, key, value, lockid):
     '''Set the extended attribute <key> to <value> using the given userid as access token'''
     reference = cs3spr.Reference(path=filepath)
-    arbitrary_metadata = cs3spr.ArbitraryMetadata()
-    arbitrary_metadata.metadata.update({key: str(value)})        # pylint: disable=no-member
-    req = cs3sp.SetArbitraryMetadataRequest(ref=reference, arbitrary_metadata=arbitrary_metadata)
-    res = ctx['cs3stub'].SetArbitraryMetadata(request=req,
-                                              metadata=[('x-access-token', userid)])
+    md = cs3spr.ArbitraryMetadata()
+    md.metadata.update({key: str(value)})        # pylint: disable=no-member
+    req = cs3sp.SetArbitraryMetadataRequest(ref=reference, arbitrary_metadata=md)  #, lock_id=lockid)
+    res = ctx['cs3gw'].SetArbitraryMetadata(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to setxattr" filepath="%s" key="%s" reason="%s"' %
                   (filepath, key, res.status.message.replace('"', "'")))
@@ -122,8 +120,7 @@ def getxattr(_endpoint, filepath, userid, key):
     '''Get the extended attribute <key> using the given userid as access token'''
     tstart = time.time()
     reference = cs3spr.Reference(path=filepath)
-    statInfo = ctx['cs3gw'].Stat(request=cs3sp.StatRequest(ref=reference),
-                                   metadata=[('X-Access-Token', userid)])
+    statInfo = ctx['cs3gw'].Stat(request=cs3sp.StatRequest(ref=reference), metadata=[('x-access-token', userid)])
     tend = time.time()
     if statInfo.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to stat" filepath="%s" key="%s" reason="%s"' %
@@ -141,11 +138,11 @@ def getxattr(_endpoint, filepath, userid, key):
         return None
 
 
-def rmxattr(_endpoint, filepath, userid, key):
+def rmxattr(_endpoint, filepath, userid, key, lockid):
     '''Remove the extended attribute <key> using the given userid as access token'''
     reference = cs3spr.Reference(path=filepath)
-    req = cs3sp.UnsetArbitraryMetadataRequest(ref=reference, arbitrary_metadata_keys=[key])
-    res = ctx['cs3stub'].UnsetArbitraryMetadata(request=req, metadata=[('x-access-token', userid)])
+    req = cs3sp.UnsetArbitraryMetadataRequest(ref=reference, arbitrary_metadata_keys=[key])  #, lock_id=lockid)
+    res = ctx['cs3gw'].UnsetArbitraryMetadata(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to rmxattr" filepath="%s" key="%s" reason="%s"' % (filepath, key, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
@@ -158,7 +155,7 @@ def setlock(_endpoint, filepath, userid, appname, value):
     lock = cs3spr.Lock(type=cs3spr.LOCK_TYPE_WRITE, app_name=appname, lock_id=value, \
                        expiration={'seconds': int(time.time() + ctx['lockexpiration'])})
     req = cs3sp.SetLockRequest(ref=reference, lock=lock)
-    res = ctx['cs3gw'].SetLock(request=req, metadata=[('X-Access-Token', userid)])
+    res = ctx['cs3gw'].SetLock(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to setlock" filepath="%s" appname="%s" value="%s" reason="%s"' %
                   (filepath, appname, value, res.status.message.replace('"', "'")))
@@ -170,11 +167,15 @@ def getlock(_endpoint, filepath, userid):
     '''Get the lock metadata for the given filepath'''
     reference = cs3spr.Reference(path=filepath)
     req = cs3sp.GetLockRequest(ref=reference)
-    res = ctx['cs3gw'].GetLock(request=req, metadata=[('X-Access-Token', userid)])
+    res = ctx['cs3gw'].GetLock(request=req, metadata=[('x-access-token', userid)])
+    if res.status.code == cs3code.CODE_NOT_FOUND:
+        log.debug('msg="Invoked getlock on unlocked file" filepath="%s"' % filepath)
+        return None
     if res.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to getlock" filepath="%s" reason="%s"' % (filepath, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
     log.debug('msg="Invoked getlock" filepath="%s" result="%s"' % (filepath, res.lock))
+    # return a dict that mimics the internal JSON structure used by Reva, cf. commoniface.py
     return {
         'lock_id': res.lock.lock_id,
         'type': res.lock.type,
@@ -192,7 +193,7 @@ def refreshlock(_endpoint, filepath, userid, appname, value):
     lock = cs3spr.Lock(type=cs3spr.LOCK_TYPE_WRITE, app_name=appname, lock_id=value, \
                        expiration={'seconds': int(time.time() + ctx['lockexpiration'])})
     req = cs3sp.RefreshLockRequest(ref=reference, lock=lock)
-    res = ctx['cs3gw'].RefreshLock(request=req, metadata=[('X-Access-Token', userid)])
+    res = ctx['cs3gw'].RefreshLock(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to refreshlock" filepath="%s" appname="%s" value="%s" reason="%s"' %
                   (filepath, appname, value, res.status.message.replace('"', "'")))
@@ -205,7 +206,7 @@ def unlock(_endpoint, filepath, userid, appname, value):
     reference = cs3spr.Reference(path=filepath)
     lock = cs3spr.Lock(type=cs3spr.LOCK_TYPE_WRITE, app_name=appname, lock_id=value)
     req = cs3sp.UnlockRequest(ref=reference, lock=lock)
-    res = ctx['cs3gw'].Unlock(request=req, metadata=[('X-Access-Token', userid)])
+    res = ctx['cs3gw'].Unlock(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to unlock" filepath="%s" reason="%s"' % (filepath, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
@@ -217,7 +218,7 @@ def readfile(_endpoint, filepath, userid):
     tstart = time.time()
     # prepare endpoint
     req = cs3sp.InitiateFileDownloadRequest(ref=cs3spr.Reference(path=filepath))
-    initfiledownloadres = ctx['cs3gw'].InitiateFileDownload(request=req, metadata=[('X-Access-Token', userid)])
+    initfiledownloadres = ctx['cs3gw'].InitiateFileDownload(request=req, metadata=[('x-access-token', userid)])
     if initfiledownloadres.status.code == cs3code.CODE_NOT_FOUND:
         log.info('msg="File not found on read" filepath="%s"' % filepath)
         yield IOError(common.ENOENT_MSG)
@@ -231,8 +232,8 @@ def readfile(_endpoint, filepath, userid):
     try:
         protocol = [p for p in initfiledownloadres.protocols if p.protocol == "simple"][0]
         headers = {
-            'X-Access-Token': userid,
-            'X-Reva-Transfer': protocol.token        # needed if the downloads pass through the data gateway in reva
+            'x-access-token': userid,
+            'x-reva-transfer': protocol.token        # needed if the downloads pass through the data gateway in reva
         }
         fileget = requests.get(url=protocol.download_endpoint, headers=headers, verify=ctx['ssl_verify'])
     except requests.exceptions.RequestException as e:
@@ -250,7 +251,7 @@ def readfile(_endpoint, filepath, userid):
             yield data[i:i+ctx['chunksize']]
 
 
-def writefile(_endpoint, filepath, userid, content, islock=False):
+def writefile(_endpoint, filepath, userid, content, lockid, islock=False):
     '''Write a file using the given userid as access token. The entire content is written
     and any pre-existing file is deleted (or moved to the previous version if supported).
     The islock flag is currently not supported. The backend should at least support
@@ -263,11 +264,11 @@ def writefile(_endpoint, filepath, userid, content, islock=False):
         content = bytes(content, 'UTF-8')
     size = str(len(content))
     metadata = types.Opaque(map={"Upload-Length": types.OpaqueEntry(decoder="plain", value=str.encode(size))})
-    req = cs3sp.InitiateFileUploadRequest(ref=cs3spr.Reference(path=filepath), opaque=metadata)
-    initfileuploadres = ctx['cs3stub'].InitiateFileUpload(request=req, metadata=[('x-access-token', userid)])
+    req = cs3sp.InitiateFileUploadRequest(ref=cs3spr.Reference(path=filepath), opaque=metadata)  # lock_id=lockid,
+    initfileuploadres = ctx['cs3gw'].InitiateFileUpload(request=req, metadata=[('x-access-token', userid)])
     if initfileuploadres.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to initiateFileUpload on write" filepath="%s" reason="%s"' % \
-                         (filepath, initfileuploadres.status.message.replace('"', "'")))
+                  (filepath, initfileuploadres.status.message.replace('"', "'")))
         raise IOError(initfileuploadres.status.message)
     log.debug('msg="writefile: InitiateFileUploadRes returned" protocols="%s"' % initfileuploadres.protocols)
 
@@ -276,9 +277,9 @@ def writefile(_endpoint, filepath, userid, content, islock=False):
         # Get the endpoint for simple protocol
         protocol = [p for p in initfileuploadres.protocols if p.protocol == "simple"][0]
         headers = {
-            'X-Access-Token': userid,
+            'x-access-token': userid,
             'Upload-Length': size,
-            'X-Reva-Transfer': protocol.token        # needed if the uploads pass through the data gateway in reva
+            'x-reva-transfer': protocol.token        # needed if the uploads pass through the data gateway in reva
         }
         putres = requests.put(url=protocol.upload_endpoint, data=content, headers=headers, verify=ctx['ssl_verify'])
     except requests.exceptions.RequestException as e:
@@ -292,12 +293,12 @@ def writefile(_endpoint, filepath, userid, content, islock=False):
                     (filepath, (tend-tstart)*1000, islock))
 
 
-def renamefile(_endpoint, filepath, newfilepath, userid):
+def renamefile(_endpoint, filepath, newfilepath, userid, lockid):
     '''Rename a file from origfilepath to newfilepath using the given userid as access token.'''
     source = cs3spr.Reference(path=filepath)
     destination = cs3spr.Reference(path=newfilepath)
-    req = cs3sp.MoveRequest(source=source, destination=destination)
-    res = ctx['cs3stub'].Move(request=req, metadata=[('x-access-token', userid)])
+    req = cs3sp.MoveRequest(source=source, destination=destination)  # lock_id=lockid)
+    res = ctx['cs3gw'].Move(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to rename file" filepath="%s" reason="%s"' % (filepath, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
@@ -309,7 +310,7 @@ def removefile(_endpoint, filepath, userid, _force=False):
        The force argument is ignored for now for CS3 storage.'''
     reference = cs3spr.Reference(path=filepath)
     req = cs3sp.DeleteRequest(ref=reference)
-    res = ctx['cs3gw'].Delete(request=req, metadata=[('X-Access-Token', userid)])
+    res = ctx['cs3gw'].Delete(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
         if str(res) == common.ENOENT_MSG:
             log.info('msg="Invoked removefile on non-existing file" filepath="%s"' % filepath)
@@ -317,3 +318,4 @@ def removefile(_endpoint, filepath, userid, _force=False):
             log.error('msg="Failed to remove file" filepath="%s" reason="%s"' % (filepath, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
     log.debug('msg="Invoked removefile" result="%s"' % res)
+

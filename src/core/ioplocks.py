@@ -129,7 +129,7 @@ def createLock(filestat, filename, userid, endpoint):
                         (srv.wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())), lockid)
         # try to write in exclusive mode (and if a valid WOPI lock exists, assume the corresponding LibreOffice lock
         # is still there so the write will fail)
-        st.writefile(endpoint, utils.getLibreOfficeLockName(filename), userid, lolockcontent, islock=True)
+        st.writefile(endpoint, utils.getLibreOfficeLockName(filename), userid, lolockcontent, None, islock=True)
         log.info('msg="cboxLock: created LibreOffice-compatible lock file" filename="%s" fileid="%s" lockid="%ld"' %
                  (filename, filestat['inode'], lockid))
         return str(lockid), http.client.OK
@@ -179,7 +179,7 @@ def createLock(filestat, filename, userid, endpoint):
                 lockid = int(time.time())
             lolockcontent = ',OnlyOffice Online Editor,%s,%s,ExtWebApp;\n%d;' % \
                             (srv.wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())), lockid)
-            st.writefile(endpoint, utils.getLibreOfficeLockName(filename), userid, lolockcontent, islock=False)
+            st.writefile(endpoint, utils.getLibreOfficeLockName(filename), userid, lolockcontent, None, islock=False)
             log.info('msg="cboxLock: refreshed LibreOffice-compatible lock file" filename="%s" fileid="%s" mtime="%ld" lockid="%ld"' %
                      (filename, filestat['inode'], filestat['mtime'], lockid))
             return str(lockid), http.client.OK
@@ -206,7 +206,7 @@ def iopunlock(filename, userid, endpoint):
         lock = lock.decode('UTF-8')
         if 'OnlyOffice Online Editor' in lock:
             # remove the LibreOffice-compatible lock file
-            st.removefile(endpoint, utils.getLibreOfficeLockName(filename), userid, 1)
+            st.removefile(endpoint, utils.getLibreOfficeLockName(filename), userid, True)
             # and log this along with the previous lockid for reference
             lockid = int(lock.split(';\n')[1].strip(';'))
             log.info('msg="cboxUnlock: successfully removed LibreOffice-compatible lock file" filename="%s" lockid="%ld"' %

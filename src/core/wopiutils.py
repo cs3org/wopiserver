@@ -162,10 +162,13 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
 def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefilename=None):
     '''Retrieves and logs a lock for a given file: returns the lock and its holder, or (None, None) if missing'''
     encacctok = flask.request.args['access_token'][-20:] if 'access_token' in flask.request.args else 'N/A'
-    lockcontent = st.getlock(acctok['endpoint'], overridefilename if overridefilename else acctok['filename'], acctok['userid'])
-    if not lockcontent:
+    try:
+        lockcontent = st.getlock(acctok['endpoint'], overridefilename if overridefilename else acctok['filename'], acctok['userid'])
+        if not lockcontent:
+            raise IOError
+    except IOError as e:
         log.info('msg="%s" user="%s" filename="%s" token="%s" error="No lock found"' %
-                 (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok))
+                (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok))
         return None, None
     try:
         # check validity: a lock is deemed expired if the most recent between its expiration time and the last
@@ -193,7 +196,7 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefilename=Non
             if isinstance(lolock, IOError):
                 raise lolock
             if 'WOPIServer' in lolock.decode('UTF-8'):
-                st.removefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], 1)
+                st.removefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], True)
         except (IOError, StopIteration) as e:
             log.warning('msg="Unable to delete the LibreOffice-compatible lock file" error="%s"' %
                         ('empty lock' if isinstance(e, StopIteration) else str(e)))
@@ -206,7 +209,9 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefilename=Non
 
 def encodeLock(lock):
     '''Generates the lock payload given the raw data'''
-    return jwt.encode(lock, srv.wopisecret, algorithm='HS256')
+    if lock:
+        return jwt.encode(lock, srv.wopisecret, algorithm='HS256')
+    return None
 
 
 def storeWopiLock(fileid, operation, lock, oldlock, acctok, isoffice):
@@ -237,7 +242,7 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok, isoffice):
             lockcontent = ',Collaborative Online Editor,%s,%s,WOPIServer;' % \
                           (srv.wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())))
             st.writefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], \
-                         lockcontent, islock=True)
+                         lockcontent, None, islock=True)
         except IOError as e:
             if common.EXCL_ERROR in str(e):
                 # retrieve the LibreOffice-compatible lock just found
@@ -285,7 +290,7 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok, isoffice):
 
         # on first lock, set an xattr with the current time for later conflicts checking
         try:
-            st.setxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], LASTSAVETIMEKEY, int(time.time()))
+            st.setxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], LASTSAVETIMEKEY, int(time.time()), encodeLock(lock))
         except IOError as e:
             # not fatal, but will generate a conflict file later on, so log a warning
             log.warning('msg="Unable to set lastwritetime xattr" user="%s" filename="%s" token="%s" reason="%s"' %
@@ -368,9 +373,9 @@ def storeWopiFile(request, retrievedlock, acctok, xakey, targetname=''):
          and stores the save time as an xattr. Throws IOError in case of any failure'''
     if not targetname:
         targetname = acctok['filename']
-    st.writefile(acctok['endpoint'], targetname, acctok['userid'], request.get_data())
+    st.writefile(acctok['endpoint'], targetname, acctok['userid'], request.get_data(), encodeLock(retrievedlock))
     # save the current time for later conflict checking: this is never older than the mtime of the file
-    st.setxattr(acctok['endpoint'], targetname, acctok['userid'], xakey, int(time.time()))
+    st.setxattr(acctok['endpoint'], targetname, acctok['userid'], xakey, int(time.time()), encodeLock(retrievedlock))
     # and reinstate the lock if existing
     if retrievedlock:
         st.setlock(acctok['endpoint'], targetname, acctok['userid'], acctok['appname'], encodeLock(retrievedlock))

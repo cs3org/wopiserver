@@ -244,7 +244,7 @@ def statx(endpoint, fileid, userid, versioninv=0):
     }
 
 
-def setxattr(endpoint, filepath, _userid, key, value):
+def setxattr(endpoint, filepath, _userid, key, value, _lockid):
     '''Set the extended attribute <key> to <value> via a special open.
     The userid is overridden to make sure it also works on shared files.'''
     _xrootcmd(endpoint, 'attr', 'set', '0:0', 'mgm.attr.key=user.' + key + '&mgm.attr.value=' + str(value) + \
@@ -263,7 +263,7 @@ def getxattr(endpoint, filepath, _userid, key):
         return None
 
 
-def rmxattr(endpoint, filepath, _userid, key):
+def rmxattr(endpoint, filepath, _userid, key, _lockid):
     '''Remove the extended attribute <key> via a special open.
     The userid is overridden to make sure it also works on shared files.'''
     _xrootcmd(endpoint, 'attr', 'rm', '0:0', 'mgm.attr.key=user.' + key + '&mgm.path=' + _getfilepath(filepath, encodeamp=True))
@@ -274,7 +274,7 @@ def setlock(endpoint, filepath, userid, appname, value):
     The special option "c" (create-if-not-exists) is used to be atomic'''
     try:
         log.debug('msg="Invoked setlock" filepath="%s" value="%s"' % (filepath, value))
-        setxattr(endpoint, filepath, userid, common.LOCKKEY, common.genrevalock(appname, value) + '&mgm.option=c')
+        setxattr(endpoint, filepath, userid, common.LOCKKEY, common.genrevalock(appname, value) + '&mgm.option=c', None)
     except IOError as e:
         if EXCL_XATTR_MSG in str(e):
             raise IOError(common.EXCL_ERROR)
@@ -297,13 +297,13 @@ def refreshlock(endpoint, filepath, userid, appname, value):
     if l['app_name'] != appname and l['app_name'] != 'wopi':
         raise IOError('File is locked by %s' % l['app_name'])
     # this is non-atomic, but the lock was already held
-    setxattr(endpoint, filepath, userid, common.LOCKKEY, common.genrevalock(appname, value))
+    setxattr(endpoint, filepath, userid, common.LOCKKEY, common.genrevalock(appname, value), None)
 
 
 def unlock(endpoint, filepath, userid, _appname, value):
     '''Remove a lock as an xattr'''
     log.debug('msg="Invoked unlock" filepath="%s" value="%s' % (filepath, value))
-    rmxattr(endpoint, filepath, userid, common.LOCKKEY)
+    rmxattr(endpoint, filepath, userid, common.LOCKKEY, None)
 
 
 def readfile(endpoint, filepath, userid):
@@ -333,7 +333,7 @@ def readfile(endpoint, filepath, userid):
                 yield chunk
 
 
-def writefile(endpoint, filepath, userid, content, islock=False):
+def writefile(endpoint, filepath, userid, content, _lockid, islock=False):
     '''Write a file via xroot on behalf of the given userid. The entire content is written
          and any pre-existing file is deleted (or moved to the previous version if supported).
          With islock=True, the write explicitly disables versioning, and the file is opened with
@@ -370,7 +370,7 @@ def writefile(endpoint, filepath, userid, content, islock=False):
              (filepath, (tend-tstart)*1000, islock))
 
 
-def renamefile(endpoint, origfilepath, newfilepath, userid):
+def renamefile(endpoint, origfilepath, newfilepath, userid, _lockid):
     '''Rename a file via a special open from origfilepath to newfilepath on behalf of the given userid.'''
     _xrootcmd(endpoint, 'file', 'rename', userid, 'mgm.path=' + _getfilepath(origfilepath, encodeamp=True) + \
               '&mgm.file.source=' + _getfilepath(origfilepath, encodeamp=True) + \
