@@ -274,8 +274,8 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok, isoffice):
                     pass      # lock not found, assume we're clear
             else:
                 # any other error is logged but not raised as this is optimistically not blocking WOPI operations
-                log.warning('msg="%s: unable to store LibreOffice-compatible lock" filename="%s" token="%s" lock="%s" reason="%s"' %
-                            (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
+                log.warning('msg="%s: unable to store LibreOffice-compatible lock" filename="%s" token="%s" reason="%s"' %
+                            (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], e))
 
     try:
         # now atomically store the lock as encoded JWT
