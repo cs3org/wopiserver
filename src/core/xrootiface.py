@@ -80,7 +80,7 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args):
         url = _geturlfor(endpoint) + '//proc/user/' + _eosargs(userid) + '&mgm.cmd=' + cmd + \
               ('&mgm.subcmd=' + subcmd if subcmd else '') + '&' + args
         tstart = time.time()
-        rc, statInfo_unused = f.open(url, OpenFlags.READ)
+        rc, _ = f.open(url, OpenFlags.READ)
         tend = time.time()
         res = b''.join(f.readlines()).decode().split('&')
         if len(res) == 3:        # we may only just get stdout: in that case, assume it's all OK
@@ -92,12 +92,13 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args):
                 if common.ENOENT_MSG.lower() in msg or 'unable to get attribute' in msg:
                     log.info('msg="Invoked xroot on non-existing entity" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' % \
                              (cmd, subcmd, args, msg, rc.strip('\00')))
-                elif EXCL_XATTR_MSG in msg:
+                    raise IOError(common.ENOENT_MSG)
+                if EXCL_XATTR_MSG in msg:
                     log.info('msg="Invoked setxattr on an already locked entity" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' % \
                              (cmd, subcmd, args, msg, rc.strip('\00')))
-                else:
-                    log.error('msg="Error with xroot" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' % \
-                              (cmd, subcmd, args, msg, rc.strip('\00')))
+                    raise IOError(EXCL_XATTR_MSG)
+                log.error('msg="Error with xroot" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' % \
+                          (cmd, subcmd, args, msg, rc.strip('\00')))
                 raise IOError(msg)
     # all right, return everything that came in stdout
     log.debug('msg="Invoked xroot" cmd="%s%s" url="%s" res="%s" elapsedTimems="%.1f"' %
