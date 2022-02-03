@@ -13,6 +13,8 @@ from enum import Enum
 from random import choice
 from string import ascii_lowercase
 from datetime import datetime
+from base64 import b64encode, b64decode
+from binascii import Error as B64Error
 import http.client
 import flask
 import jwt
@@ -173,20 +175,19 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefilename=Non
     try:
         # check validity: a lock is deemed expired if the most recent between its expiration time and the last
         # save time by WOPI has passed
-        rawlock = lockcontent['lock_id']
-        lockcontent['lock_id'] = jwt.decode(lockcontent['lock_id'], srv.wopisecret, algorithms=['HS256'])
+        storedlock = lockcontent['lock_id']
+        lockcontent['lock_id'] = _decodeLock(storedlock)
         savetime = st.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], LASTSAVETIMEKEY)
-        if max(lockcontent['expiration']['seconds'], int(savetime) + \
+        if max(lockcontent['expiration']['seconds'], (int(savetime) if savetime else 0) + \
                srv.config.getint('general', 'wopilockexpiration')) < time.time():
-            # we got a malformed or expired lock, reject. Note that we may get an ExpiredSignatureError
-            # by jwt.decode() as we had stored it with a timed signature.
-            raise jwt.exceptions.ExpiredSignatureError
-    except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
+            # we got a malformed or expired lock, reject
+            raise B64Error
+    except B64Error as e:
         log.warning('msg="%s" user="%s" filename="%s" token="%s" error="WOPI lock expired or invalid, ignoring" ' \
                     'exception="%s"' % (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, type(e)))
         # the retrieved lock is not valid any longer, discard and remove it from the backend
         try:
-            st.unlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'], rawlock)
+            st.unlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'], storedlock)
         except IOError:
             # ignore, it's not worth to report anything here
             pass
@@ -208,9 +209,19 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefilename=Non
 
 
 def encodeLock(lock):
-    '''Generates the lock payload given the raw data'''
+    '''Generates the lock payload for the storage given the raw metadata'''
     if lock:
-        return jwt.encode(lock, srv.wopisecret, algorithm='HS256')
+        # the prefix here makes the lock WebDAV-compatible, though according to
+        # https://datatracker.ietf.org/doc/html/rfc4918#appendix-C the payload must be a UUID
+        # (see https://github.com/cs3org/reva/pull/2460#discussion_r802360564 for more details)
+        return 'opaquelocktoken:' + b64encode(lock.encode()).decode()
+    return None
+
+
+def _decodeLock(storedlock):
+    '''Restores the lock payload reverting the `encodeLock` format. May raise B64Error'''
+    if storedlock:
+        return b64decode(storedlock.replace('opaquelocktoken:', '').encode()).decode()
     return None
 
 
