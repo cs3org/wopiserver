@@ -170,6 +170,7 @@ class Wopi:
             cls.log.info('msg="WOPI Server starting in standalone secure mode" port="%d" wopiurl="%s" version="%s"' %
                          (cls.port, cls.wopiurl, WOPISERVERVERSION))
         else:
+            cls.app.ssl_context = None
             cls.log.info('msg="WOPI Server starting in unsecure/embedded mode" port="%d" wopiurl="%s" version="%s"' %
                          (cls.port, cls.wopiurl, WOPISERVERVERSION))
 
@@ -183,7 +184,7 @@ class Wopi:
 
             serve(cls.app, host='0.0.0.0', port=cls.port)
         else:
-            cls.app.run(host='0.0.0.0', port=cls.port)
+            cls.app.run(host='0.0.0.0', port=cls.port, ssl_context=cls.app.ssl_context)
 
 
 @Wopi.app.errorhandler(Exception)
