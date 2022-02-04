@@ -420,9 +420,9 @@ def putFile(fileid):
             try:
                 utils.storeWopiFile(flask.request, retrievedLock, acctok, utils.LASTSAVETIMEKEY, newname)
             except IOError as e:
-                if common.ACCESS_ERROR in str(e):
+                if common.ACCESS_ERROR in str(e) and srv.conflictpath:
                     # let's try the user's home instead of the current folder
-                    newname = utils.getuserhome(acctok['username']) + os.path.sep + os.path.basename(newname)
+                    newname = utils.getconflictpath(acctok['username']) + os.path.sep + os.path.basename(newname)
                     utils.storeWopiFile(flask.request, retrievedLock, acctok, utils.LASTSAVETIMEKEY, newname)
 
             # keep track of this action in the original file's xattr, to avoid looping (see below)

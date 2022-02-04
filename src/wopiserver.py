@@ -123,10 +123,10 @@ class Wopi:
                     cls.log.error('msg="Failed to open the provided certificate or key to start in https mode"')
                     raise
             cls.wopiurl = cls.config.get('general', 'wopiurl')
-            if cls.config.has_option('general', 'lockpath'):
-                cls.lockpath = cls.config.get('general', 'lockpath')
+            if cls.config.has_option('general', 'conflictpath'):
+                cls.conflictpath = cls.config.get('general', 'conflictpath')
             else:
-                cls.lockpath = ''
+                cls.conflictpath = None
             _ = cls.config.get('general', 'downloadurl')   # make sure this is defined
             # WOPI proxy configuration (optional)
             cls.wopiproxy = cls.config.get('general', 'wopiproxy', fallback='')
