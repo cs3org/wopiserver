@@ -381,8 +381,8 @@ def storeWopiFile(request, retrievedlock, acctok, xakey, targetname=''):
         st.setlock(acctok['endpoint'], targetname, acctok['userid'], acctok['appname'], encodeLock(retrievedlock))
 
 
-def getuserhome(username):
-    '''Returns the path to the "home" directory for a given user.
-    TODO This is CERN/EOS-specific, to be removed once locking is fully implemented
-    and the logic to store webconflict files can be dropped.'''
-    return '/eos/user/%s/%s' % (username[0], username)
+def getconflictpath(username):
+    '''Returns the path to a suitable conflict path directory for a given user'''
+    if not srv.conflictpath:
+        return None
+    return srv.conflictpath.replace('user_initial', username[0]).replace('username', username)
