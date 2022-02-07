@@ -158,7 +158,10 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
     reply = wopic.handleputfile('PutFile', wopisrc, res)
     if reply:
         return reply
-    wopilock = wopic.refreshlock(wopisrc, acctok, wopilock, digest='dirty')
-    log.info('msg="Save completed" filename="%s" isclose="%s" token="%s"' %
-             (wopilock['filename'], isclose, acctok[-20:]))
-    return wopic.jsonify('File saved successfully'), http.client.OK
+    try:
+        wopilock = wopic.refreshlock(wopisrc, acctok, wopilock, digest='dirty')
+        log.info('msg="Save completed" filename="%s" isclose="%s" token="%s"' %
+                (wopilock['filename'], isclose, acctok[-20:]))
+        return wopic.jsonify('File saved successfully'), http.client.OK
+    except wopic.InvalidLock:
+        return wopic.jsonify('File saved, but failed to refresh lock'), http.client.INTERNAL_SERVER_ERROR

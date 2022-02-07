@@ -369,7 +369,10 @@ class SaveThread(threading.Thread):
                     del WB.openfiles[wopisrc]
             elif openfile['toclose'] != wopilock['toclose']:
                 # some user still on it, refresh lock if the toclose part has changed
-                wopic.refreshlock(wopisrc, openfile['acctok'], wopilock, toclose=openfile['toclose'])
+                try:
+                    wopic.refreshlock(wopisrc, openfile['acctok'], wopilock, toclose=openfile['toclose'])
+                except wopic.InvalidLock:
+                    WB.log.warning('msg="SaveThread: failed to refresh lock, will try again later" url="%s"' % wopisrc)
 
 
 @atexit.register

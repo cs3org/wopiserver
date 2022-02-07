@@ -269,11 +269,15 @@ def savetostorage(wopisrc, acctok, isclose, wopilock):
         if isclose and wopilock['digest'] == 'dirty':
             h = hashlib.sha1()
             h.update(mddoc)
-        wopilock = wopic.refreshlock(wopisrc, acctok, wopilock, digest=(h.hexdigest() if h else 'dirty'))
-        log.info('msg="Save completed" filename="%s" isclose="%s" token="%s"' %
-                 (wopilock['filename'], isclose, acctok[-20:]))
-        # combine the responses
-        return attresponse if attresponse else (wopic.jsonify('File saved successfully'), http.client.OK)
+        try:
+            wopilock = wopic.refreshlock(wopisrc, acctok, wopilock, digest=(h.hexdigest() if h else 'dirty'))
+            log.info('msg="Save completed" filename="%s" isclose="%s" token="%s"' %
+                     (wopilock['filename'], isclose, acctok[-20:]))
+            # combine the responses
+            return attresponse if attresponse else (wopic.jsonify('File saved successfully'), http.client.OK)
+        except wopic.InvalidLock:
+            return wopic.jsonify('File saved, but failed to refresh lock'), http.client.INTERNAL_SERVER_ERROR
+
 
     # on close, use saveas for either the new bundle, if this is the first time we have attachments,
     # or the single md file, if there are no more attachments.
