@@ -113,7 +113,7 @@ def refreshlock(wopisrc, acctok, wopilock, digest=None, toclose=None):
         # else fail
     log.error('msg="Calling WOPI RefreshLock failed" url="%s" response="%d" reason="%s"' %
               (wopisrc, res.status_code, res.headers.get('X-WOPI-LockFailureReason')))
-    return None
+    raise InvalidLock('Failed to refresh the lock')
 
 
 def relock(wopisrc, acctok, docid, isclose):
