@@ -172,26 +172,27 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefilename=Non
         log.info('msg="%s" user="%s" filename="%s" token="%s" error="No lock found"' %
                 (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok))
         return None, None
+
     try:
-        # check validity: a lock is deemed expired if the most recent between its expiration time and the last
-        # save time by WOPI has passed
+        # decode the lock payload
         storedlock = lockcontent['lock_id']
         lockcontent['lock_id'] = _decodeLock(storedlock)
-        savetime = st.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], LASTSAVETIMEKEY)
-        if max(lockcontent['expiration']['seconds'], (int(savetime) if savetime else 0) + \
-               srv.config.getint('general', 'wopilockexpiration')) < time.time():
-            # we got a malformed or expired lock, reject
-            raise B64Error
     except B64Error as e:
-        log.warning('msg="%s" user="%s" filename="%s" token="%s" error="WOPI lock expired or invalid, ignoring" ' \
-                    'exception="%s"' % (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, type(e)))
+        log.warning('msg="%s" user="%s" filename="%s" token="%s" error="Malformed WOPI lock, ignoring" exception="%s"' %
+                    (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, type(e)))
+
+    # check validity: a lock is deemed expired if the most recent between its expiration time and
+    # the last save time by WOPI has passed
+    savetime = st.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], LASTSAVETIMEKEY)
+    if max(lockcontent['expiration']['seconds'],
+           (int(savetime) if savetime else 0) + srv.config.getint('general', 'wopilockexpiration')) < time.time():
         # the retrieved lock is not valid any longer, discard and remove it from the backend
         try:
             st.unlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'], storedlock)
         except IOError:
             # ignore, it's not worth to report anything here
             pass
-        # also remove the LibreOffice-compatible lock file, if it has the expected signature - cf. storeWopiLock()
+        # also remove the LibreOffice-compatible lock file, if it exists and has the expected signature - cf. storeWopiLock()
         try:
             lolock = next(st.readfile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid']))
             if isinstance(lolock, IOError):
@@ -202,6 +203,7 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefilename=Non
             log.warning('msg="Unable to delete the LibreOffice-compatible lock file" error="%s"' %
                         ('empty lock' if isinstance(e, StopIteration) else str(e)))
         return None, None
+
     log.info('msg="%s" user="%s" filename="%s" fileid="%s" lock="%s" retrievedlock="%s" expTime="%s" token="%s"' %
              (operation.title(), acctok['userid'][-20:], acctok['filename'], fileid, lockforlog, lockcontent['lock_id'],
               time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(lockcontent['expiration']['seconds'])), encacctok))
@@ -220,9 +222,9 @@ def encodeLock(lock):
 
 def _decodeLock(storedlock):
     '''Restores the lock payload reverting the `encodeLock` format. May raise B64Error'''
-    if storedlock:
-        return b64decode(storedlock.replace('opaquelocktoken:', '').encode()).decode()
-    return None
+    if storedlock and storedlock.find('opaquelocktoken:') == 0:
+        return b64decode(storedlock[16:].encode()).decode()
+    return storedlock     # it's not our lock, but it's likely valid
 
 
 def storeWopiLock(fileid, operation, lock, oldlock, acctok, isoffice):

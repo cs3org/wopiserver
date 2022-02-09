@@ -63,7 +63,7 @@ def retrieverevalock(rawlock):
     if 'h' in l:
         # temporary code to support the data structure from WOPI 8.0
         l['app_name'] = l['h']
-        l['lock_id'] = l['md']
+        l['lock_id'] = 'opaquelocktoken:' + l['md']
         l['expiration'] = {}
         l['expiration']['seconds'] = l['exp']
     return l
