@@ -114,7 +114,9 @@ def getFile(fileid):
         log.info('msg="GetFile" user="%s" filename="%s" fileid="%s" token="%s"' %
                  (acctok['userid'][-20:], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
         # get the file reader generator
-        f = peekable(st.readfile(acctok['endpoint'], acctok['filename'], acctok['userid']))
+        # TODO for the time being we do not look if the file is locked. Once exclusive locks are implemented in Reva,
+        # the lock must be fetched prior to the following call in order to access the file.
+        f = peekable(st.readfile(acctok['endpoint'], acctok['filename'], acctok['userid'], None))
         firstchunk = f.peek()
         if isinstance(firstchunk, IOError):
             return ('Failed to fetch file from storage: %s' % firstchunk), http.client.INTERNAL_SERVER_ERROR

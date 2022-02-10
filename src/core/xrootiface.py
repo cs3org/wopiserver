@@ -290,23 +290,36 @@ def getlock(endpoint, filepath, userid):
 
 def refreshlock(endpoint, filepath, userid, appname, value):
     '''Refresh the lock value as an xattr'''
-    log.debug('msg="Invoked refreshlock" filepath="%s" value="%s"' % (filepath, value))
     l = getlock(endpoint, filepath, userid)
     if not l:
+        log.warning('msg="Failed to refreshlock" filepath="%s" appname="%s" reason="%s"' %
+                    (filepath, appname, 'File is not locked'))
         raise IOError('File was not locked')
     if l['app_name'] != appname and l['app_name'] != 'wopi':
+        log.warning('msg="Failed to refreshlock" filepath="%s" appname="%s" reason="%s"' %
+                    (filepath, appname, 'File is locked by %s' % l['app_name']))
         raise IOError('File is locked by %s' % l['app_name'])
+    log.debug('msg="Invoked refreshlock" filepath="%s" value="%s"' % (filepath, value))
     # this is non-atomic, but the lock was already held
     setxattr(endpoint, filepath, userid, common.LOCKKEY, common.genrevalock(appname, value), None)
 
 
-def unlock(endpoint, filepath, userid, _appname, value):
+def unlock(endpoint, filepath, userid, appname, value):
     '''Remove a lock as an xattr'''
+    l = getlock(endpoint, filepath, userid)
+    if not l:
+        log.warning('msg="Failed to unlock" filepath="%s" appname="%s" reason="%s"' %
+                    (filepath, appname, 'File is not locked'))
+        raise IOError('File was not locked')
+    if l['app_name'] != appname and l['app_name'] != 'wopi':
+        log.warning('msg="Failed to unlock" filepath="%s" appname="%s" reason="%s"' %
+                    (filepath, appname, 'File is locked by %s' % l['app_name']))
+        raise IOError('File is locked by %s' % l['app_name'])
     log.debug('msg="Invoked unlock" filepath="%s" value="%s' % (filepath, value))
     rmxattr(endpoint, filepath, userid, common.LOCKKEY, None)
 
 
-def readfile(endpoint, filepath, userid):
+def readfile(endpoint, filepath, userid, _lockid):
     '''Read a file via xroot on behalf of the given userid. Note that the function is a generator, managed by Flask.'''
     log.debug('msg="Invoking readFile" filepath="%s"' % filepath)
     with XrdClient.File() as f:
