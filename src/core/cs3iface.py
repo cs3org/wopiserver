@@ -188,7 +188,10 @@ def getlock(_endpoint, filepath, userid):
         'lock_id': res.lock.lock_id,
         'type': res.lock.type,
         'app_name': res.lock.app_name,
-        'user': res.lock.user.opaque_id + '@' + res.lock.user.idp,
+        'user': {'opaque_id' : res.lock.user.opaque_id,
+                 'idp': res.lock.user.idp,
+                 'type': 1
+                } if res.lock.user.opaque_id else {},
         'expiration': {
             'seconds': res.lock.expiration.seconds
         }
@@ -203,8 +206,8 @@ def refreshlock(_endpoint, filepath, userid, appname, value):
     req = cs3sp.RefreshLockRequest(ref=reference, lock=lock)
     res = ctx['cs3gw'].RefreshLock(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
-        log.error('msg="Failed to refreshlock" filepath="%s" appname="%s" value="%s" code="%s" reason="%s"' %
-                  (filepath, appname, value, res.status.code, res.status.message.replace('"', "'")))
+        log.warning('msg="Failed to refreshlock" filepath="%s" appname="%s" value="%s" code="%s" reason="%s"' %
+                    (filepath, appname, value, res.status.code, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
     log.debug('msg="Invoked refreshlock" filepath="%s" value="%s" result="%s"' % (filepath, value, res.status))
 
@@ -222,11 +225,11 @@ def unlock(_endpoint, filepath, userid, appname, value):
     log.debug('msg="Invoked unlock" filepath="%s" value="%s" result="%s"' % (filepath, value, res.status))
 
 
-def readfile(_endpoint, filepath, userid):
+def readfile(_endpoint, filepath, userid, lockid):
     '''Read a file using the given userid as access token. Note that the function is a generator, managed by Flask.'''
     tstart = time.time()
     # prepare endpoint
-    req = cs3sp.InitiateFileDownloadRequest(ref=cs3spr.Reference(path=filepath))
+    req = cs3sp.InitiateFileDownloadRequest(ref=cs3spr.Reference(path=filepath))  # lock_id=lockid
     initfiledownloadres = ctx['cs3gw'].InitiateFileDownload(request=req, metadata=[('x-access-token', userid)])
     if initfiledownloadres.status.code == cs3code.CODE_NOT_FOUND:
         log.info('msg="File not found on read" filepath="%s"' % filepath)

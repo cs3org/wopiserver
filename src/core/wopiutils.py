@@ -170,7 +170,7 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefilename=Non
             raise IOError
     except IOError as e:
         log.info('msg="%s" user="%s" filename="%s" token="%s" error="No lock found"' %
-                (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok))
+                 (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok))
         return None, None
 
     try:
@@ -194,7 +194,7 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefilename=Non
             pass
         # also remove the LibreOffice-compatible lock file, if it exists and has the expected signature - cf. storeWopiLock()
         try:
-            lolock = next(st.readfile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid']))
+            lolock = next(st.readfile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], None))
             if isinstance(lolock, IOError):
                 raise lolock
             if 'WOPIServer' in lolock.decode('UTF-8'):
@@ -261,7 +261,7 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok, isoffice):
                 # retrieve the LibreOffice-compatible lock just found
                 try:
                     retrievedlolock = next(st.readfile(acctok['endpoint'], \
-                                           getLibreOfficeLockName(acctok['filename']), acctok['userid']))
+                                           getLibreOfficeLockName(acctok['filename']), acctok['userid'], None))
                     if isinstance(retrievedlolock, IOError):
                         raise retrievedlolock
                     retrievedlolock = retrievedlolock.decode('UTF-8')
@@ -296,7 +296,7 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok, isoffice):
                             (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], e))
 
     try:
-        # now atomically store the lock as encoded JWT
+        # now atomically store the lock
         st.setlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'], encodeLock(lock))
         log.info('msg="%s" filename="%s" token="%s" lock="%s" result="success"' %
                  (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))

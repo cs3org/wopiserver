@@ -118,7 +118,7 @@ class TestStorage(unittest.TestCase):
     '''Writes a binary file and reads it back, validating that the content matches'''
     self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, databuf, None)
     content = ''
-    for chunk in self.storage.readfile(self.endpoint, self.homepath + '/test.txt', self.userid):
+    for chunk in self.storage.readfile(self.endpoint, self.homepath + '/test.txt', self.userid, None):
       self.assertNotIsInstance(chunk, IOError, 'raised by storage.readfile')
       content += chunk.decode('utf-8')
     self.assertEqual(content, 'bla', 'File test.txt should contain the string "bla"')
@@ -129,7 +129,7 @@ class TestStorage(unittest.TestCase):
     content = 'bla\n'
     self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, content, None)
     content = ''
-    for chunk in self.storage.readfile(self.endpoint, self.homepath + '/test.txt', self.userid):
+    for chunk in self.storage.readfile(self.endpoint, self.homepath + '/test.txt', self.userid, None):
       self.assertNotIsInstance(chunk, IOError, 'raised by storage.readfile')
       content += chunk.decode('utf-8')
     self.assertEqual(content, 'bla\n', 'File test.txt should contain the text "bla\\n"')
@@ -139,7 +139,7 @@ class TestStorage(unittest.TestCase):
     '''Writes an empty file and reads it back, validating that the read does not fail'''
     content = ''
     self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, content, None)
-    for chunk in self.storage.readfile(self.endpoint, self.homepath + '/test.txt', self.userid):
+    for chunk in self.storage.readfile(self.endpoint, self.homepath + '/test.txt', self.userid, None):
       self.assertNotIsInstance(chunk, IOError, 'raised by storage.readfile')
       content += chunk.decode('utf-8')
     self.assertEqual(content, '', 'File test.txt should be empty')
@@ -147,7 +147,7 @@ class TestStorage(unittest.TestCase):
 
   def test_read_nofile(self):
     '''Test reading of a non-existing file'''
-    readex = next(self.storage.readfile(self.endpoint, self.homepath + '/hopefullynotexisting', self.userid))
+    readex = next(self.storage.readfile(self.endpoint, self.homepath + '/hopefullynotexisting', self.userid, None))
     self.assertIsInstance(readex, IOError, 'readfile returned %s' % readex)
     self.assertEqual(str(readex), ENOENT_MSG, 'readfile returned %s' % readex)
 
