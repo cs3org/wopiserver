@@ -134,13 +134,16 @@ def _fetchfrometherpad(wopilock, acctok):
         raise AppFailure
 
 
-def savetostorage(wopisrc, acctok, isclose, wopilock):
+def savetostorage(wopisrc, acctok, isclose, wopilock, onlyfetch=False):
     '''Copy document from Etherpad back to storage'''
     # get document from Etherpad
     try:
         log.info('msg="Fetching file from Etherpad" isclose="%s" appurl="%s" token="%s"' %
                  (isclose, appurl + '/p' + wopilock['docid'], acctok[-20:]))
         epfile = _fetchfrometherpad(wopilock, acctok)
+        if onlyfetch:
+            # this is used only in case of recovery to local storage
+            return epfile, http.client.OK
     except AppFailure:
         return wopic.jsonify('Could not save file, failed to fetch document from Etherpad'), http.client.INTERNAL_SERVER_ERROR
 

@@ -26,6 +26,7 @@ services:
       - config:/etc/wopi
       - storage:/var/wopi_local_storage
       - logs:/var/log/wopi
+      - recovery:/var/spool/wopirecovery
     healthcheck:
       test: ["CMD", "curl", "--insecure", "http://localhost:8880"]
       interval: 600s
@@ -42,4 +43,5 @@ volumes:
   config:
   storage:
   logs:
+  recovery:
 

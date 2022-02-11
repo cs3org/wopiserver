@@ -233,13 +233,16 @@ def _getattachments(mddoc, docfilename, forcezip=False):
     return zip_buffer.getvalue(), response
 
 
-def savetostorage(wopisrc, acctok, isclose, wopilock):
+def savetostorage(wopisrc, acctok, isclose, wopilock, onlyfetch=False):
     '''Copy document from CodiMD back to storage'''
     # get document from CodiMD
     try:
         log.info('msg="Fetching file from CodiMD" isclose="%s" appurl="%s" token="%s"' %
                  (isclose, appurl + wopilock['docid'], acctok[-20:]))
         mddoc = _fetchfromcodimd(wopilock, acctok)
+        if onlyfetch:
+            # this is used only in case of recovery to local storage
+            return mddoc, http.client.OK
     except AppFailure:
         return wopic.jsonify('Could not save file, failed to fetch document from CodiMD'), http.client.INTERNAL_SERVER_ERROR
 

@@ -154,8 +154,8 @@ def handleputfile(wopicall, wopisrc, res):
         return jsonify('Error saving the file. %s' % res.headers.get('X-WOPI-LockFailureReason')), \
                http.client.INTERNAL_SERVER_ERROR
     if res.status_code != http.client.OK:
+        # hopefully the server has kept a local copy for later recovery
         log.error('msg="Calling WOPI %s failed" url="%s" response="%s"' % (wopicall, wopisrc, res.status_code))
-        # TODO need to save the file on a local storage for later recovery
         return jsonify('Error saving the file, please contact support'), http.client.INTERNAL_SERVER_ERROR
     return None
 

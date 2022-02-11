@@ -123,10 +123,12 @@ class Wopi:
                     cls.log.error('msg="Failed to open the provided certificate or key to start in https mode"')
                     raise
             cls.wopiurl = cls.config.get('general', 'wopiurl')
-            if cls.config.has_option('general', 'conflictpath'):
-                cls.conflictpath = cls.config.get('general', 'conflictpath')
-            else:
-                cls.conflictpath = None
+            cls.conflictpath = cls.config.get('general', 'conflictpath', fallback='/')
+            cls.recoverypath = cls.config.get('general', 'recoverypath', fallback='/var/spool/wopirecovery')
+            try:
+                os.makedirs(cls.recoverypath)
+            except FileExistsError as e:
+                pass
             _ = cls.config.get('general', 'downloadurl')   # make sure this is defined
             # WOPI proxy configuration (optional)
             cls.wopiproxy = cls.config.get('general', 'wopiproxy', fallback='')
