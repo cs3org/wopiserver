@@ -20,6 +20,7 @@ import hmac
 from base64 import urlsafe_b64encode
 import flask
 import bridge.wopiclient as wopic
+import core.wopiutils as utils
 
 
 # The supported plugins integrated with this WOPI Bridge
@@ -171,6 +172,7 @@ def appopen(wopisrc, acctok):
                                          'lastsave': int(time.time()) - WB.saveinterval,
                                          'toclose': {acctok[-20:]: False},
                                          'docid': wopilock['docid'],
+                                         'app': os.path.splitext(filemd['BaseFileName'])[1][1:],
                                         }
             # also clear any potential stale response for this document
             try:
@@ -282,15 +284,15 @@ class SaveThread(threading.Thread):
                         self.cleanup(openfile, wopisrc, wopilock)
                     except Exception as e:    # pylint: disable=broad-except
                         ex_type, ex_value, ex_traceback = sys.exc_info()
-                        WB.log.error('msg="SaveThread: unexpected exception caught" ex="%s" type="%s" traceback="%s"' %
-                                     (e, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback)))
-        WB.log.info('msg="SaveThread terminated, shutting down"')
+                        WB.log.critical('msg="SaveThread: unexpected exception caught" ex="%s" type="%s" traceback="%s"' %
+                                        (e, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback)))
 
     def savedirty(self, openfile, wopisrc):
         '''save documents that are dirty for more than `saveinterval` or that are being closed'''
         wopilock = None
         if openfile['tosave'] and (_intersection(openfile['toclose'])
                                    or (openfile['lastsave'] < time.time() - WB.saveinterval)):
+            app = BRIDGE_EXT_PLUGINS.get(openfile['app']) if 'app' in openfile else None
             try:
                 wopilock = wopic.getlock(wopisrc, openfile['acctok'])
             except wopic.InvalidLock:
@@ -301,14 +303,23 @@ class SaveThread(threading.Thread):
                         wopisrc, openfile['acctok'], openfile['docid'], _intersection(openfile['toclose']))
                 except wopic.InvalidLock as ile:
                     # even this attempt failed, give up
-                    # TODO here we should save the file on a local storage to help later recovery
                     WB.saveresponses[wopisrc] = wopic.jsonify(str(ile)), http.client.INTERNAL_SERVER_ERROR
+                    # attempt to save to local storage to help for later recovery: this is a feature of the core wopiserver
+                    content = rc = None
+                    if app:
+                        content, rc = WB.plugins[app].savetostorage(wopisrc, openfile['acctok'], False, {'docid': openfile['docid']}, onlyfetch=True)
+                        if rc == http.client.OK:
+                            utils.storeForRecovery(content, wopisrc[wopisrc.rfind('/')+1:], openfile['acctok'][-20:], ile)
+                    if rc != http.client.OK:
+                        WB.log.error('msg="SaveThread: failed to fetch file for recovery to local storage" token="%s" docid="%s" app="%s" response="%s"' %
+                                     (openfile['acctok'][-20:], openfile['docid'], app, content))
                     # set some 'fake' metadata, will be automatically cleaned up later
                     openfile['lastsave'] = int(time.time())
                     openfile['tosave'] = False
                     openfile['toclose'] = {'invalid-lock': True}
                     return None
-            app = BRIDGE_EXT_PLUGINS.get(wopilock['app'])
+            if not app:
+                app = BRIDGE_EXT_PLUGINS.get(wopilock['app'])
             if not app:
                 WB.log.error('msg="SaveThread: malformed app attribute in WOPI lock" lock="%s"' % wopilock)
                 WB.saveresponses[wopisrc] = wopic.jsonify('Unrecognized app for this file'), http.client.BAD_REQUEST
@@ -379,7 +390,7 @@ class SaveThread(threading.Thread):
 def stopsavethread():
     '''Exit handler to cleanly stop the storage sync thread'''
     if WB.savethread:
-        WB.log.info('msg="Waiting for SaveThread to complete"')
+        WB.log.info('msg="Waiting for SaveThread to complete"')  # TODO when this handler is called, the logger is not accessible any longer
         with WB.savecv:
             WB.active = False
             WB.savecv.notify()

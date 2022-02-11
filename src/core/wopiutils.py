@@ -394,8 +394,22 @@ def storeWopiFile(request, retrievedlock, acctok, xakey, targetname=''):
         st.setlock(acctok['endpoint'], targetname, acctok['userid'], acctok['appname'], encodeLock(retrievedlock))
 
 
-def getconflictpath(username):
+def getConflictPath(username):
     '''Returns the path to a suitable conflict path directory for a given user'''
-    if not srv.conflictpath:
-        return None
     return srv.conflictpath.replace('user_initial', username[0]).replace('username', username)
+
+
+def storeForRecovery(content, filename, acctokforlog, exception):
+    try:
+        filepath = srv.recoverypath + os.sep + time.strftime('%Y%m%dT%H%M%S') + '_' + os.path.basename(filename)
+        with open(filepath, mode='wb') as f:
+            written = f.write(content)
+        if written != len(content):
+            raise IOError('Size mismatch')
+        log.error('msg="Error writing file, a copy was stored locally for later recovery" ' + \
+                  'filename="%s" recoveredpath="%s" token="%s" error="%s"' %
+                  (filename, filepath, acctokforlog, exception))
+    except (OSError, IOError) as e:
+        log.critical('msg="Error writing file and failed to recover it to local storage, data is LOST" ' + \
+                     'filename="%s" token="%s" originalerror="%s" recoveryerror="%s"' %
+                     (filename, acctokforlog, exception, e))
