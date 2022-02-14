@@ -10,6 +10,7 @@ Author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 import time
 import json
 from base64 import urlsafe_b64encode, urlsafe_b64decode
+from binascii import Error as B64Error
 
 
 # standard file missing message
@@ -23,6 +24,11 @@ ACCESS_ERROR = 'Operation not permitted'
 
 # name of the xattr storing the Reva lock
 LOCKKEY = 'iop.lock'
+
+# the prefix used for the lock-id payload to be WebDAV compatible:
+# see https://github.com/cs3org/wopiserver/pull/51#issuecomment-1038798545 for more details;
+# the UUID is fully random and hard coded to identify WOPI locks, no need to have it dynamic
+WEBDAV_LOCK_PREFIX = 'opaquelocktoken:797356a8-0500-4ceb-a8a0-c94c8cde7eba'
 
 # reference to global config
 config = None
@@ -59,11 +65,14 @@ def genrevalock(appname, value):
 
 def retrieverevalock(rawlock):
     '''Restores the JSON payload from a base64-encoded Reva lock'''
-    l = json.loads(urlsafe_b64decode(rawlock).decode())
-    if 'h' in l:
-        # temporary code to support the data structure from WOPI 8.0
-        l['app_name'] = l['h']
-        l['lock_id'] = 'opaquelocktoken:' + l['md']
-        l['expiration'] = {}
-        l['expiration']['seconds'] = l['exp']
-    return l
+    try:
+        l = json.loads(urlsafe_b64decode(rawlock).decode())
+        if 'h' in l:
+            # temporary code to support the data structure from WOPI 8.0
+            l['app_name'] = l['h']
+            l['lock_id'] = WEBDAV_LOCK_PREFIX + ' ' + l['md']
+            l['expiration'] = {}
+            l['expiration']['seconds'] = l['exp']
+        return l
+    except (B64Error, json.JSONDecodeError) as e:
+        raise IOError(e)
