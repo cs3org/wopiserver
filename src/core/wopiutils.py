@@ -23,7 +23,6 @@ import core.commoniface as common
 # this is the xattr key used for conflicts resolution on the remote storage
 LASTSAVETIMEKEY = 'iop.wopi.lastwritetime'
 
-
 # convenience references to global entities
 st = None
 srv = None
@@ -165,21 +164,18 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefilename=Non
     '''Retrieves and logs a lock for a given file: returns the lock and its holder, or (None, None) if missing'''
     encacctok = flask.request.args['access_token'][-20:] if 'access_token' in flask.request.args else 'N/A'
     try:
+        # fetch and decode the lock
         lockcontent = st.getlock(acctok['endpoint'], overridefilename if overridefilename else acctok['filename'], acctok['userid'])
         if not lockcontent:
-            raise IOError
-    except IOError as e:
-        log.info('msg="%s" user="%s" filename="%s" token="%s" error="No lock found"' %
-                 (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok))
-        return None, None
-
-    try:
-        # decode the lock payload
+            log.info('msg="%s" user="%s" filename="%s" token="%s" error="No lock found"' %
+                    (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok))
+            return None, None
         storedlock = lockcontent['lock_id']
         lockcontent['lock_id'] = _decodeLock(storedlock)
-    except B64Error as e:
-        log.warning('msg="%s" user="%s" filename="%s" token="%s" error="Malformed WOPI lock, ignoring" exception="%s"' %
-                    (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, type(e)))
+    except IOError as e:
+        log.info('msg="%s" user="%s" filename="%s" token="%s" error="Lock is not WOPI-compatible or unreadable, ignoring" details="%s"' %
+                 (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, e))
+        return 'External', 'another user'
 
     # check validity: a lock is deemed expired if the most recent between its expiration time and
     # the last save time by WOPI has passed
@@ -213,18 +209,18 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefilename=Non
 def encodeLock(lock):
     '''Generates the lock payload for the storage given the raw metadata'''
     if lock:
-        # the prefix here makes the lock WebDAV-compatible, though according to
-        # https://datatracker.ietf.org/doc/html/rfc4918#appendix-C the payload must be a UUID
-        # (see https://github.com/cs3org/reva/pull/2460#discussion_r802360564 for more details)
-        return 'opaquelocktoken:' + b64encode(lock.encode()).decode()
+        return common.WEBDAV_LOCK_PREFIX + ' ' + b64encode(lock.encode()).decode()
     return None
 
 
 def _decodeLock(storedlock):
-    '''Restores the lock payload reverting the `encodeLock` format. May raise B64Error'''
-    if storedlock and storedlock.find('opaquelocktoken:') == 0:
-        return b64decode(storedlock[16:].encode()).decode()
-    return storedlock     # it's not our lock, but it's likely valid
+    '''Restores the lock payload reverting the `encodeLock` format. May raise IOError'''
+    try:
+        if storedlock and storedlock.find(common.WEBDAV_LOCK_PREFIX) == 0:
+            return b64decode(storedlock[len(common.WEBDAV_LOCK_PREFIX)+1:].encode()).decode()
+        raise IOError('Non-WOPI lock found')     # it's not our lock, though it's likely valid
+    except B64Error as e:
+        raise IOError(e)
 
 
 def storeWopiLock(fileid, operation, lock, oldlock, acctok, isoffice):
