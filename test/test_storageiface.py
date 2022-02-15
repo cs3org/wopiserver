@@ -12,7 +12,7 @@ import configparser
 import sys
 import os
 from threading import Thread
-sys.path.append('../src/core')  # for tests out of the git repo
+sys.path.append('src/core')  # for tests out of the git repo
 sys.path.append('/app')    # for tests within the Docker image
 
 
@@ -30,7 +30,7 @@ class TestStorage(unittest.TestCase):
     log.setLevel(logging.DEBUG)
     config = configparser.ConfigParser()
     try:
-      with open('wopiserver-test.conf') as fdconf:
+      with open('test/wopiserver-test.conf') as fdconf:
         config.read_file(fdconf)
       storagetype = os.environ.get('WOPI_STORAGE')
       if not storagetype:

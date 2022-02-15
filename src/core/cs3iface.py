@@ -60,7 +60,7 @@ def authenticate_for_test(userid, userpwd):
     return authRes.token
 
 
-def stat(endpoint, fileid, userid, _versioninv=1):
+def stat(endpoint, fileid, userid, versioninv=1):
     '''Stat a file and returns (size, mtime) as well as other extended info using the given userid as access token.
     Note that endpoint here means the storage id. Note that fileid can be either a path (which MUST begin with /),
     or an id (which MUST NOT start with a /). The versioninv flag is natively supported by Reva.'''

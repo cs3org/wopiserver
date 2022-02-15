@@ -33,25 +33,23 @@ The `/test` folder contains some unit tests for the supported storage interfaces
 No tests are provided (yet) for the core WOPI server, though the test suite aims at covering all
 storage access patterns used by the WOPI server.
 
-By default, the local storage is tested. To run the tests, use the standard python unittest arguments:
+By default, the local storage is tested. The CI includes it as well (_TODO_ test against Reva in the CI).
+To run the tests, use the standard python unittest arguments:
 
-1. Go to the test folder `cd test`
-2. Run all tests: `python3 test_storageiface.py [-v]`
-3. Run only one test: `python3 test_storageiface.py [-v] TestStorage.<the test you would like to run>`
+1. Run all tests: `python3 test/test_storageiface.py [-v]`
+2. Run only one test: `python3 test/test_storageiface.py [-v] TestStorage.<the test you would like to run>`
 
 ### Test against a Reva endpoint:
 
 1. Clone reva (https://github.com/cs3org/reva)
 2. Run Reva according to <https://reva.link/docs/tutorials/share-tutorial/> (ie up until step 4 in the instructions).
-3. Go to the test folder `cd test`
-4. Run the tests: `WOPI_STORAGE=cs3 python3 test_storageiface.py`
+3. Run the tests: `WOPI_STORAGE=cs3 python3 test/test_storageiface.py`
 
 ### Test against an Eos endpoint:
 
 1. Make sure your Eos instance is configured to accept connections from WOPI as a privileged gateway
-2. Go to the test folder `cd test`
-3. Configure `wopiserver-test.conf` according to your Eos setup. The provided defaults are valid at CERN.
-4. Run the tests: `WOPI_STORAGE=xroot python3 test_storageiface.py`
+2. Configure `wopiserver-test.conf` according to your Eos setup. The provided defaults are valid at CERN.
+3. Run the tests: `WOPI_STORAGE=xroot python3 test/test_storageiface.py`
 
 
 ## Test the `open` workflow with Reva
