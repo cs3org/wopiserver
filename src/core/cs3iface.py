@@ -298,6 +298,9 @@ def writefile(_endpoint, filepath, userid, content, lockid, islock=False):
         log.error('msg="Exception when uploading file to Reva" reason="%s"' % e)
         raise IOError(e)
     tend = time.time()
+    if putres.status_code == http.client.UNAUTHORIZED:
+        log.warning('msg="Access denied uploading file to Reva" reason="%s"' % putres.reason)
+        raise IOError(common.ACCESS_ERROR)
     if putres.status_code != http.client.OK:
         log.error('msg="Error uploading file to Reva" code="%d" reason="%s"' % (putres.status_code, putres.reason))
         raise IOError(putres.reason)
