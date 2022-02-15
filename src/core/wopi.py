@@ -161,8 +161,7 @@ def setLock(fileid, reqheaders, acctok):
     # LOCK or REFRESH_LOCK: atomically set the lock to the given one, including the expiration time,
     # and return conflict response if the file was already locked
     try:
-        return utils.storeWopiLock(fileid, op, lock, oldLock, acctok, \
-                                   os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes)
+        return utils.storeWopiLock(fileid, op, lock, oldLock, acctok)
     except IOError as e:
         # expected failures are handled in storeWopiLock
         log.error('msg="%s: unable to store WOPI lock" filename="%s" token="%s" lock="%s" reason="%s"' %
@@ -175,9 +174,9 @@ def getLock(fileid, _reqheaders_unused, acctok):
     resp = flask.Response()
     lock, _ = utils.retrieveWopiLock(fileid, 'GETLOCK', '', acctok)
     resp.status_code = http.client.OK if lock else http.client.NOT_FOUND
-    if lock:
-        resp.headers['X-WOPI-Lock'] = lock
-        # for statistical purposes, check whether a lock exists and update internal bookkeeping
+    resp.headers['X-WOPI-Lock'] = lock
+    # for statistical purposes, check whether a lock exists and update internal bookkeeping
+    if lock and lock != 'External':
         try:
             # the file was already opened for write, check whether this is a new user
             if not acctok['username'] in srv.openfiles[acctok['filename']][1]:
@@ -186,22 +185,13 @@ def getLock(fileid, _reqheaders_unused, acctok):
                 if len(srv.openfiles[acctok['filename']][1]) > 1:
                     # for later monitoring, explicitly log that this file is being edited by at least two users
                     log.info('msg="Collaborative editing detected" filename="%s" token="%s" users="%s"' %
-                             (acctok['filename'], flask.request.args['access_token'][-20:],
-                              list(srv.openfiles[acctok['filename']][1])))
+                            (acctok['filename'], flask.request.args['access_token'][-20:],
+                            list(srv.openfiles[acctok['filename']][1])))
         except KeyError:
             # existing lock but missing srv.openfiles[acctok['filename']] ?
             log.warning('msg="Repopulating missing metadata" filename="%s" token="%s" friendlyname="%s"' %
                         (acctok['filename'], flask.request.args['access_token'][-20:], acctok['username']))
             srv.openfiles[acctok['filename']] = (time.asctime(), set([acctok['username']]))
-    # we might want to check if a non-WOPI lock exists for this file:
-    #if os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes:
-    #  try:
-    #    lockstat = st.stat(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), acctok['userid'])
-    #    return utils.makeConflictResponse('GetLock', 'External App', '', '', acctok['filename'], \
-    #                                      'The file was locked by LibreOffice for Desktop')
-    #  except IOError:
-    #    pass
-    # however implications have to be properly understood as we've seen cases of locks left behind
     return resp
 
 
@@ -413,7 +403,7 @@ def putFile(fileid):
         savetime = st.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY)
         mtime = None
         mtime = st.stat(acctok['endpoint'], acctok['filename'], acctok['userid'])['mtime']
-        if savetime and savetime.isdigit() and int(savetime) <= int(mtime):
+        if savetime and savetime.isdigit() and int(savetime) >= int(mtime):
             # Go for overwriting the file. Note that the entire check+write operation should be atomic,
             # but the previous checks still give the opportunity of a race condition. We just live with it.
             # Anyhow, the EFSS should support versioning for such cases.
