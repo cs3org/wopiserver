@@ -5,6 +5,6 @@
   missingok
   rotate 380
   postrotate
-    systemctl restart wopiserver
+    systemctl reload-or-try-restart wopiserver
   endscript
 }
