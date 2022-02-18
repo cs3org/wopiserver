@@ -257,7 +257,7 @@ def putRelative(fileid, reqheaders, acctok):
                 log.warning('msg="PutRelative" user="%s" filename="%s" token="%s" suggTarget="%s" error="%s"' %
                             (acctok['userid'][-20:], targetName, flask.request.args['access_token'][-20:], \
                              suggTarget, str(e)))
-                return 'Illegal filename %s' % targetName, http.client.BAD_REQUEST
+                return 'Illegal filename', http.client.BAD_REQUEST
     else:
         # the relative target is a filename to be respected, and that may overwrite an existing file
         relTarget = os.path.dirname(acctok['filename']) + os.path.sep + relTarget    # make full path
@@ -276,7 +276,7 @@ def putRelative(fileid, reqheaders, acctok):
     try:
         utils.storeWopiFile(flask.request, None, acctok, utils.LASTSAVETIMEKEY, targetName)
     except IOError as e:
-        utils.storeForRecovery(flask.request.get_data(), targetName, flask.request.args['access_token'][-20:], e)
+        utils.storeForRecovery(flask.request.get_data(), targetName, flask.request.args['access_token'][-20:], e)  # lgtm [py/path-injection]
         return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
     # generate an access token for the new file
     log.info('msg="PutRelative: generating new access token" user="%s" filename="%s" ' \
