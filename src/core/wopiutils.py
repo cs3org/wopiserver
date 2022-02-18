@@ -135,7 +135,6 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
     except IOError as e:
         log.info('msg="Requested file not found or not a file" fileid="%s" error="%s"' % (fileid, e))
         raise
-    # if write access is requested, probe whether there's already a lock file coming from Desktop applications
     exptime = int(time.time()) + srv.tokenvalidity
     if not appediturl:
         # deprecated: for backwards compatibility, work out the URLs from the discovered app endpoints
@@ -165,7 +164,7 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefilename=Non
     encacctok = flask.request.args['access_token'][-20:] if 'access_token' in flask.request.args else 'N/A'
 
     # if required, check if a non-WOPI office lock exists for this file
-    checkext = srv.config.get('general', 'detectexternallock', fallback='True').upper() == 'TRUE'
+    checkext = srv.config.get('general', 'detectexternallocks', fallback='True').upper() == 'TRUE'
     lolock = lolockstat = None
     if checkext and os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes:
         try:
@@ -263,7 +262,7 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok):
         return makeConflictResponse(operation, 'External App', lock, oldlock, acctok['filename'], \
                                     'The file got moved or deleted')
 
-    if srv.config.get('general', 'detectexternallock', fallback='True').upper() == 'TRUE' and \
+    if srv.config.get('general', 'detectexternallocks', fallback='True').upper() == 'TRUE' and \
        os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes:
         try:
             # create a LibreOffice-compatible lock file for interoperability purposes, making sure to

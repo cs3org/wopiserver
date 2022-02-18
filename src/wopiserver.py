@@ -124,7 +124,7 @@ class Wopi:
                     raise
             cls.wopiurl = cls.config.get('general', 'wopiurl')
             cls.conflictpath = cls.config.get('general', 'conflictpath', fallback='/')
-            cls.recoverypath = cls.config.get('general', 'recoverypath', fallback='/var/spool/wopirecovery')
+            cls.recoverypath = cls.config.get('io', 'recoverypath', fallback='/var/spool/wopirecovery')
             try:
                 os.makedirs(cls.recoverypath)
             except FileExistsError as e:
@@ -433,7 +433,7 @@ def wopiFilesPost(fileid):
     except KeyError as e:
         Wopi.log.warning('msg="Missing argument" client="%s" requestedUrl="%s" error="%s" token="%s"' %
                          (flask.request.remote_addr, flask.request.base_url, e, flask.request.args.get('access_token')))
-        return 'Missing argument: %s' % e, http.client.BAD_REQUEST
+        return 'Missing argument', http.client.BAD_REQUEST
 
 
 @Wopi.app.route("/wopi/files/<fileid>/contents", methods=['POST'])
@@ -443,7 +443,7 @@ def wopiPutFile(fileid):
 
 
 #
-# IOP lock endpoints
+# interoperable lock endpoints
 #
 @Wopi.app.route("/wopi/cbox/lock", methods=['GET', 'POST'])
 @Wopi.metrics.counter('lock_by_ext', 'Number of /lock calls by file extension',
