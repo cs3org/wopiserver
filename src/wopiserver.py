@@ -382,6 +382,35 @@ def iopGetOpenFiles():
     return flask.Response(json.dumps(jlist), mimetype='application/json')
 
 
+@Wopi.app.route("/wopi/iop/test", methods=['GET'])
+def iopWopiTest():
+    '''Returns a WOPI_URL and a WOPI_TOKEN values suitable as input for the WOPI validator test suite.
+    This call is protected by the same shared secret as the /wopi/iop/openinapp call.
+    Request arguments:
+    - string filepath: the full path to the file used for the test. The file must exist
+    - string endpoint (optional): the storage endpoint, defaults to 'default'
+    - string usertoken: the credentials to access the given file (uid:gid for xrootd, bearer token for Reva)
+    '''
+    req = flask.request
+    if req.headers.get('Authorization') != 'Bearer ' + Wopi.iopsecret:
+        Wopi.log.warning('msg="iopWopiTest: unauthorized access attempt, missing authorization token" ' \
+                         'client="%s"' % req.remote_addr)
+        return UNAUTHORIZED
+    # the Microsoft WOPI validator test suite requires to issue an access token for a predefined test file
+    filepath = req.args.get('filepath', '')
+    endpoint = req.args.get('endpoint', 'default')
+    usertoken = req.args.get('usertoken', '')
+    if not filepath or not usertoken:
+        return 'Missing arguments', http.client.BAD_REQUEST
+    if Wopi.useHttps:
+        return 'WOPI validator not supported in https mode', http.client.BAD_REQUEST
+    inode, acctok = utils.generateAccessToken(usertoken, filepath, utils.ViewMode.READ_WRITE, ('test', usertoken), '/',
+                                              endpoint, ('WOPI validator', 'http://fortestonly/', 'http://fortestonly/'))
+    Wopi.log.info('msg="iopWopiTest: preparing test via WOPI validator" client="%s"' % req.remote_addr)
+    return '-e WOPI_URL=http://localhost:%d/wopi/files/%s -e WOPI_TOKEN=%s' % (Wopi.port, inode, acctok)
+
+
+
 #
 # WOPI protocol implementation
 #
