@@ -1,15 +1,19 @@
-# How to run the wopi-validator on a local setup for testing
+## How to run the wopi-validator on a local setup for testing
 
 These notes have been adaped from the enterprise ownCloud WOPI implementation, credits to @deepdiver1975.
 
 1. Setup your WOPI server as well as Reva as required. Make sure the WOPI storage interface unit tests pass.
 
-2. Create an empty file named `test.wopitest` in the user folder, e.g. `touch /var/tmp/reva/einstein/test.wopitest` for a local Reva setup.
+2. Create an empty folder and touch an file named `test.wopitest` in that folder. For a local Reva setup:
 
-3. Generate a WOPI URL and token for that file, e.g. `wopiopen.py /test.wopitest 1000 1000`. Remote setups would require appropriate userids and file paths.
+   `mkdir /var/tmp/reva/data/einstein/wopivalidator && touch /var/tmp/reva/data/einstein/wopivalidator/test.wopitest`.
 
-4. Amend the `WOPI_URL` env variable such that it looks like `http://localhost:<wopiport>/wopi/files/<fileid>`. Note the hardcoded `localhost`.
+3. Ensure you run your WOPI server in http mode, that is you have `usehttps = no` in your configuration.
 
-5. Run the testsuite (you can select a specific test group with e.g. `-e WOPI_TESTGROUP=FileVersion`):
-`docker run --add-host="localhost:<your_external_wopiserver_IP>" -e WOPI_URL=$WOPI_URL -e WOPI_TOKEN=$WOPI_TOKEN deepdiver/wopi-validator-core-docker:use-different-branch-to-make-ci-finally-green`
+4. Generate the input for the test suite:
 
+   `curl -H "Authorization: Bearer <wopisecret>" "http://your_wopi_server:port/wopi/iop/test?filepath=<your_file>&endpoint=<your_storage_endpoint>&usertoken=<your_user_credentials_or_id>"`
+
+5. Run the testsuite (you can select a specific test group passing as well e.g. `-e WOPI_TESTGROUP=FileVersion`):
+
+   `docker run --add-host="localhost:<your_external_wopiserver_IP>" <output from step 4> deepdiver/wopi-validator-core-docker:latest`
