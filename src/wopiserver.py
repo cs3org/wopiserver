@@ -410,10 +410,10 @@ def wopiFilesPost(fileid):
             return 'Attempting to perform a write operation using a read-only token', http.client.UNAUTHORIZED
         if op in ('LOCK', 'REFRESH_LOCK'):
             return core.wopi.setLock(fileid, headers, acctok)
-        if op == 'UNLOCK':
-            return core.wopi.unlock(fileid, headers, acctok)
         if op == 'GET_LOCK':
             return core.wopi.getLock(fileid, headers, acctok)
+        if op == 'UNLOCK':
+            return core.wopi.unlock(fileid, headers, acctok)
         if op == 'PUT_RELATIVE':
             return core.wopi.putRelative(fileid, headers, acctok)
         if op == 'DELETE':

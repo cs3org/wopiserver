@@ -21,7 +21,7 @@ import cs3.gateway.v1beta1.gateway_api_pb2 as cs3gw
 import cs3.rpc.v1beta1.code_pb2 as cs3code
 import cs3.types.v1beta1.types_pb2 as types
 
-ENOENT_MSG = 'No such file or directory'
+import core.commoniface as common
 
 # module-wide state
 ctx = {}            # "map" to store some module context: cf. init()
@@ -94,7 +94,7 @@ def stat(endpoint, fileid, userid, versioninv=1):
             'mtime': statInfo.info.mtime.seconds
         }
     ctx['log'].info('msg="Failed stat" inode="%s" reason="%s"' % (fileid, statInfo.status.message.replace('"', "'")))
-    raise IOError(ENOENT_MSG if statInfo.status.code == cs3code.CODE_NOT_FOUND else statInfo.status.message)
+    raise IOError(common.ENOENT_MSG if statInfo.status.code == cs3code.CODE_NOT_FOUND else statInfo.status.message)
 
 
 def statx(endpoint, fileid, userid, versioninv=0):
@@ -148,6 +148,26 @@ def rmxattr(_endpoint, filepath, userid, key):
     ctx['log'].debug('msg="Invoked rmxattr" result="%s"' % res)
 
 
+def setlock(endpoint, filepath, userid, appname, value):
+    '''Set a lock to filepath with the given value metadata and appname as holder'''
+    raise NotImplementedError
+
+
+def getlock(endpoint, filepath, userid, appname):
+    '''Get the lock metadata for the given filepath'''
+    raise NotImplementedError
+
+
+def refreshlock(endpoint, filepath, userid, appname, value):
+    '''Refresh the lock metadata for the given filepath'''
+    raise NotImplementedError
+
+
+def unlock(endpoint, filepath, userid, appname):
+    '''Remove the lock for the given filepath'''
+    raise NotImplementedError
+
+
 def readfile(_endpoint, filepath, userid):
     '''Read a file using the given userid as access token. Note that the function is a generator, managed by Flask.'''
     tstart = time.time()
@@ -156,7 +176,7 @@ def readfile(_endpoint, filepath, userid):
     initfiledownloadres = ctx['cs3stub'].InitiateFileDownload(request=req, metadata=[('x-access-token', userid)])
     if initfiledownloadres.status.code == cs3code.CODE_NOT_FOUND:
         ctx['log'].info('msg="File not found on read" filepath="%s"' % filepath)
-        yield IOError(ENOENT_MSG)
+        yield IOError(common.ENOENT_MSG)
     elif initfiledownloadres.status.code != cs3code.CODE_OK:
         ctx['log'].error('msg="Failed to initiateFileDownload on read" filepath="%s" reason="%s"' %
                          (filepath, initfiledownloadres.status.message.replace('"', "'")))
@@ -239,14 +259,14 @@ def renamefile(_endpoint, filepath, newfilepath, userid):
     ctx['log'].debug('msg="Invoked renamefile" result="%s"' % res)
 
 
-def removefile(_endpoint, filepath, userid, _force=0):
+def removefile(_endpoint, filepath, userid, force=False):
     '''Remove a file using the given userid as access token.
        The force argument is ignored for now for CS3 storage.'''
     reference = cs3spr.Reference(path=filepath)
     req = cs3sp.DeleteRequest(ref=reference)
     res = ctx['cs3stub'].Delete(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
-        if str(res) == ENOENT_MSG:
+        if str(res) == common.ENOENT_MSG:
             ctx['log'].info('msg="Invoked removefile on non-existing file" filepath="%s"' % filepath)
         else:
             ctx['log'].error('msg="Failed to remove file" filepath="%s" reason="%s"' % (filepath, res.status.message.replace('"', "'")))

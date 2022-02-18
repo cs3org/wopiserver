@@ -11,12 +11,13 @@ import configparser
 import json
 import http.client
 from urllib.parse import quote_plus as url_quote_plus
-from urllib.parse import unquote as url_unquote
 from more_itertools import peekable
 import jwt
 import flask
 import core.wopiutils as utils
+import core.commoniface as common
 
+IO_ERROR = 'I/O Error'
 
 # convenience references to global entities
 st = None
@@ -39,54 +40,57 @@ def checkFileInfo(fileid):
         # compute some entities for the response
         wopiSrc = 'WOPISrc=%s&access_token=%s' % (utils.generateWopiSrc(fileid), flask.request.args['access_token'])
         # populate metadata for this file
-        filemd = {}
-        filemd['BaseFileName'] = filemd['BreadcrumbDocName'] = os.path.basename(acctok['filename'])
+        fmd = {}
+        fmd['BaseFileName'] = fmd['BreadcrumbDocName'] = os.path.basename(acctok['filename'])
         furl = acctok['folderurl']
         # encode the path part as it is going to be an URL GET argument
-        filemd['BreadcrumbFolderUrl'] = furl[:furl.find('=')+1] + url_quote_plus(furl[furl.find('=')+1:]) if furl != '/' else ''
+        fmd['BreadcrumbFolderUrl'] = furl[:furl.find('=')+1] + url_quote_plus(furl[furl.find('=')+1:]) if furl != '/' else ''
         if acctok['username'] == '':
-            filemd['UserFriendlyName'] = 'Guest ' + utils.randomString(3)
+            fmd['UserFriendlyName'] = 'Guest ' + utils.randomString(3)
             if '?path' in furl and furl[-1] != '/' and furl[-1] != '=':
                 # this is a subfolder of a public share, show it
-                filemd['BreadcrumbFolderName'] = 'Back to ' + furl[furl.find('?path'):].split('/')[-1]
+                fmd['BreadcrumbFolderName'] = 'Back to ' + furl[furl.find('?path'):].split('/')[-1]
             else:
                 # this is the top level public share, which is anonymous
-                filemd['BreadcrumbFolderName'] = 'Back to the public share'
+                fmd['BreadcrumbFolderName'] = 'Back to the public share'
         else:
-            filemd['UserFriendlyName'] = acctok['username']
-            filemd['BreadcrumbFolderName'] = 'Back to ' + os.path.dirname(acctok['filename'])
+            fmd['UserFriendlyName'] = acctok['username']
+            fmd['BreadcrumbFolderName'] = 'Back to ' + os.path.dirname(acctok['filename'])
         if furl == '/':    # if no target folder URL was given, override the above and completely hide it
-            filemd['BreadcrumbFolderName'] = ''
+            fmd['BreadcrumbFolderName'] = ''
         if acctok['viewmode'] in (utils.ViewMode.READ_ONLY, utils.ViewMode.READ_WRITE):
-            filemd['DownloadUrl'] = '%s?access_token=%s' % \
+            fmd['DownloadUrl'] = '%s?access_token=%s' % \
                                     (srv.config.get('general', 'downloadurl'), flask.request.args['access_token'])
-        filemd['OwnerId'] = statInfo['ownerid']
-        filemd['UserId'] = acctok['wopiuser']     # typically same as OwnerId; different when accessing shared documents
-        filemd['Size'] = statInfo['size']
+        fmd['OwnerId'] = statInfo['ownerid']
+        fmd['UserId'] = acctok['wopiuser']     # typically same as OwnerId; different when accessing shared documents
+        fmd['Size'] = statInfo['size']
         # TODO the version is generated like this in ownCloud: 'V' . $file->getEtag() . \md5($file->getChecksum());
-        filemd['Version'] = statInfo['mtime']   # mtime is used as version here
-        filemd['SupportsExtendedLockLength'] = filemd['SupportsGetLock'] = True
-        filemd['SupportsUpdate'] = filemd['UserCanWrite'] = filemd['SupportsLocks'] = \
-            filemd['SupportsDeleteFile'] = acctok['viewmode'] == utils.ViewMode.READ_WRITE
-        filemd['UserCanNotWriteRelative'] = acctok['viewmode'] != utils.ViewMode.READ_WRITE
-        filemd['HostViewUrl'] = '%s%s%s' % (acctok['appviewurl'], '&' if '?' in acctok['appviewurl'] else '?', wopiSrc)
-        filemd['HostEditUrl'] = '%s%s%s' % (acctok['appediturl'], '&' if '?' in acctok['appediturl'] else '?', wopiSrc)
-        filemd['SupportsRename'] = filemd['UserCanRename'] = enablerename and utils.ViewMode.READ_WRITE
+        fmd['Version'] = statInfo['mtime']   # mtime is used as version here
+        fmd['SupportsExtendedLockLength'] = fmd['SupportsGetLock'] = True
+        fmd['SupportsUpdate'] = fmd['UserCanWrite'] = fmd['SupportsLocks'] = \
+            fmd['SupportsDeleteFile'] = acctok['viewmode'] == utils.ViewMode.READ_WRITE
+        fmd['UserCanNotWriteRelative'] = acctok['viewmode'] != utils.ViewMode.READ_WRITE
+        fmd['HostViewUrl'] = '%s%s%s' % (acctok['appviewurl'], '&' if '?' in acctok['appviewurl'] else '?', wopiSrc)
+        fmd['HostEditUrl'] = '%s%s%s' % (acctok['appediturl'], '&' if '?' in acctok['appediturl'] else '?', wopiSrc)
+        fmd['SupportsRename'] = fmd['UserCanRename'] = enablerename and utils.ViewMode.READ_WRITE
         # populate app-specific metadata
         if acctok['appname'].find('Microsoft') > 0:
             # the following is to enable the 'Edit in Word/Excel/PowerPoint' (desktop) action (probably broken)
             try:
-                filemd['ClientUrl'] = srv.config.get('general', 'webdavurl') + '/' + acctok['filename']
+                fmd['ClientUrl'] = srv.config.get('general', 'webdavurl') + '/' + acctok['filename']
             except configparser.NoOptionError:
                 # if no WebDAV URL is provided, ignore this setting
                 pass
         # extensions for Collabora Online
-        filemd['EnableOwnerTermination'] = True
-        filemd['DisableExport'] = filemd['DisableCopy'] = filemd['DisablePrint'] = acctok['viewmode'] == utils.ViewMode.VIEW_ONLY
-        #filemd['LastModifiedTime'] = datetime.fromtimestamp(int(statInfo['mtime'])).isoformat()   # this currently breaks
+        fmd['EnableOwnerTermination'] = True
+        fmd['DisableExport'] = fmd['DisableCopy'] = fmd['DisablePrint'] = acctok['viewmode'] == utils.ViewMode.VIEW_ONLY
+        #fmd['LastModifiedTime'] = datetime.fromtimestamp(int(statInfo['mtime'])).isoformat()   # this currently breaks
 
-        log.info('msg="File metadata response" token="%s" metadata="%s"' % (flask.request.args['access_token'][-20:], filemd))
-        return flask.Response(json.dumps(filemd), mimetype='application/json')
+        res = flask.Response(json.dumps(fmd), mimetype='application/json')
+        # amend sensitive metadata for the logs
+        fmd['HostViewUrl'] = fmd['HostEditUrl'] = fmd['DownloadUrl'] = '_amended_'
+        log.info('msg="File metadata response" token="%s" metadata="%s"' % (flask.request.args['access_token'][-20:], fmd))
+        return res
     except IOError as e:
         log.info('msg="Requested file not found" filename="%s" token="%s" error="%s"' %
                  (acctok['filename'], flask.request.args['access_token'][-20:], e))
@@ -130,40 +134,6 @@ def getFile(fileid):
 #
 # The following operations are all called on POST /wopi/files/<fileid>
 #
-def unlock(fileid, reqheaders, acctok, force=False):
-    '''Implements the Unlock WOPI call'''
-    lock = reqheaders['X-WOPI-Lock']
-    retrievedLock = utils.retrieveWopiLock(fileid, 'UNLOCK', lock, acctok)
-    if not force and not utils.compareWopiLocks(retrievedLock, lock):
-        return utils.makeConflictResponse('UNLOCK', retrievedLock, lock, '', acctok['filename'])
-    # OK, the lock matches. Remove any extended attribute related to locks and conflicts handling
-    try:
-        st.removefile(acctok['endpoint'], utils.getLockName(acctok['filename']), acctok['userid'], 1)
-    except IOError:
-        # ignore, it's not worth to report anything here
-        pass
-    try:
-        st.rmxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY)
-    except IOError:
-        # same as above
-        pass
-    try:
-        # also remove the LibreOffice-compatible lock file when relevant
-        if os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes:
-            st.removefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), acctok['userid'], 1)
-    except IOError:
-        # same as above
-        pass
-    # and update our internal list of opened files
-    if not force:
-        try:
-            del srv.openfiles[acctok['filename']]
-        except KeyError:
-            # already removed?
-            pass
-    return 'OK', http.client.OK
-
-
 def setLock(fileid, reqheaders, acctok):
     '''Implements the Lock, RefreshLock, and UnlockAndRelock WOPI calls'''
     # cf. http://wopi.readthedocs.io/projects/wopirest/en/latest/files/Lock.html
@@ -171,10 +141,10 @@ def setLock(fileid, reqheaders, acctok):
     lock = reqheaders['X-WOPI-Lock']
     oldLock = reqheaders.get('X-WOPI-OldLock')
     validateTarget = reqheaders.get('X-WOPI-Validate-Target')
-    retrievedLock = utils.retrieveWopiLock(fileid, op, lock, acctok)
+    retrievedLock, _ = utils.retrieveWopiLock(fileid, op, lock, acctok)
 
     # perform the required checks for the validity of the new lock
-    if not retrievedLock and op == 'REFRESH_LOCK':
+    if op == 'REFRESH_LOCK' and not retrievedLock:
         if validateTarget:
             # this is an extension of the API: a REFRESH_LOCK without previous lock but with a Validate-Target header
             # is allowed provided that the target file was last saved by WOPI and not overwritten by external actions,
@@ -185,47 +155,23 @@ def setLock(fileid, reqheaders, acctok):
         if not savetime or not savetime.isdigit():
             return utils.makeConflictResponse(op, '', lock, oldLock, acctok['filename'],
                                               'The file was not locked' + ' and got modified' if validateTarget else '')
-    if retrievedLock and not utils.compareWopiLocks(retrievedLock, (oldLock if oldLock else lock)):
-        return utils.makeConflictResponse(op, retrievedLock, lock, oldLock, acctok['filename'], \
-                                          'The file was locked by another online editor')
 
-    # LOCK or REFRESH_LOCK: set the lock to the given one, including the expiration time
+    # LOCK or REFRESH_LOCK: atomically set the lock to the given one, including the expiration time,
+    # and return conflict response if the file was already locked
     try:
-        utils.storeWopiLock(op, lock, acctok, os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes)
+        return utils.storeWopiLock(fileid, op, lock, oldLock, acctok, \
+                                   os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes)
     except IOError as e:
-        if utils.EXCL_ERROR in str(e):
-            # this file was already locked externally: storeWopiLock looks at LibreOffice-compatible locks
-            return utils.makeConflictResponse(op, 'External App', lock, oldLock, acctok['filename'], \
-                                              'The file was locked by another application')
-        if 'No such file or directory' in str(e):
-            # the file got renamed/deleted: this is equivalent to a conflict
-            return utils.makeConflictResponse(op, 'External App', lock, oldLock, acctok['filename'], \
-                                              'The file got moved or deleted')
-        # any other failure
-        return str(e), http.client.INTERNAL_SERVER_ERROR
-    if not retrievedLock:
-        # on first lock, set an xattr with the current time for later conflicts checking
-        try:
-            st.setxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY, int(time.time()))
-        except IOError as e:
-            # not fatal, but will generate a conflict file later on, so log a warning
-            log.warning('msg="Unable to set lastwritetime xattr" user="%s" filename="%s" token="%s" reason="%s"' %
-                        (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:], e))
-        # also, keep track of files that have been opened for write: this is for statistical purposes only
-        # (cf. the GetLock WOPI call and the /wopi/cbox/open/list action)
-        if acctok['filename'] not in srv.openfiles:
-            srv.openfiles[acctok['filename']] = (time.asctime(), set([acctok['username']]))
-        else:
-            # the file was already opened but without lock: this happens on new files (cf. editnew action), just log
-            log.info('msg="First lock for new file" user="%s" filename="%s" token="%s"' %
-                     (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:]))
-    return 'OK', http.client.OK
+        # expected failures are handled in storeWopiLock
+        log.error('msg="%s: unable to store WOPI lock" filename="%s" token="%s" lock="%s" reason="%s"' %
+                  (op.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
+        return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
 
 
 def getLock(fileid, _reqheaders_unused, acctok):
     '''Implements the GetLock WOPI call'''
     resp = flask.Response()
-    lock = utils.retrieveWopiLock(fileid, 'GETLOCK', '', acctok)
+    lock, _ = utils.retrieveWopiLock(fileid, 'GETLOCK', '', acctok)
     resp.status_code = http.client.OK if lock else http.client.NOT_FOUND
     if lock:
         resp.headers['X-WOPI-Lock'] = lock
@@ -255,6 +201,34 @@ def getLock(fileid, _reqheaders_unused, acctok):
     #    pass
     # however implications have to be properly understood as we've seen cases of locks left behind
     return resp
+
+
+def unlock(fileid, reqheaders, acctok):
+    '''Implements the Unlock WOPI call'''
+    lock = reqheaders['X-WOPI-Lock']
+    retrievedLock, _ = utils.retrieveWopiLock(fileid, 'UNLOCK', lock, acctok)
+    if not utils.compareWopiLocks(retrievedLock, lock):
+        return utils.makeConflictResponse('UNLOCK', retrievedLock, lock, '', acctok['filename'])
+    # OK, the lock matches. Remove any extended attribute related to locks and conflicts handling
+    try:
+        st.unlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'])
+    except IOError:
+        # ignore, it's not worth to report anything here
+        pass
+    try:
+        # also remove the LibreOffice-compatible lock file when relevant
+        if os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes:
+            st.removefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), acctok['userid'], force=True)
+    except IOError:
+        # same as above
+        pass
+    # and update our internal list of opened files
+    try:
+        del srv.openfiles[acctok['filename']]
+    except KeyError:
+        # already removed?
+        pass
+    return 'OK', http.client.OK
 
 
 def putRelative(fileid, reqheaders, acctok):
@@ -298,7 +272,7 @@ def putRelative(fileid, reqheaders, acctok):
         try:
             # check for file existence + lock
             fileExists = st.stat(acctok['endpoint'], relTarget, acctok['userid'])
-            retrievedTargetLock = utils.retrieveWopiLock(fileid, 'PUT_RELATIVE', None, acctok, overridefilename=relTarget)
+            retrievedTargetLock, _ = utils.retrieveWopiLock(fileid, 'PUT_RELATIVE', None, acctok, overridefilename=relTarget)
         except IOError:
             fileExists = False
         if fileExists and (not overwriteTarget or retrievedTargetLock):
@@ -308,11 +282,11 @@ def putRelative(fileid, reqheaders, acctok):
         targetName = relTarget
     # either way, we now have a targetName to save the file: attempt to do so
     try:
-        utils.storeWopiFile(flask.request, acctok, utils.LASTSAVETIMEKEY, targetName)
+        utils.storeWopiFile(flask.request, None, acctok, utils.LASTSAVETIMEKEY, targetName)
     except IOError as e:
         log.info('msg="Error writing file" filename="%s" token="%s" error="%s"' %
                  (targetName, flask.request.args['access_token'][-20:], e))
-        return 'I/O Error', http.client.INTERNAL_SERVER_ERROR
+        return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
     # generate an access token for the new file
     log.info('msg="PutRelative: generating new access token" user="%s" filename="%s" ' \
              'mode="ViewMode.READ_WRITE" friendlyname="%s"' %
@@ -334,7 +308,7 @@ def putRelative(fileid, reqheaders, acctok):
 
 def deleteFile(fileid, _reqheaders_unused, acctok):
     '''Implements the DeleteFile WOPI call'''
-    retrievedLock = utils.retrieveWopiLock(fileid, 'DELETE', '', acctok)
+    retrievedLock, _ = utils.retrieveWopiLock(fileid, 'DELETE', '', acctok)
     if retrievedLock is not None:
         # file is locked and cannot be deleted
         return utils.makeConflictResponse('DELETE', retrievedLock, '', '', acctok['filename'])
@@ -343,14 +317,14 @@ def deleteFile(fileid, _reqheaders_unused, acctok):
         return 'OK', http.client.OK
     except IOError as e:
         log.info('msg="DeleteFile" token="%s" error="%s"' % (flask.request.args['access_token'][-20:], e))
-        return 'Internal error', http.client.INTERNAL_SERVER_ERROR
+        return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
 
 
 def renameFile(fileid, reqheaders, acctok):
     '''Implements the RenameFile WOPI call.'''
     targetName = reqheaders['X-WOPI-RequestedName']
     lock = reqheaders['X-WOPI-Lock'] if 'X-WOPI-Lock' in reqheaders else None
-    retrievedLock = utils.retrieveWopiLock(fileid, 'RENAMEFILE', lock, acctok)
+    retrievedLock, _ = utils.retrieveWopiLock(fileid, 'RENAMEFILE', lock, acctok)
     if retrievedLock is not None and not utils.compareWopiLocks(retrievedLock, lock):
         return utils.makeConflictResponse('RENAMEFILE', retrievedLock, lock, '', acctok['filename'])
     try:
@@ -360,8 +334,6 @@ def renameFile(fileid, reqheaders, acctok):
                  (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:], targetName))
         st.renamefile(acctok['endpoint'], acctok['filename'], targetName, acctok['userid'])
         # also rename the locks
-        st.renamefile(acctok['endpoint'], utils.getLockName(acctok['filename']), \
-                      utils.getLockName(targetName), acctok['userid'])
         if os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes:
             st.renamefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), \
                           utils.getLibreOfficeLockName(targetName), acctok['userid'])
@@ -392,7 +364,7 @@ def _createNewFile(fileid, acctok):
         return 'File exists', http.client.CONFLICT
     except IOError:
         # indeed the file did not exist, so we write it for the first time
-        utils.storeWopiFile(flask.request, acctok, utils.LASTSAVETIMEKEY)
+        utils.storeWopiFile(flask.request, None, acctok, utils.LASTSAVETIMEKEY)
         log.info('msg="File stored successfully" action="editnew" user="%s" filename="%s" token="%s"' %
                  (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:]))
         # and we keep track of it as an open file with timestamp = Epoch, despite not having any lock yet.
@@ -413,13 +385,14 @@ def putFile(fileid):
             return _createNewFile(fileid, acctok)
         # otherwise, check that the caller holds the current lock on the file
         lock = flask.request.headers['X-WOPI-Lock']
-        retrievedLock = utils.retrieveWopiLock(fileid, 'PUTFILE', lock, acctok)
+        retrievedLock, lockHolder = utils.retrieveWopiLock(fileid, 'PUTFILE', lock, acctok)
         if retrievedLock is None:
             return utils.makeConflictResponse('PUTFILE', retrievedLock, lock, '', acctok['filename'], \
                                               'Cannot overwrite unlocked file')
         if not utils.compareWopiLocks(retrievedLock, lock):
             return utils.makeConflictResponse('PUTFILE', retrievedLock, lock, '', acctok['filename'], \
-                                              'Cannot overwrite file locked by another application')
+                                              'Cannot overwrite file locked by %s' % \
+                                               (lockHolder if lockHolder != 'wopi' else 'another application'))
         # OK, we can save the file now
         log.info('msg="PutFile" user="%s" filename="%s" fileid="%s" action="edit" token="%s"' %
                  (acctok['userid'][-20:], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
@@ -444,7 +417,14 @@ def putFile(fileid):
             newname, ext = os.path.splitext(acctok['filename'])
             # !!! typical EFSS formats are like '<filename>_conflict-<date>-<time>', but they're not synchronized back !!!
             newname = '%s-webconflict-%s%s' % (newname, time.strftime('%Y%m%d-%H'), ext.strip())
-            utils.storeWopiFile(flask.request, acctok, utils.LASTSAVETIMEKEY, newname)
+            try:
+                utils.storeWopiFile(flask.request, retrievedLock, acctok, utils.LASTSAVETIMEKEY, newname)
+            except IOError as e:
+                if common.ACCESS_ERROR in str(e):
+                    # let's try the user's home instead of the current folder
+                    newname = utils.getuserhome(acctok['username']) + os.path.sep + os.path.basename(newname)
+                    utils.storeWopiFile(flask.request, retrievedLock, acctok, utils.LASTSAVETIMEKEY, newname)
+
             # keep track of this action in the original file's xattr, to avoid looping (see below)
             st.setxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY, 0)
             log.info('msg="Conflicting copy created" user="%s" savetime="%s" lastmtime="%s" newfilename="%s" token="%s"' %
@@ -456,7 +436,7 @@ def putFile(fileid):
         # Go for overwriting the file. Note that the entire check+write operation should be atomic,
         # but the previous check still gives the opportunity of a race condition. We just live with it.
         # Anyhow, the EFSS should support versioning for such cases.
-        utils.storeWopiFile(flask.request, acctok, utils.LASTSAVETIMEKEY)
+        utils.storeWopiFile(flask.request, retrievedLock, acctok, utils.LASTSAVETIMEKEY)
         log.info('msg="File stored successfully" action="edit" user="%s" filename="%s" token="%s"' %
                  (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:]))
         return 'OK', http.client.OK
@@ -469,4 +449,4 @@ def putFile(fileid):
     except IOError as e:
         log.error('msg="Error writing file" filename="%s" token="%s" error="%s"' %
                   (acctok['filename'], flask.request.args['access_token'], e))
-        return 'I/O Error', http.client.INTERNAL_SERVER_ERROR
+        return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
