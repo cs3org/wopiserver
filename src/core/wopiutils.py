@@ -161,7 +161,7 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
 
 def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefilename=None):
     '''Retrieves and logs a lock for a given file: returns the lock and its holder, or (None, None) if no lock found'''
-    encacctok = flask.request.args['access_token'][-20:] if 'access_token' in flask.request.args else 'N/A'
+    encacctok = flask.request.args['access_token'][-20:] if 'access_token' in flask.request.args else 'NA'
 
     # if required, check if a non-WOPI office lock exists for this file
     checkext = srv.config.get('general', 'detectexternallocks', fallback='True').upper() == 'TRUE'
@@ -255,7 +255,7 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok):
     '''Stores the lock for a given file in the form of an encoded JSON string'''
     try:
         # validate that the underlying file is still there (it might have been moved/deleted)
-        st.stat(acctok['endpoint'], acctok['filename'], acctok['userid'])
+        statInfo = st.stat(acctok['endpoint'], acctok['filename'], acctok['userid'])
     except IOError as e:
         log.warning('msg="%s: target file not found any longer" filename="%s" token="%s" reason="%s"' %
                     (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], e))
@@ -321,7 +321,10 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok):
             # the file was already opened but without lock: this happens on new files (cf. editnew action), just log
             log.info('msg="First lock for new file" user="%s" filename="%s" token="%s"' %
                      (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:]))
-        return 'OK', http.client.OK
+        resp = flask.Response()
+        resp.status_code = http.client.OK
+        resp.headers['X-WOPI-ItemVersion'] = 'v%d' % statInfo['mtime']
+        return resp
 
     except IOError as e:
         if common.EXCL_ERROR in str(e):
@@ -335,7 +338,10 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok):
             st.refreshlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'], encodeLock(lock))
             log.info('msg="%s" filename="%s" token="%s" lock="%s" result="refreshed"' %
                      (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
-            return 'OK', http.client.OK
+            resp = flask.Response()
+            resp.status_code = http.client.OK
+            resp.headers['X-WOPI-ItemVersion'] = 'v%d' % statInfo['mtime']
+            return resp
         # any other error is raised
         raise
 
@@ -375,14 +381,18 @@ def compareWopiLocks(lock1, lock2):
 
 def makeConflictResponse(operation, retrievedlock, lock, oldlock, filename, reason=None):
     '''Generates and logs an HTTP 409 response in case of locks conflict'''
-    resp = flask.Response()
-    resp.headers['X-WOPI-Lock'] = retrievedlock if retrievedlock is not None else 'missing'
-    if reason:
-        resp.headers['X-WOPI-LockFailureReason'] = resp.data = reason
+    resp = flask.Response(mimetype='application/json')
+    resp.headers['X-WOPI-Lock'] = retrievedlock if retrievedlock else ''
     resp.status_code = http.client.CONFLICT
+    if reason:
+        # this is either a simple message or a dictionary: in all cases we want a dictionary to be JSON-ified
+        if type(reason) == str:
+            reason = {'message': reason}
+        resp.headers['X-WOPI-LockFailureReason'] = reason['message']
+        resp.data = json.dumps(reason)
     log.warning('msg="%s: returning conflict" filename="%s" token="%s" lock="%s" oldlock="%s" retrievedlock="%s" reason="%s"' %
                 (operation.title(), filename, flask.request.args['access_token'][-20:], \
-                 lock, oldlock, retrievedlock, (reason if reason else 'N/A')))
+                 lock, oldlock, retrievedlock, (reason['message'] if reason else 'NA')))
     return resp
 
 
