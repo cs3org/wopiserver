@@ -16,4 +16,4 @@ These notes have been adaped from the enterprise ownCloud WOPI implementation, c
 
 5. Run the testsuite (you can select a specific test group passing as well e.g. `-e WOPI_TESTGROUP=FileVersion`):
 
-   `docker run --add-host="localhost:<your_external_wopiserver_IP>" <output from step 4> deepdiver/wopi-validator-core-docker:latest`
+   `docker run --rm --add-host="localhost:<your_external_wopiserver_IP>" <output from step 4> deepdiver/wopi-validator-core-docker:latest`

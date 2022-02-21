@@ -404,8 +404,9 @@ def iopWopiTest():
         return 'Missing arguments', http.client.BAD_REQUEST
     if Wopi.useHttps:
         return 'WOPI validator not supported in https mode', http.client.BAD_REQUEST
-    inode, acctok = utils.generateAccessToken(usertoken, filepath, utils.ViewMode.READ_WRITE, ('test', usertoken), '/',
-                                              endpoint, ('WOPI validator', 'http://fortestonly/', 'http://fortestonly/'))
+    inode, acctok = utils.generateAccessToken(usertoken, filepath, utils.ViewMode.READ_WRITE, ('test', usertoken),
+                                              'http://folderurlfortestonly/', endpoint,
+                                              ('WOPI validator', 'http://fortestonly/', 'http://fortestonly/'))
     Wopi.log.info('msg="iopWopiTest: preparing test via WOPI validator" client="%s"' % req.remote_addr)
     return '-e WOPI_URL=http://localhost:%d/wopi/files/%s -e WOPI_TOKEN=%s' % (Wopi.port, inode, acctok)
 
