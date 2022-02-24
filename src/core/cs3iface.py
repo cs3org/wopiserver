@@ -107,7 +107,7 @@ def setxattr(_endpoint, filepath, userid, key, value, lockid):
     reference = cs3spr.Reference(path=filepath)
     md = cs3spr.ArbitraryMetadata()
     md.metadata.update({key: str(value)})        # pylint: disable=no-member
-    req = cs3sp.SetArbitraryMetadataRequest(ref=reference, arbitrary_metadata=md)  #, lock_id=lockid)
+    req = cs3sp.SetArbitraryMetadataRequest(ref=reference, arbitrary_metadata=md, lock_id=lockid)
     res = ctx['cs3gw'].SetArbitraryMetadata(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to setxattr" filepath="%s" key="%s" code="%s" reason="%s"' %
@@ -144,7 +144,7 @@ def getxattr(_endpoint, filepath, userid, key):
 def rmxattr(_endpoint, filepath, userid, key, lockid):
     '''Remove the extended attribute <key> using the given userid as access token'''
     reference = cs3spr.Reference(path=filepath)
-    req = cs3sp.UnsetArbitraryMetadataRequest(ref=reference, arbitrary_metadata_keys=[key])  #, lock_id=lockid)
+    req = cs3sp.UnsetArbitraryMetadataRequest(ref=reference, arbitrary_metadata_keys=[key], lock_id=lockid)
     res = ctx['cs3gw'].UnsetArbitraryMetadata(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to rmxattr" filepath="%s" key="%s" reason="%s"' % (filepath, key, res.status.message.replace('"', "'")))
@@ -229,7 +229,7 @@ def readfile(_endpoint, filepath, userid, lockid):
     '''Read a file using the given userid as access token. Note that the function is a generator, managed by Flask.'''
     tstart = time.time()
     # prepare endpoint
-    req = cs3sp.InitiateFileDownloadRequest(ref=cs3spr.Reference(path=filepath))  # lock_id=lockid
+    req = cs3sp.InitiateFileDownloadRequest(ref=cs3spr.Reference(path=filepath), lock_id=lockid)
     initfiledownloadres = ctx['cs3gw'].InitiateFileDownload(request=req, metadata=[('x-access-token', userid)])
     if initfiledownloadres.status.code == cs3code.CODE_NOT_FOUND:
         log.info('msg="File not found on read" filepath="%s"' % filepath)
@@ -276,7 +276,7 @@ def writefile(_endpoint, filepath, userid, content, lockid, islock=False):
         content = bytes(content, 'UTF-8')
     size = str(len(content))
     metadata = types.Opaque(map={"Upload-Length": types.OpaqueEntry(decoder="plain", value=str.encode(size))})
-    req = cs3sp.InitiateFileUploadRequest(ref=cs3spr.Reference(path=filepath), opaque=metadata)  # lock_id=lockid,
+    req = cs3sp.InitiateFileUploadRequest(ref=cs3spr.Reference(path=filepath), lock_id=lockid, opaque=metadata)
     initfileuploadres = ctx['cs3gw'].InitiateFileUpload(request=req, metadata=[('x-access-token', userid)])
     if initfileuploadres.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to initiateFileUpload on write" filepath="%s" code="%s" reason="%s"' % \
@@ -310,9 +310,8 @@ def writefile(_endpoint, filepath, userid, content, lockid, islock=False):
 
 def renamefile(_endpoint, filepath, newfilepath, userid, lockid):
     '''Rename a file from origfilepath to newfilepath using the given userid as access token.'''
-    source = cs3spr.Reference(path=filepath)
-    destination = cs3spr.Reference(path=newfilepath)
-    req = cs3sp.MoveRequest(source=source, destination=destination)  # lock_id=lockid)
+    req = cs3sp.MoveRequest(source=cs3spr.Reference(path=filepath), \
+                            destination=cs3spr.Reference(path=newfilepath), lock_id=lockid)
     res = ctx['cs3gw'].Move(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to rename file" filepath="%s" code="%s" reason="%s"' %
@@ -324,8 +323,7 @@ def renamefile(_endpoint, filepath, newfilepath, userid, lockid):
 def removefile(_endpoint, filepath, userid, _force=False):
     '''Remove a file using the given userid as access token.
        The force argument is ignored for now for CS3 storage.'''
-    reference = cs3spr.Reference(path=filepath)
-    req = cs3sp.DeleteRequest(ref=reference)
+    req = cs3sp.DeleteRequest(ref=cs3spr.Reference(path=filepath))
     res = ctx['cs3gw'].Delete(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
         if str(res) == common.ENOENT_MSG:
