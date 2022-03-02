@@ -304,7 +304,7 @@ def putRelative(fileid, reqheaders, acctok):
     try:
         utils.storeWopiFile(flask.request, None, acctok, utils.LASTSAVETIMEKEY, targetName)
     except IOError as e:
-        utils.storeForRecovery(flask.request.get_data(), targetName, flask.request.args['access_token'][-20:], e)  # lgtm [py/path-injection]
+        utils.storeForRecovery(flask.request.get_data(), targetName, flask.request.args['access_token'][-20:], e)
         return '', http.client.INTERNAL_SERVER_ERROR
     # generate an access token for the new file
     log.info('msg="PutRelative: generating new access token" user="%s" filename="%s" ' \

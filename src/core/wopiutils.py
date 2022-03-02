@@ -20,6 +20,7 @@ from binascii import Error as B64Error
 import http.client
 import flask
 import jwt
+from werkzeug.utils import secure_filename
 import core.commoniface as common
 
 # this is the xattr key used for conflicts resolution on the remote storage
@@ -418,7 +419,7 @@ def getConflictPath(username):
 
 def storeForRecovery(content, filename, acctokforlog, exception):
     try:
-        filepath = srv.recoverypath + os.sep + time.strftime('%Y%m%dT%H%M%S') + '_' + os.path.basename(filename)
+        filepath = srv.recoverypath + os.sep + time.strftime('%Y%m%dT%H%M%S') + '_' + secure_filename(filename)
         with open(filepath, mode='wb') as f:
             written = f.write(content)
         if written != len(content):
