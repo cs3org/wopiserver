@@ -1,8 +1,22 @@
 ## Changelog for the WOPI server
 
+### ... v8.1.0
+- The new Lock API is now fully supported,
+  including for the CS3APIs-compatible implementation;
+  in addition, locks are passed along to CS3APIs
+  backends on any operation that implies a modification
+- Introduced a configurable `recoverypath` as a
+  local path where to store files in case of I/O errors
+  with the remote storage. Fixes bug #39
+- Introduced a configurable `conflictpath` as the
+  target location where to store webconflict files
+- Introduced a `detectexternallocks` option, to control
+  the additional logic that allows to operate the WOPI
+  server on shared online storages
+
 ### Fri Dec  3 2021 - v8.0.0
 - Refactored the locking logic to use a new
-  Lock API (#53) and corresponding xattr support
+  Lock API (#51) and corresponding xattr support
   in xrootd/EOS. Note that for this release,
   the CS3APIs-compatible implementation of locking
   is not yet available
