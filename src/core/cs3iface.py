@@ -3,9 +3,7 @@ cs3iface.py
 
 CS3 API based interface for the IOP WOPI server
 
-Authors:
-Giuseppe.LoPresti@cern.ch, CERN/IT-ST
-Lovisa.Lugnegaard@cern.ch, CERN/IT-ST
+Main author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 '''
 
 import time

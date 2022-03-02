@@ -3,6 +3,8 @@
 srv.py
 
 Implementation of the core WOPI API
+
+Main author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 '''
 
 import time

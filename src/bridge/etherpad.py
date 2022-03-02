@@ -3,7 +3,7 @@ etherpad.py
 
 The Etherpad-specific code used by the WOPI bridge.
 
-Author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
+Main author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 '''
 
 from random import choice

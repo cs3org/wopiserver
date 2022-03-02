@@ -4,7 +4,7 @@ commoniface.py
 Common entities used by all storage interfaces for the IOP WOPI server.
 Includes functions to store and retrieve Reva-compatible locks.
 
-Author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
+Main author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 '''
 
 import time

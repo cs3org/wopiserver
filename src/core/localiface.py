@@ -3,7 +3,7 @@ localiface.py
 
 Local storage interface for the IOP WOPI server
 
-Author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
+Main author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 '''
 
 import time

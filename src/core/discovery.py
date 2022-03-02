@@ -1,9 +1,12 @@
 '''
 discovery.py
 
-Helper code for the WOPI discovery phase, as well as
-for integrating the apps supported by the bridge functionality.
-This code is going to be deprecated once the new Reva AppProvider is fully functional.
+Helper code for the WOPI discovery phase, as well as for integrating the apps
+supported by the bridge functionality.
+This code is deprecated and is only used in conjunction with the xroot storage interface:
+when the WOPI server is interfaced to Reva via the cs3 storage interface this code is disabled.
+
+Main author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 '''
 
 from xml.etree import ElementTree as ET
