@@ -4,6 +4,8 @@ test_storageiface.py
 Basic unit testing of the storage interfaces. To run them, please make sure the
 wopiserver-test.conf is correctly configured (see /README.md). The storage layer
 to be tested can be overridden by the WOPI_STORAGE env variable.
+
+Main author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 '''
 
 import unittest

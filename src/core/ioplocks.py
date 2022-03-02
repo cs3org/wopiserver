@@ -2,6 +2,8 @@
 ioplocks.py
 
 Implementation of the interoperable (iop) locking used for OnlyOffice and Office Desktop applications.
+
+Main author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 '''
 
 import time

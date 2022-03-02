@@ -1,9 +1,9 @@
 '''
 wopiclient.py
 
-A set of WOPI functions for the WOPI bridge service.
+A set of WOPI client functions for the WOPI bridge service.
 
-Author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
+Main author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 '''
 
 import os

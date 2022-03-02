@@ -1,7 +1,7 @@
 '''
-The WOPI Bridge for IOP. This connector service supports CodiMD and Etherpad.
+The WOPI bridge extension for IOP. This connector service supports CodiMD and Etherpad.
 
-Author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
+Main author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 '''
 
 import os

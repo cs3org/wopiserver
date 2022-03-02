@@ -1,7 +1,9 @@
 '''
 wopiutils.py
 
-General Low-level functions to support the WOPI server
+General low-level functions to support the WOPI server.
+
+Main author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 '''
 
 import sys

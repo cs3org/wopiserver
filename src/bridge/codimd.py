@@ -3,7 +3,7 @@ codimd.py
 
 The CodiMD-specific code used by the WOPI bridge.
 
-Author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
+Main author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 '''
 
 import os

@@ -4,7 +4,7 @@ wopiserver.py
 
 The Web-application Open Platform Interface (WOPI) gateway for the ScienceMesh IOP
 
-Author: Giuseppe Lo Presti (@glpatcern), CERN/IT-ST
+Main author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 Contributions: see README.md
 '''
 
