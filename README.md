@@ -14,6 +14,7 @@ Contributors:
 - Michael DSilva (@madsi1m)
 - Lovisa Lugnegaard (@LovisaLugnegard)
 - Samuel Alfageme (@SamuAlfageme)
+- Diogo Castro (@diocas)
 - Ishank Arora (@ishank011)
 - Willy Kloucek (@wkloucek)
 - Gianmaria Del Monte (@gmgigi96)
