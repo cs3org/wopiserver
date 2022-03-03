@@ -212,7 +212,7 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefn=None):
             log.info('msg="%s: no lock found" user="%s" filename="%s" token="%s"' %
                      (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok))
             # lazily remove the LibreOffice-compatible lock file, if it was detected and has
-            # the expected signature - cf. storeWopiLock()
+            # the expected signature - cf. setLock()
             try:
                 if lolock:
                     st.removefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], True)

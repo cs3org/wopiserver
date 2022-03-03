@@ -174,6 +174,13 @@ def statx(endpoint, fileref, userid, versioninv=1):
         filepath = fileref
     rc, statInfo = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(filepath, encodeamp=True)
                                               + _eosargs(userid) + '&mgm.pcmd=stat')
+    # alternative: stat with -m flag
+    # fileInfoV = _xrootcmd(endpoint, 'fileinfo', '', userid, 'mgm.path=pid:' + fileref + '&mgm.file.info.option=-m')
+    # keylength.file=35 file=/eos/.../filename size=2915 mtime=1599649863.0 ctime=1599649866.280468540 btime=1599649866.280468540 clock=0 mode=0644
+    # uid=4179 gid=2763 fxid=19ab8b68 fid=430672744 ino=115607834422411264 pid=1713958 pxid=001a2726 xstype=adler xs=a2dfcdf9
+    # etag="115607834422411264:a2dfcdf9" detached=0 layout=replica nstripes=2 lid=00100112 nrep=2 xattrn=sys.eos.btime xattrv=1599649866.280468540
+    # uid:xxxx[username] gid:xxxx[group] tident:xxx name:username dn: prot:https host:xxxx.cern.ch domain:cern.ch geo: sudo:0 fsid=305 fsid=486
+    # cf. https://gitlab.cern.ch/dss/eos/-/blob/master/archive/eosarch/utils.py
     log.info('msg="Invoked stat" filepath="%s" rc="%s"' % (_getfilepath(filepath), str(rc).strip('\n')))
     if OK_MSG not in str(rc) or not statInfo:
         raise IOError(str(rc).strip('\n'))
@@ -197,7 +204,8 @@ def statx(endpoint, fileref, userid, versioninv=1):
             'filepath': filepath,
             'ownerid': statxdata[5] + ':' + statxdata[6],
             'size': int(statxdata[8]),
-            'mtime': int(statxdata[12])
+            'mtime': int(statxdata[12]),
+            'etag': statxdata[12],   # TODO extract the ETAG from a fileinfo query
         }
     # now stat the corresponding version folder to get an inode invariant to save operations, see CERNBOX-1216
     # also, use the owner's as opposed to the user's credentials to bypass any restriction (e.g. with single-share files)
@@ -235,7 +243,8 @@ def statx(endpoint, fileref, userid, versioninv=1):
         'filepath': filepath,
         'ownerid': statxdata[5] + ':' + statxdata[6],
         'size': int(statxdata[8]),
-        'mtime': int(statxdata[12])
+        'mtime': int(statxdata[12]),
+        'etag': statxdata[12],    # TODO extract the ETAG from a fileinfo query
     }
 
 

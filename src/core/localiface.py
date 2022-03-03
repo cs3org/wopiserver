@@ -88,7 +88,8 @@ def stat(_endpoint, filepath, _userid):
             'filepath': filepath,
             'ownerid': str(statInfo.st_uid) + ':' + str(statInfo.st_gid),
             'size': statInfo.st_size,
-            'mtime': statInfo.st_mtime
+            'mtime': statInfo.st_mtime,
+            'etag': str(statInfo.st_mtime),
         }
     except (FileNotFoundError, PermissionError) as e:
         raise IOError(e)

@@ -86,7 +86,6 @@ def stat(endpoint, fileref, userid, versioninv=1):
     ref = _getcs3reference(endpoint, fileref)
     statInfo = ctx['cs3gw'].Stat(request=cs3sp.StatRequest(ref=ref), metadata=[('x-access-token', userid)])
     tend = time.time()
-
     if statInfo.status.code != cs3code.CODE_OK:
         log.info('msg="Failed stat" fileref="%s" trace="%s" reason="%s"' %
                  (fileref, statInfo.status.trace, statInfo.status.message.replace('"', "'")))
@@ -114,12 +113,12 @@ def stat(endpoint, fileref, userid, versioninv=1):
         'filepath': filepath,
         'ownerid': statInfo.info.owner.opaque_id + '@' + statInfo.info.owner.idp,
         'size': statInfo.info.size,
-        'mtime': statInfo.info.mtime.seconds
+        'mtime': statInfo.info.mtime.seconds,
+        'etag': statInfo.info.etag,
     }
 
-
 def statx(endpoint, fileref, userid, versioninv=1):
-    '''Get extended stat info (inode, filepath, ownerid, size, mtime). Equivalent to stat.'''
+    '''Get extended stat info (inode, filepath, ownerid, size, mtime, etag). Equivalent to stat.'''
     return stat(endpoint, fileref, userid, versioninv)
 
 
