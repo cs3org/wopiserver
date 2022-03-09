@@ -275,7 +275,7 @@ def setlock(endpoint, filepath, userid, appname, value):
         log.debug('msg="Invoked setlock" filepath="%s" value="%s"' % (filepath, value))
         setxattr(endpoint, filepath, userid, common.LOCKKEY, common.genrevalock(appname, value) + '&mgm.option=c', None)
     except IOError as e:
-        if EXCL_XATTR_MSG in str(e):
+        if EXCL_XATTR_MSG in str(e) or 'flock already held' in str(e):  # TODO need to confirm this error message once EOS-5145 is implemented
             raise IOError(common.EXCL_ERROR)
 
 
