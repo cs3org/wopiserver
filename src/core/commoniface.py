@@ -66,14 +66,7 @@ def genrevalock(appname, value):
 def retrieverevalock(rawlock):
     '''Restores the JSON payload from a base64-encoded Reva lock'''
     try:
-        l = json.loads(urlsafe_b64decode(rawlock).decode())
-        if 'h' in l:
-            # temporary code to support the data structure from WOPI 8.0
-            l['app_name'] = l['h']
-            l['lock_id'] = WEBDAV_LOCK_PREFIX + ' ' + l['md']
-            l['expiration'] = {}
-            l['expiration']['seconds'] = l['exp']
-        return l
+        return json.loads(urlsafe_b64decode(rawlock).decode())
     except (B64Error, json.JSONDecodeError) as e:
         raise IOError(e)
 
