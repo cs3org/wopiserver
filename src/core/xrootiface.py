@@ -9,7 +9,6 @@ Main author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 import time
 import os
 from stat import S_ISDIR
-from base64 import b64encode
 from pwd import getpwnam
 from XRootD import client as XrdClient
 from XRootD.client.flags import OpenFlags, QueryCode, MkDirFlags, StatInfoFlags
@@ -122,12 +121,9 @@ def init(inconfig, inlog):
     log = inlog
     endpointoverride = config.get('xroot', 'endpointoverride', fallback='')
     defaultstorage = config.get('xroot', 'storageserver')
+    homepath = config.get('xroot', 'storagehomepath', fallback='')
     # prepare the xroot client for the default storageserver
     _getxrdfor(defaultstorage)
-    if config.has_option('xroot', 'storagehomepath'):
-        homepath = config.get('xroot', 'storagehomepath')
-    else:
-        homepath = ''
 
 
 def getuseridfromcreds(_token, wopiuser):
@@ -191,11 +187,9 @@ def statx(endpoint, fileref, userid, versioninv=0):
         raise IOError('Is a directory')            # EISDIR
     if versioninv == 0:
         # classic statx info of the given file:
-        # the inode is base64-encoded to match the format issued by the CS3APIs and ensure interoperability,
-        # and we extract the eosinstance from endpoint, which looks like e.g. root://eosinstance[.cern.ch]
+        # we extract the eosinstance from endpoint, which looks like e.g. root://eosinstance[.cern.ch]
         endpoint = _geturlfor(endpoint)
-        inode = endpoint[7:] if endpoint.find('.') == -1 else endpoint[7:endpoint.find('.')]
-        inode += '-' + b64encode(statxdata[2].encode()).decode()
+        inode = common.encodeinode(endpoint[7:] if endpoint.find('.') == -1 else endpoint[7:endpoint.find('.')], statxdata[2]),
         log.debug('msg="Invoked stat return" inode="%s" filepath="%s"' % (inode, _getfilepath(filepath)))
         return {
             'inode': inode,
@@ -209,7 +203,7 @@ def statx(endpoint, fileref, userid, versioninv=0):
     rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder) + _eosargs(userid) + '&mgm.pcmd=stat')
     tend = time.time()
     infov = infov.decode()
-    log.debug('msg="Invoked stat on version folder" endpoint="%s" filepath="%s" result="%s" elapsedTimems="%.1f"' % \
+    log.debug('msg="Invoking stat on version folder" endpoint="%s" filepath="%s" result="%s" elapsedTimems="%.1f"' % \
               (endpoint, _getfilepath(verFolder), infov, (tend-tstart)*1000))
     try:
         if '[SUCCESS]' not in str(rcv) or 'retc=' in infov:
@@ -229,10 +223,9 @@ def statx(endpoint, fileref, userid, versioninv=0):
     except IOError:
         log.warning('msg="Failed to mkdir/stat version folder" rc="%s"' % rcv)
         statxvdata = statxdata
-    # return the metadata of the given file, with the inode taken from the version folder (see above for the encoding)
+    # return the metadata of the given file, with the inode taken from the version folder
     endpoint = _geturlfor(endpoint)
-    inode = endpoint[7:] if endpoint.find('.') == -1 else endpoint[7:endpoint.find('.')]
-    inode += '-' + b64encode(statxvdata[2].encode()).decode()
+    inode = common.encodeinode(endpoint[7:] if endpoint.find('.') == -1 else endpoint[7:endpoint.find('.')], statxvdata[2]),
     log.debug('msg="Invoked stat return" inode="%s" filepath="%s"' % (inode, _getfilepath(verFolder)))
     return {
         'inode': inode,

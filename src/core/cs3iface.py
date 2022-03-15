@@ -8,7 +8,6 @@ Main author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 
 import time
 import http
-from base64 import urlsafe_b64encode
 import requests
 import grpc
 
@@ -59,39 +58,39 @@ def authenticate_for_test(userid, userpwd):
     return authRes.token
 
 
-def stat(endpoint, fileid, userid, versioninv=1):
+def stat(endpoint, fileref, userid, versioninv=1):
     '''Stat a file and returns (size, mtime) as well as other extended info using the given userid as access token.
-    Note that endpoint here means the storage id. Note that fileid can be either a path (which MUST begin with /),
+    Note that endpoint here means the storage id, and fileref can be either a path (which MUST begin with /),
     or an id (which MUST NOT start with a /). The versioninv flag is natively supported by Reva.'''
     if endpoint == 'default':
         raise IOError('A CS3API-compatible storage endpoint must be identified by a storage UUID')
     tstart = time.time()
-    if fileid[0] == '/':
+    if fileref[0] == '/':
         # assume this is a filepath
-        ref = cs3spr.Reference(path=fileid)
+        ref = cs3spr.Reference(path=fileref)
     else:
         # assume we have an opaque fileid
-        ref = cs3spr.Reference(resource_id=cs3spr.ResourceId(storage_id=endpoint, opaque_id=fileid))
+        ref = cs3spr.Reference(resource_id=cs3spr.ResourceId(storage_id=endpoint, opaque_id=fileref))
     statInfo = ctx['cs3gw'].Stat(request=cs3sp.StatRequest(ref=ref), metadata=[('x-access-token', userid)])
     tend = time.time()
-    log.info('msg="Invoked stat" inode="%s" elapsedTimems="%.1f"' % (fileid, (tend-tstart)*1000))
     if statInfo.status.code == cs3code.CODE_OK:
-        log.debug('msg="Stat result" data="%s"' % statInfo)
         if statInfo.info.type == cs3spr.RESOURCE_TYPE_CONTAINER:
+            log.info('msg="Invoked stat" fileref="%s" result="ISDIR" elapsedTimems="%.1f"' % (fileref, (tend-tstart)*1000))
             raise IOError('Is a directory')
         if statInfo.info.type not in (cs3spr.RESOURCE_TYPE_FILE, cs3spr.RESOURCE_TYPE_SYMLINK):
-            log.warning('msg="Stat: unexpected type" type="%d"' % statInfo.info.type)
+            log.warning('msg="Invoked stat" fileref="%s" unexpectedtype="%d"' % (fileref, statInfo.info.type))
             raise IOError('Unexpected type %d' % statInfo.info.type)
-        # we base64-encode the inode so it can be used in a WOPISrc
-        inode = urlsafe_b64encode(statInfo.info.id.opaque_id.encode()).decode()
+        inode = common.encodeinode(statInfo.info.id.storage_id, statInfo.info.id.opaque_id)
+        log.info('msg="Invoked stat" fileref="%s" inode="%s" filepath="%s" elapsedTimems="%.1f"' %
+                 (fileref, inode, statInfo.info.path, (tend-tstart)*1000))
         return {
-            'inode': statInfo.info.id.storage_id + '-' + inode,
+            'inode': inode,
             'filepath': statInfo.info.path,
             'ownerid': statInfo.info.owner.opaque_id + '@' + statInfo.info.owner.idp,
             'size': statInfo.info.size,
             'mtime': statInfo.info.mtime.seconds
         }
-    log.info('msg="Failed stat" inode="%s" reason="%s"' % (fileid, statInfo.status.message.replace('"', "'")))
+    log.info('msg="Failed stat" fileref="%s" reason="%s"' % (fileref, statInfo.status.message.replace('"', "'")))
     raise IOError(common.ENOENT_MSG if statInfo.status.code == cs3code.CODE_NOT_FOUND else statInfo.status.message)
 
 
@@ -181,7 +180,7 @@ def getlock(_endpoint, filepath, userid):
                   (filepath, res.status.code, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
     log.debug('msg="Invoked getlock" filepath="%s" result="%s"' % (filepath, res.lock))
-    # return a dict that mimics the internal JSON structure used by Reva, cf. commoniface.py
+    # rebuild a dict corresponding to the internal JSON structure used by Reva, cf. commoniface.py
     return {
         'lock_id': res.lock.lock_id,
         'type': res.lock.type,

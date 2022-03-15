@@ -76,3 +76,8 @@ def retrieverevalock(rawlock):
         return l
     except (B64Error, json.JSONDecodeError) as e:
         raise IOError(e)
+
+
+def encodeinode(endpoint, inode):
+    '''Encodes a given endpoint and inode to be used as a safe WOPISrc'''
+    return endpoint + '-' + urlsafe_b64encode(inode.encode()).decode()

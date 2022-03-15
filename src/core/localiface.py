@@ -58,7 +58,7 @@ def stat(_endpoint, filepath, _userid):
         if S_ISDIR(statInfo.st_mode):
             raise IOError('Is a directory')
         return {
-            'inode': str(statInfo.st_ino),
+            'inode': common.encodeinode('local', str(statInfo.st_ino)),
             'filepath': filepath,
             'ownerid': str(statInfo.st_uid) + ':' + str(statInfo.st_gid),
             'size': statInfo.st_size,
