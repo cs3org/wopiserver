@@ -1,20 +1,24 @@
 ## Changelog for the WOPI server
 
-### ... v8.1.0
-- The new Lock API is now fully supported,
+### ... Mar .. 2022 - v8.0.0
+- The new Lock API is now fully supported (#51),
   including for the CS3APIs-compatible implementation;
   in addition, locks are passed along to CS3APIs
   backends on any operation that implies a modification
-- Introduced a configurable `recoverypath` as a
+- Introduced a `recoverypath` configuration option as a
   local path where to store files in case of I/O errors
   with the remote storage. Fixes bug #39
-- Introduced a configurable `conflictpath` as the
+- Introduced a `conflictpath` configuration option as the
   target location where to store webconflict files
 - Introduced a `detectexternallocks` option, to control
   the additional logic that allows to operate the WOPI
   server on shared online storages
+- Improved logging: lock-related logs were made more
+  consistent and informative, and access tokens have
+  been redacted from logged URLs
+- The docker image has been upgraded to python 3.10
 
-### Fri Dec  3 2021 - v8.0.0
+### Fri Dec  3 2021 - v8.0.0rc1
 - Refactored the locking logic to use a new
   Lock API (#51) and corresponding xattr support
   in xrootd/EOS. Note that for this release,
@@ -23,7 +27,7 @@
 - Removed legacy crypto settings from docker image
 - Adapted the xrootd/EOS storage interface to
   support the new `/openinapp` Reva workflow
-- Implemented support for ownCloud WOPI proxy
+- Implemented support for the ownCloud WOPI proxy
 
 ### Wed Oct 27 2021 - v7.5.0
 - Improved support for bridged apps when opened
