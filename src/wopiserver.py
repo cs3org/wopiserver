@@ -437,33 +437,33 @@ def wopiFilesPost(fileid):
             raise jwt.exceptions.ExpiredSignatureError
         headers = flask.request.headers
         op = headers['X-WOPI-Override']       # must be one of the following strings, throws KeyError if missing
-        if op != 'GET_LOCK' and utils.ViewMode(acctok['viewmode']) != utils.ViewMode.READ_WRITE:
-            # protect this call if the WOPI client does not have privileges
-            return 'Attempting to perform a write operation using a read-only token', http.client.UNAUTHORIZED
-        if op in ('LOCK', 'REFRESH_LOCK'):
-            return core.wopi.setLock(fileid, headers, acctok)
-        if op == 'GET_LOCK':
-            return core.wopi.getLock(fileid, headers, acctok)
-        if op == 'UNLOCK':
-            return core.wopi.unlock(fileid, headers, acctok)
-        if op == 'PUT_RELATIVE':
-            return core.wopi.putRelative(fileid, headers, acctok)
-        if op == 'DELETE':
-            return core.wopi.deleteFile(fileid, headers, acctok)
-        if op == 'RENAME_FILE':
-            return core.wopi.renameFile(fileid, headers, acctok)
-        #elif op == 'PUT_USER_INFO':   https://wopirest.readthedocs.io/en/latest/files/PutUserInfo.html
-        # Any other op is unsupported
-        Wopi.log.warning('msg="Unknown/unsupported operation" operation="%s"' % op)
-        return 'Not supported operation found in header', http.client.NOT_IMPLEMENTED
     except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
         Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" error="%s" token="%s"' %
                          (flask.request.remote_addr, flask.request.base_url, e, flask.request.args['access_token']))
         return 'Invalid access token', http.client.UNAUTHORIZED
     except KeyError as e:
         Wopi.log.warning('msg="Missing argument" client="%s" requestedUrl="%s" error="%s" token="%s"' %
-                         (flask.request.remote_addr, flask.request.base_url, e, flask.request.args.get('access_token')))
+                         (flask.request.remote_addr, flask.request.base_url, e, flask.request.args.get('access_token')[-20:]))
         return 'Missing argument', http.client.BAD_REQUEST
+    if op != 'GET_LOCK' and utils.ViewMode(acctok['viewmode']) != utils.ViewMode.READ_WRITE:
+        # protect this call if the WOPI client does not have privileges
+        return 'Attempting to perform a write operation using a read-only token', http.client.UNAUTHORIZED
+    if op in ('LOCK', 'REFRESH_LOCK'):
+        return core.wopi.setLock(fileid, headers, acctok)
+    if op == 'GET_LOCK':
+        return core.wopi.getLock(fileid, headers, acctok)
+    if op == 'UNLOCK':
+        return core.wopi.unlock(fileid, headers, acctok)
+    if op == 'PUT_RELATIVE':
+        return core.wopi.putRelative(fileid, headers, acctok)
+    if op == 'DELETE':
+        return core.wopi.deleteFile(fileid, headers, acctok)
+    if op == 'RENAME_FILE':
+        return core.wopi.renameFile(fileid, headers, acctok)
+    #elif op == 'PUT_USER_INFO':   https://wopirest.readthedocs.io/en/latest/files/PutUserInfo.html
+    # Any other op is unsupported
+    Wopi.log.warning('msg="Unknown/unsupported operation" operation="%s"' % op)
+    return 'Not supported operation found in header', http.client.NOT_IMPLEMENTED
 
 
 @Wopi.app.route("/wopi/files/<fileid>/contents", methods=['POST'])
