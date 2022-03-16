@@ -185,7 +185,8 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefilename=Non
             if isinstance(lolock, IOError):
                 # this might be an access error, therefore we can't tell here if it's our lock: move on
                 raise lolock
-            if 'WOPIServer' not in lolock.decode('UTF-8'):
+            lolock = lolock.decode()
+            if 'WOPIServer' not in lolock:
                 lolockholder = lolock.split(',')[1] if ',' in lolock else lolockstat['ownerid']
                 log.info('msg="%s" user="%s" filename="%s" token="%s" status="Found existing LibreOffice lock" lockmtime="%ld" holder="%s"' %
                          (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, lolockstat['mtime'], lolockholder))
@@ -282,7 +283,7 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok):
                                            getLibreOfficeLockName(acctok['filename']), acctok['userid'], None))
                     if isinstance(retrievedlolock, IOError):
                         raise retrievedlolock
-                    retrievedlolock = retrievedlolock.decode('UTF-8')
+                    retrievedlolock = retrievedlolock.decode()
                     # check that the lock is not stale
                     if datetime.strptime(retrievedlolock.split(',')[3], '%d.%m.%Y %H:%M').timestamp() + \
                                          srv.config.getint('general', 'wopilockexpiration') < time.time():
