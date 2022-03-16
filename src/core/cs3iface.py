@@ -47,7 +47,7 @@ def getuseridfromcreds(token, _wopiuser):
     For the CS3 API case, this is just the token'''
     return token
 
-def getcs3reference(endpoint, filepath):
+def _getcs3reference(endpoint, filepath):
     if endpoint == 'default':
         raise IOError('A CS3API-compatible storage endpoint must be identified by a storage UUID')
     if filepath[0] == '/':
@@ -74,7 +74,7 @@ def stat(endpoint, fileref, userid, versioninv=1):
     Note that endpoint here means the storage id, and fileref can be either a path (which MUST begin with /),
     or an id (which MUST NOT start with a /). The versioninv flag is natively supported by Reva.'''
     tstart = time.time()
-    ref = getcs3reference(endpoint, fileref)
+    ref = _getcs3reference(endpoint, fileref)
     statInfo = ctx['cs3gw'].Stat(request=cs3sp.StatRequest(ref=ref), metadata=[('x-access-token', userid)])
     tend = time.time()
     if statInfo.status.code == cs3code.CODE_OK:
@@ -107,7 +107,7 @@ def setxattr(endpoint, filepath, userid, key, value, lockid):
     '''Set the extended attribute <key> to <value> using the given userid as access token'''
 
     # This assumes that the filepath is the same as the fileid like in the method above. Is that ok?
-    reference = getcs3reference(endpoint, filepath)
+    reference = _getcs3reference(endpoint, filepath)
     md = cs3spr.ArbitraryMetadata()
     md.metadata.update({key: str(value)})        # pylint: disable=no-member
     req = cs3sp.SetArbitraryMetadataRequest(ref=reference, arbitrary_metadata=md, lock_id=lockid)
@@ -123,7 +123,7 @@ def getxattr(endpoint, filepath, userid, key):
     '''Get the extended attribute <key> using the given userid as access token'''
     tstart = time.time()
     # This assumes that the filepath is the same as the fileid like in the method above. Is that ok?
-    reference = getcs3reference(endpoint, filepath)
+    reference = _getcs3reference(endpoint, filepath)
     statInfo = ctx['cs3gw'].Stat(request=cs3sp.StatRequest(ref=reference), metadata=[('x-access-token', userid)])
     tend = time.time()
     if statInfo.status.code == cs3code.CODE_NOT_FOUND:
@@ -148,7 +148,7 @@ def getxattr(endpoint, filepath, userid, key):
 def rmxattr(endpoint, filepath, userid, key, lockid):
     '''Remove the extended attribute <key> using the given userid as access token'''
     # This assumes that the filepath is the same as the fileid like in the method above. Is that ok?
-    reference = getcs3reference(endpoint, filepath)
+    reference = _getcs3reference(endpoint, filepath)
     req = cs3sp.UnsetArbitraryMetadataRequest(ref=reference, arbitrary_metadata_keys=[key], lock_id=lockid)
     res = ctx['cs3gw'].UnsetArbitraryMetadata(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
@@ -160,7 +160,7 @@ def rmxattr(endpoint, filepath, userid, key, lockid):
 def setlock(endpoint, filepath, userid, appname, value):
     '''Set a lock to filepath with the given value metadata and appname as holder'''
     # This assumes that the filepath is the same as the fileid like in the method above. Is that ok?
-    reference = getcs3reference(endpoint, filepath)
+    reference = _getcs3reference(endpoint, filepath)
     lock = cs3spr.Lock(type=cs3spr.LOCK_TYPE_WRITE, app_name=appname, lock_id=value, \
                        expiration={'seconds': int(time.time() + ctx['lockexpiration'])})
     req = cs3sp.SetLockRequest(ref=reference, lock=lock)
@@ -179,7 +179,7 @@ def setlock(endpoint, filepath, userid, appname, value):
 def getlock(endpoint, filepath, userid):
     '''Get the lock metadata for the given filepath'''
     # This assumes that the filepath is the same as the fileid like in the method above. Is that ok?
-    reference = getcs3reference(endpoint, filepath)
+    reference = _getcs3reference(endpoint, filepath)
     req = cs3sp.GetLockRequest(ref=reference)
     res = ctx['cs3gw'].GetLock(request=req, metadata=[('x-access-token', userid)])
     if res.status.code == cs3code.CODE_NOT_FOUND:
@@ -208,7 +208,7 @@ def getlock(endpoint, filepath, userid):
 def refreshlock(endpoint, filepath, userid, appname, value):
     '''Refresh the lock metadata for the given filepath'''
         # This assumes that the filepath is the same as the fileid like in the method above. Is that ok?
-    reference = getcs3reference(endpoint, filepath)
+    reference = _getcs3reference(endpoint, filepath)
     lock = cs3spr.Lock(type=cs3spr.LOCK_TYPE_WRITE, app_name=appname, lock_id=value, \
                        expiration={'seconds': int(time.time() + ctx['lockexpiration'])})
     req = cs3sp.RefreshLockRequest(ref=reference, lock=lock)
@@ -223,7 +223,7 @@ def refreshlock(endpoint, filepath, userid, appname, value):
 def unlock(endpoint, filepath, userid, appname, value):
     '''Remove the lock for the given filepath'''
     # This assumes that the filepath is the same as the fileid like in the method above. Is that ok?
-    reference = getcs3reference(endpoint, filepath)
+    reference = _getcs3reference(endpoint, filepath)
     lock = cs3spr.Lock(type=cs3spr.LOCK_TYPE_WRITE, app_name=appname, lock_id=value)
     req = cs3sp.UnlockRequest(ref=reference, lock=lock)
     res = ctx['cs3gw'].Unlock(request=req, metadata=[('x-access-token', userid)])
@@ -238,7 +238,7 @@ def readfile(endpoint, filepath, userid, lockid):
     '''Read a file using the given userid as access token. Note that the function is a generator, managed by Flask.'''
     tstart = time.time()
         # This assumes that the filepath is the same as the fileid like in the method above. Is that ok?
-    reference = getcs3reference(endpoint, filepath)
+    reference = _getcs3reference(endpoint, filepath)
     # prepare endpoint
     req = cs3sp.InitiateFileDownloadRequest(ref=reference, lock_id=lockid)
     initfiledownloadres = ctx['cs3gw'].InitiateFileDownload(request=req, metadata=[('x-access-token', userid)])
@@ -286,7 +286,7 @@ def writefile(endpoint, filepath, userid, content, lockid, islock=False):
     if isinstance(content, str):
         content = bytes(content, 'UTF-8')
     size = str(len(content))
-    reference = getcs3reference(endpoint, filepath)
+    reference = _getcs3reference(endpoint, filepath)
     metadata = types.Opaque(map={"Upload-Length": types.OpaqueEntry(decoder="plain", value=str.encode(size))})
     req = cs3sp.InitiateFileUploadRequest(ref=reference, lock_id=lockid, opaque=metadata)
     initfileuploadres = ctx['cs3gw'].InitiateFileUpload(request=req, metadata=[('x-access-token', userid)])
@@ -322,8 +322,8 @@ def writefile(endpoint, filepath, userid, content, lockid, islock=False):
 
 def renamefile(endpoint, filepath, newfilepath, userid, lockid):
     '''Rename a file from origfilepath to newfilepath using the given userid as access token.'''
-    reference = getcs3reference(endpoint, filepath)
-    newfileref = getcs3reference(endpoint, newfilepath)
+    reference = _getcs3reference(endpoint, filepath)
+    newfileref = _getcs3reference(endpoint, newfilepath)
 
     req = cs3sp.MoveRequest(source=reference, destination=newfileref, lock_id=lockid)
     res = ctx['cs3gw'].Move(request=req, metadata=[('x-access-token', userid)])
@@ -337,7 +337,7 @@ def renamefile(endpoint, filepath, newfilepath, userid, lockid):
 def removefile(endpoint, filepath, userid, _force=False):
     '''Remove a file using the given userid as access token.
        The force argument is ignored for now for CS3 storage.'''
-    reference = getcs3reference(endpoint, filepath)
+    reference = _getcs3reference(endpoint, filepath)
     req = cs3sp.DeleteRequest(ref=reference)
     res = ctx['cs3gw'].Delete(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
