@@ -189,7 +189,7 @@ def statx(endpoint, fileref, userid, versioninv=0):
         # classic statx info of the given file:
         # we extract the eosinstance from endpoint, which looks like e.g. root://eosinstance[.cern.ch]
         endpoint = _geturlfor(endpoint)
-        inode = common.encodeinode(endpoint[7:] if endpoint.find('.') == -1 else endpoint[7:endpoint.find('.')], statxdata[2]),
+        inode = common.encodeinode(endpoint[7:] if endpoint.find('.') == -1 else endpoint[7:endpoint.find('.')], statxdata[2])
         log.debug('msg="Invoked stat return" inode="%s" filepath="%s"' % (inode, _getfilepath(filepath)))
         return {
             'inode': inode,
@@ -225,7 +225,7 @@ def statx(endpoint, fileref, userid, versioninv=0):
         statxvdata = statxdata
     # return the metadata of the given file, with the inode taken from the version folder
     endpoint = _geturlfor(endpoint)
-    inode = common.encodeinode(endpoint[7:] if endpoint.find('.') == -1 else endpoint[7:endpoint.find('.')], statxvdata[2]),
+    inode = common.encodeinode(endpoint[7:] if endpoint.find('.') == -1 else endpoint[7:endpoint.find('.')], statxvdata[2])
     log.debug('msg="Invoked stat return" inode="%s" filepath="%s"' % (inode, _getfilepath(verFolder)))
     return {
         'inode': inode,
