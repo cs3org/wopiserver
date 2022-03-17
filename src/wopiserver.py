@@ -596,6 +596,7 @@ def cboxOpen_deprecated():
     - string endpoint (optional): the storage endpoint to be used to look up the file or the storage id, in case of
       multi-instance underlying storage; defaults to 'default'
     - string folderurl (optional): the URL to come back to the containing folder for this file, typically shown by the Office app
+    - boolean proxy (optional): whether the returned WOPISrc must be proxied or not, defaults to false
     Returns: a single string with the application URL, or a message and a 4xx/5xx HTTP code in case of errors
     '''
     Wopi.refreshconfig()
@@ -635,6 +636,7 @@ def cboxOpen_deprecated():
     username = req.args.get('username', '')
     folderurl = url_unquote(req.args.get('folderurl', '%2F'))   # defaults to `/`
     endpoint = req.args.get('endpoint', 'default')
+    toproxy = req.args.get('proxy', 'false') == 'true' and filename[-1] == 'x'    # if requested, only proxy OOXML files
     try:
         # here we set wopiuser = userid (i.e. uid:gid) as that's well known to be consistent over time
         inode, acctok = utils.generateAccessToken(userid, filename, viewmode, (username, userid), \
@@ -654,7 +656,8 @@ def cboxOpen_deprecated():
             Wopi.log.warning('msg="cboxOpen: open via bridge failed" reason="%s"' % foe.msg)
             return foe.msg, foe.statuscode
     # generate the target for the app engine
-    return '%s&access_token=%s' % (utils.generateWopiSrc(inode), acctok)
+    wopisrc = '%s&access_token=%s' % (utils.generateWopiSrc(inode, toproxy), acctok)
+    return wopisrc
 
 
 @Wopi.app.route("/wopi/cbox/endpoints", methods=['GET'])
