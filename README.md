@@ -80,6 +80,6 @@ For testing collaborative scenarios, repeat the above for each user participatin
 2. Add log file directory: `sudo mkdir /var/log/wopi/ && sudo chmod a+rwx /var/log/wopi`
 3. Create the folder for the wopi config: `sudo mkdir /etc/wopi/ && sudo chmod a+rwx /etc/wopi`
 4. Create the files `iopsecret` and `wopiscret` in the folder `/etc/wopi/`, create random strings for the secrets
-5. Create a local config file `/etc/wopi/wopiserver.conf` with the needed parameters: start from `docker/etc/wopiserver.conf`, and make sure that at least an application provider URL is configured (e.g. `codeurl` for Collabora)
-6. From the WOPI server folder run: `python3 src/wopiserver.py`
-
+5. Copy the provided `wopiserver.conf` to `/etc/wopi/wopiserver.defaults.conf`
+6. Create a config file `/etc/wopi/wopiserver.conf`: start from `docker/etc/wopiserver.conf` for a minimal configuration and add from the defaults file as needed
+7. From the WOPI server folder run: `python3 src/wopiserver.py`
