@@ -127,10 +127,6 @@ def refreshlock(endpoint, filepath, _userid, appname, value):
         log.warning('msg="Failed to refreshlock" filepath="%s" appname="%s" reason="%s"' %
                     (filepath, appname, 'File is not locked'))
         raise IOError('File was not locked')
-    if l['app_name'] != appname and l['app_name'] != 'wopi':
-        log.warning('msg="Failed to refreshlock" filepath="%s" appname="%s" reason="%s"' %
-                    (filepath, appname, 'File is locked by %s' % l['app_name']))
-        raise IOError('File is locked by %s' % l['app_name'])
     log.debug('msg="Invoked refreshlock" filepath="%s" value="%s"' % (filepath, value))
     # this is non-atomic, but the lock was already held
     setxattr(endpoint, filepath, '0:0', common.LOCKKEY, common.genrevalock(appname, value), None)
