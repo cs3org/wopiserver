@@ -219,6 +219,8 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefilename=Non
     if max(lockcontent['expiration']['seconds'],
            (int(savetime) if savetime else 0) + srv.config.getint('general', 'wopilockexpiration')) < time.time():
         # the retrieved lock is not valid any longer, discard and remove it from the backend
+        log.info('msg="%s: lazily removing stale lock" user="%s" filename="%s" fileid="%s"' %
+                 (operation.title(), acctok['userid'][-20:], acctok['filename'], fileid))
         try:
             st.unlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'], storedlock)
         except IOError:
@@ -229,7 +231,8 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefilename=Non
             if lolock:
                 st.removefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], True)
         except IOError as e:
-            log.warning('msg="Unable to delete the LibreOffice-compatible lock file" error="%s"' % e)
+            log.warning('msg="Unable to delete stale LibreOffice-compatible lock file" user="%s" filename="%s" fileid="%s" error="%s"' %
+                        (acctok['userid'][-20:], acctok['filename'], fileid, e))
         return None, None
 
     log.info('msg="%s" user="%s" filename="%s" fileid="%s" lock="%s" retrievedlock="%s" expTime="%s" token="%s"' %
