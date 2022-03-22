@@ -183,7 +183,7 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefilename=Non
             lolockstat = st.statx(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'])
             lolock = next(st.readfile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], None))
             if isinstance(lolock, IOError):
-                # this might be an access error, therefore we can't tell here if it's our lock: move on
+                # this might be an access error, therefore we can't tell here if it's our lock: optimistically move on
                 raise lolock
             lolock = lolock.decode()
             if 'WOPIServer' not in lolock:
@@ -197,14 +197,19 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefilename=Non
     try:
         # fetch and decode the lock
         lockcontent = st.getlock(acctok['endpoint'], overridefilename if overridefilename else acctok['filename'], acctok['userid'])
+        # here we used to check the last save time to "extend" the validity of an otherwise expired lock:
+        # however, this goes against isolating the lock expiration logic in the storage interfaces and ultimately
+        # violates the WOPI specifications, therefore it was dropped
         if not lockcontent:
-            if checkext and lolockstat:
-                # here we are sure the previously found LibreOffice lock is not ours, as we would have found the WOPI lock too
-                log.info('msg="%s" user="%s" filename="%s" token="%s" status="Found existing LibreOffice lock" lockmtime="%ld" holder="%s"' %
-                         (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, lolockstat['mtime'], lolockstat['ownerid']))
-                return 'External', 'LibreOffice for Desktop'
-            log.info('msg="%s" user="%s" filename="%s" token="%s" status="No lock found"' %
+            log.info('msg="%s: no lock found" user="%s" filename="%s" token="%s"' %
                      (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok))
+            # lazily remove the LibreOffice-compatible lock file, if it was detected and has the expected signature - cf. storeWopiLock()
+            try:
+                if lolock:
+                    st.removefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], True)
+            except IOError as e:
+                log.warning('msg="Unable to delete stale LibreOffice-compatible lock file" user="%s" filename="%s" fileid="%s" error="%s"' %
+                            (acctok['userid'][-20:], acctok['filename'], fileid, e))
             return None, None
         storedlock = lockcontent['lock_id']
         lockcontent['lock_id'] = _decodeLock(storedlock)
@@ -212,28 +217,6 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefilename=Non
         log.info('msg="%s" user="%s" filename="%s" token="%s" status="Found non-compatible or unreadable lock" error="%s"' %
                  (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, e))
         return 'External', 'another app or user'
-
-    # check validity: a lock is deemed expired if the most recent between its expiration time and
-    # the last save time by WOPI has passed
-    savetime = st.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], LASTSAVETIMEKEY)
-    if max(lockcontent['expiration']['seconds'],
-           (int(savetime) if savetime else 0) + srv.config.getint('general', 'wopilockexpiration')) < time.time():
-        # the retrieved lock is not valid any longer, discard and remove it from the backend
-        log.info('msg="%s: lazily removing stale lock" user="%s" filename="%s" fileid="%s"' %
-                 (operation.title(), acctok['userid'][-20:], acctok['filename'], fileid))
-        try:
-            st.unlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'], storedlock)
-        except IOError:
-            # ignore, it's not worth to report anything here
-            pass
-        # also remove the LibreOffice-compatible lock file, if it was detected and has the expected signature - cf. storeWopiLock()
-        try:
-            if lolock:
-                st.removefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], True)
-        except IOError as e:
-            log.warning('msg="Unable to delete stale LibreOffice-compatible lock file" user="%s" filename="%s" fileid="%s" error="%s"' %
-                        (acctok['userid'][-20:], acctok['filename'], fileid, e))
-        return None, None
 
     log.info('msg="%s" user="%s" filename="%s" fileid="%s" lock="%s" retrievedlock="%s" expTime="%s" token="%s"' %
              (operation.title(), acctok['userid'][-20:], acctok['filename'], fileid, lockforlog, lockcontent['lock_id'],

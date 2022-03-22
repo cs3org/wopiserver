@@ -114,31 +114,30 @@ def setlock(endpoint, filepath, _userid, appname, value):
 
 def getlock(endpoint, filepath, _userid):
     '''Get the lock metadata as an xattr on behalf of the given userid'''
-    l = getxattr(endpoint, filepath, '0:0', common.LOCKKEY)
-    if l:
-        return common.retrieverevalock(l)
+    rawl = getxattr(endpoint, filepath, '0:0', common.LOCKKEY)
+    if rawl:
+        l = common.retrieverevalock(rawl)
+        if l['expiration']['seconds'] > time.time():
+            log.debug('msg="Invoked getlock" filepath="%s"' % filepath)
+            return l
+        # otherwise, the lock had expired: drop it and return None
+        log.debug('msg="getlock: removed stale lock" filepath="%s"' % filepath)
+        rmxattr(endpoint, filepath, '0:0', common.LOCKKEY, None)
     return None
 
-def refreshlock(endpoint, filepath, _userid, appname, value):
+
+def refreshlock(endpoint, filepath, userid, appname, value):
     '''Refresh the lock value as an xattr on behalf of the given userid'''
+    common.validatelock(filepath, appname, getlock(endpoint, filepath, userid), 'refreshlock', log)
+    # this is non-atomic, but if we get here the lock was already held
     log.debug('msg="Invoked refreshlock" filepath="%s" value="%s"' % (filepath, value))
-    l = getlock(endpoint, filepath, _userid)
-    if not l:
-        log.warning('msg="Failed to refreshlock" filepath="%s" appname="%s" reason="%s"' %
-                    (filepath, appname, 'File is not locked'))
-        raise IOError('File was not locked')
-    if l['app_name'] != appname and l['app_name'] != 'wopi':
-        log.warning('msg="Failed to refreshlock" filepath="%s" appname="%s" reason="%s"' %
-                    (filepath, appname, 'File is locked by %s' % l['app_name']))
-        raise IOError('File is locked by %s' % l['app_name'])
-    log.debug('msg="Invoked refreshlock" filepath="%s" value="%s"' % (filepath, value))
-    # this is non-atomic, but the lock was already held
     setxattr(endpoint, filepath, '0:0', common.LOCKKEY, common.genrevalock(appname, value), None)
 
 
-def unlock(endpoint, filepath, _userid, _appname, value):
+def unlock(endpoint, filepath, userid, appname, value):
     '''Remove the lock as an xattr on behalf of the given userid'''
-    log.debug('msg="Invoked unlock" filepath="%s" value="%s' % (filepath, value))
+    common.validatelock(filepath, appname, getlock(endpoint, filepath, userid), 'unlock', log)
+    log.debug('msg="Invoked unlock" filepath="%s" value="%s"' % (filepath, value))
     rmxattr(endpoint, filepath, '0:0', common.LOCKKEY, None)
 
 
