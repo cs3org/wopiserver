@@ -102,10 +102,10 @@ def rmxattr(_endpoint, filepath, _userid, key, _lockid):
         raise IOError(e)
 
 
-def setlock(endpoint, filepath, _userid, appname, value):
+def setlock(endpoint, filepath, userid, appname, value):
     '''Set the lock as an xattr on behalf of the given userid'''
     log.debug('msg="Invoked setlock" filepath="%s" value="%s"' % (filepath, value))
-    if not getxattr(endpoint, filepath, '0:0', common.LOCKKEY):
+    if not getlock(endpoint, filepath, userid):
         # we do not protect from race conditions here
         setxattr(endpoint, filepath, '0:0', common.LOCKKEY, common.genrevalock(appname, value), None)
     else:

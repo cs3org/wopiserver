@@ -13,6 +13,7 @@ import logging
 import configparser
 import sys
 import os
+import time
 from threading import Thread
 import pytest
 sys.path.append('src')     # for tests out of the git repo
@@ -266,7 +267,7 @@ class TestStorage(unittest.TestCase):
 
   @unittest.expectedFailure
   def test_lock_operations(self):
-    '''Test file operations on locked file. Eexpected to fail until locks are enforced by the storage'''
+    '''Test file operations on locked file. Expected to fail until locks are enforced by the storage'''
     try:
       self.storage.removefile(self.endpoint, self.homepath + '/testlockop', self.userid)
     except IOError:
@@ -285,6 +286,36 @@ class TestStorage(unittest.TestCase):
     with self.assertRaises(IOError):
         self.storage.renamefile(self.endpoint, self.homepath + '/testlockop_renamed', self.homepath + '/testlockop', self.userid, None)
     self.storage.removefile(self.endpoint, self.homepath + '/testlockop_renamed', self.userid)
+
+  def test_expired_locks(self):
+    '''Test lock operations on expired locks'''
+    try:
+      self.storage.removefile(self.endpoint, self.homepath + '/testelock', self.userid)
+    except IOError:
+      pass
+    self.storage.writefile(self.endpoint, self.homepath + '/testelock', self.userid, databuf, None)
+    statInfo = self.storage.stat(self.endpoint, self.homepath + '/testelock', self.userid)
+    self.assertIsInstance(statInfo, dict)
+    self.storage.setlock(self.endpoint, self.homepath + '/testelock', self.userid, 'myapp', 'testlock')
+    time.sleep(3)
+    l = self.storage.getlock(self.endpoint, self.homepath + '/testelock', self.userid)
+    self.assertEqual(l, None)
+    self.storage.setlock(self.endpoint, self.homepath + '/testelock', self.userid, 'myapp', 'testlock2')
+    time.sleep(3)
+    self.storage.setlock(self.endpoint, self.homepath + '/testelock', self.userid, 'myapp', 'testlock3')
+    l = self.storage.getlock(self.endpoint, self.homepath + '/testelock', self.userid)
+    self.assertIsInstance(l, dict)
+    self.assertEqual(l['lock_id'], 'testlock3')
+    time.sleep(3)
+    with self.assertRaises(IOError) as context:
+      self.storage.refreshlock(self.endpoint, self.homepath + '/testelock', self.userid, 'myapp', 'testlock4')
+    self.assertIn('File was not locked', str(context.exception))
+    self.storage.setlock(self.endpoint, self.homepath + '/testelock', self.userid, 'myapp', 'testlock5')
+    time.sleep(3)
+    with self.assertRaises(IOError) as context:
+        self.storage.unlock(self.endpoint, self.homepath + '/testelock', self.userid, 'myapp', 'testlock5')
+    self.assertIn('File was not locked', str(context.exception))
+    self.storage.removefile(self.endpoint, self.homepath + '/testelock', self.userid)
 
   def test_remove_nofile(self):
     '''Test removal of a non-existing file'''
