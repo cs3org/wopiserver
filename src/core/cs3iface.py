@@ -6,6 +6,7 @@ CS3 API based interface for the IOP WOPI server
 Main author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 '''
 
+import os
 import time
 import http
 import requests
@@ -47,15 +48,21 @@ def getuseridfromcreds(token, _wopiuser):
     For the CS3 API case, this is just the token'''
     return token
 
-def _getcs3reference(endpoint, filepath):
-    if endpoint == 'default':
-        raise IOError('A CS3API-compatible storage endpoint must be identified by a storage UUID')
-    if filepath[0] == '/':
+
+def _getcs3reference(endpoint, fileref):
+    '''Generates a CS3 reference for a given fileref, covering the following cases:
+    absolute path, relative hybrid path, fully opaque fileid'''
+    if fileref[0] == '/':
         # assume this is a filepath
-        ref = cs3spr.Reference(path=filepath)
+        ref = cs3spr.Reference(path=fileref)
+    elif fileref.rfind('/') > 0:
+        # assume we have a relative path in the form `<parent_opaque_id>/<base_filename>`
+        ref = cs3spr.Reference(resource_id=cs3spr.ResourceId(storage_id=endpoint,
+                                                             opaque_id=fileref[:fileref.rfind('/')]),
+                               path='.' + fileref[fileref.rfind('/'):])
     else:
         # assume we have an opaque fileid
-        ref = cs3spr.Reference(resource_id=cs3spr.ResourceId(storage_id=endpoint, opaque_id=filepath))
+        ref = cs3spr.Reference(resource_id=cs3spr.ResourceId(storage_id=endpoint, opaque_id=fileref))
     return ref
 
 
@@ -85,11 +92,15 @@ def stat(endpoint, fileref, userid, versioninv=1):
             log.warning('msg="Invoked stat" fileref="%s" unexpectedtype="%d"' % (fileref, statInfo.info.type))
             raise IOError('Unexpected type %d' % statInfo.info.type)
         inode = common.encodeinode(statInfo.info.id.storage_id, statInfo.info.id.opaque_id)
+        # in case we got a relative path, build an hybrid path that can be used to reference the file:
+        # note that as per specs the parent_id MUST be available in this case
+        filepath = statInfo.info.path if statInfo.info.path[0] == '/' else \
+                        statInfo.info.parent_id.opaque_id + '/' + os.path.basename(statInfo.info.path)
         log.info('msg="Invoked stat" fileref="%s" inode="%s" filepath="%s" elapsedTimems="%.1f"' %
-                 (fileref, inode, statInfo.info.path, (tend-tstart)*1000))
+                 (fileref, inode, filepath, (tend-tstart)*1000))
         return {
             'inode': inode,
-            'filepath': statInfo.info.path,
+            'filepath': filepath,
             'ownerid': statInfo.info.owner.opaque_id + '@' + statInfo.info.owner.idp,
             'size': statInfo.info.size,
             'mtime': statInfo.info.mtime.seconds
@@ -98,15 +109,13 @@ def stat(endpoint, fileref, userid, versioninv=1):
     raise IOError(common.ENOENT_MSG if statInfo.status.code == cs3code.CODE_NOT_FOUND else statInfo.status.message)
 
 
-def statx(endpoint, fileid, userid, versioninv=0):
+def statx(endpoint, fileref, userid, versioninv=0):
     '''Get extended stat info (inode, filepath, userid, size, mtime). Equivalent to stat.'''
-    return stat(endpoint, fileid, userid, versioninv)
+    return stat(endpoint, fileref, userid, versioninv)
 
 
 def setxattr(endpoint, filepath, userid, key, value, lockid):
     '''Set the extended attribute <key> to <value> using the given userid as access token'''
-
-    # This assumes that the filepath is the same as the fileid like in the method above. Is that ok?
     reference = _getcs3reference(endpoint, filepath)
     md = cs3spr.ArbitraryMetadata()
     md.metadata.update({key: str(value)})        # pylint: disable=no-member
@@ -122,7 +131,6 @@ def setxattr(endpoint, filepath, userid, key, value, lockid):
 def getxattr(endpoint, filepath, userid, key):
     '''Get the extended attribute <key> using the given userid as access token'''
     tstart = time.time()
-    # This assumes that the filepath is the same as the fileid like in the method above. Is that ok?
     reference = _getcs3reference(endpoint, filepath)
     statInfo = ctx['cs3gw'].Stat(request=cs3sp.StatRequest(ref=reference), metadata=[('x-access-token', userid)])
     tend = time.time()
@@ -147,7 +155,6 @@ def getxattr(endpoint, filepath, userid, key):
 
 def rmxattr(endpoint, filepath, userid, key, lockid):
     '''Remove the extended attribute <key> using the given userid as access token'''
-    # This assumes that the filepath is the same as the fileid like in the method above. Is that ok?
     reference = _getcs3reference(endpoint, filepath)
     req = cs3sp.UnsetArbitraryMetadataRequest(ref=reference, arbitrary_metadata_keys=[key], lock_id=lockid)
     res = ctx['cs3gw'].UnsetArbitraryMetadata(request=req, metadata=[('x-access-token', userid)])
@@ -159,7 +166,6 @@ def rmxattr(endpoint, filepath, userid, key, lockid):
 
 def setlock(endpoint, filepath, userid, appname, value):
     '''Set a lock to filepath with the given value metadata and appname as holder'''
-    # This assumes that the filepath is the same as the fileid like in the method above. Is that ok?
     reference = _getcs3reference(endpoint, filepath)
     lock = cs3spr.Lock(type=cs3spr.LOCK_TYPE_WRITE, app_name=appname, lock_id=value, \
                        expiration={'seconds': int(time.time() + ctx['lockexpiration'])})
@@ -178,7 +184,6 @@ def setlock(endpoint, filepath, userid, appname, value):
 
 def getlock(endpoint, filepath, userid):
     '''Get the lock metadata for the given filepath'''
-    # This assumes that the filepath is the same as the fileid like in the method above. Is that ok?
     reference = _getcs3reference(endpoint, filepath)
     req = cs3sp.GetLockRequest(ref=reference)
     res = ctx['cs3gw'].GetLock(request=req, metadata=[('x-access-token', userid)])
@@ -207,7 +212,6 @@ def getlock(endpoint, filepath, userid):
 
 def refreshlock(endpoint, filepath, userid, appname, value):
     '''Refresh the lock metadata for the given filepath'''
-        # This assumes that the filepath is the same as the fileid like in the method above. Is that ok?
     reference = _getcs3reference(endpoint, filepath)
     lock = cs3spr.Lock(type=cs3spr.LOCK_TYPE_WRITE, app_name=appname, lock_id=value, \
                        expiration={'seconds': int(time.time() + ctx['lockexpiration'])})
@@ -222,7 +226,6 @@ def refreshlock(endpoint, filepath, userid, appname, value):
 
 def unlock(endpoint, filepath, userid, appname, value):
     '''Remove the lock for the given filepath'''
-    # This assumes that the filepath is the same as the fileid like in the method above. Is that ok?
     reference = _getcs3reference(endpoint, filepath)
     lock = cs3spr.Lock(type=cs3spr.LOCK_TYPE_WRITE, app_name=appname, lock_id=value)
     req = cs3sp.UnlockRequest(ref=reference, lock=lock)
@@ -237,8 +240,8 @@ def unlock(endpoint, filepath, userid, appname, value):
 def readfile(endpoint, filepath, userid, lockid):
     '''Read a file using the given userid as access token. Note that the function is a generator, managed by Flask.'''
     tstart = time.time()
-        # This assumes that the filepath is the same as the fileid like in the method above. Is that ok?
     reference = _getcs3reference(endpoint, filepath)
+
     # prepare endpoint
     req = cs3sp.InitiateFileDownloadRequest(ref=reference, lock_id=lockid)
     initfiledownloadres = ctx['cs3gw'].InitiateFileDownload(request=req, metadata=[('x-access-token', userid)])
@@ -282,6 +285,7 @@ def writefile(endpoint, filepath, userid, content, lockid, islock=False):
     if islock:
         log.warning('msg="Lock (no-overwrite) flag not supported, going for standard upload"')
     tstart = time.time()
+
     # prepare endpoint
     if isinstance(content, str):
         content = bytes(content, 'UTF-8')
