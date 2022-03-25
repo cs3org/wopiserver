@@ -5,6 +5,11 @@
   including for the CS3APIs-compatible implementation;
   in addition, locks are passed along to CS3APIs
   backends on any operation that implies a modification
+- Moved part of the lock handling logic to the storage
+  providers (#69), as Reva implements it natively: this
+  removes the non-standard feature that the expiration time
+  of a lock was extended by `PutFile` operations without
+  needing to call `RefreshLock`, as introduced in v6.3.0
 - Introduced a `recoverypath` configuration option as a
   local path where to store files in case of I/O errors
   with the remote storage. Fixes bug #39
@@ -17,11 +22,13 @@
   consistent and informative, and access tokens have
   been redacted from logged URLs
 - The docker image has been upgraded to python 3.10
+- Support for the ownCloud WOPI proxy was extended
+  to the legacy `/cbox/open` endpoint
 
 ### Fri Dec  3 2021 - v8.0.0rc1
 - Refactored the locking logic to use a new
   Lock API (#51) and corresponding xattr support
-  in xrootd/EOS. Note that for this release,
+  in xrootd/EOS. Note that for this pre-release,
   the CS3APIs-compatible implementation of locking
   is not yet available
 - Removed legacy crypto settings from docker image
