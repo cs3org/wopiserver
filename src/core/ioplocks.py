@@ -68,11 +68,11 @@ def queryLock(filestat, filename, userid, endpoint):
     '''
     # read the requested LibreOffice-compatible lock
     try:
-        lock = next(st.readfile(endpoint, utils.getLibreOfficeLockName(filename), userid))
+        lock = next(st.readfile(endpoint, utils.getLibreOfficeLockName(filename), userid, None))
         if isinstance(lock, IOError):
             raise lock
         # lock is there, check last mtime
-        lockstat = st.stat(endpoint, utils.getLibreOfficeLockName(filename), userid)
+        lockstat = st.stat(endpoint, utils.getLibreOfficeLockName(filename), userid, None)
     except (IOError, StopIteration) as e:
         # be optimistic, any error here (including no content in the lock file) is like ENOENT
         log.info('msg="cboxLock: lock being queried not found" filename="%s" reason="%s"' %
@@ -143,7 +143,7 @@ def createLock(filestat, filename, userid, endpoint):
             return 'Error locking file', http.client.INTERNAL_SERVER_ERROR
         # otherwise, a lock existed: try and read it
         try:
-            lock = next(st.readfile(endpoint, utils.getLibreOfficeLockName(filename), userid))
+            lock = next(st.readfile(endpoint, utils.getLibreOfficeLockName(filename), userid, None))
             if isinstance(lock, IOError):
                 raise lock
         except (IOError, StopIteration) as e:
@@ -153,7 +153,7 @@ def createLock(filestat, filename, userid, endpoint):
             # let's just try again in a short while (not too short though: 2 secs were not enough in testing)
             time.sleep(5)
             try:
-                lock = next(st.readfile(endpoint, utils.getLibreOfficeLockName(filename), userid))
+                lock = next(st.readfile(endpoint, utils.getLibreOfficeLockName(filename), userid, None))
                 if isinstance(lock, IOError):
                     raise lock
             except (IOError, StopIteration) as e:
@@ -200,7 +200,7 @@ def iopunlock(filename, userid, endpoint):
     log.info('msg="cboxUnlock: start processing" filename="%s"' % filename)
     try:
         # probe if a WOPI/LibreOffice lock exists with the expected signature
-        lock = next(st.readfile(endpoint, utils.getLibreOfficeLockName(filename), userid))
+        lock = next(st.readfile(endpoint, utils.getLibreOfficeLockName(filename), userid, None))
         if isinstance(lock, IOError):
             # typically ENOENT, any other error is grouped here
             log.warning('msg="cboxUnlock: lock file not found" filename="%s"' % filename)

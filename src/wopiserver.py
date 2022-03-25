@@ -342,7 +342,8 @@ def iopDownload():
         acctok = jwt.decode(flask.request.args['access_token'], Wopi.wopisecret, algorithms=['HS256'])
         if acctok['exp'] < time.time():
             raise jwt.exceptions.ExpiredSignatureError
-        resp = flask.Response(storage.readfile(acctok['endpoint'], acctok['filename'], acctok['userid']), \
+        # TODO support exclusive locks by getting the lock first and then passing it to readfile()
+        resp = flask.Response(storage.readfile(acctok['endpoint'], acctok['filename'], acctok['userid'], None), \
                               mimetype='application/octet-stream')
         resp.headers['Content-Disposition'] = 'attachment; filename="%s"' % os.path.basename(acctok['filename'])
         resp.headers['X-Frame-Options'] = 'sameorigin'
