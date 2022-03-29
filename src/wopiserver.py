@@ -130,6 +130,7 @@ class Wopi:
             except FileExistsError as e:
                 pass
             _ = cls.config.get('general', 'downloadurl')   # make sure this is defined
+            _ = cls.config.getint('general', 'wopilockexpiration')   # make sure this is defined as an int
             # WOPI proxy configuration (optional)
             cls.wopiproxy = cls.config.get('general', 'wopiproxy', fallback='')
             cls.wopiproxykey = cls.config.get('general', 'wopiproxykey', fallback='x')
