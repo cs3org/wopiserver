@@ -265,7 +265,6 @@ class TestStorage(unittest.TestCase):
     self.assertIn(EXCL_ERROR, str(context.exception))
     self.storage.removefile(self.endpoint, self.homepath + '/testlockrace', self.userid)
 
-  @unittest.expectedFailure
   def test_lock_operations(self):
     '''Test file operations on locked file. Expected to fail until locks are enforced by the storage'''
     try:
@@ -279,6 +278,7 @@ class TestStorage(unittest.TestCase):
     self.storage.writefile(self.endpoint, self.homepath + '/testlockop', self.userid, databuf, 'testlock')
     self.storage.setxattr(self.endpoint, self.homepath + '/testlockop', self.userid, 'testkey', 123, 'testlock')
     self.storage.renamefile(self.endpoint, self.homepath + '/testlockop', self.homepath + '/testlockop_renamed', self.userid, 'testlock')
+    self.storage.refreshlock(self.endpoint, self.homepath + '/testlockop_renamed', self.userid, 'myapp', 'testlock')
     with self.assertRaises(IOError):
         self.storage.writefile(self.endpoint, self.homepath + '/testlockop_renamed', self.userid, databuf, None)
     with self.assertRaises(IOError):
