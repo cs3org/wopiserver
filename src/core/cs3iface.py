@@ -55,11 +55,12 @@ def _getcs3reference(endpoint, fileref):
     if fileref[0] == '/':
         # assume this is a filepath
         ref = cs3spr.Reference(path=fileref)
-    elif fileref.rfind('/') > 0:
-        # assume we have a relative path in the form `<parent_opaque_id>/<base_filename>`
+    elif fileref.find('/') > 0:
+        # assume we have a relative path in the form `<parent_opaque_id>/<base_filename>`,
+        # also works if we get `<parent_opaque_id>/<path>/<filename>`
         ref = cs3spr.Reference(resource_id=cs3spr.ResourceId(storage_id=endpoint,
-                                                             opaque_id=fileref[:fileref.rfind('/')]),
-                               path='.' + fileref[fileref.rfind('/'):])
+                                                             opaque_id=fileref[:fileref.find('/')]),
+                               path='.' + fileref[fileref.find('/'):])
     else:
         # assume we have an opaque fileid
         ref = cs3spr.Reference(resource_id=cs3spr.ResourceId(storage_id=endpoint, opaque_id=fileref))
