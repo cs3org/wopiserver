@@ -35,19 +35,19 @@ config = None
 
 
 # Manipulate Reva-compliant locks, i.e. JSON structs with the following format:
-#{
+# {
 #   "lock_id": "id1234",
 #   "type": 2,
 #   "user": {
-#      "idp": "https://your-idprovider.org",
-#      "opaque_id": "username",
-#      "type": 1
+#     "idp": "https://your-idprovider.org",
+#     "opaque_id": "username",
+#     "type": 1
 #   },
 #   "app_name": "your_app",
 #   "expiration": {
-#      "seconds": 1665446400
+#     "seconds": 1665446400
 #   }
-#}
+# }
 
 def genrevalock(appname, value):
     '''Return a base64-encoded lock compatible with the Reva implementation of the CS3 Lock API
@@ -83,7 +83,7 @@ def validatelock(filepath, appname, oldlock, op, log):
         log.warning('msg="Failed to %s" filepath="%s" appname="%s" reason="%s"' %
                     (op, filepath, appname, 'File was not locked or lock had expired'))
         raise IOError('File was not locked or lock had expired')
-    if oldlock['app_name'] != appname and oldlock['app_name'] != 'wopi':
+    if oldlock['app_name'] != appname and oldlock['app_name'] != 'wopi' and oldlock['app_name'] != '':
         log.warning('msg="Failed to %s" filepath="%s" appname="%s" reason="%s"' %
                     (op, filepath, appname, 'File is locked by %s' % oldlock['app_name']))
         raise IOError('File is locked by %s' % oldlock['app_name'])
