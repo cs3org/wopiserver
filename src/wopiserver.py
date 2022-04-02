@@ -134,7 +134,11 @@ class Wopi:
             _ = cls.config.getint('general', 'wopilockexpiration')   # make sure this is defined as an int
             # WOPI proxy configuration (optional)
             cls.wopiproxy = cls.config.get('general', 'wopiproxy', fallback='')
-            cls.wopiproxykey = cls.config.get('general', 'wopiproxykey', fallback='x')
+            cls.wopiproxykey = None
+            proxykeyfile = cls.config.get('general', 'wopiproxysecretfile', fallback='')
+            if proxykeyfile:
+                with open(proxykeyfile) as s:
+                    cls.wopiproxykey = s.read().strip('\n')
             cls.proxiedappname = cls.config.get('general', 'proxiedappname', fallback='')
             # initialize the bridge
             bridge.WB.init(cls.config, cls.log, cls.wopisecret)
