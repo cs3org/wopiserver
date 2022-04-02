@@ -66,7 +66,7 @@ def _eosargs(userid, atomicwrite=0, bookingsize=0):
         ruid = int(userid[0])
         rgid = int(userid[1])
         return '?eos.ruid=%d&eos.rgid=%d' % (ruid, rgid) + '&eos.app=' + ('fuse::wopi' if not atomicwrite else 'wopi') + \
-               (('&eos.bookingsize='+str(bookingsize)) if bookingsize else '')
+               (('&eos.bookingsize=' + str(bookingsize)) if bookingsize else '')
     except (ValueError, IndexError):
         raise ValueError('Only Unix-based userid is supported with xrootd storage: %s' % userid)
 
@@ -76,32 +76,32 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args):
        Note that this is entirely EOS-specific.'''
     with XrdClient.File() as f:
         url = _geturlfor(endpoint) + '//proc/user/' + _eosargs(userid) + '&mgm.cmd=' + cmd + \
-              ('&mgm.subcmd=' + subcmd if subcmd else '') + '&' + args
+            ('&mgm.subcmd=' + subcmd if subcmd else '') + '&' + args
         tstart = time.time()
         rc, _ = f.open(url, OpenFlags.READ)
         tend = time.time()
         res = b''.join(f.readlines()).decode().split('&')
         if len(res) == 3:        # we may only just get stdout: in that case, assume it's all OK
             rc = res[2].strip('\n')
-            rc = rc[rc.find('=')+1:]
+            rc = rc[rc.find('=') + 1:]
             if rc != '0':
                 # failure: get info from stderr, log and raise
-                msg = res[1][res[1].find('=')+1:].strip('\n')
+                msg = res[1][res[1].find('=') + 1:].strip('\n')
                 if common.ENOENT_MSG.lower() in msg or 'unable to get attribute' in msg:
-                    log.info('msg="Invoked xroot on non-existing entity" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' % \
+                    log.info('msg="Invoked xroot on non-existing entity" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' %
                              (cmd, subcmd, args, msg, rc.strip('\00')))
                     raise IOError(common.ENOENT_MSG)
                 if EXCL_XATTR_MSG in msg:
-                    log.info('msg="Invoked setxattr on an already locked entity" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' % \
+                    log.info('msg="Invoked setxattr on an already locked entity" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' %
                              (cmd, subcmd, args, msg, rc.strip('\00')))
                     raise IOError(EXCL_XATTR_MSG)
-                log.error('msg="Error with xroot" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' % \
+                log.error('msg="Error with xroot" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' %
                           (cmd, subcmd, args, msg, rc.strip('\00')))
                 raise IOError(msg)
     # all right, return everything that came in stdout
     log.debug('msg="Invoked xroot" cmd="%s%s" url="%s" res="%s" elapsedTimems="%.1f"' %
-              (cmd, ('/' + subcmd if subcmd else ''), url, res, (tend-tstart)*1000))
-    return res[0][res[0].find('stdout=')+7:].strip('\n')
+              (cmd, ('/' + subcmd if subcmd else ''), url, res, (tend - tstart) * 1000))
+    return res[0][res[0].find('stdout=') + 7:].strip('\n')
 
 
 def _getfilepath(filepath, encodeamp=False):
@@ -139,7 +139,7 @@ def stat(endpoint, filepath, userid):
     tstart = time.time()
     rc, statInfo = _getxrdfor(endpoint).stat(filepath + _eosargs(userid))
     tend = time.time()
-    log.info('msg="Invoked stat" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
+    log.info('msg="Invoked stat" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend - tstart) * 1000))
     if not statInfo:
         if common.ENOENT_MSG in rc.message:
             raise IOError(common.ENOENT_MSG)
@@ -168,11 +168,11 @@ def statx(endpoint, fileref, userid, versioninv=0):
         # CUid: 4179 CGid: 2763 Fxid: 000b80fe Fid: 753918 Pid: 2571 Pxid: 00000a0b
         # ETAG: b80fe:1636190067.768
         # ```
-        filepath = rc[rc.find('Directory:')+12:rc.find('Treesize')-4].replace(EOSVERSIONPREFIX, '')
+        filepath = rc[rc.find('Directory:') + 12:rc.find('Treesize') - 4].replace(EOSVERSIONPREFIX, '')
     else:
         filepath = fileref
-    rc, statInfo = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(filepath, encodeamp=True) + \
-                                              _eosargs(userid) + '&mgm.pcmd=stat')
+    rc, statInfo = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(filepath, encodeamp=True)
+                                              + _eosargs(userid) + '&mgm.pcmd=stat')
     log.info('msg="Invoked stat" filepath="%s"' % _getfilepath(filepath))
     if '[SUCCESS]' not in str(rc) or not statInfo:
         raise IOError(str(rc).strip('\n'))
@@ -203,8 +203,8 @@ def statx(endpoint, fileref, userid, versioninv=0):
     rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder) + _eosargs(userid) + '&mgm.pcmd=stat')
     tend = time.time()
     infov = infov.decode()
-    log.debug('msg="Invoking stat on version folder" endpoint="%s" filepath="%s" result="%s" elapsedTimems="%.1f"' % \
-              (endpoint, _getfilepath(verFolder), infov, (tend-tstart)*1000))
+    log.debug('msg="Invoking stat on version folder" endpoint="%s" filepath="%s" result="%s" elapsedTimems="%.1f"' %
+              (endpoint, _getfilepath(verFolder), infov, (tend - tstart) * 1000))
     try:
         if '[SUCCESS]' not in str(rcv) or 'retc=' in infov:
             # the version folder does not exist: create it
@@ -213,8 +213,8 @@ def statx(endpoint, fileref, userid, versioninv=0):
             log.debug('msg="Invoked mkdir on version folder" filepath="%s" rc="%s"' % (_getfilepath(verFolder), rcmkdir))
             if '[SUCCESS]' not in str(rcmkdir):
                 raise IOError
-            rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder) + \
-                                                    _eosargs(userid) + '&mgm.pcmd=stat')
+            rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder)
+                                                    + _eosargs(userid) + '&mgm.pcmd=stat')
             infov = infov.decode()
             log.debug('msg="Invoked stat on version folder" filepath="%s" result="%s"' % (_getfilepath(verFolder), infov))
             if '[SUCCESS]' not in str(rcv) or 'retc=' in infov:
@@ -239,15 +239,15 @@ def statx(endpoint, fileref, userid, versioninv=0):
 def setxattr(endpoint, filepath, _userid, key, value, _lockid):
     '''Set the extended attribute <key> to <value> via a special open.
     The userid is overridden to make sure it also works on shared files.'''
-    _xrootcmd(endpoint, 'attr', 'set', '0:0', 'mgm.attr.key=user.' + key + '&mgm.attr.value=' + str(value) + \
-              '&mgm.path=' + _getfilepath(filepath, encodeamp=True))
+    _xrootcmd(endpoint, 'attr', 'set', '0:0', 'mgm.attr.key=user.' + key + '&mgm.attr.value=' + str(value)
+              + '&mgm.path=' + _getfilepath(filepath, encodeamp=True))
 
 
 def getxattr(endpoint, filepath, _userid, key):
     '''Get the extended attribute <key> via a special open.
     The userid is overridden to make sure it also works on shared files.'''
     try:
-        res = _xrootcmd(endpoint, 'attr', 'get', '0:0', \
+        res = _xrootcmd(endpoint, 'attr', 'get', '0:0',
                         'mgm.attr.key=user.' + key + '&mgm.path=' + _getfilepath(filepath, encodeamp=True))
         # if no error, the response comes in the format <key>="<value>"
         return res.split('"')[1]
@@ -284,10 +284,10 @@ def getlock(endpoint, filepath, userid):
     '''Get the lock metadata as an xattr'''
     rawl = getxattr(endpoint, filepath, userid, common.LOCKKEY)
     if rawl:
-        l = common.retrieverevalock(rawl)
-        if l['expiration']['seconds'] > time.time():
+        localVariable = common.retrieverevalock(rawl)
+        if localVariable['expiration']['seconds'] > time.time():
             log.debug('msg="Invoked getlock" filepath="%s"' % filepath)
-            return l
+            return localVariable
         # otherwise, the lock had expired: drop it and return None
         log.debug('msg="getlock: removed stale lock" filepath="%s"' % filepath)
         rmxattr(endpoint, filepath, userid, common.LOCKKEY, None)
@@ -323,11 +323,11 @@ def readfile(endpoint, filepath, userid, _lockid):
                 log.info('msg="File not found on read" filepath="%s"' % filepath)
                 yield IOError(common.ENOENT_MSG)
             else:
-                log.warning('msg="Error opening the file for read" filepath="%s" code="%d" error="%s"' % \
+                log.warning('msg="Error opening the file for read" filepath="%s" code="%d" error="%s"' %
                             (filepath, rc.shellcode, rc.message.strip('\n')))
                 yield IOError(rc.message)
         else:
-            log.info('msg="File open for read" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
+            log.info('msg="File open for read" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend - tstart) * 1000))
             chunksize = config.getint('io', 'chunksize')
             rc, statInfo = f.stat()
             chunksize = min(chunksize, statInfo.size)
@@ -369,15 +369,15 @@ def writefile(endpoint, filepath, userid, content, _lockid, islock=False):
     if not rc.ok:
         log.warning('msg="Error closing the file" filepath="%s" error="%s"' % (filepath, rc.message.strip('\n')))
         raise IOError(rc.message.strip('\n'))
-    log.info('msg="File written successfully" filepath="%s" elapsedTimems="%.1f" islock="%s"' % \
-             (filepath, (tend-tstart)*1000, islock))
+    log.info('msg="File written successfully" filepath="%s" elapsedTimems="%.1f" islock="%s"' %
+             (filepath, (tend - tstart) * 1000, islock))
 
 
 def renamefile(endpoint, origfilepath, newfilepath, userid, _lockid):
     '''Rename a file via a special open from origfilepath to newfilepath on behalf of the given userid.'''
-    _xrootcmd(endpoint, 'file', 'rename', userid, 'mgm.path=' + _getfilepath(origfilepath, encodeamp=True) + \
-              '&mgm.file.source=' + _getfilepath(origfilepath, encodeamp=True) + \
-              '&mgm.file.target=' + _getfilepath(newfilepath, encodeamp=True))
+    _xrootcmd(endpoint, 'file', 'rename', userid, 'mgm.path=' + _getfilepath(origfilepath, encodeamp=True)
+              + '&mgm.file.source=' + _getfilepath(origfilepath, encodeamp=True)
+              + '&mgm.file.target=' + _getfilepath(newfilepath, encodeamp=True))
 
 
 def removefile(endpoint, filepath, userid, force=False):
@@ -386,5 +386,5 @@ def removefile(endpoint, filepath, userid, force=False):
     This is useful for lock files, but as it requires root access the userid is overridden.'''
     if force:
         userid = '0:0'
-    _xrootcmd(endpoint, 'rm', None, userid, 'mgm.path=' + _getfilepath(filepath, encodeamp=True) + \
-              ('&mgm.option=f' if force else ''))
+    _xrootcmd(endpoint, 'rm', None, userid, 'mgm.path=' + _getfilepath(filepath, encodeamp=True)
+              + ('&mgm.option=f' if force else ''))

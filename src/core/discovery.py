@@ -44,7 +44,7 @@ def registerapp(appname, appurl, appinturl, apikey=None):
                 endpoints[t] = {}
                 endpoints[t]['view'] = urlsrc + 'permission=readonly'
                 endpoints[t]['edit'] = urlsrc + 'permission=edit'
-                endpoints[t]['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace
+                endpoints[t]['new'] = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace
             log.info('msg="Collabora Online endpoints successfully configured" count="%d" CODEURL="%s"' %
                      (len(codetypes), endpoints['.odt']['edit']))
             return
@@ -53,15 +53,15 @@ def registerapp(appname, appurl, appinturl, apikey=None):
         endpoints['.docx'] = {}
         endpoints['.docx']['view'] = appurl + '/wv/wordviewerframe.aspx?edit=0'
         endpoints['.docx']['edit'] = appurl + '/we/wordeditorframe.aspx?edit=1'
-        endpoints['.docx']['new']  = appurl + '/we/wordeditorframe.aspx?new=1'                         # pylint: disable=bad-whitespace
+        endpoints['.docx']['new'] = appurl + '/we/wordeditorframe.aspx?new=1'                         # pylint: disable=bad-whitespace
         endpoints['.xlsx'] = {}
         endpoints['.xlsx']['view'] = appurl + '/x/_layouts/xlviewerinternal.aspx?edit=0'
         endpoints['.xlsx']['edit'] = appurl + '/x/_layouts/xlviewerinternal.aspx?edit=1'
-        endpoints['.xlsx']['new']  = appurl + '/x/_layouts/xlviewerinternal.aspx?edit=1&new=1'         # pylint: disable=bad-whitespace
+        endpoints['.xlsx']['new'] = appurl + '/x/_layouts/xlviewerinternal.aspx?edit=1&new=1'         # pylint: disable=bad-whitespace
         endpoints['.pptx'] = {}
         endpoints['.pptx']['view'] = appurl + '/p/PowerPointFrame.aspx?PowerPointView=ReadingView'
         endpoints['.pptx']['edit'] = appurl + '/p/PowerPointFrame.aspx?PowerPointView=EditView'
-        endpoints['.pptx']['new']  = appurl + '/p/PowerPointFrame.aspx?PowerPointView=EditView&New=1'  # pylint: disable=bad-whitespace
+        endpoints['.pptx']['new'] = appurl + '/p/PowerPointFrame.aspx?PowerPointView=EditView&New=1'  # pylint: disable=bad-whitespace
         log.info('msg="Microsoft Office Online endpoints successfully configured" OfficeURL="%s"' %
                  endpoints['.docx']['edit'])
         return

@@ -32,6 +32,7 @@ srv = None
 log = None
 endpoints = {}
 
+
 class ViewMode(Enum):
     '''File view mode: reference is `ViewMode` at
     https://github.com/cs3org/cs3apis/blob/master/cs3/app/provider/v1beta1/provider_api.proto
@@ -59,11 +60,11 @@ class JsonLogger:
             if name in ['debug', 'info', 'warning', 'error', 'fatal']:
                 # resolve the current module
                 f = traceback.extract_stack()[-2].filename
-                m = f[f.rfind('/')+1:f.rfind('.')]
+                m = f[f.rfind('/') + 1:f.rfind('.')]
                 if m == '__init__':
                     # take 'module' out of '/path/to/module/__init__.py'
                     f = f[:f.rfind('/')]
-                    m = f[f.rfind('/')+1:]
+                    m = f[f.rfind('/') + 1:]
                 try:
                     # as we use a `key="value" ...` format in all logs, we only have args[0]
                     payload = 'module="%s" %s ' % (m, args[0])
@@ -85,7 +86,7 @@ def logGeneralExceptionAndReturn(ex, req):
     '''Convenience function to log a stack trace and return HTTP 500'''
     ex_type, ex_value, ex_traceback = sys.exc_info()
     log.critical('msg="Unexpected exception caught" exception="%s" type="%s" traceback="%s" client="%s" requestedUrl="%s"' %
-                 (ex, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback), req.remote_addr, \
+                 (ex, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback), req.remote_addr,
                   req.url[0:req.url.find('?')] + '?_args_redacted_' if req.url.find('?') > 0 else req.url))
     return 'Internal error, please contact support', http.client.INTERNAL_SERVER_ERROR
 
@@ -95,7 +96,7 @@ def generateWopiSrc(fileid, proxy=False):
     Note we'd need to URL-encode it per spec (including `-` to `%2D`), but it turns out that MS Office breaks
     with URL-encoded WOPISrc values via GET (it works via POST), whereas it works with plain WOPISrc values.
     And luckily enough, other known apps (Collabora and OnlyOffice) also work with non-encoded URLs.'''
-    #return urllib.parse.quote_plus('%s/wopi/files/%s' % (srv.wopiurl, fileid)).replace('-', '%2D')
+    # return urllib.parse.quote_plus('%s/wopi/files/%s' % (srv.wopiurl, fileid)).replace('-', '%2D')
     if not proxy or not srv.wopiproxy:
         return '%s/wopi/files/%s' % (srv.wopiurl, fileid)
     # proxy the WOPI request through an external WOPI proxy service
@@ -112,12 +113,12 @@ def getLibreOfficeLockName(filename):
 
 def getMicrosoftOfficeLockName(filename):
     '''Returns the filename of a lock file as created by Microsoft Office'''
-    if os.path.splitext(filename)[1] != '.docx' or len(os.path.basename(filename)) <= 6+1+4:
+    if os.path.splitext(filename)[1] != '.docx' or len(os.path.basename(filename)) <= 6 + 1 + 4:
         return os.path.dirname(filename) + os.path.sep + '~$' + os.path.basename(filename)
     # MS Word has a really weird algorithm for the lock file name...
-    if len(os.path.basename(filename)) >= 8+1+4:
+    if len(os.path.basename(filename)) >= 8 + 1 + 4:
         return os.path.dirname(filename) + os.path.sep + '~$' + os.path.basename(filename)[2:]
-    #elif len(os.path.basename(filename)) == 7+1+4:
+    # elif len(os.path.basename(filename)) == 7+1+4:
     return os.path.dirname(filename) + os.path.sep + '~$' + os.path.basename(filename)[1:]
 
 
@@ -145,7 +146,7 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
         try:
             appediturl = endpoints[fext]['edit']
             appviewurl = endpoints[fext]['view']
-        except KeyError as e:
+        except KeyError:
             log.critical('msg="No app URLs registered for the given file type" fileext="%s" mimetypescount="%d"' %
                          (fext, len(endpoints) if endpoints else 0))
             raise IOError
@@ -153,10 +154,10 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
                          'viewmode': viewmode.value, 'folderurl': folderurl, 'endpoint': endpoint,
                          'appname': appname, 'appediturl': appediturl, 'appviewurl': appviewurl, 'exp': exptime},
                         srv.wopisecret, algorithm='HS256')
-    log.info('msg="Access token generated" userid="%s" wopiuser="%s" mode="%s" endpoint="%s" filename="%s" inode="%s" ' \
+    log.info('msg="Access token generated" userid="%s" wopiuser="%s" mode="%s" endpoint="%s" filename="%s" inode="%s" '
              'mtime="%s" folderurl="%s" appname="%s" expiration="%d" token="%s"' %
-             (userid[-20:], wopiuser if wopiuser != userid else username, viewmode, endpoint, \
-              statinfo['filepath'], statinfo['inode'], statinfo['mtime'], \
+             (userid[-20:], wopiuser if wopiuser != userid else username, viewmode, endpoint,
+              statinfo['filepath'], statinfo['inode'], statinfo['mtime'],
               folderurl, appname, exptime, acctok[-20:]))
     # return the inode == fileid, the filepath and the access token
     return statinfo['inode'], acctok
@@ -191,7 +192,7 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefilename=Non
                 log.info('msg="%s" user="%s" filename="%s" token="%s" status="Found existing LibreOffice lock" lockmtime="%ld" holder="%s"' %
                          (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, lolockstat['mtime'], lolockholder))
                 return 'External', 'LibreOffice for Desktop'
-        except (IOError, StopIteration) as e:
+        except (IOError, StopIteration):
             pass
 
     try:
@@ -235,7 +236,7 @@ def _decodeLock(storedlock):
     '''Restores the lock payload reverting the `encodeLock` format. May raise IOError'''
     try:
         if storedlock and storedlock.find(common.WEBDAV_LOCK_PREFIX) == 0:
-            return b64decode(storedlock[len(common.WEBDAV_LOCK_PREFIX)+1:].encode()).decode()
+            return b64decode(storedlock[len(common.WEBDAV_LOCK_PREFIX) + 1:].encode()).decode()
         raise IOError('Non-WOPI lock found')     # it's not our lock, though it's likely valid
     except B64Error as e:
         raise IOError(e)
@@ -249,7 +250,7 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok):
     except IOError as e:
         log.warning('msg="%s: target file not found any longer" filename="%s" token="%s" reason="%s"' %
                     (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], e))
-        return makeConflictResponse(operation, 'External App', lock, oldlock, acctok['filename'], \
+        return makeConflictResponse(operation, 'External App', lock, oldlock, acctok['filename'],
                                     'The file got moved or deleted')
 
     if srv.config.get('general', 'detectexternallocks', fallback='True').upper() == 'TRUE' and \
@@ -259,31 +260,31 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok):
             # not overwrite any existing or being created lock
             lockcontent = ',Collaborative Online Editor,%s,%s,WOPIServer;' % \
                           (srv.wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())))
-            st.writefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], \
+            st.writefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'],
                          lockcontent, None, islock=True)
         except IOError as e:
             if common.EXCL_ERROR in str(e):
                 # retrieve the LibreOffice-compatible lock just found
                 try:
-                    retrievedlolock = next(st.readfile(acctok['endpoint'], \
+                    retrievedlolock = next(st.readfile(acctok['endpoint'],
                                            getLibreOfficeLockName(acctok['filename']), acctok['userid'], None))
                     if isinstance(retrievedlolock, IOError):
                         raise retrievedlolock
                     retrievedlolock = retrievedlolock.decode()
                     # check that the lock is not stale
                     if datetime.strptime(retrievedlolock.split(',')[3], '%d.%m.%Y %H:%M').timestamp() + \
-                                         srv.config.getint('general', 'wopilockexpiration') < time.time():
+                       srv.config.getint('general', 'wopilockexpiration') < time.time():
                         retrievedlolock = 'WOPIServer'
-                except (IOError, StopIteration, IndexError, ValueError) as e:
+                except (IOError, StopIteration, IndexError, ValueError):
                     retrievedlolock = 'WOPIServer'     # could not read the lock, assume it expired and take ownership
                 if 'WOPIServer' not in retrievedlolock:
                     # the file was externally locked, make this call fail
                     lockholder = retrievedlolock.split(',')[1] if ',' in retrievedlolock else ''
                     log.warning('msg="WOPI lock denied because of an existing LibreOffice lock" filename="%s" holder="%s"' %
                                 (acctok['filename'], lockholder if lockholder else retrievedlolock))
-                    return makeConflictResponse(operation, 'External App', lock, oldlock, acctok['filename'], \
-                        'The file was locked by ' + ((lockholder + ' via LibreOffice') if lockholder else 'a LibreOffice user'))
-                #else it's our previous lock or it had expired: all right, move on
+                    return makeConflictResponse(operation, 'External App', lock, oldlock, acctok['filename'],
+                                                'The file was locked by ' + ((lockholder + ' via LibreOffice') if lockholder else 'a LibreOffice user'))
+                # else it's our previous lock or it had expired: all right, move on
             else:
                 # any other error is logged but not raised as this is optimistically not blocking WOPI operations
                 # this includes the case of access denied (over)writing the LibreOffice lock because of accessing a single-file share
@@ -322,7 +323,7 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok):
             # get the lock that was set
             retrievedLock, lockHolder = retrieveWopiLock(fileid, operation, lock, acctok)
             if retrievedLock and not compareWopiLocks(retrievedLock, (oldlock if oldlock else lock)):
-                return makeConflictResponse(operation, retrievedLock, lock, oldlock, acctok['filename'], \
+                return makeConflictResponse(operation, retrievedLock, lock, oldlock, acctok['filename'],
                                             'The file is locked by %s' % (lockHolder if lockHolder != 'wopi' else 'another online editor'))
             # else it's our lock or it had expired, refresh it and return
             st.refreshlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'], encodeLock(lock))
@@ -381,7 +382,7 @@ def makeConflictResponse(operation, retrievedlock, lock, oldlock, filename, reas
         resp.headers['X-WOPI-LockFailureReason'] = reason['message']
         resp.data = json.dumps(reason)
     log.warning('msg="%s: returning conflict" filename="%s" token="%s" lock="%s" oldlock="%s" retrievedlock="%s" reason="%s"' %
-                (operation.title(), filename, flask.request.args['access_token'][-20:], \
+                (operation.title(), filename, flask.request.args['access_token'][-20:],
                  lock, oldlock, retrievedlock, (reason['message'] if reason else 'NA')))
     return resp
 
@@ -411,10 +412,10 @@ def storeForRecovery(content, filename, acctokforlog, exception):
             written = f.write(content)
         if written != len(content):
             raise IOError('Size mismatch')
-        log.error('msg="Error writing file, a copy was stored locally for later recovery" ' + \
-                  'filename="%s" recoveredpath="%s" token="%s" error="%s"' %
+        log.error('msg="Error writing file, a copy was stored locally for later recovery" '
+                  + 'filename="%s" recoveredpath="%s" token="%s" error="%s"' %
                   (filename, filepath, acctokforlog, exception))
     except (OSError, IOError) as e:
-        log.critical('msg="Error writing file and failed to recover it to local storage, data is LOST" ' + \
-                     'filename="%s" token="%s" originalerror="%s" recoveryerror="%s"' %
+        log.critical('msg="Error writing file and failed to recover it to local storage, data is LOST" '
+                     + 'filename="%s" token="%s" originalerror="%s" recoveryerror="%s"' %
                      (filename, acctokforlog, exception, e))

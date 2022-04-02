@@ -24,6 +24,7 @@ import core.commoniface as common
 ctx = {}            # "map" to store some module context: cf. init()
 log = None
 
+
 def init(inconfig, inlog):
     '''Init module-level variables'''
     global log     # pylint: disable=global-statement
@@ -75,14 +76,14 @@ def stat(endpoint, fileref, userid, versioninv=1):
     tend = time.time()
     if statInfo.status.code == cs3code.CODE_OK:
         if statInfo.info.type == cs3spr.RESOURCE_TYPE_CONTAINER:
-            log.info('msg="Invoked stat" fileref="%s" result="ISDIR" elapsedTimems="%.1f"' % (fileref, (tend-tstart)*1000))
+            log.info('msg="Invoked stat" fileref="%s" result="ISDIR" elapsedTimems="%.1f"' % (fileref, (tend - tstart) * 1000))
             raise IOError('Is a directory')
         if statInfo.info.type not in (cs3spr.RESOURCE_TYPE_FILE, cs3spr.RESOURCE_TYPE_SYMLINK):
             log.warning('msg="Invoked stat" fileref="%s" unexpectedtype="%d"' % (fileref, statInfo.info.type))
             raise IOError('Unexpected type %d' % statInfo.info.type)
         inode = common.encodeinode(statInfo.info.id.storage_id, statInfo.info.id.opaque_id)
         log.info('msg="Invoked stat" fileref="%s" inode="%s" filepath="%s" elapsedTimems="%.1f"' %
-                 (fileref, inode, statInfo.info.path, (tend-tstart)*1000))
+                 (fileref, inode, statInfo.info.path, (tend - tstart) * 1000))
         return {
             'inode': inode,
             'filepath': statInfo.info.path,
@@ -130,7 +131,7 @@ def getxattr(_endpoint, filepath, userid, key):
         xattrvalue = statInfo.info.arbitrary_metadata.metadata[key]
         if xattrvalue == '':
             raise KeyError
-        log.debug('msg="Invoked stat for getxattr" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
+        log.debug('msg="Invoked stat for getxattr" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend - tstart) * 1000))
         return xattrvalue
     except KeyError:
         log.warning('msg="Empty value or key not found in getxattr" filepath="%s" key="%s" metadata="%s"' %
@@ -152,7 +153,7 @@ def rmxattr(_endpoint, filepath, userid, key, lockid):
 def setlock(_endpoint, filepath, userid, appname, value):
     '''Set a lock to filepath with the given value metadata and appname as holder'''
     reference = cs3spr.Reference(path=filepath)
-    lock = cs3spr.Lock(type=cs3spr.LOCK_TYPE_WRITE, app_name=appname, lock_id=value, \
+    lock = cs3spr.Lock(type=cs3spr.LOCK_TYPE_WRITE, app_name=appname, lock_id=value,
                        expiration={'seconds': int(time.time() + ctx['lockexpiration'])})
     req = cs3sp.SetLockRequest(ref=reference, lock=lock)
     res = ctx['cs3gw'].SetLock(request=req, metadata=[('x-access-token', userid)])
@@ -185,10 +186,10 @@ def getlock(_endpoint, filepath, userid):
         'lock_id': res.lock.lock_id,
         'type': res.lock.type,
         'app_name': res.lock.app_name,
-        'user': {'opaque_id' : res.lock.user.opaque_id,
+        'user': {'opaque_id': res.lock.user.opaque_id,
                  'idp': res.lock.user.idp,
                  'type': 1
-                } if res.lock.user.opaque_id else {},
+                 } if res.lock.user.opaque_id else {},
         'expiration': {
             'seconds': res.lock.expiration.seconds
         }
@@ -198,7 +199,7 @@ def getlock(_endpoint, filepath, userid):
 def refreshlock(_endpoint, filepath, userid, appname, value):
     '''Refresh the lock metadata for the given filepath'''
     reference = cs3spr.Reference(path=filepath)
-    lock = cs3spr.Lock(type=cs3spr.LOCK_TYPE_WRITE, app_name=appname, lock_id=value, \
+    lock = cs3spr.Lock(type=cs3spr.LOCK_TYPE_WRITE, app_name=appname, lock_id=value,
                        expiration={'seconds': int(time.time() + ctx['lockexpiration'])})
     req = cs3sp.RefreshLockRequest(ref=reference, lock=lock)
     res = ctx['cs3gw'].RefreshLock(request=req, metadata=[('x-access-token', userid)])
@@ -255,9 +256,9 @@ def readfile(_endpoint, filepath, userid, lockid):
                   (fileget.status_code, fileget.reason.replace('"', "'")))
         yield IOError(fileget.reason)
     else:
-        log.info('msg="File open for read" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
+        log.info('msg="File open for read" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend - tstart) * 1000))
         for i in range(0, len(data), ctx['chunksize']):
-            yield data[i:i+ctx['chunksize']]
+            yield data[i:i + ctx['chunksize']]
 
 
 def writefile(_endpoint, filepath, userid, content, lockid, islock=False):
@@ -276,7 +277,7 @@ def writefile(_endpoint, filepath, userid, content, lockid, islock=False):
     req = cs3sp.InitiateFileUploadRequest(ref=cs3spr.Reference(path=filepath), lock_id=lockid, opaque=metadata)
     initfileuploadres = ctx['cs3gw'].InitiateFileUpload(request=req, metadata=[('x-access-token', userid)])
     if initfileuploadres.status.code != cs3code.CODE_OK:
-        log.error('msg="Failed to initiateFileUpload on write" filepath="%s" code="%s" reason="%s"' % \
+        log.error('msg="Failed to initiateFileUpload on write" filepath="%s" code="%s" reason="%s"' %
                   (filepath, initfileuploadres.status.code, initfileuploadres.status.message.replace('"', "'")))
         raise IOError(initfileuploadres.status.message)
     log.debug('msg="writefile: InitiateFileUploadRes returned" protocols="%s"' % initfileuploadres.protocols)
@@ -301,13 +302,13 @@ def writefile(_endpoint, filepath, userid, content, lockid, islock=False):
     if putres.status_code != http.client.OK:
         log.error('msg="Error uploading file to Reva" code="%d" reason="%s"' % (putres.status_code, putres.reason))
         raise IOError(putres.reason)
-    log.info('msg="File written successfully" filepath="%s" elapsedTimems="%.1f" islock="%s"' % \
-                    (filepath, (tend-tstart)*1000, islock))
+    log.info('msg="File written successfully" filepath="%s" elapsedTimems="%.1f" islock="%s"' %
+             (filepath, (tend - tstart) * 1000, islock))
 
 
 def renamefile(_endpoint, filepath, newfilepath, userid, lockid):
     '''Rename a file from origfilepath to newfilepath using the given userid as access token.'''
-    req = cs3sp.MoveRequest(source=cs3spr.Reference(path=filepath), \
+    req = cs3sp.MoveRequest(source=cs3spr.Reference(path=filepath),
                             destination=cs3spr.Reference(path=newfilepath), lock_id=lockid)
     res = ctx['cs3gw'].Move(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
