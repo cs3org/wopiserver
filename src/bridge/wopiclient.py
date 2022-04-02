@@ -17,6 +17,8 @@ class InvalidLock(Exception):
     '''A custom exception to represent an invalid or missing WOPI lock'''
 
 # initialized by the main class
+
+
 log = None
 sslverify = None
 
@@ -25,14 +27,14 @@ def jsonify(msg):
     '''One-liner to consistently json-ify a given message and pass a delay.
     If delay = 0 means the user has to click on it to dismiss it, good for longer messages'''
     # this is part of the EFSS webhook specs (to be) implemented by the bridged apps
-    return '{"message": "%s", "delay": "%.1f"}' % (msg, 0 if len(msg) > 60 else 0.5 + len(msg)/20)
+    return '{"message": "%s", "delay": "%.1f"}' % (msg, 0 if len(msg) > 60 else 0.5 + len(msg) / 20)
 
 
 def request(wopisrc, acctok, method, contents=None, headers=None):
     '''Execute a WOPI request with the given parameters and headers'''
     try:
-        wopiurl = '%s%s' % (wopisrc, ('/contents' if contents is not None and
-                                      (not headers or headers.get('X-WOPI-Override') != 'PUT_RELATIVE')
+        wopiurl = '%s%s' % (wopisrc, ('/contents' if contents is not None
+                                      and (not headers or headers.get('X-WOPI-Override') != 'PUT_RELATIVE')
                                       else ''))
         log.debug('msg="Calling WOPI" url="%s" headers="%s" acctok="%s" ssl="%s"' %
                   (wopiurl, headers, acctok[-20:], sslverify))
@@ -57,7 +59,7 @@ def generatelock(docid, filemd, digest, app, acctok, isclose):
             'digest': digest,
             'app': app if app else os.path.splitext(filemd['BaseFileName'])[1][1:],
             'toclose': {acctok[-20:]: isclose},
-           }
+            }
 
 
 def getlock(wopisrc, acctok):
@@ -88,7 +90,7 @@ def _getheadersforrefreshlock(acctok, wopilock, digest, toclose):
     return {'X-Wopi-Override': 'REFRESH_LOCK',
             'X-WOPI-OldLock': json.dumps(wopilock),
             'X-WOPI-Lock': json.dumps(newlock)
-           }, newlock
+            }, newlock
 
 
 def refreshlock(wopisrc, acctok, wopilock, digest=None, toclose=None):
@@ -131,7 +133,7 @@ def relock(wopisrc, acctok, docid, isclose):
     lockheaders = {'X-WOPI-Lock': json.dumps(wopilock),
                    'X-WOPI-Override': 'REFRESH_LOCK',
                    'X-WOPI-Validate-Target': 'True'    # this is an extension of the Lock API
-                  }
+                   }
     res = request(wopisrc, acctok, 'POST', headers=lockheaders)
     if res.status_code == http.client.CONFLICT:
         log.warning('msg="Got conflict in relocking the file" response="%d" token="%s" reason="%s"' %
@@ -152,7 +154,7 @@ def handleputfile(wopicall, wopisrc, res):
         log.warning('msg="Conflict when calling WOPI %s" url="%s" reason="%s"' %
                     (wopicall, wopisrc, res.headers.get('X-WOPI-LockFailureReason')))
         return jsonify('Error saving the file. %s' % res.headers.get('X-WOPI-LockFailureReason')), \
-               http.client.INTERNAL_SERVER_ERROR
+            http.client.INTERNAL_SERVER_ERROR
     if res.status_code != http.client.OK:
         # hopefully the server has kept a local copy for later recovery
         log.error('msg="Calling WOPI %s failed" url="%s" response="%s"' % (wopicall, wopisrc, res.status_code))
@@ -166,7 +168,7 @@ def saveas(wopisrc, acctok, wopilock, targetname, content):
                      'X-WOPI-Override': 'PUT_RELATIVE',
                      # SuggestedTarget to not overwrite a possibly existing file
                      'X-WOPI-SuggestedTarget': targetname
-                    }
+                     }
     res = request(wopisrc, acctok, 'POST', headers=putrelheaders, contents=content)
     reply = handleputfile('PutRelative', wopisrc, res)
     if reply:

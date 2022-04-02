@@ -8,7 +8,6 @@ import os
 import sys
 import time
 import traceback
-import logging
 import threading
 import atexit
 import functools
@@ -173,7 +172,7 @@ def appopen(wopisrc, acctok):
                                          'toclose': {acctok[-20:]: False},
                                          'docid': wopilock['docid'],
                                          'app': os.path.splitext(filemd['BaseFileName'])[1][1:],
-                                        }
+                                         }
             # also clear any potential stale response for this document
             try:
                 del WB.saveresponses[wopisrc]
@@ -200,7 +199,7 @@ def appsave(docid):
     try:
         meta = urlparse.unquote(flask.request.headers['X-EFSS-Metadata'])
         wopisrc = meta[:meta.index('?t=')]
-        acctok = meta[meta.index('?t=')+3:]
+        acctok = meta[meta.index('?t=') + 3:]
         isclose = flask.request.args.get('close') == 'true'
         if not docid:
             raise ValueError
@@ -224,7 +223,7 @@ def appsave(docid):
                                      'lastsave': int(time.time() - WB.saveinterval),
                                      'toclose': {acctok[-20:]: isclose},
                                      'docid': docid,
-                                    }
+                                     }
             # if it's the first time we heard about this wopisrc, remove any potential stale response
             try:
                 del WB.saveresponses[wopisrc]
@@ -260,9 +259,11 @@ def _intersection(boolsdict):
     '''Given a dictionary of booleans, returns the intersection (AND) of all'''
     return functools.reduce(lambda x, y: x and y, list(boolsdict.values()))
 
+
 def _union(boolsdict):
     '''Given a dictionary of booleans, returns the union (OR) of all'''
     return functools.reduce(lambda x, y: x or y, list(boolsdict.values()))
+
 
 class SaveThread(threading.Thread):
     '''Async thread for save operations'''
@@ -309,7 +310,7 @@ class SaveThread(threading.Thread):
                     if app:
                         content, rc = WB.plugins[app].savetostorage(wopisrc, openfile['acctok'], False, {'docid': openfile['docid']}, onlyfetch=True)
                         if rc == http.client.OK:
-                            utils.storeForRecovery(content, wopisrc[wopisrc.rfind('/')+1:], openfile['acctok'][-20:], ile)
+                            utils.storeForRecovery(content, wopisrc[wopisrc.rfind('/') + 1:], openfile['acctok'][-20:], ile)
                     if rc != http.client.OK:
                         WB.log.error('msg="SaveThread: failed to fetch file for recovery to local storage" token="%s" docid="%s" app="%s" response="%s"' %
                                      (openfile['acctok'][-20:], openfile['docid'], app, content))
@@ -336,7 +337,7 @@ class SaveThread(threading.Thread):
         '''close and unlock documents tha are idle for more than 4x the save interval (about 14 minutes by default).
         They will transparently be relocked when/if the session resumes, but we seem to miss some close notifications,
         therefore this also works as a cleanup step'''
-        if openfile['lastsave'] < int(time.time()) - 4*WB.saveinterval:
+        if openfile['lastsave'] < int(time.time()) - 4 * WB.saveinterval:
             try:
                 wopilock = wopic.getlock(wopisrc, openfile['acctok']) if not wopilock else wopilock
                 # this will force a close in the cleanup step
