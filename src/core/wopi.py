@@ -227,13 +227,17 @@ def unlock(fileid, reqheaders, acctok):
         if common.ENOENT_MSG in e:
             return 'File not found', http.client.NOT_FOUND
         return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
-    try:
-        # also remove the LibreOffice-compatible lock file when relevant
-        if os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes:
-            st.removefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), acctok['userid'], True)
-    except IOError:
-        # ignore, it's not worth to report anything here
-        pass
+
+    checkext = srv.config.get('general', 'detectexternallocks', fallback='True').upper() == 'TRUE'
+    if checkext:
+        try:
+            # also remove the LibreOffice-compatible lock file when relevant
+            if os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes:
+                st.removefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), acctok['userid'], True)
+        except IOError:
+            # ignore, it's not worth to report anything here
+            pass
+
     # and update our internal list of opened files
     try:
         del srv.openfiles[acctok['filename']]
