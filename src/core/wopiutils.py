@@ -394,9 +394,6 @@ def storeWopiFile(request, retrievedlock, acctok, xakey, targetname=''):
     st.writefile(acctok['endpoint'], targetname, acctok['userid'], request.get_data(), encodeLock(retrievedlock))
     # save the current time for later conflict checking: this is never older than the mtime of the file
     st.setxattr(acctok['endpoint'], targetname, acctok['userid'], xakey, int(time.time()), encodeLock(retrievedlock))
-    # and reinstate the lock if existing
-    if retrievedlock:
-        st.setlock(acctok['endpoint'], targetname, acctok['userid'], acctok['appname'], encodeLock(retrievedlock))
 
 
 def getConflictPath(username):
