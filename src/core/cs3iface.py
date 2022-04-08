@@ -53,10 +53,7 @@ def getuseridfromcreds(token, _wopiuser):
 def _getcs3reference(endpoint, fileref):
     '''Generates a CS3 reference for a given fileref, covering the following cases:
     absolute path, relative hybrid path, fully opaque fileid'''
-    if fileref[0] == '/':
-        # assume this is a filepath
-        ref = cs3spr.Reference(path=fileref)
-    elif fileref.find('/') > 0:
+    if fileref.find('/') > 0:
         # assume we have a relative path in the form `<parent_opaque_id>/<base_filename>`,
         # also works if we get `<parent_opaque_id>/<path>/<filename>`
         ref = cs3spr.Reference(resource_id=cs3spr.ResourceId(storage_id=endpoint,
@@ -64,7 +61,7 @@ def _getcs3reference(endpoint, fileref):
                                path='.' + fileref[fileref.find('/'):])
     else:
         # assume we have an opaque fileid
-        ref = cs3spr.Reference(resource_id=cs3spr.ResourceId(storage_id=endpoint, opaque_id=fileref))
+        ref = cs3spr.Reference(resource_id=cs3spr.ResourceId(storage_id=endpoint, opaque_id=fileref), path='.')
     return ref
 
 
@@ -80,8 +77,8 @@ def authenticate_for_test(userid, userpwd):
 
 def stat(endpoint, fileref, userid, versioninv=1):
     '''Stat a file and returns (size, mtime) as well as other extended info using the given userid as access token.
-    Note that endpoint here means the storage id, and fileref can be either a path (which MUST begin with /),
-    or an id (which MUST NOT start with a /). The versioninv flag is natively supported by Reva.'''
+    Note that endpoint here means the storage id, and fileref can be either a path in the form (parent_id/base_filename)
+    or a pure id (cf. _getcs3reference). The versioninv flag is natively supported by Reva.'''
     tstart = time.time()
     ref = _getcs3reference(endpoint, fileref)
     statInfo = ctx['cs3gw'].Stat(request=cs3sp.StatRequest(ref=ref), metadata=[('x-access-token', userid)])
@@ -100,12 +97,9 @@ def stat(endpoint, fileref, userid, versioninv=1):
         raise IOError('Unexpected type %d' % statInfo.info.type)
 
     inode = common.encodeinode(statInfo.info.id.storage_id, statInfo.info.id.opaque_id)
-    # in case we got a relative path, build an hybrid path that can be used to reference the file:
-    # note that as per specs the parent_id MUST be available in this case
-    if statInfo.info.path[0] == '/':
-        filepath = statInfo.info.path
-    else:
-        filepath = statInfo.info.parent_id.opaque_id + '/' + os.path.basename(statInfo.info.path)
+    # here we build an hybrid path that can be used to reference the file, as the path is actually just the basename
+    # (and eventually the CS3 APIs should be updated to reflect that): note that as per specs the parent_id MUST be available
+    filepath = statInfo.info.parent_id.opaque_id + '/' + os.path.basename(statInfo.info.path)
     log.info('msg="Invoked stat" fileref="%s" trace="%s" inode="%s" filepath="%s" elapsedTimems="%.1f"' %
              (fileref, statInfo.status.trace, inode, filepath, (tend-tstart)*1000))
     return {
