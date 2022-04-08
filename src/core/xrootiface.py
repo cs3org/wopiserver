@@ -343,6 +343,7 @@ def writefile(endpoint, filepath, userid, content, _lockid, islock=False):
          O_CREAT|O_EXCL, preventing race conditions.'''
     size = len(content)
     log.debug('msg="Invoking writeFile" filepath="%s" userid="%s" size="%d" islock="%s"' % (filepath, userid, size, islock))
+    existingLock = getlock(endpoint, filepath, userid)
     f = XrdClient.File()
     tstart = time.time()
     rc, _ = f.open(_geturlfor(endpoint) + '/' + homepath + filepath + _eosargs(userid, not islock, size),
@@ -369,6 +370,8 @@ def writefile(endpoint, filepath, userid, content, _lockid, islock=False):
     if not rc.ok:
         log.warning('msg="Error closing the file" filepath="%s" error="%s"' % (filepath, rc.message.strip('\n')))
         raise IOError(rc.message.strip('\n'))
+    if existingLock:
+        setlock(endpoint, filepath, userid, existingLock['app_name'], existingLock['lock_id'], False)
     log.info('msg="File written successfully" filepath="%s" elapsedTimems="%.1f" islock="%s"' % \
              (filepath, (tend-tstart)*1000, islock))
 
