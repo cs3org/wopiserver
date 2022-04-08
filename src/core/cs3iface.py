@@ -64,7 +64,7 @@ def _getcs3reference(endpoint, fileref):
                                path='.' + fileref[fileref.find('/'):])
     else:
         # assume we have an opaque fileid
-        ref = cs3spr.Reference(resource_id=cs3spr.ResourceId(storage_id=endpoint, opaque_id=fileref))
+        ref = cs3spr.Reference(resource_id=cs3spr.ResourceId(storage_id=endpoint, opaque_id=fileref),path='.')
     return ref
 
 
