@@ -1,8 +1,8 @@
 ## Changelog for the WOPI server
 
-### ... Mar .. 2022 - v8.0.0
+### Fri Apr 08 2022 - v8.0.0
 - The new Lock API is now fully supported (#51),
-  including for the CS3APIs-compatible implementation;
+  including in the CS3APIs-compatible layer;
   in addition, locks are passed along to CS3APIs
   backends on any operation that implies a modification
 - Moved part of the lock handling logic to the storage
@@ -10,6 +10,8 @@
   removes the non-standard feature that the expiration time
   of a lock was extended by `PutFile` operations without
   needing to call `RefreshLock`, as introduced in v6.3.0
+- Added support for Reva spaces in the CS3API-compatible
+  storage layer (#67)
 - Introduced a `recoverypath` configuration option as a
   local path where to store files in case of I/O errors
   with the remote storage. Fixes bug #39

@@ -5,7 +5,7 @@
 
 # WOPI Server
 
-This service is part of the ScienceMesh Interoperability Platform (IOP) and implements a Vendor-neutral application gateway compatible with the Web-application Open Platform Interface ([WOPI](https://docs.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/online)) specifications.
+This service is part of the ScienceMesh Interoperability Platform (IOP) and implements a vendor-neutral application gateway compatible with the Web-application Open Platform Interface ([WOPI](https://docs.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/online)) specifications.
 
 It enables ScienceMesh EFSS storages to integrate Office Online platforms including Microsoft Office Online and Collabora Online. In addition it implements a [bridge](src/bridge/readme.md) module with dedicated extensions to support apps like CodiMD and Etherpad.
 
@@ -34,6 +34,9 @@ Integration in the CS3 Organisation: April 2020
 
 [Available here](CHANGELOG.md)
 
+## Compatibility
+
+This WOPI server implements the required APIs to ensure full compatibility with Collabora Online and Microsoft Office. For the latter, however, the OneNote application uses newer WOPI APIs and is currently not supported.
 
 ## Unit testing
 
@@ -41,8 +44,8 @@ The `/test` folder contains some unit tests for the supported storage interfaces
 No tests are provided (yet) for the core WOPI server, though the test suite aims at covering all
 storage access patterns used by the WOPI server.
 
-By default, the local storage is tested. The CI includes it as well (_TODO_ test against Reva in the CI).
-To run the tests, use the standard python unittest arguments:
+By default, the local storage is tested, and the CI runs it as well (_TODO_ test against Reva in the CI).
+To run the tests, either run `pytest` if available in your system, or execute the following:
 
 1. Run all tests: `python3 test/test_storageiface.py [-v]`
 2. Run only one test: `python3 test/test_storageiface.py [-v] TestStorage.<the test you would like to run>`
@@ -83,3 +86,4 @@ For testing collaborative scenarios, repeat the above for each user participatin
 5. Copy the provided `wopiserver.conf` to `/etc/wopi/wopiserver.defaults.conf`
 6. Create a config file `/etc/wopi/wopiserver.conf`: start from `docker/etc/wopiserver.conf` for a minimal configuration and add from the defaults file as needed
 7. From the WOPI server folder run: `python3 src/wopiserver.py`
+
