@@ -1,8 +1,6 @@
 '''
 etherpad.py
-
 The Etherpad-specific code used by the WOPI bridge.
-
 Main author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 '''
 
@@ -20,8 +18,6 @@ class AppFailure(Exception):
     '''A custom exception to represent a fatal failure when contacting Etherpad'''
 
 # initialized by the main class or by the init method
-
-
 appurl = None
 appexturl = None
 apikey = None
@@ -75,7 +71,7 @@ def getredirecturl(isreadwrite, wopisrc, acctok, wopilock, displayname):
         return appexturl + '/p/' + res['data']['readOnlyID']
     # return the URL to the pad (TODO the metadata argument must be picked up by an Etherpad plugin)
     return appexturl + '/p/%s?userName=%s&metadata=%s' % \
-        (wopilock['docid'][1:], displayname, urlparse.quote_plus('%s?t=%s' % (wopisrc, acctok)))
+           (wopilock['docid'][1:], displayname, urlparse.quote_plus('%s?t=%s' % (wopisrc, acctok)))
 
 
 # Cloud storage to Etherpad
@@ -166,7 +162,7 @@ def savetostorage(wopisrc, acctok, isclose, wopilock, onlyfetch=False):
     try:
         wopilock = wopic.refreshlock(wopisrc, acctok, wopilock, digest='dirty')
         log.info('msg="Save completed" filename="%s" isclose="%s" token="%s"' %
-                 (wopilock['filename'], isclose, acctok[-20:]))
+                (wopilock['filename'], isclose, acctok[-20:]))
         return wopic.jsonify('File saved successfully'), http.client.OK
     except wopic.InvalidLock:
         return wopic.jsonify('File saved, but failed to refresh lock'), http.client.INTERNAL_SERVER_ERROR

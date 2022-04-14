@@ -20,11 +20,8 @@ import bridge.wopiclient as wopic
 
 
 TOOLARGE = 'File is too large to be edited in CodiMD. Please reduce its size with a regular text editor and try again.'
-
-
 class AppFailure(Exception):
     '''A custom exception to represent a fatal failure when contacting CodiMD'''
-
 
 # a regexp for uploads, that have links like '/uploads/upload_542a360ddefe1e21ad1b8c85207d9365.*'
 upload_re = re.compile(r'\/uploads\/upload_\w{32}\.\w+')
@@ -62,8 +59,8 @@ def getredirecturl(isreadwrite, wopisrc, acctok, wopilock, displayname):
     '''Return a valid URL to the app for the given WOPI context'''
     if isreadwrite:
         return appexturl + wopilock['docid'] + '?metadata=' + \
-            urlparse.quote_plus('%s?t=%s' % (wopisrc, acctok)) + \
-            '&apiKey=' + apikey + '&displayName=' + displayname
+               urlparse.quote_plus('%s?t=%s' % (wopisrc, acctok)) + \
+               '&apiKey=' + apikey + '&displayName=' + displayname
     # read-only mode: in this case redirect to publish mode or normal view
     # to quickly jump in slide mode depending on the content
     url = wopilock['docid'] + ('/publish' if wopilock['app'] != 'mds' else '')
@@ -74,9 +71,10 @@ def getredirecturl(isreadwrite, wopisrc, acctok, wopilock, displayname):
         return appexturl + '/s/' + urlparse.urlsplit(res.next.url).path.split('/')[-1]
     return appexturl + url + '?apiKey=' + apikey
 
+
+
 # Cloud storage to CodiMD
 ##########################
-
 
 def _unzipattachments(inputbuf):
     '''Unzip the given input buffer uploading the content to CodiMD and return the contained .md file'''
@@ -99,7 +97,7 @@ def _unzipattachments(inputbuf):
                 log.warning('msg="Attachment collision detected" filename="%s"' % fname)
                 # append a random letter to the filename
                 name, ext = os.path.splitext(fname)
-                fname = name + '_' + chr(randint(65, 65 + 26)) + ext
+                fname = name + '_' + chr(randint(65, 65+26)) + ext
                 # and replace its reference in the document (this creates a copy of the doc, not very efficient)
                 mddoc = mddoc.replace(zipinfo.filename, fname)
             # OK, let's upload
@@ -202,8 +200,8 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
         raise AppFailure
     except UnicodeDecodeError as e:
         log.warning('msg="Invalid UTF-8 content found in file" exception="%s"' % e)
-        raise AppFailure('File contains an invalid UTF-8 character, was it corrupted? '
-                         + 'Please fix it in a regular editor before opening it in CodiMD.')
+        raise AppFailure('File contains an invalid UTF-8 character, was it corrupted? ' + \
+                         'Please fix it in a regular editor before opening it in CodiMD.')
     # generate and return a WOPI lock structure for this document
     return wopic.generatelock(docid, filemd, h.hexdigest(), 'mds' if _isslides(mddoc) else 'md', acctok, False)
 
@@ -282,6 +280,7 @@ def savetostorage(wopisrc, acctok, isclose, wopilock, onlyfetch=False):
             return attresponse if attresponse else (wopic.jsonify('File saved successfully'), http.client.OK)
         except wopic.InvalidLock:
             return wopic.jsonify('File saved, but failed to refresh lock'), http.client.INTERNAL_SERVER_ERROR
+
 
     # on close, use saveas for either the new bundle, if this is the first time we have attachments,
     # or the single md file, if there are no more attachments.

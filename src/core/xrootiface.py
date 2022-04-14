@@ -284,10 +284,10 @@ def getlock(endpoint, filepath, userid):
     '''Get the lock metadata as an xattr'''
     rawl = getxattr(endpoint, filepath, userid, common.LOCKKEY)
     if rawl:
-        localVariable = common.retrieverevalock(rawl)
-        if localVariable['expiration']['seconds'] > time.time():
+        lock = common.retrieverevalock(rawl)
+        if lock['expiration']['seconds'] > time.time():
             log.debug('msg="Invoked getlock" filepath="%s"' % filepath)
-            return localVariable
+            return lock
         # otherwise, the lock had expired: drop it and return None
         log.debug('msg="getlock: removed stale lock" filepath="%s"' % filepath)
         rmxattr(endpoint, filepath, userid, common.LOCKKEY, None)

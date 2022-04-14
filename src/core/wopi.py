@@ -30,7 +30,7 @@ enablerename = False
 
 def checkFileInfo(fileid):
     '''Implements the CheckFileInfo WOPI call'''
-# cf. http://wopi.readthedocs.io/projects/wopirest/en/latest/files/CheckFileInfo.html
+    '''cf. http://wopi.readthedocs.io/projects/wopirest/en/latest/files/CheckFileInfo.html'''
     srv.refreshconfig()
     try:
         acctok = jwt.decode(flask.request.args['access_token'], srv.wopisecret, algorithms=['HS256'])

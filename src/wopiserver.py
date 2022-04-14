@@ -68,10 +68,10 @@ class Wopi:
     port = 0
     lastConfigReadTime = time.time()
     loglevels = {"Critical": logging.CRITICAL,  # 50
-                 "Error": logging.ERROR,     # 40
-                 "Warning": logging.WARNING,   # 30
-                 "Info": logging.INFO,      # 20
-                 "Debug": logging.DEBUG      # 10
+                 "Error":    logging.ERROR,     # 40
+                 "Warning":  logging.WARNING,   # 30
+                 "Info":     logging.INFO,      # 20
+                 "Debug":    logging.DEBUG      # 10
                  }
     log = utils.JsonLogger(app.logger)
     openfiles = {}

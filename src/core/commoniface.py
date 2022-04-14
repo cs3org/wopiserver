@@ -50,8 +50,8 @@ config = None
 # }
 
 def genrevalock(appname, value):
-    """Return a base64-encoded lock compatible with the Reva implementation of the CS3 Lock API
-    cf. https://github.com/cs3org/cs3apis/blob/main/cs3/storage/provider/v1beta1/resources.proto"""
+    '''Return a base64-encoded lock compatible with the Reva implementation of the CS3 Lock API
+    cf. https://github.com/cs3org/cs3apis/blob/main/cs3/storage/provider/v1beta1/resources.proto'''
     return urlsafe_b64encode(
         json.dumps(
             {
