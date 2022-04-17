@@ -95,6 +95,7 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args):
                     log.info('msg="Invoked setxattr on an already locked entity" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' % \
                              (cmd, subcmd, args, msg, rc.strip('\00')))
                     raise IOError(EXCL_XATTR_MSG)
+                # anything else (including permission errors) are logged as errors
                 log.error('msg="Error with xroot" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' % \
                           (cmd, subcmd, args, msg, rc.strip('\00')))
                 raise IOError(msg)

@@ -85,8 +85,7 @@ def logGeneralExceptionAndReturn(ex, req):
     '''Convenience function to log a stack trace and return HTTP 500'''
     ex_type, ex_value, ex_traceback = sys.exc_info()
     log.critical('msg="Unexpected exception caught" exception="%s" type="%s" traceback="%s" client="%s" requestedUrl="%s"' %
-                 (ex, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback), req.remote_addr, \
-                  req.url[0:req.url.find('?')] + '?_args_redacted_' if req.url.find('?') > 0 else req.url))
+                 (ex, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback), req.remote_addr, req.url))
     return 'Internal error, please contact support', http.client.INTERNAL_SERVER_ERROR
 
 
@@ -99,9 +98,10 @@ def generateWopiSrc(fileid, proxy=False):
     if not proxy or not srv.wopiproxy:
         return '%s/wopi/files/%s' % (srv.wopiurl, fileid)
     # proxy the WOPI request through an external WOPI proxy service
-    proxied_fileid = jwt.encode({'u': srv.wopiurl + '/wopi/files/', 'f': fileid}, srv.wopiproxykey, algorithm='HS256')
-    log.debug('msg="Generated proxied WOPISrc" fileid="%s" proxiedfileid="%s"' % (fileid, proxied_fileid))
-    return '%s/wopi/files/%s' % (srv.wopiproxy, proxied_fileid)
+    proxiedfileid = jwt.encode({'u': srv.wopiurl + '/wopi/files/', 'f': fileid}, srv.wopiproxykey, algorithm='HS256')
+    proxiedsrc = '%s/wopi/files/%s' % (srv.wopiproxy, proxiedfileid)
+    log.info('msg="Generated proxied WOPISrc" fileid="%s" proxiedsrc="%s"' % (fileid, proxiedsrc))
+    return proxiedsrc
 
 
 def getLibreOfficeLockName(filename):
