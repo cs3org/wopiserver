@@ -140,6 +140,8 @@ class Wopi:
                 with open(proxykeyfile) as s:
                     cls.wopiproxykey = s.read().strip('\n')
             cls.proxiedappname = cls.config.get('general', 'proxiedappname', fallback='')
+            if cls.proxiedappname and (not cls.wopiproxy or not cls.wopiproxykey):
+                raise OSError('Proxed app configured but missing wopiproxy or shared key')
             # initialize the bridge
             bridge.WB.init(cls.config, cls.log, cls.wopisecret)
             # initialize the submodules
@@ -358,10 +360,10 @@ def iopDownload():
                       (acctok['filename'], acctok['userid'][-20:], flask.request.args['access_token'][-20:]))
         return resp
     except IOError as e:
-        Wopi.log.info('msg="Requested file not found" filename="%s" token="%s" error="%s"' %
+        Wopi.log.info('msg="Error downloading requested file" filename="%s" token="%s" error="%s"' %
                       (acctok['filename'], flask.request.args['access_token'][-20:], e))
-        return 'File not found', http.client.NOT_FOUND
-    except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError):
+        return 'Error downloading file', http.client.INTERNAL_SERVER_ERROR
+    except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
         Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" token="%s"' %
                          (flask.request.remote_addr, flask.request.base_url, flask.request.args['access_token']))
         return 'Invalid access token', http.client.UNAUTHORIZED
