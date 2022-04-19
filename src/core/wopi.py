@@ -109,10 +109,8 @@ def checkFileInfo(fileid):
         log.info('msg="Requested file not found" filename="%s" token="%s" error="%s"' %
                  (acctok['filename'], flask.request.args['access_token'][-20:], e))
         return 'File not found', http.client.NOT_FOUND
-    except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError):
-        log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" token="%s"' %
-                    (flask.request.remote_addr, flask.request.base_url, flask.request.args['access_token']))
-        return 'Invalid access token', http.client.UNAUTHORIZED
+    except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
+        return utils.logExpiredTokenAndReturn(e, flask.request)
     except KeyError as e:
         log.warning('msg="Invalid access token or request argument" error="%s" request="%s"' % (e, flask.request.__dict__))
         return 'Invalid request', http.client.UNAUTHORIZED
@@ -145,9 +143,7 @@ def getFile(fileid):
         # File is empty, still return OK (strictly speaking, we should return 204 NO_CONTENT)
         return '', http.client.OK
     except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
-        log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" error="%s" token="%s"' %
-                    (flask.request.remote_addr, flask.request.base_url, e, flask.request.args['access_token']))
-        return 'Invalid access token', http.client.UNAUTHORIZED
+        return utils.logExpiredTokenAndReturn(e, flask.request)
 
 
 #
@@ -411,10 +407,8 @@ def putFile(fileid):
         acctok = jwt.decode(flask.request.args['access_token'], srv.wopisecret, algorithms=['HS256'])
         if acctok['exp'] < time.time():
             raise jwt.exceptions.ExpiredSignatureError
-    except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError):
-        log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" token="%s"' %
-                    (flask.request.remote_addr, flask.request.base_url, flask.request.args['access_token']))
-        return 'Invalid access token', http.client.UNAUTHORIZED
+    except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
+        return utils.logExpiredTokenAndReturn(e, flask.request)
 
     if 'X-WOPI-Lock' not in flask.request.headers:
         # no lock given: assume we are in creation mode (cf. editnew WOPI action)

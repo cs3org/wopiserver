@@ -90,6 +90,13 @@ def logGeneralExceptionAndReturn(ex, req):
     return 'Internal error, please contact support', http.client.INTERNAL_SERVER_ERROR
 
 
+def logExpiredTokenAndReturn(ex, req):
+    '''Convenience function to log about an expired JWT token and return HTTP 401'''
+    log.warning('msg="Expired or malformed token" client="%s" requestedUrl="%s" error="%s" token="%s"' %
+                (req.remote_addr, req.base_url, ex, req.args['access_token']))
+    return 'Invalid access token', http.client.UNAUTHORIZED
+
+
 def generateWopiSrc(fileid, proxy=False):
     '''Returns a WOPISrc for the given fileid.
     Note we'd need to URL-encode it per spec (including `-` to `%2D`), but it turns out that MS Office breaks

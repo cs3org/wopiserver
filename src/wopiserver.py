@@ -364,9 +364,7 @@ def iopDownload():
                       (acctok['filename'], flask.request.args['access_token'][-20:], e))
         return 'Error downloading file', http.client.INTERNAL_SERVER_ERROR
     except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
-        Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" token="%s"' %
-                         (flask.request.remote_addr, flask.request.base_url, flask.request.args['access_token']))
-        return 'Invalid access token', http.client.UNAUTHORIZED
+        return utils.logExpiredTokenAndReturn(e, flask.request)
     except KeyError as e:
         Wopi.log.warning('msg="Invalid access token or request argument" error="%s" request="%s"' % (e, flask.request.__dict__))
         return 'Invalid request', http.client.UNAUTHORIZED
@@ -445,9 +443,7 @@ def wopiFilesPost(fileid):
         headers = flask.request.headers
         op = headers['X-WOPI-Override']       # must be one of the following strings, throws KeyError if missing
     except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
-        Wopi.log.warning('msg="Signature verification failed" client="%s" requestedUrl="%s" error="%s" token="%s"' %
-                         (flask.request.remote_addr, flask.request.base_url, e, flask.request.args['access_token']))
-        return 'Invalid access token', http.client.UNAUTHORIZED
+        return utils.logExpiredTokenAndReturn(e, flask.request)
     except KeyError as e:
         Wopi.log.warning('msg="Missing argument" client="%s" requestedUrl="%s" error="%s" token="%s"' %
                          (flask.request.remote_addr, flask.request.base_url, e, flask.request.args.get('access_token')[-20:]))
