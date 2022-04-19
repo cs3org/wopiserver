@@ -81,7 +81,7 @@ def queryLock(filestat, filename, userid, endpoint):
     if filestat['mtime'] > lockstat['mtime']:
         # we were asked to query an existing lock, but the file was modified in between (e.g. by a sync client):
         # notify potential conflict
-        log.warning('msg="cboxLock: file got modified after LibreOffice-compatible lock file was created" ' \
+        log.warning('msg="cboxLock: file got modified after LibreOffice-compatible lock file was created" '
                     'filename="%s" request="query"' % filename)
         return 'File modified since open time', http.client.CONFLICT
     # now check content
@@ -148,7 +148,7 @@ def createLock(filestat, filename, userid, endpoint):
                 raise lock
         except (IOError, StopIteration) as e:
             #  CERNBOX-1279: another thread was faster in creating the lock, but it's still in flight (StopIteration = no content)!
-            log.warning('msg="cboxLock: detected race condition, attempting to re-read LibreOffice-compatible lock" ' \
+            log.warning('msg="cboxLock: detected race condition, attempting to re-read LibreOffice-compatible lock" '
                         'filename="%s" reason="%s"' % (filename, 'empty lock' if isinstance(e, StopIteration) else str(e)))
             # let's just try again in a short while (not too short though: 2 secs were not enough in testing)
             time.sleep(5)

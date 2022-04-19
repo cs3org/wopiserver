@@ -20,6 +20,7 @@ import bridge.wopiclient as wopic
 
 
 TOOLARGE = 'File is too large to be edited in CodiMD. Please reduce its size with a regular text editor and try again.'
+
 class AppFailure(Exception):
     '''A custom exception to represent a fatal failure when contacting CodiMD'''
 
@@ -200,7 +201,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
         raise AppFailure
     except UnicodeDecodeError as e:
         log.warning('msg="Invalid UTF-8 content found in file" exception="%s"' % e)
-        raise AppFailure('File contains an invalid UTF-8 character, was it corrupted? ' + \
+        raise AppFailure('File contains an invalid UTF-8 character, was it corrupted? ' +
                          'Please fix it in a regular editor before opening it in CodiMD.')
     # generate and return a WOPI lock structure for this document
     return wopic.generatelock(docid, filemd, h.hexdigest(), 'mds' if _isslides(mddoc) else 'md', acctok, False)

@@ -55,8 +55,8 @@ def stat(_endpoint, filepath, _userid):
         tstart = time.time()
         statInfo = os.stat(_getfilepath(filepath))
         tend = time.time()
-        log.info('msg="Invoked stat" inode="%d" filepath="%s" elapsedTimems="%.1f"' % \
-                 (statInfo.st_ino, _getfilepath(filepath), (tend-tstart)*1000))
+        log.info('msg="Invoked stat" inode="%d" filepath="%s" elapsedTimems="%.1f"' %
+                 (statInfo.st_ino, _getfilepath(filepath), (tend - tstart) * 1000))
         if S_ISDIR(statInfo.st_mode):
             raise IOError('Is a directory')
         return {
@@ -130,10 +130,10 @@ def getlock(endpoint, filepath, _userid):
     '''Get the lock metadata as an xattr on behalf of the given userid'''
     rawl = getxattr(endpoint, filepath, '0:0', common.LOCKKEY)
     if rawl:
-        l = common.retrieverevalock(rawl)
-        if l['expiration']['seconds'] > time.time():
+        lock = common.retrieverevalock(rawl)
+        if lock['expiration']['seconds'] > time.time():
             log.debug('msg="Invoked getlock" filepath="%s"' % filepath)
-            return l
+            return lock
         # otherwise, the lock had expired: drop it and return None
         log.debug('msg="getlock: removed stale lock" filepath="%s"' % filepath)
         rmxattr(endpoint, filepath, '0:0', common.LOCKKEY, LOCK)
@@ -163,11 +163,11 @@ def readfile(_endpoint, filepath, _userid, _lockid):
         chunksize = config.getint('io', 'chunksize')
         with open(_getfilepath(filepath), mode='rb', buffering=chunksize) as f:
             tend = time.time()
-            log.info('msg="File open for read" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend-tstart)*1000))
+            log.info('msg="File open for read" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend - tstart) * 1000))
             # the actual read is buffered and managed by the Flask server
             for chunk in iter(lambda: f.read(chunksize), b''):
                 yield chunk
-    except FileNotFoundError as e:
+    except FileNotFoundError:
         # log this case as info to keep the logs cleaner
         log.info('msg="File not found on read" filepath="%s"' % filepath)
         # as this is a generator, we yield the error string instead of the file's contents
@@ -215,8 +215,8 @@ def writefile(endpoint, filepath, userid, content, lockid, islock=False):
     tend = time.time()
     if written != size:
         raise IOError('Written %d bytes but content is %d bytes' % (written, size))
-    log.info('msg="File written successfully" filepath="%s" elapsedTimems="%.1f" islock="%s"' % \
-             (filepath, (tend-tstart)*1000, islock))
+    log.info('msg="File written successfully" filepath="%s" elapsedTimems="%.1f" islock="%s"' %
+             (filepath, (tend - tstart) * 1000, islock))
 
 
 def renamefile(endpoint, origfilepath, newfilepath, userid, lockid):

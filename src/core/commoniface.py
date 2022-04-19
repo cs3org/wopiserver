@@ -51,16 +51,21 @@ config = None
 
 def genrevalock(appname, value):
     '''Return a base64-encoded lock compatible with the Reva implementation of the CS3 Lock API
-       cf. https://github.com/cs3org/cs3apis/blob/main/cs3/storage/provider/v1beta1/resources.proto'''
-    return urlsafe_b64encode(json.dumps(
-        {'lock_id': value,
-         'type': 2,    # LOCK_TYPE_WRITE
-         'app_name': appname if appname else 'wopi',
-         'user': {},
-         'expiration': {
-             'seconds': int(time.time()) + config.getint('general', 'wopilockexpiration')
-         },
-        }).encode()).decode()
+    cf. https://github.com/cs3org/cs3apis/blob/main/cs3/storage/provider/v1beta1/resources.proto'''
+    return urlsafe_b64encode(
+        json.dumps(
+            {
+                "lock_id": value,
+                "type": 2,  # LOCK_TYPE_WRITE
+                "app_name": appname if appname else "wopi",
+                "user": {},
+                "expiration": {
+                    "seconds": int(time.time())
+                    + config.getint("general", "wopilockexpiration")
+                },
+            }
+        ).encode()
+    ).decode()
 
 
 def retrieverevalock(rawlock):
