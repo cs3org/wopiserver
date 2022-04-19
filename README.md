@@ -62,19 +62,9 @@ To run the tests, either run `pytest` if available in your system, or execute th
 2. Configure `wopiserver-test.conf` according to your Eos setup. The provided defaults are valid at CERN.
 3. Run the tests: `WOPI_STORAGE=xroot python3 test/test_storageiface.py`
 
+### Test using the Microsoft WOPI validator test suite
 
-## Test the `open` workflow with Reva
-
-_Note: this test workflow is now deprecated and the Reva CLI should be used instead._
-
-1. Run Reva as detailed above
-2. Login with `reva login`
-3. Extract (from the logs) your `x-access-token`
-4. Upload an ODF or .md file with the reva CLI (or copy it to Reva's storage, e.g. in `/var/tmp/reva/data/einstein`)
-5. From the wopiserver container, execute `wopiopen.py -v READ_WRITE /<your_file.odt> <your_x-access-token>`
-6. If the above call is successful, you are given the URL of the application provider, with appropriate parameters (including a WOPI access token) to open your file: open it in a browser to start your edit session via WOPI
-
-For testing collaborative scenarios, repeat the above for each user participating in the collaborative session. Reusing the `x-access-token` is OK, however it is generally not OK to open multiple times the same application provider URL, and different WOPI access tokens are needed instead.
+This is work in progress. Refer to [these notes](test/wopi-validator.md).
 
 
 ## Run the WOPI server locally for development purposes
