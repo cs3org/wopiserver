@@ -169,7 +169,7 @@ def rmxattr(endpoint, filepath, userid, key, lockid):
 def setlock(endpoint, filepath, userid, appname, value):
     '''Set a lock to filepath with the given value metadata and appname as holder'''
     reference = _getcs3reference(endpoint, filepath)
-    lock = cs3spr.Lock(type=cs3spr.LOCK_TYPE_WRITE, app_name=appname, lock_id=value, \
+    lock = cs3spr.Lock(type=cs3spr.LOCK_TYPE_WRITE, app_name=appname, lock_id=value,
                        expiration={'seconds': int(time.time() + ctx['lockexpiration'])})
     req = cs3sp.SetLockRequest(ref=reference, lock=lock)
     res = ctx['cs3gw'].SetLock(request=req, metadata=[('x-access-token', userid)])
@@ -215,7 +215,7 @@ def getlock(endpoint, filepath, userid):
 def refreshlock(endpoint, filepath, userid, appname, value):
     '''Refresh the lock metadata for the given filepath'''
     reference = _getcs3reference(endpoint, filepath)
-    lock = cs3spr.Lock(type=cs3spr.LOCK_TYPE_WRITE, app_name=appname, lock_id=value, \
+    lock = cs3spr.Lock(type=cs3spr.LOCK_TYPE_WRITE, app_name=appname, lock_id=value,
                        expiration={'seconds': int(time.time() + ctx['lockexpiration'])})
     req = cs3sp.RefreshLockRequest(ref=reference, lock=lock)
     res = ctx['cs3gw'].RefreshLock(request=req, metadata=[('x-access-token', userid)])

@@ -1,6 +1,5 @@
-#!/usr/bin/env python3
 '''
-srv.py
+wopi.py
 
 Implementation of the core WOPI API
 

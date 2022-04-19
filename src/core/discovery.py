@@ -44,7 +44,7 @@ def registerapp(appname, appurl, appinturl, apikey=None):
                 endpoints[t] = {}
                 endpoints[t]['view'] = urlsrc + 'permission=readonly'
                 endpoints[t]['edit'] = urlsrc + 'permission=edit'
-                endpoints[t]['new'] = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace
+                endpoints[t]['new']  = urlsrc + 'permission=edit'        # pylint: disable=bad-whitespace
             log.info('msg="Collabora Online endpoints successfully configured" count="%d" CODEURL="%s"' %
                      (len(codetypes), endpoints['.odt']['edit']))
             return

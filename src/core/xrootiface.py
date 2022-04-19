@@ -96,7 +96,7 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args):
                              (cmd, subcmd, args, msg, rc.strip('\00')))
                     raise IOError(EXCL_XATTR_MSG)
                 # anything else (including permission errors) are logged as errors
-                log.error('msg="Error with xroot" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' % \
+                log.error('msg="Error with xroot" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' %
                           (cmd, subcmd, args, msg, rc.strip('\00')))
                 raise IOError(msg)
     # all right, return everything that came in stdout
@@ -373,7 +373,7 @@ def writefile(endpoint, filepath, userid, content, _lockid, islock=False):
         raise IOError(rc.message.strip('\n'))
     if existingLock:
         setlock(endpoint, filepath, userid, existingLock['app_name'], existingLock['lock_id'], False)
-    log.info('msg="File written successfully" filepath="%s" elapsedTimems="%.1f" islock="%s"' % \
+    log.info('msg="File written successfully" filepath="%s" elapsedTimems="%.1f" islock="%s"' %
              (filepath, (tend-tstart)*1000, islock))
 
 
