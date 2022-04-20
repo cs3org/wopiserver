@@ -18,9 +18,10 @@ from threading import Thread
 import pytest
 sys.path.append('src')         # for tests out of the git repo
 sys.path.append('/app')        # for tests within the Docker image
-from core.commoniface import EXCL_ERROR, ENOENT_MSG
+from core.commoniface import EXCL_ERROR, ENOENT_MSG  # noqa: E402
 
 databuf = b'ebe5tresbsrdthbrdhvdtr'
+
 
 class TestStorage(unittest.TestCase):
     '''Simple tests for the storage layers of the WOPI server. See README for how to run the tests for each storage provider'''
@@ -31,7 +32,7 @@ class TestStorage(unittest.TestCase):
         '''One-off initialization of the test environment: create mock logging and import the library'''
         loghandler = logging.FileHandler('/tmp/wopiserver-test.log')
         loghandler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)s[%(process)d] %(levelname)-8s %(message)s',
-                                                                                            datefmt='%Y-%m-%dT%H:%M:%S'))
+                                datefmt='%Y-%m-%dT%H:%M:%S'))
         log = logging.getLogger('wopiserver.test')
         log.addHandler(loghandler)
         log.setLevel(logging.DEBUG)
@@ -210,7 +211,7 @@ class TestStorage(unittest.TestCase):
         statInfo = self.storage.stat(self.endpoint, self.homepath + '/testlock', self.userid)
         self.assertIsInstance(statInfo, dict)
         self.storage.setlock(self.endpoint, self.homepath + '/testlock', self.userid, 'myapp', 'testlock')
-        l = self.storage.getlock(self.endpoint, self.homepath + '/testlock', self.userid)
+        l = self.storage.getlock(self.endpoint, self.homepath + '/testlock', self.userid)  # noqa: E741
         self.assertIsInstance(l, dict)
         self.assertEqual(l['lock_id'], 'testlock')
         self.assertEqual(l['app_name'], 'myapp')
@@ -236,7 +237,7 @@ class TestStorage(unittest.TestCase):
         self.assertIn('File was not locked', str(context.exception))
         self.storage.setlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'myapp', 'testlock')
         self.storage.refreshlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'myapp', 'testlock2')
-        l = self.storage.getlock(self.endpoint, self.homepath + '/testrlock', self.userid)
+        l = self.storage.getlock(self.endpoint, self.homepath + '/testrlock', self.userid)  # noqa: E741
         self.assertIsInstance(l, dict)
         self.assertEqual(l['lock_id'], 'testlock2')
         self.assertEqual(l['app_name'], 'myapp')
@@ -277,14 +278,16 @@ class TestStorage(unittest.TestCase):
         self.storage.setlock(self.endpoint, self.homepath + '/testlockop', self.userid, 'myapp', 'testlock')
         self.storage.writefile(self.endpoint, self.homepath + '/testlockop', self.userid, databuf, 'testlock')
         self.storage.setxattr(self.endpoint, self.homepath + '/testlockop', self.userid, 'testkey', 123, 'testlock')
-        self.storage.renamefile(self.endpoint, self.homepath + '/testlockop', self.homepath + '/testlockop_renamed', self.userid, 'testlock')
+        self.storage.renamefile(self.endpoint, self.homepath + '/testlockop', self.homepath + '/testlockop_renamed',
+                                self.userid, 'testlock')
         self.storage.refreshlock(self.endpoint, self.homepath + '/testlockop_renamed', self.userid, 'myapp', 'testlock')
         with self.assertRaises(IOError):
             self.storage.writefile(self.endpoint, self.homepath + '/testlockop_renamed', self.userid, databuf, None)
         with self.assertRaises(IOError):
             self.storage.setxattr(self.endpoint, self.homepath + '/testlockop_renamed', self.userid, 'testkey', 123, None)
         with self.assertRaises(IOError):
-            self.storage.renamefile(self.endpoint, self.homepath + '/testlockop_renamed', self.homepath + '/testlockop', self.userid, None)
+            self.storage.renamefile(self.endpoint, self.homepath + '/testlockop_renamed', self.homepath + '/testlockop',
+                                    self.userid, None)
         self.storage.removefile(self.endpoint, self.homepath + '/testlockop_renamed', self.userid)
 
     def test_expired_locks(self):
@@ -298,12 +301,12 @@ class TestStorage(unittest.TestCase):
         self.assertIsInstance(statInfo, dict)
         self.storage.setlock(self.endpoint, self.homepath + '/testelock', self.userid, 'myapp', 'testlock')
         time.sleep(3)
-        l = self.storage.getlock(self.endpoint, self.homepath + '/testelock', self.userid)
+        l = self.storage.getlock(self.endpoint, self.homepath + '/testelock', self.userid)  # noqa: E741
         self.assertEqual(l, None)
         self.storage.setlock(self.endpoint, self.homepath + '/testelock', self.userid, 'myapp', 'testlock2')
         time.sleep(3)
         self.storage.setlock(self.endpoint, self.homepath + '/testelock', self.userid, 'myapp', 'testlock3')
-        l = self.storage.getlock(self.endpoint, self.homepath + '/testelock', self.userid)
+        l = self.storage.getlock(self.endpoint, self.homepath + '/testelock', self.userid)  # noqa: E741
         self.assertIsInstance(l, dict)
         self.assertEqual(l['lock_id'], 'testlock3')
         time.sleep(3)
@@ -337,10 +340,10 @@ class TestStorage(unittest.TestCase):
     def test_rename_statx(self):
         '''Test renaming and statx of a file with special chars'''
         self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, databuf, None)
-        self.storage.renamefile(self.endpoint, self.homepath + '/test.txt', self.homepath + '/test&renamed.txt', self.userid, None)
-        statInfo = self.storage.statx(self.endpoint, self.homepath + '/test&renamed.txt', self.userid)
-        self.assertEqual(statInfo['filepath'], self.homepath + '/test&renamed.txt')
-        self.storage.renamefile(self.endpoint, self.homepath + '/test&renamed.txt', self.homepath + '/test.txt', self.userid, None)
+        self.storage.renamefile(self.endpoint, self.homepath + '/test.txt', self.homepath + '/test&ren.txt', self.userid, None)
+        statInfo = self.storage.statx(self.endpoint, self.homepath + '/test&ren.txt', self.userid)
+        self.assertEqual(statInfo['filepath'], self.homepath + '/test&ren.txt')
+        self.storage.renamefile(self.endpoint, self.homepath + '/test&ren.txt', self.homepath + '/test.txt', self.userid, None)
         statInfo = self.storage.statx(self.endpoint, self.homepath + '/test.txt', self.userid)
         self.assertEqual(statInfo['filepath'], self.homepath + '/test.txt')
         self.storage.removefile(self.endpoint, self.homepath + '/test.txt', self.userid)
