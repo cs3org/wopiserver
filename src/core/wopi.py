@@ -163,7 +163,9 @@ def setLock(fileid, reqheaders, acctok):
         if validateTarget:
             # this is an extension of the API: a REFRESH_LOCK without previous lock but with a Validate-Target header
             # is allowed provided that the target file was last saved by WOPI and not overwritten by external actions,
-            # that is it must have a valid LASTSAVETIMEKEY xattr
+            # that is it must have a valid LASTSAVETIMEKEY xattr.
+            # XXX Note this currently works on EOS because of a "feature" (soon to be fixed) such that xattrs are not
+            # XXX preserved when saving a new version of a file. To be reviewed!
             savetime = st.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY)
         else:
             savetime = None
