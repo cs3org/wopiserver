@@ -71,7 +71,7 @@ def genrevalock(appname, value):
 def retrieverevalock(rawlock):
     '''Restores the JSON payload from a base64-encoded Reva lock'''
     try:
-        return json.loads(urlsafe_b64decode(rawlock).decode())
+        return json.loads(urlsafe_b64decode(rawlock + '==').decode())
     except (B64Error, json.JSONDecodeError) as e:
         raise IOError(e)
 
