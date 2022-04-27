@@ -185,9 +185,8 @@ class TestStorage(unittest.TestCase):
         self.assertIn(EXCL_ERROR, str(context.exception))
         self.storage.removefile(self.endpoint, self.homepath + '/testoverwrite', self.userid)
 
-    @pytest.mark.skip(reason="Unhandled race on localstorage")
     def test_write_race(self):
-        '''Test multithreaded double write with the islock flag. Randomly fails on localstorage, should not on cs3 nor xroot'''
+        '''Test multithreaded double write with the islock flag. Might fail as it relies on tight timing'''
         try:
             self.storage.removefile(self.endpoint, self.homepath + '/testwriterace', self.userid)
         except IOError:
@@ -196,6 +195,7 @@ class TestStorage(unittest.TestCase):
                    args=[self.endpoint, self.homepath + '/testwriterace', self.userid, databuf, None], kwargs={'islock': True})
         t.start()
         with self.assertRaises(IOError) as context:
+            time.sleep(0.01)
             self.storage.writefile(self.endpoint, self.homepath + '/testwriterace', self.userid, databuf, None, islock=True)
         self.assertIn(EXCL_ERROR, str(context.exception))
         t.join()
@@ -248,9 +248,8 @@ class TestStorage(unittest.TestCase):
         self.assertIn('File is locked by myapp', str(context.exception))
         self.storage.removefile(self.endpoint, self.homepath + '/testrlock', self.userid)
 
-    @pytest.mark.skip(reason="Unhandled race on localstorage")
     def test_lock_race(self):
-        '''Test multithreaded setting lock. Expected to fail on localstorage, not on cs3 nor xroot'''
+        '''Test multithreaded setting lock. Might fail as it relies on tight timing'''
         try:
             self.storage.removefile(self.endpoint, self.homepath + '/testlockrace', self.userid)
         except IOError:
@@ -262,12 +261,13 @@ class TestStorage(unittest.TestCase):
                    args=[self.endpoint, self.homepath + '/testlockrace', self.userid, 'myapp', 'testlock'])
         t.start()
         with self.assertRaises(IOError) as context:
+            time.sleep(0.01)
             self.storage.setlock(self.endpoint, self.homepath + '/testlockrace', self.userid, 'myapp', 'testlock2')
         self.assertIn(EXCL_ERROR, str(context.exception))
         self.storage.removefile(self.endpoint, self.homepath + '/testlockrace', self.userid)
 
     def test_lock_operations(self):
-        '''Test file operations on locked file. Expected to fail until locks are enforced by the storage'''
+        '''Test file operations on a locked file'''
         try:
             self.storage.removefile(self.endpoint, self.homepath + '/testlockop', self.userid)
         except IOError:
@@ -300,21 +300,21 @@ class TestStorage(unittest.TestCase):
         statInfo = self.storage.stat(self.endpoint, self.homepath + '/testelock', self.userid)
         self.assertIsInstance(statInfo, dict)
         self.storage.setlock(self.endpoint, self.homepath + '/testelock', self.userid, 'myapp', 'testlock')
-        time.sleep(3)
+        time.sleep(2.1)
         l = self.storage.getlock(self.endpoint, self.homepath + '/testelock', self.userid)  # noqa: E741
         self.assertEqual(l, None)
         self.storage.setlock(self.endpoint, self.homepath + '/testelock', self.userid, 'myapp', 'testlock2')
-        time.sleep(3)
+        time.sleep(2.1)
         self.storage.setlock(self.endpoint, self.homepath + '/testelock', self.userid, 'myapp', 'testlock3')
         l = self.storage.getlock(self.endpoint, self.homepath + '/testelock', self.userid)  # noqa: E741
         self.assertIsInstance(l, dict)
         self.assertEqual(l['lock_id'], 'testlock3')
-        time.sleep(3)
+        time.sleep(2.1)
         with self.assertRaises(IOError) as context:
             self.storage.refreshlock(self.endpoint, self.homepath + '/testelock', self.userid, 'myapp', 'testlock4')
         self.assertIn('File was not locked', str(context.exception))
         self.storage.setlock(self.endpoint, self.homepath + '/testelock', self.userid, 'myapp', 'testlock5')
-        time.sleep(3)
+        time.sleep(2.1)
         with self.assertRaises(IOError) as context:
             self.storage.unlock(self.endpoint, self.homepath + '/testelock', self.userid, 'myapp', 'testlock5')
         self.assertIn('File was not locked', str(context.exception))

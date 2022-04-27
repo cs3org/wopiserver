@@ -8,6 +8,7 @@ Main author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 
 import time
 import os
+import fcntl
 import warnings
 from stat import S_ISDIR
 import core.commoniface as common
@@ -19,6 +20,28 @@ homepath = None
 
 # a conventional value recognized by _checklock()
 LOCK = '__LOCK__'
+
+class Flock:
+    '''A simple class to lock/unlock when entering/leaving a runtime context
+    credits: https://github.com/misli/python-flock/blob/master/flock.py
+    Could be used as a PoC for the production storage interfaces'''
+
+    def __init__(self, fd, blocking=False):
+        '''Instance init'''
+        self.fd = fd
+        self.op = fcntl.LOCK_EX
+        if not blocking:
+            self.op |= fcntl.LOCK_NB
+
+    def __enter__(self):
+        '''Called on `with`'''
+        fcntl.flock(self.fd, self.op)
+        return self
+
+    def __exit__(self, _exc_type, _exc_value, _traceback):
+        '''Called when exiting a `with` runtime context'''
+        fcntl.flock(self.fd, fcntl.LOCK_UN)
+
 
 def _getfilepath(filepath):
     '''map the given filepath into the target fs by prepending the homepath (see storagehomepath in wopiserver.conf)'''
@@ -119,11 +142,17 @@ def rmxattr(endpoint, filepath, userid, key, lockid):
 def setlock(endpoint, filepath, userid, appname, value):
     '''Set the lock as an xattr on behalf of the given userid'''
     log.debug('msg="Invoked setlock" filepath="%s" value="%s"' % (filepath, value))
-    if not getlock(endpoint, filepath, userid):
-        # we do not protect from race conditions here
-        setxattr(endpoint, filepath, '0:0', common.LOCKKEY, common.genrevalock(appname, value), LOCK)
-    else:
-        raise IOError(common.EXCL_ERROR)
+    with open(_getfilepath(filepath)) as fd:
+        fl = Flock(fd)    # ensures atomicity of the following operations
+        try:
+            with fl:
+                if not getlock(endpoint, filepath, userid):
+                    setxattr(endpoint, filepath, '0:0', common.LOCKKEY, common.genrevalock(appname, value), LOCK)
+                else:
+                    raise IOError(common.EXCL_ERROR)
+        except BlockingIOError as e:
+            log.error('msg="File already flocked" filepath="%s" exception="%s"' % (filepath, e))
+            raise IOError(common.EXCL_ERROR)
 
 
 def getlock(endpoint, filepath, _userid):
@@ -191,7 +220,7 @@ def writefile(endpoint, filepath, userid, content, lockid, islock=False):
     if islock:
         warnings.simplefilter("ignore", ResourceWarning)
         try:
-            # apparently there's no way to pass the O_CREAT without O_TRUNC to the python f.open()!
+            # apparently there's no way to pass O_CREAT without O_TRUNC to the python/C f.open()!
             # cf. https://stackoverflow.com/questions/38530910/python-open-flags-for-open-or-create
             # so we resort to the os-level open(), with some caveats
             fd = os.open(_getfilepath(filepath), os.O_CREAT | os.O_EXCL)
