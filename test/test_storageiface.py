@@ -93,7 +93,7 @@ class TestStorage(unittest.TestCase):
     def test_statx_fileid(self):
         '''Call statx() and test if fileid-based stat is supported'''
         self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, databuf, None)
-        statInfo = self.storage.statx(self.endpoint, self.homepath + '/test.txt', self.userid)
+        statInfo = self.storage.statx(self.endpoint, self.homepath + '/test.txt', self.userid, versioninv=0)
         if self.endpoint in str(statInfo['inode']):
             # detected CS3 storage, test if fileid-based stat is supported
             # (notably, homepath is not part of the fileid)
@@ -103,15 +103,15 @@ class TestStorage(unittest.TestCase):
 
     def test_statx_invariant_fileid(self):
         '''Call statx() before and after updating a file, and assert the inode did not change'''
-        self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, databuf, None)
-        statInfo = self.storage.statx(self.endpoint, self.homepath + '/test.txt', self.userid, versioninv=1)
+        self.storage.writefile(self.endpoint, self.homepath + '/test&upd.txt', self.userid, databuf, None)
+        statInfo = self.storage.statx(self.endpoint, self.homepath + '/test&upd.txt', self.userid)
         self.assertIsInstance(statInfo, dict)
         inode = statInfo['inode']
-        self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, databuf, None)
-        statInfo = self.storage.statx(self.endpoint, self.homepath + '/test.txt', self.userid, versioninv=1)
+        self.storage.writefile(self.endpoint, self.homepath + '/test&upd.txt', self.userid, databuf, None)
+        statInfo = self.storage.statx(self.endpoint, self.homepath + '/test&upd.txt', self.userid)
         self.assertIsInstance(statInfo, dict)
         self.assertEqual(statInfo['inode'], inode, 'Fileid is not invariant to multiple write operations')
-        self.storage.removefile(self.endpoint, self.homepath + '/test.txt', self.userid)
+        self.storage.removefile(self.endpoint, self.homepath + '/test&upd.txt', self.userid)
 
     def test_stat_nofile(self):
         '''Call stat() and assert the exception is as expected'''

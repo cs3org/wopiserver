@@ -24,7 +24,7 @@ def ioplock(filename, userid, endpoint, isquery):
 
     # first make sure the file itself exists
     try:
-        filestat = st.statx(endpoint, filename, userid, versioninv=1)
+        filestat = st.statx(endpoint, filename, userid)
     except IOError:
         log.warning('msg="cboxLock: target not found or not a file" filename="%s"' % filename)
         return 'File not found or file is a directory', http.client.NOT_FOUND

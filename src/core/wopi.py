@@ -48,7 +48,7 @@ def checkFileInfo(fileid):
         log.info('msg="CheckFileInfo" user="%s" filename="%s" fileid="%s" token="%s" wopits="%s"' %
                  (acctok['userid'][-20:], acctok['filename'], fileid, flask.request.args['access_token'][-20:], wopits))
         acctok['viewmode'] = utils.ViewMode(acctok['viewmode'])
-        statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'], versioninv=1)
+        statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
         # compute some entities for the response
         wopiSrc = 'WOPISrc=%s&access_token=%s' % (utils.generateWopiSrc(fileid), flask.request.args['access_token'])
         # populate metadata for this file

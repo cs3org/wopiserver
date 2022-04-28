@@ -142,7 +142,7 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
     try:
         # stat the file to check for existence and get a version-invariant inode and modification time:
         # the inode serves as fileid (and must not change across save operations), the mtime is used for version information.
-        statinfo = st.statx(endpoint, fileid, userid, versioninv=1)
+        statinfo = st.statx(endpoint, fileid, userid)
     except IOError as e:
         log.info('msg="Requested file not found or not a file" fileid="%s" error="%s"' % (fileid, e))
         raise
@@ -188,7 +188,7 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefilename=Non
             pass
         try:
             # then try to read a LibreOffice lock
-            lolockstat = st.statx(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'])
+            lolockstat = st.statx(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], versioninv=0)
             lolock = next(st.readfile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], None))
             if isinstance(lolock, IOError):
                 # this might be an access error, therefore we can't tell here if it's our lock: optimistically move on

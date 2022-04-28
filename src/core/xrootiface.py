@@ -150,8 +150,8 @@ def stat(endpoint, filepath, userid):
     return {'size': statInfo.size, 'mtime': statInfo.modtime}
 
 
-def statx(endpoint, fileref, userid, versioninv=0):
-    '''Get extended stat info (inode, filepath, userid, size, mtime) via an xroot opaque query on behalf of the given userid.
+def statx(endpoint, fileref, userid, versioninv=1):
+    '''Get extended stat info (inode, filepath, ownerid, size, mtime) via an xroot opaque query on behalf of the given userid.
     If versioninv=0, the logic to support the version folder is not triggered.
     If the given fileref is an inode, it is resolved to a full path.'''
     tstart = time.time()

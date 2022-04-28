@@ -111,8 +111,8 @@ def stat(endpoint, fileref, userid, versioninv=1):
     raise IOError(common.ENOENT_MSG if statInfo.status.code == cs3code.CODE_NOT_FOUND else statInfo.status.message)
 
 
-def statx(endpoint, fileref, userid, versioninv=0):
-    '''Get extended stat info (inode, filepath, userid, size, mtime). Equivalent to stat.'''
+def statx(endpoint, fileref, userid, versioninv=1):
+    '''Get extended stat info (inode, filepath, ownerid, size, mtime). Equivalent to stat.'''
     return stat(endpoint, fileref, userid, versioninv)
 
 
