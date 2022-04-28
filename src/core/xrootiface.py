@@ -218,7 +218,7 @@ def statx(endpoint, fileref, userid, versioninv=1):
                                                     + _eosargs(statxdata[5] + ':' + statxdata[6]) + '&mgm.pcmd=stat')
             tend = time.time()
             infov = infov.decode()
-            if OK_MSG not in str(rcv) or 'retc=2' in infov:
+            if OK_MSG not in str(rcv) or 'retc=' in infov:
                 raise IOError(rcv)
         statxvdata = infov.split()
         log.debug('msg="Invoked stat on version folder" endpoint="%s" filepath="%s" rc="%s" result="%s" elapsedTimems="%.1f"' %
@@ -375,7 +375,14 @@ def writefile(endpoint, filepath, userid, content, _lockid, islock=False):
         log.warning('msg="Error closing the file" filepath="%s" error="%s"' % (filepath, rc.message.strip('\n')))
         raise IOError(rc.message.strip('\n'))
     if existingLock:
-        setlock(endpoint, filepath, userid, existingLock['app_name'], existingLock['lock_id'], False)
+        try:
+            setlock(endpoint, filepath, userid, existingLock['app_name'], existingLock['lock_id'], False)
+        except IOError as e:
+            if str(e) == common.EXCL_ERROR:
+                # new EOS versions do preserve the attributes, so this would fail but it's OK
+                pass
+            else:
+                raise
     log.info('msg="File written successfully" filepath="%s" elapsedTimems="%.1f" islock="%s"' %
              (filepath, (tend-tstart)*1000, islock))
 
