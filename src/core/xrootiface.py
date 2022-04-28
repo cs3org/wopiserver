@@ -16,8 +16,8 @@ from XRootD.client.flags import OpenFlags, QueryCode, MkDirFlags, StatInfoFlags
 import core.commoniface as common
 
 EOSVERSIONPREFIX = '.sys.v#.'
-
 EXCL_XATTR_MSG = 'exclusive set for existing attribute'
+OK_MSG = '[SUCCESS]'     # this is what xroot returns on success
 
 # module-wide state
 config = None
@@ -169,13 +169,13 @@ def statx(endpoint, fileref, userid, versioninv=1):
         # CUid: 4179 CGid: 2763 Fxid: 000b80fe Fid: 753918 Pid: 2571 Pxid: 00000a0b
         # ETAG: b80fe:1636190067.768
         # ```
-        filepath = rc[rc.find('Directory:') + 12 : rc.find('Treesize') - 4].replace(EOSVERSIONPREFIX, '')
+        filepath = rc[rc.find('Directory:')+12:rc.find('Treesize')-4].replace(EOSVERSIONPREFIX, '').replace('#and#', '&')  # noqa:
     else:
         filepath = fileref
     rc, statInfo = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(filepath, encodeamp=True)
                                               + _eosargs(userid) + '&mgm.pcmd=stat')
-    log.info('msg="Invoked stat" filepath="%s"' % _getfilepath(filepath))
-    if '[SUCCESS]' not in str(rc) or not statInfo:
+    log.info('msg="Invoked stat" filepath="%s" rc="%s"' % (_getfilepath(filepath), str(rc).strip('\n')))
+    if OK_MSG not in str(rc) or not statInfo:
         raise IOError(str(rc).strip('\n'))
     statInfo = statInfo.decode()
     if 'stat: retc=2' in statInfo:
@@ -207,22 +207,22 @@ def statx(endpoint, fileref, userid, versioninv=1):
     tend = time.time()
     infov = infov.decode()
     try:
-        if '[SUCCESS]' not in str(rcv) or 'retc=' in infov:
+        if OK_MSG not in str(rcv) or 'retc=2' in infov:
             # the version folder does not exist: create it (on behalf of the owner)
             # cf. https://github.com/cernbox/revaold/blob/master/api/public_link_manager_owncloud/public_link_manager_owncloud.go#L127
             rcmkdir = _getxrdfor(endpoint).mkdir(_getfilepath(verFolder) + _eosargs(statxdata[5] + ':' + statxdata[6]), MkDirFlags.MAKEPATH)
-            if '[SUCCESS]' not in str(rcmkdir):
+            if OK_MSG not in str(rcmkdir):
                 raise IOError(rcmkdir)
             log.debug('msg="Invoked mkdir on version folder" filepath="%s" rc="%s"' % (_getfilepath(verFolder), rcmkdir))
             rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder)
                                                     + _eosargs(statxdata[5] + ':' + statxdata[6]) + '&mgm.pcmd=stat')
             tend = time.time()
             infov = infov.decode()
-            if '[SUCCESS]' not in str(rcv) or 'retc=' in infov:
+            if OK_MSG not in str(rcv) or 'retc=2' in infov:
                 raise IOError(rcv)
         statxvdata = infov.split()
-        log.debug('msg="Invoked stat on version folder" endpoint="%s" filepath="%s" result="%s" elapsedTimems="%.1f"' %
-                  (endpoint, _getfilepath(verFolder), infov, (tend-tstart)*1000))
+        log.debug('msg="Invoked stat on version folder" endpoint="%s" filepath="%s" rc="%s" result="%s" elapsedTimems="%.1f"' %
+                  (endpoint, _getfilepath(verFolder), str(rcv).strip('\n'), infov, (tend-tstart)*1000))
     except IOError as e:
         # here we should really raise the error, but for now we just log it
         log.error('msg="Failed to mkdir/stat version folder, returning file metadata instead" rc="%s"' % e)
