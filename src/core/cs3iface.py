@@ -97,7 +97,7 @@ def stat(endpoint, fileref, userid, versioninv=1):
         # in case we got a relative path, build an hybrid path that can be used to reference the file:
         # note that as per specs the parent_id MUST be available in this case
         filepath = statInfo.info.path if statInfo.info.path[0] == '/' else \
-                        statInfo.info.parent_id.opaque_id + '/' + os.path.basename(statInfo.info.path)
+                       statInfo.info.parent_id.opaque_id + '/' + os.path.basename(statInfo.info.path)
         log.info('msg="Invoked stat" fileref="%s" inode="%s" filepath="%s" elapsedTimems="%.1f"' %
                  (fileref, inode, filepath, (tend-tstart)*1000))
         return {

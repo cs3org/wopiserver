@@ -15,7 +15,6 @@ import sys
 import os
 import time
 from threading import Thread
-import pytest
 sys.path.append('src')         # for tests out of the git repo
 sys.path.append('/app')        # for tests within the Docker image
 from core.commoniface import EXCL_ERROR, ENOENT_MSG  # noqa: E402
@@ -32,7 +31,7 @@ class TestStorage(unittest.TestCase):
         '''One-off initialization of the test environment: create mock logging and import the library'''
         loghandler = logging.FileHandler('/tmp/wopiserver-test.log')
         loghandler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)s[%(process)d] %(levelname)-8s %(message)s',
-                                datefmt='%Y-%m-%dT%H:%M:%S'))
+                                                  datefmt='%Y-%m-%dT%H:%M:%S'))
         log = logging.getLogger('wopiserver.test')
         log.addHandler(loghandler)
         log.setLevel(logging.DEBUG)
