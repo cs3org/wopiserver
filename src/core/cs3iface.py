@@ -210,10 +210,11 @@ def getlock(endpoint, filepath, userid):
         'lock_id': res.lock.lock_id,
         'type': res.lock.type,
         'app_name': res.lock.app_name,
-        'user': {'opaque_id': res.lock.user.opaque_id,
-                 'idp': res.lock.user.idp,
-                 'type': res.lock.user.type
-                } if res.lock.user.opaque_id else {},
+        'user': {
+            'opaque_id': res.lock.user.opaque_id,
+            'idp': res.lock.user.idp,
+            'type': res.lock.user.type
+        } if res.lock.user.opaque_id else {},
         'expiration': {
             'seconds': res.lock.expiration.seconds
         }
