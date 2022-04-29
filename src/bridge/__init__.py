@@ -361,7 +361,10 @@ class SaveThread(threading.Thread):
                 if openfile['lastsave'] < time.time() - WB.unlockinterval:
                     # yet cleanup only after the unlockinterval time, cf. the InvalidLock handling in savedirty()
                     WB.log.info('msg="SaveThread: cleaning up metadata, file already unlocked" url="%s"' % wopisrc)
-                    del WB.openfiles[wopisrc]
+                    try:
+                        del WB.openfiles[wopisrc]
+                    except KeyError:
+                        pass
                 return
 
             # reconcile list of toclose tokens
