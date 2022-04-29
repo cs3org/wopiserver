@@ -149,7 +149,7 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
     exptime = int(time.time()) + srv.tokenvalidity
     if not appediturl:
         # deprecated: for backwards compatibility, work out the URLs from the discovered app endpoints
-        fext = os.path.splitext(statinfo['filepath'])[1]
+        fext = os.path.splitext(statinfo['filepath'])[1].lower()
         try:
             appediturl = endpoints[fext]['edit']
             appviewurl = endpoints[fext]['view']
