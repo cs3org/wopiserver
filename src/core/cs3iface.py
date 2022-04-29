@@ -86,29 +86,36 @@ def stat(endpoint, fileref, userid, versioninv=1):
     ref = _getcs3reference(endpoint, fileref)
     statInfo = ctx['cs3gw'].Stat(request=cs3sp.StatRequest(ref=ref), metadata=[('x-access-token', userid)])
     tend = time.time()
-    if statInfo.status.code == cs3code.CODE_OK:
-        if statInfo.info.type == cs3spr.RESOURCE_TYPE_CONTAINER:
-            log.info('msg="Invoked stat" fileref="%s" result="ISDIR" elapsedTimems="%.1f"' % (fileref, (tend - tstart) * 1000))
-            raise IOError('Is a directory')
-        if statInfo.info.type not in (cs3spr.RESOURCE_TYPE_FILE, cs3spr.RESOURCE_TYPE_SYMLINK):
-            log.warning('msg="Invoked stat" fileref="%s" unexpectedtype="%d"' % (fileref, statInfo.info.type))
-            raise IOError('Unexpected type %d' % statInfo.info.type)
-        inode = common.encodeinode(statInfo.info.id.storage_id, statInfo.info.id.opaque_id)
-        # in case we got a relative path, build an hybrid path that can be used to reference the file:
-        # note that as per specs the parent_id MUST be available in this case
-        filepath = statInfo.info.path if statInfo.info.path[0] == '/' else \
-                       statInfo.info.parent_id.opaque_id + '/' + os.path.basename(statInfo.info.path)
-        log.info('msg="Invoked stat" fileref="%s" inode="%s" filepath="%s" elapsedTimems="%.1f"' %
-                 (fileref, inode, filepath, (tend-tstart)*1000))
-        return {
-            'inode': inode,
-            'filepath': filepath,
-            'ownerid': statInfo.info.owner.opaque_id + '@' + statInfo.info.owner.idp,
-            'size': statInfo.info.size,
-            'mtime': statInfo.info.mtime.seconds
-        }
-    log.info('msg="Failed stat" fileref="%s" reason="%s"' % (fileref, statInfo.status.message.replace('"', "'")))
-    raise IOError(common.ENOENT_MSG if statInfo.status.code == cs3code.CODE_NOT_FOUND else statInfo.status.message)
+
+    if statInfo.status.code != cs3code.CODE_OK:
+        log.info('msg="Failed stat" fileref="%s" trace="%s" reason="%s"' %
+                 (fileref, statInfo.status.trace, statInfo.status.message.replace('"', "'")))
+        raise IOError(common.ENOENT_MSG if statInfo.status.code == cs3code.CODE_NOT_FOUND else statInfo.status.message)
+
+    if statInfo.info.type == cs3spr.RESOURCE_TYPE_CONTAINER:
+        log.info('msg="Invoked stat" fileref="%s" result="ISDIR" elapsedTimems="%.1f"' % (fileref, (tend - tstart) * 1000))
+        raise IOError('Is a directory')
+
+    if statInfo.info.type not in (cs3spr.RESOURCE_TYPE_FILE, cs3spr.RESOURCE_TYPE_SYMLINK):
+        log.warning('msg="Invoked stat" fileref="%s" unexpectedtype="%d"' % (fileref, statInfo.info.type))
+        raise IOError('Unexpected type %d' % statInfo.info.type)
+
+    inode = common.encodeinode(statInfo.info.id.storage_id, statInfo.info.id.opaque_id)
+    # in case we got a relative path, build an hybrid path that can be used to reference the file:
+    # note that as per specs the parent_id MUST be available in this case
+    if statInfo.info.path[0] == '/':
+        filepath = statInfo.info.path
+    else:
+        filepath = statInfo.info.parent_id.opaque_id + '/' + os.path.basename(statInfo.info.path)
+    log.info('msg="Invoked stat" fileref="%s" trace="%s" inode="%s" filepath="%s" elapsedTimems="%.1f"' %
+             (fileref, statInfo.status.trace, inode, filepath, (tend-tstart)*1000))
+    return {
+        'inode': inode,
+        'filepath': filepath,
+        'ownerid': statInfo.info.owner.opaque_id + '@' + statInfo.info.owner.idp,
+        'size': statInfo.info.size,
+        'mtime': statInfo.info.mtime.seconds
+    }
 
 
 def statx(endpoint, fileref, userid, versioninv=1):
@@ -124,8 +131,8 @@ def setxattr(endpoint, filepath, userid, key, value, lockid):
     req = cs3sp.SetArbitraryMetadataRequest(ref=reference, arbitrary_metadata=md, lock_id=lockid)
     res = ctx['cs3gw'].SetArbitraryMetadata(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
-        log.error('msg="Failed to setxattr" filepath="%s" key="%s" code="%s" reason="%s"' %
-                  (filepath, key, res.status.code, res.status.message.replace('"', "'")))
+        log.error('msg="Failed to setxattr" filepath="%s" key="%s" trace="%s" code="%s" reason="%s"' %
+                  (filepath, key, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
     log.debug('msg="Invoked setxattr" result="%s"' % res)
 
@@ -140,8 +147,8 @@ def getxattr(endpoint, filepath, userid, key):
         log.debug('msg="Invoked stat for getxattr on missing file" filepath="%s"' % filepath)
         return None
     if statInfo.status.code != cs3code.CODE_OK:
-        log.error('msg="Failed to stat" filepath="%s" key="%s" reason="%s"' %
-                  (filepath, key, statInfo.status.message.replace('"', "'")))
+        log.error('msg="Failed to stat" filepath="%s" trace="%s" key="%s" reason="%s"' %
+                  (filepath, statInfo.status.trace, key, statInfo.status.message.replace('"', "'")))
         raise IOError(statInfo.status.message)
     try:
         xattrvalue = statInfo.info.arbitrary_metadata.metadata[key]
@@ -150,8 +157,8 @@ def getxattr(endpoint, filepath, userid, key):
         log.debug('msg="Invoked stat for getxattr" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend - tstart) * 1000))
         return xattrvalue
     except KeyError:
-        log.warning('msg="Empty value or key not found in getxattr" filepath="%s" key="%s" metadata="%s"' %
-                    (filepath, key, statInfo.info.arbitrary_metadata.metadata))
+        log.warning('msg="Empty value or key not found in getxattr" filepath="%s" key="%s" trace="%s" metadata="%s"' %
+                    (filepath, key, statInfo.status.trace, statInfo.info.arbitrary_metadata.metadata))
         return None
 
 
@@ -161,7 +168,8 @@ def rmxattr(endpoint, filepath, userid, key, lockid):
     req = cs3sp.UnsetArbitraryMetadataRequest(ref=reference, arbitrary_metadata_keys=[key], lock_id=lockid)
     res = ctx['cs3gw'].UnsetArbitraryMetadata(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
-        log.error('msg="Failed to rmxattr" filepath="%s" key="%s" reason="%s"' % (filepath, key, res.status.message.replace('"', "'")))
+        log.error('msg="Failed to rmxattr" filepath="%s" trace="%s" key="%s" reason="%s"' %
+                  (filepath, key, res.status.trace, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
     log.debug('msg="Invoked rmxattr" result="%s"' % res.status)
 
@@ -174,12 +182,12 @@ def setlock(endpoint, filepath, userid, appname, value):
     req = cs3sp.SetLockRequest(ref=reference, lock=lock)
     res = ctx['cs3gw'].SetLock(request=req, metadata=[('x-access-token', userid)])
     if res.status.code == cs3code.CODE_FAILED_PRECONDITION:
-        log.info('msg="Invoked setlock on an already locked entity" filepath="%s" appname="%s" reason="%s"' %
-                 (filepath, appname, res.status.message.replace('"', "'")))
+        log.info('msg="Invoked setlock on an already locked entity" filepath="%s" appname="%s" trace="%s" reason="%s"' %
+                 (filepath, appname, res.status.trace, res.status.message.replace('"', "'")))
         raise IOError(common.EXCL_ERROR)
     if res.status.code != cs3code.CODE_OK:
-        log.error('msg="Failed to setlock" filepath="%s" appname="%s" value="%s" code="%s" reason="%s"' %
-                  (filepath, appname, value, res.status.code, res.status.message.replace('"', "'")))
+        log.error('msg="Failed to setlock" filepath="%s" appname="%s" value="%s" trace="%s" code="%s" reason="%s"' %
+                  (filepath, appname, value, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
     log.debug('msg="Invoked setlock" filepath="%s" value="%s" result="%s"' % (filepath, value, res.status))
 
@@ -193,8 +201,8 @@ def getlock(endpoint, filepath, userid):
         log.debug('msg="Invoked getlock on unlocked or missing file" filepath="%s"' % filepath)
         return None
     if res.status.code != cs3code.CODE_OK:
-        log.error('msg="Failed to getlock" filepath="%s" code="%s" reason="%s"' %
-                  (filepath, res.status.code, res.status.message.replace('"', "'")))
+        log.error('msg="Failed to getlock" filepath="%s" trace="%s" code="%s" reason="%s"' %
+                  (filepath, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
     log.debug('msg="Invoked getlock" filepath="%s" result="%s"' % (filepath, res.lock))
     # rebuild a dict corresponding to the internal JSON structure used by Reva, cf. commoniface.py
@@ -220,8 +228,8 @@ def refreshlock(endpoint, filepath, userid, appname, value):
     req = cs3sp.RefreshLockRequest(ref=reference, lock=lock)
     res = ctx['cs3gw'].RefreshLock(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
-        log.warning('msg="Failed to refreshlock" filepath="%s" appname="%s" value="%s" code="%s" reason="%s"' %
-                    (filepath, appname, value, res.status.code, res.status.message.replace('"', "'")))
+        log.warning('msg="Failed to refreshlock" filepath="%s" appname="%s" value="%s" trace="%s" code="%s" reason="%s"' %
+                    (filepath, appname, value, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
     log.debug('msg="Invoked refreshlock" filepath="%s" value="%s" result="%s"' % (filepath, value, res.status))
 
@@ -233,8 +241,8 @@ def unlock(endpoint, filepath, userid, appname, value):
     req = cs3sp.UnlockRequest(ref=reference, lock=lock)
     res = ctx['cs3gw'].Unlock(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
-        log.error('msg="Failed to unlock" filepath="%s" code="%s" reason="%s"' %
-                  (filepath, res.status.code, res.status.message.replace('"', "'")))
+        log.error('msg="Failed to unlock" filepath="%s" trace="%s" code="%s" reason="%s"' %
+                  (filepath, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
     log.debug('msg="Invoked unlock" filepath="%s" value="%s" result="%s"' % (filepath, value, res.status))
 
@@ -246,19 +254,20 @@ def readfile(endpoint, filepath, userid, lockid):
 
     # prepare endpoint
     req = cs3sp.InitiateFileDownloadRequest(ref=reference, lock_id=lockid)
-    initfiledownloadres = ctx['cs3gw'].InitiateFileDownload(request=req, metadata=[('x-access-token', userid)])
-    if initfiledownloadres.status.code == cs3code.CODE_NOT_FOUND:
+    res = ctx['cs3gw'].InitiateFileDownload(request=req, metadata=[('x-access-token', userid)])
+    if res.status.code == cs3code.CODE_NOT_FOUND:
         log.info('msg="File not found on read" filepath="%s"' % filepath)
         yield IOError(common.ENOENT_MSG)
-    elif initfiledownloadres.status.code != cs3code.CODE_OK:
-        log.error('msg="Failed to initiateFileDownload on read" filepath="%s" code="%s" reason="%s"' %
-                  (filepath, initfiledownloadres.status.code, initfiledownloadres.status.message.replace('"', "'")))
-        yield IOError(initfiledownloadres.status.message)
-    log.debug('msg="readfile: InitiateFileDownloadRes returned" protocols="%s"' % initfiledownloadres.protocols)
+    elif res.status.code != cs3code.CODE_OK:
+        log.error('msg="Failed to initiateFileDownload on read" filepath="%s" trace="%s" code="%s" reason="%s"' %
+                  (filepath, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
+        yield IOError(res.status.message)
+    log.debug('msg="readfile: InitiateFileDownloadRes returned" trace="%s" protocols="%s"' %
+              (res.status.trace, res.protocols))
 
     # Download
     try:
-        protocol = [p for p in initfiledownloadres.protocols if p.protocol == "simple" or p.protocol == "spaces"][0]
+        protocol = [p for p in res.protocols if p.protocol == "simple" or p.protocol == "spaces"][0]
         headers = {
             'x-access-token': userid,
             'x-reva-transfer': protocol.token        # needed if the downloads pass through the data gateway in reva
@@ -295,16 +304,17 @@ def writefile(endpoint, filepath, userid, content, lockid, islock=False):
     reference = _getcs3reference(endpoint, filepath)
     metadata = types.Opaque(map={"Upload-Length": types.OpaqueEntry(decoder="plain", value=str.encode(size))})
     req = cs3sp.InitiateFileUploadRequest(ref=reference, lock_id=lockid, opaque=metadata)
-    initfileuploadres = ctx['cs3gw'].InitiateFileUpload(request=req, metadata=[('x-access-token', userid)])
-    if initfileuploadres.status.code != cs3code.CODE_OK:
-        log.error('msg="Failed to initiateFileUpload on write" filepath="%s" code="%s" reason="%s"' %
-                  (filepath, initfileuploadres.status.code, initfileuploadres.status.message.replace('"', "'")))
-        raise IOError(initfileuploadres.status.message)
-    log.debug('msg="writefile: InitiateFileUploadRes returned" protocols="%s"' % initfileuploadres.protocols)
+    res = ctx['cs3gw'].InitiateFileUpload(request=req, metadata=[('x-access-token', userid)])
+    if res.status.code != cs3code.CODE_OK:
+        log.error('msg="Failed to initiateFileUpload on write" filepath="%s" trace="%s" code="%s" reason="%s"' %
+                  (filepath, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
+        raise IOError(res.status.message)
+    log.debug('msg="writefile: InitiateFileUploadRes returned" trace="%s" protocols="%s"' %
+              (res.status.trace, res.protocols))
 
     # Upload
     try:
-        protocol = [p for p in initfileuploadres.protocols if p.protocol == "simple" or p.protocol == "spaces"][0]
+        protocol = [p for p in res.protocols if p.protocol == "simple" or p.protocol == "spaces"][0]
         headers = {
             'x-access-token': userid,
             'Upload-Length': size,
@@ -333,8 +343,8 @@ def renamefile(endpoint, filepath, newfilepath, userid, lockid):
     req = cs3sp.MoveRequest(source=reference, destination=newfileref, lock_id=lockid)
     res = ctx['cs3gw'].Move(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
-        log.error('msg="Failed to rename file" filepath="%s" code="%s" reason="%s"' %
-                  (filepath, res.status.code, res.status.message.replace('"', "'")))
+        log.error('msg="Failed to rename file" filepath="%s" trace="%s" code="%s" reason="%s"' %
+                  (filepath, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
     log.debug('msg="Invoked renamefile" result="%s"' % res)
 
@@ -349,7 +359,7 @@ def removefile(endpoint, filepath, userid, _force=False):
         if str(res) == common.ENOENT_MSG:
             log.info('msg="Invoked removefile on non-existing file" filepath="%s"' % filepath)
         else:
-            log.error('msg="Failed to remove file" filepath="%s" code="%s" reason="%s"' %
-                      (filepath, res.status.code, res.status.message.replace('"', "'")))
+            log.error('msg="Failed to remove file" filepath="%s" trace="%s" code="%s" reason="%s"' %
+                      (filepath, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
     log.debug('msg="Invoked removefile" result="%s"' % res)
