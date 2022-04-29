@@ -88,12 +88,12 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args):
                 # failure: get info from stderr, log and raise
                 msg = res[1][res[1].find('=') + 1:].strip('\n')
                 if common.ENOENT_MSG.lower() in msg or 'unable to get attribute' in msg:
-                    log.info('msg="Invoked xroot on non-existing entity" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' %
-                             (cmd, subcmd, args, msg, rc.strip('\00')))
+                    log.info('msg="Invoked xroot on non-existing entity" cmd="%s" subcmd="%s" args="%s" result="%s" rc="%s"' %
+                             (cmd, subcmd, args, msg.replace('error:', ''), rc.strip('\00')))
                     raise IOError(common.ENOENT_MSG)
                 if EXCL_XATTR_MSG in msg:
-                    log.info('msg="Invoked setxattr on an already locked entity" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' %
-                             (cmd, subcmd, args, msg, rc.strip('\00')))
+                    log.info('msg="Invoked setxattr on an already locked entity" cmd="%s" subcmd="%s" args="%s" result="%s" rc="%s"' %
+                             (cmd, subcmd, args, msg.replace('error:', ''), rc.strip('\00')))
                     raise IOError(EXCL_XATTR_MSG)
                 # anything else (including permission errors) are logged as errors
                 log.error('msg="Error with xroot" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' %
@@ -225,7 +225,7 @@ def statx(endpoint, fileref, userid, versioninv=1):
                   (endpoint, _getfilepath(verFolder), str(rcv).strip('\n'), infov, (tend-tstart)*1000))
     except IOError as e:
         # here we should really raise the error, but for now we just log it
-        log.error('msg="Failed to mkdir/stat version folder, returning file metadata instead" rc="%s"' % e)
+        log.error('msg="Failed to mkdir/stat version folder, returning file metadata instead" filepath="%s" rc="%s"' % (_getfilepath(filepath), e))
         statxvdata = statxdata
     # return the metadata of the given file, with the inode taken from the version folder
     endpoint = _geturlfor(endpoint)
