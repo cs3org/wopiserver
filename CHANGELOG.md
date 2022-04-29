@@ -1,5 +1,12 @@
 ## Changelog for the WOPI server
 
+### Fri Apr 29 2022 - v8.1.0
+- Fixed handling of files with a `&` char in xroot
+- Improved stat/version folder logic and logging in xroot
+- Added reva traces to all relevant logs (#75)
+- Restored full URL logging in case of critical errors
+- Code linting and cleanup campaign
+
 ### Fri Apr 08 2022 - v8.0.0
 - The new Lock API is now fully supported (#51),
   including in the CS3APIs-compatible layer;
