@@ -5,9 +5,10 @@
 - Improved stat/version folder logic and logging in xroot
 - Added reva traces to all relevant logs (#75)
 - Restored full URL logging in case of critical errors
+- Fixed uncaught exceptions
 - Code linting and cleanup campaign
 
-### Fri Apr 08 2022 - v8.0.0
+### Fri Apr  8 2022 - v8.0.0
 - The new Lock API is now fully supported (#51),
   including in the CS3APIs-compatible layer;
   in addition, locks are passed along to CS3APIs
