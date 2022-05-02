@@ -21,9 +21,6 @@ import bridge.wopiclient as wopic
 
 TOOLARGE = 'File is too large to be edited in CodiMD. Please reduce its size with a regular text editor and try again.'
 
-class AppFailure(Exception):
-    '''A custom exception to represent a fatal failure when contacting CodiMD'''
-
 # a regexp for uploads, that have links like '/uploads/upload_542a360ddefe1e21ad1b8c85207d9365.*'
 upload_re = re.compile(r'\/uploads\/upload_\w{32}\.\w+')
 
@@ -34,6 +31,10 @@ apikey = None
 log = None
 sslverify = None
 disablezip = None
+
+
+class AppFailure(Exception):
+    '''A custom exception to represent a fatal failure when contacting CodiMD'''
 
 
 def init(_appurl, _appinturl, _apikey):
@@ -280,7 +281,6 @@ def savetostorage(wopisrc, acctok, isclose, wopilock, onlyfetch=False):
             return attresponse if attresponse else (wopic.jsonify('File saved successfully'), http.client.OK)
         except wopic.InvalidLock:
             return wopic.jsonify('File saved, but failed to refresh lock'), http.client.INTERNAL_SERVER_ERROR
-
 
     # on close, use saveas for either the new bundle, if this is the first time we have attachments,
     # or the single md file, if there are no more attachments.

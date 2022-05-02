@@ -15,6 +15,7 @@ import jwt
 
 storage = None
 
+
 def usage(exitcode):
     '''Prints usage'''
     print('Usage : ' + sys.argv[0] + ' [-h|--help] <filename>')

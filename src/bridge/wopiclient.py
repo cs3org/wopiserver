@@ -16,6 +16,7 @@ from flask import Response
 class InvalidLock(Exception):
     '''A custom exception to represent an invalid or missing WOPI lock'''
 
+
 # initialized by the main class
 log = None
 sslverify = None
@@ -52,12 +53,13 @@ def request(wopisrc, acctok, method, contents=None, headers=None):
 def generatelock(docid, filemd, digest, app, acctok, isclose):
     '''return a dict to be used as WOPI lock, in the format { docid, filename, digest, app, toclose },
        where toclose is like in the openfiles map'''
-    return {'docid': '/' + docid.strip('/'),
-            'filename': filemd['BaseFileName'],
-            'digest': digest,
-            'app': app if app else os.path.splitext(filemd['BaseFileName'])[1][1:],
-            'toclose': {acctok[-20:]: isclose},
-           }
+    return {
+        'docid': '/' + docid.strip('/'),
+        'filename': filemd['BaseFileName'],
+        'digest': digest,
+        'app': app if app else os.path.splitext(filemd['BaseFileName'])[1][1:],
+        'toclose': {acctok[-20:]: isclose},
+    }
 
 
 def getlock(wopisrc, acctok):
@@ -85,10 +87,11 @@ def _getheadersforrefreshlock(acctok, wopilock, digest, toclose):
         newlock['toclose'][acctok[-20:]] = False
     if digest and wopilock['digest'] != digest:
         newlock['digest'] = digest
-    return {'X-Wopi-Override': 'REFRESH_LOCK',
-            'X-WOPI-OldLock': json.dumps(wopilock),
-            'X-WOPI-Lock': json.dumps(newlock)
-           }, newlock
+    return {
+        'X-Wopi-Override': 'REFRESH_LOCK',
+        'X-WOPI-OldLock': json.dumps(wopilock),
+        'X-WOPI-Lock': json.dumps(newlock)
+    }, newlock
 
 
 def refreshlock(wopisrc, acctok, wopilock, digest=None, toclose=None):
@@ -128,10 +131,11 @@ def relock(wopisrc, acctok, docid, isclose):
 
     # lock the file again: we assume we are alone as the previous lock had been released
     wopilock = generatelock(docid, filemd, 'dirty', None, acctok, isclose)
-    lockheaders = {'X-WOPI-Lock': json.dumps(wopilock),
-                   'X-WOPI-Override': 'REFRESH_LOCK',
-                   'X-WOPI-Validate-Target': 'True'    # this is an extension of the Lock API
-                  }
+    lockheaders = {
+        'X-WOPI-Lock': json.dumps(wopilock),
+        'X-WOPI-Override': 'REFRESH_LOCK',
+        'X-WOPI-Validate-Target': 'True'    # this is an extension of the Lock API
+    }
     res = request(wopisrc, acctok, 'POST', headers=lockheaders)
     if res.status_code == http.client.CONFLICT:
         log.warning('msg="Got conflict in relocking the file" response="%d" token="%s" reason="%s"' %
@@ -151,8 +155,8 @@ def handleputfile(wopicall, wopisrc, res):
     if res.status_code == http.client.CONFLICT:
         log.warning('msg="Conflict when calling WOPI %s" url="%s" reason="%s"' %
                     (wopicall, wopisrc, res.headers.get('X-WOPI-LockFailureReason')))
-        return jsonify('Error saving the file. %s' % res.headers.get('X-WOPI-LockFailureReason')), \
-               http.client.INTERNAL_SERVER_ERROR
+        return jsonify('Error saving the file. %s' %
+                       res.headers.get('X-WOPI-LockFailureReason')), http.client.INTERNAL_SERVER_ERROR
     if res.status_code != http.client.OK:
         # hopefully the server has kept a local copy for later recovery
         log.error('msg="Calling WOPI %s failed" url="%s" response="%s"' % (wopicall, wopisrc, res.status_code))
@@ -162,11 +166,12 @@ def handleputfile(wopicall, wopisrc, res):
 
 def saveas(wopisrc, acctok, wopilock, targetname, content):
     '''Save a given document with an alternate name by using WOPI PutRelative'''
-    putrelheaders = {'X-WOPI-Lock': json.dumps(wopilock),
-                     'X-WOPI-Override': 'PUT_RELATIVE',
-                     # SuggestedTarget to not overwrite a possibly existing file
-                     'X-WOPI-SuggestedTarget': targetname
-                    }
+    putrelheaders = {
+        'X-WOPI-Lock': json.dumps(wopilock),
+        'X-WOPI-Override': 'PUT_RELATIVE',
+        # SuggestedTarget to not overwrite a possibly existing file
+        'X-WOPI-SuggestedTarget': targetname
+    }
     res = request(wopisrc, acctok, 'POST', headers=putrelheaders, contents=content)
     reply = handleputfile('PutRelative', wopisrc, res)
     if reply:
