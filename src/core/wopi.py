@@ -306,7 +306,8 @@ def putRelative(fileid, reqheaders, acctok):
     try:
         utils.storeWopiFile(flask.request, None, acctok, utils.LASTSAVETIMEKEY, targetName)
     except IOError as e:
-        utils.storeForRecovery(flask.request.get_data(), targetName, flask.request.args['access_token'][-20:], e)
+        utils.storeForRecovery(flask.request.get_data(), acctok['username'], targetName,
+                               flask.request.args['access_token'][-20:], e)
         return '', http.client.INTERNAL_SERVER_ERROR
     # generate an access token for the new file
     log.info('msg="PutRelative: generating new access token" user="%s" filename="%s" '
@@ -397,7 +398,7 @@ def _createNewFile(fileid, acctok):
             srv.openfiles[acctok['filename']] = ('0', set([acctok['username']]))
             return 'OK', http.client.OK
         except IOError as e:
-            utils.storeForRecovery(flask.request.get_data(), acctok['filename'],
+            utils.storeForRecovery(flask.request.get_data(), acctok['username'], acctok['filename'],
                                    flask.request.args['access_token'][-20:], e)
             return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
 
@@ -446,7 +447,7 @@ def putFile(fileid):
             return resp
 
     except IOError as e:
-        utils.storeForRecovery(flask.request.get_data(), acctok['filename'],
+        utils.storeForRecovery(flask.request.get_data(), acctok['username'], acctok['filename'],
                                flask.request.args['access_token'][-20:], e)
         return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
 
@@ -475,7 +476,8 @@ def putFile(fileid):
     if dorecovery:
         log.error('msg="Failed to create conflicting copy" user="%s" savetime="%s" lastmtime="%s" newfilename="%s" token="%s"' %
                   (acctok['userid'][-20:], savetime, mtime, newname, flask.request.args['access_token'][-20:]))
-        utils.storeForRecovery(flask.request.get_data(), newname, flask.request.args['access_token'][-20:], dorecovery)
+        utils.storeForRecovery(flask.request.get_data(), acctok['username'], newname,
+                               flask.request.args['access_token'][-20:], dorecovery)
         return utils.makeConflictResponse('PUTFILE', 'External', lock, 'NA', acctok['filename'],
                                           'The file being edited got moved or overwritten, please contact support to recover it')
 

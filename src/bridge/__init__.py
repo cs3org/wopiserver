@@ -312,11 +312,12 @@ class SaveThread(threading.Thread):
                         content, rc = WB.plugins[app].savetostorage(wopisrc, openfile['acctok'],
                                                                     False, {'docid': openfile['docid']}, onlyfetch=True)
                         if rc == http.client.OK:
-                            utils.storeForRecovery(content, wopisrc[wopisrc.rfind('/') + 1:], openfile['acctok'][-20:], ile)
+                            utils.storeForRecovery(content, 'unknown', wopisrc[wopisrc.rfind('/') + 1:],
+                                                   openfile['acctok'][-20:], ile)
                     if rc != http.client.OK:
                         WB.log.error('msg="SaveThread: failed to fetch file for recovery to local storage" '
                                      + 'token="%s" docid="%s" app="%s" response="%s"' %
-                                     (openfile['acctok'][-20:], openfile['docid'], app, content))
+                                     (openfile['acctok'][-20:], openfile['docid'], app, rc))
                     # set some 'fake' metadata, will be automatically cleaned up later
                     openfile['lastsave'] = int(time.time())
                     openfile['tosave'] = False

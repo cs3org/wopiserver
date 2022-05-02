@@ -409,9 +409,10 @@ def getConflictPath(username):
     return srv.conflictpath.replace('user_initial', username[0]).replace('username', username)
 
 
-def storeForRecovery(content, filename, acctokforlog, exception):
+def storeForRecovery(content, username, filename, acctokforlog, exception):
     try:
-        filepath = srv.recoverypath + os.sep + time.strftime('%Y%m%dT%H%M%S') + '_' + secure_filename(filename)
+        filepath = srv.recoverypath + os.sep + time.strftime('%Y%m%dT%H%M%S') + '_editedby_' + username \
+                   + '_origat_' + secure_filename(filename)
         with open(filepath, mode='wb') as f:
             written = f.write(content)
         if written != len(content):
