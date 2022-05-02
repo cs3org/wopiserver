@@ -32,7 +32,6 @@ except ImportError:
 
 import core.wopi
 import core.discovery
-import core.ioplocks
 import core.wopiutils as utils
 import bridge
 
@@ -146,9 +145,9 @@ class Wopi:
             bridge.WB.init(cls.config, cls.log, cls.wopisecret)
             # initialize the submodules
             # TODO improve handling of globals across the whole code base
-            utils.srv = core.ioplocks.srv = core.wopi.srv = cls
-            utils.log = core.ioplocks.log = core.wopi.log = core.discovery.log = cls.log
-            utils.st = core.ioplocks.st = core.wopi.st = storage
+            utils.srv = core.wopi.srv = cls
+            utils.log = core.wopi.log = core.discovery.log = cls.log
+            utils.st = core.wopi.st = storage
             core.discovery.config = cls.config
             utils.endpoints = core.discovery.endpoints
         except (configparser.NoOptionError, OSError) as e:
@@ -474,67 +473,6 @@ def wopiFilesPost(fileid):
 def wopiPutFile(fileid):
     '''The PutFile WOPI call'''
     return core.wopi.putFile(fileid)
-
-
-#
-# interoperable lock endpoints
-#
-@Wopi.app.route("/wopi/cbox/lock", methods=['GET', 'POST'])
-@Wopi.metrics.counter('lock_by_ext', 'Number of /lock calls by file extension',
-                      labels={'open_type': lambda:
-                              (flask.request.args['filename'].split('.')[-1]
-                               if 'filename' in flask.request.args and '.' in flask.request.args['filename']
-                               else 'noext') if flask.request.method == 'POST' else 'query'
-                              })
-def cboxLock():
-    '''Lock a given filename so that a later WOPI lock call would detect a conflict.
-    Used for OnlyOffice as they do not use WOPI: this way better interoperability is ensured.
-    It creates a LibreOffice-compatible lock, which is checked by the WOPI lock call
-    as well as by LibreOffice.
-    Method: POST to create a lock, GET to query for it
-    Request arguments:
-    - string filename: the full path of the filename to be opened
-    - string userid (optional): the user identity to create the file, defaults to 'root:root'
-    - string endpoint (optional): the storage endpoint to be used to look up the file or the storage id, in case of
-      multi-instance underlying storage; defaults to 'default'
-    '''
-    req = flask.request
-    # first check if the shared secret matches ours
-    if req.headers.get('Authorization') != 'Bearer ' + Wopi.iopsecret:
-        Wopi.log.warning('msg="cboxLock: unauthorized access attempt, missing authorization token" '
-                         'client="%s"' % req.remote_addr)
-        return UNAUTHORIZED
-    filename = req.args['filename']
-    userid = req.args['userid'] if 'userid' in req.args else '0:0'
-    endpoint = req.args['endpoint'] if 'endpoint' in req.args else 'default'
-    return core.ioplocks.ioplock(filename, userid, endpoint, req.method == 'GET')
-
-
-@Wopi.app.route("/wopi/cbox/unlock", methods=['POST'])
-def cboxUnlock():
-    '''Unlock a given filename. Used for OnlyOffice as they do not use WOPI (see cboxLock).
-    Request arguments:
-    - string filename: the full path of the filename to be opened
-    - string userid (optional): the user identity to create the file, defaults to 'root:root'
-    - string endpoint (optional): the storage endpoint to be used to look up the file or the storage id, in case of
-      multi-instance underlying storage; defaults to 'default'
-    The call returns:
-    - HTTP UNAUTHORIZED (401) if the 'Authorization: Bearer' secret is not provided in the header (cf. /wopi/cbox/open)
-    - HTTP CONFLICT (409) if a lock exists, but held by another application
-    - HTTP NOT_FOUND (404) if no lock was found for the given file
-    - HTTP INTERNAL_SERVER_ERROR (500) if some other I/O error occurred with the given lock file
-    - HTTP OK (200) if a lock for OnlyOffice existed. In this case it is removed.
-    '''
-    req = flask.request
-    # first check if the shared secret matches ours
-    if req.headers.get('Authorization') != 'Bearer ' + Wopi.iopsecret:
-        Wopi.log.warning('msg="cboxUnlock: unauthorized access attempt, missing authorization token" '
-                         'client="%s"' % req.remote_addr)
-        return UNAUTHORIZED
-    filename = req.args['filename']
-    userid = req.args['userid'] if 'userid' in req.args else '0:0'
-    endpoint = req.args['endpoint'] if 'endpoint' in req.args else 'default'
-    return core.ioplocks.iopunlock(filename, userid, endpoint)
 
 
 #
