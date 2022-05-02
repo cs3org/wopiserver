@@ -56,7 +56,7 @@ def checkFileInfo(fileid):
         fmd = {}
         fmd['BaseFileName'] = fmd['BreadcrumbDocName'] = os.path.basename(acctok['filename'])
         furl = acctok['folderurl']
-        fmd['BreadcrumbFolderUrl'] = furl if furl != '/' else ''
+        fmd['BreadcrumbFolderUrl'] = furl if furl != '/' else srv.wopiurl   # the WOPI URL is a placeholder
         if acctok['username'] == '':
             fmd['IsAnonymousUser'] = True
             fmd['UserFriendlyName'] = 'Guest ' + utils.randomString(3)
@@ -84,6 +84,7 @@ def checkFileInfo(fileid):
             fmd['SupportsDeleteFile'] = acctok['viewmode'] == utils.ViewMode.READ_WRITE
         fmd['UserCanNotWriteRelative'] = acctok['viewmode'] != utils.ViewMode.READ_WRITE
         fmd['SupportsContainers'] = False    # TODO this is all to be implemented
+        fmd['SupportsUserInfo'] = False      # TODO https://docs.microsoft.com/en-us/openspecs/office_protocols/ms-wopi/371e25ae-e45b-47ab-aec3-9111e962919d
         fmd['HostViewUrl'] = '%s%s%s' % (acctok['appviewurl'], '&' if '?' in acctok['appviewurl'] else '?', wopiSrc)
         fmd['HostEditUrl'] = '%s%s%s' % (acctok['appediturl'], '&' if '?' in acctok['appediturl'] else '?', wopiSrc)
         fmd['SupportsRename'] = fmd['UserCanRename'] = enablerename and (acctok['viewmode'] == utils.ViewMode.READ_WRITE)
