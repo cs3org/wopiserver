@@ -583,7 +583,7 @@ def cboxOpen_deprecated():
     try:
         # here we set wopiuser = userid (i.e. uid:gid) as that's well known to be consistent over time
         inode, acctok = utils.generateAccessToken(userid, filename, viewmode, (username, userid),
-                                                  folderurl, endpoint, ('', '', ''))
+                                                  folderurl, endpoint, (Wopi.proxiedappname if toproxy else '', '', ''))
     except IOError as e:
         Wopi.log.warning('msg="cboxOpen: remote error on generating token" client="%s" user="%s" '
                          'friendlyname="%s" mode="%s" endpoint="%s" reason="%s"' %

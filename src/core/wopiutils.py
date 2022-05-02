@@ -105,11 +105,13 @@ def generateWopiSrc(fileid, proxy=False):
     # return urllib.parse.quote_plus('%s/wopi/files/%s' % (srv.wopiurl, fileid)).replace('-', '%2D')
     if not proxy or not srv.wopiproxy:
         return '%s/wopi/files/%s' % (srv.wopiurl, fileid)
-    # proxy the WOPI request through an external WOPI proxy service
-    proxiedfileid = jwt.encode({'u': srv.wopiurl + '/wopi/files/', 'f': fileid}, srv.wopiproxykey, algorithm='HS256')
-    proxiedsrc = '%s/wopi/files/%s' % (srv.wopiproxy, proxiedfileid)
-    log.info('msg="Generated proxied WOPISrc" fileid="%s" proxiedsrc="%s"' % (fileid, proxiedsrc))
-    return proxiedsrc
+    # proxy the WOPI request through an external WOPI proxy service, but only if it was not already proxied
+    if len(fileid) < 50:   # heuristically, proxied fileids are (much) longer than that
+        log.debug('msg="Generating proxied fileid" fileid="%s" proxy="%s"' % (fileid, srv.wopiproxy))
+        fileid = jwt.encode({'u': srv.wopiurl + '/wopi/files/', 'f': fileid}, srv.wopiproxykey, algorithm='HS256')
+    else:
+        log.debug('msg="Proxied fileid already created" fileid="%s" proxy="%s"' % (fileid, srv.wopiproxy))
+    return '%s/wopi/files/%s' % (srv.wopiproxy, fileid)
 
 
 def getLibreOfficeLockName(filename):

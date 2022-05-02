@@ -50,7 +50,8 @@ def checkFileInfo(fileid):
         acctok['viewmode'] = utils.ViewMode(acctok['viewmode'])
         statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
         # compute some entities for the response
-        wopiSrc = 'WOPISrc=%s&access_token=%s' % (utils.generateWopiSrc(fileid), flask.request.args['access_token'])
+        wopiSrc = 'WOPISrc=%s&access_token=%s' % (utils.generateWopiSrc(fileid, acctok['appname'] == srv.proxiedappname), \
+            flask.request.args['access_token'])
         # populate metadata for this file
         fmd = {}
         fmd['BaseFileName'] = fmd['BreadcrumbDocName'] = os.path.basename(acctok['filename'])
@@ -298,7 +299,7 @@ def putRelative(fileid, reqheaders, acctok):
                                               {'message': 'Target file already exists',
                                                # specs (the WOPI validator) require these to be populated with valid values
                                                'Name': os.path.basename(relTarget),
-                                               'Url': utils.generateWopiSrc('0'),
+                                               'Url': utils.generateWopiSrc('0', acctok['appname'] == srv.proxiedappname),
                                                })
         # else we can use the relative target
         targetName = relTarget
@@ -320,10 +321,10 @@ def putRelative(fileid, reqheaders, acctok):
     # prepare and send the response as JSON
     putrelmd = {}
     putrelmd['Name'] = os.path.basename(targetName)
-    putrelmd['Url'] = '%s?access_token=%s' % (utils.generateWopiSrc(inode), newacctok)
+    putrelmd['Url'] = '%s?access_token=%s' % (utils.generateWopiSrc(inode, acctok['appname'] == srv.proxiedappname), newacctok)
     putrelmd['HostEditUrl'] = '%s%sWOPISrc=%s&access_token=%s' % \
                               (acctok['appediturl'], '&' if '?' in acctok['appediturl'] else '?',
-                               utils.generateWopiSrc(inode), newacctok)
+                               utils.generateWopiSrc(inode, acctok['appname'] == srv.proxiedappname), newacctok)
     resp = flask.Response(json.dumps(putrelmd), mimetype='application/json')
     putrelmd['Url'] = putrelmd['HostEditUrl'] = '_redacted_'
     log.debug('msg="PutRelative response" token="%s" metadata="%s"' % (newacctok[-20:], putrelmd))
