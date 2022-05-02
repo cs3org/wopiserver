@@ -16,7 +16,7 @@ import configparser
 from platform import python_version
 import logging
 import logging.handlers
-from urllib.parse import unquote as url_unquote
+from urllib.parse import unquote_plus as url_unquote_plus
 import http.client
 import json
 try:
@@ -295,11 +295,11 @@ def iopOpenInApp():
     username = req.args.get('username', '')
     # this needs to be a unique identifier: if missing (case of anonymous users), just generate a random string
     wopiuser = req.args.get('userid', utils.randomString(10))
-    folderurl = url_unquote(req.args.get('folderurl', '%2F'))   # defaults to `/`
+    folderurl = url_unquote_plus(req.args.get('folderurl', '%2F'))   # defaults to `/`
     endpoint = req.args.get('endpoint', 'default')
-    appname = url_unquote(req.args.get('appname', ''))
-    appurl = url_unquote(req.args.get('appurl', '')).strip('/')
-    appviewurl = url_unquote(req.args.get('appviewurl', appurl)).strip('/')
+    appname = url_unquote_plus(req.args.get('appname', ''))
+    appurl = url_unquote_plus(req.args.get('appurl', '')).strip('/')
+    appviewurl = url_unquote_plus(req.args.get('appviewurl', appurl)).strip('/')
     if not appname or not appurl:
         Wopi.log.warning('msg="iopOpenInApp: app-related arguments must be provided" client="%s"' % req.remote_addr)
         return 'Missing appname or appurl arguments', http.client.BAD_REQUEST
@@ -307,7 +307,7 @@ def iopOpenInApp():
     if bridge.issupported(appname):
         # This is a bridge-supported application, get the extra info to enable it
         apikey = req.headers.get('ApiKey')
-        appinturl = url_unquote(req.args.get('appinturl', appurl))     # defaults to the external appurl
+        appinturl = url_unquote_plus(req.args.get('appinturl', appurl))     # defaults to the external appurl
         try:
             bridge.WB.loadplugin(appname, appurl, appinturl, apikey)
         except ValueError:
@@ -489,7 +489,7 @@ def _guireturn(msg):
 def bridgeOpen():
     '''The WOPI bridge open call'''
     try:
-        wopisrc = url_unquote(flask.request.args['WOPISrc'])
+        wopisrc = url_unquote_plus(flask.request.args['WOPISrc'])
         acctok = flask.request.args['access_token']
         Wopi.log.info('msg="BridgeOpen called" client="%s" user-agent="%s" token="%s"' %
                       (flask.request.remote_addr, flask.request.user_agent, acctok[-20:]))
@@ -563,7 +563,7 @@ def cboxOpen_deprecated():
         Wopi.log.warning('msg="cboxOpen: invalid or missing user/token in request" client="%s" user="%s"' %
                          (req.remote_addr, userid))
         return UNAUTHORIZED
-    filename = url_unquote(req.args.get('filename', ''))
+    filename = url_unquote_plus(req.args.get('filename', ''))
     if filename == '':
         Wopi.log.warning('msg="cboxOpen: the filename must be provided" client="%s"' % req.remote_addr)
         return 'Invalid argument', http.client.BAD_REQUEST
@@ -579,7 +579,7 @@ def cboxOpen_deprecated():
         viewmode = utils.ViewMode.READ_WRITE if 'canedit' in req.args and req.args['canedit'].lower() == 'true' \
             else utils.ViewMode.READ_ONLY
     username = req.args.get('username', '')
-    folderurl = url_unquote(req.args.get('folderurl', '%2F'))   # defaults to `/`
+    folderurl = url_unquote_plus(req.args.get('folderurl', '%2F'))   # defaults to `/`
     endpoint = req.args.get('endpoint', 'default')
     toproxy = req.args.get('proxy', 'false') == 'true' and filename[-1] == 'x'    # if requested, only proxy OOXML files
     try:

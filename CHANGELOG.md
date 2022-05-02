@@ -4,7 +4,8 @@
 - Improved support for ownCloud WOPI proxy
 - Simplified SetLock logic
 - Fixed some metadata responses following Microsoft
-  WOPI validation tests
+  WOPI validation tests. In particular, WOPISrc
+  values are now URL-encoded as per specifications
 
 ### Fri Apr 29 2022 - v8.1.0
 - Fixed handling of files with a `&` char in xroot

@@ -16,6 +16,7 @@ from random import choice
 from string import ascii_lowercase
 from base64 import b64encode, b64decode
 from binascii import Error as B64Error
+from urllib.parse import quote_plus as url_quote_plus
 import http.client
 import flask
 import jwt
@@ -97,20 +98,16 @@ def logExpiredTokenAndReturn(ex, req):
 
 
 def generateWopiSrc(fileid, proxy=False):
-    '''Returns a WOPISrc for the given fileid.
-    Note we'd need to URL-encode it per spec (including `-` to `%2D`), but it turns out that MS Office breaks
-    with URL-encoded WOPISrc values via GET (it works via POST), whereas it works with plain WOPISrc values.
-    And luckily enough, other known apps (Collabora and OnlyOffice) also work with non-encoded URLs.'''
-    # return urllib.parse.quote_plus('%s/wopi/files/%s' % (srv.wopiurl, fileid)).replace('-', '%2D')
+    '''Returns a URL-encoded WOPISrc for the given fileid, proxied if required.'''
     if not proxy or not srv.wopiproxy:
-        return '%s/wopi/files/%s' % (srv.wopiurl, fileid)
+        return url_quote_plus('%s/wopi/files/%s' % (srv.wopiurl, fileid)).replace('-', '%2D')
     # proxy the WOPI request through an external WOPI proxy service, but only if it was not already proxied
     if len(fileid) < 50:   # heuristically, proxied fileids are (much) longer than that
         log.debug('msg="Generating proxied fileid" fileid="%s" proxy="%s"' % (fileid, srv.wopiproxy))
         fileid = jwt.encode({'u': srv.wopiurl + '/wopi/files/', 'f': fileid}, srv.wopiproxykey, algorithm='HS256')
     else:
         log.debug('msg="Proxied fileid already created" fileid="%s" proxy="%s"' % (fileid, srv.wopiproxy))
-    return '%s/wopi/files/%s' % (srv.wopiproxy, fileid)
+    return url_quote_plus('%s/wopi/files/%s' % (srv.wopiproxy, fileid)).replace('-', '%2D')
 
 
 def getLibreOfficeLockName(filename):

@@ -121,6 +121,7 @@ def _gendocid(wopisrc):
 def appopen(wopisrc, acctok):
     '''Open a doc by contacting the provided WOPISrc with the given access_token.
     Returns a (app-url, params{}) pair if successful, raises a FailedOpen exception otherwise'''
+    wopisrc = urlparse.unquote_plus(wopisrc)
     # WOPI GetFileInfo
     res = wopic.request(wopisrc, acctok, 'GET')
     if res.status_code != http.client.OK:

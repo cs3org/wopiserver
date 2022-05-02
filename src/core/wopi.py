@@ -12,6 +12,7 @@ import configparser
 import json
 import http.client
 from datetime import datetime
+from urllib.parse import unquote_plus as url_unquote
 from more_itertools import peekable
 import jwt
 import flask
@@ -379,7 +380,7 @@ def putRelative(fileid, reqheaders, acctok):
         try:
             # check for file existence + lock
             fileExists = st.stat(acctok['endpoint'], relTarget, acctok['userid'])
-            retrievedTargetLock, _ = utils.retrieveWopiLock(fileid, 'PUT_RELATIVE', None, acctok, overridefilename=relTarget)
+            retrievedTargetLock, _ = utils.retrieveWopiLock(fileid, 'PUT_RELATIVE', None, acctok, overridefn=relTarget)
         except IOError:
             fileExists = False
         if fileExists and (not overwriteTarget or retrievedTargetLock):
@@ -410,7 +411,7 @@ def putRelative(fileid, reqheaders, acctok):
     putrelmd = {}
     putrelmd['Name'] = os.path.basename(targetName)
     newwopisrc = '%s&access_token=%s' % (utils.generateWopiSrc(inode, acctok['appname'] == srv.proxiedappname), newacctok)
-    putrelmd['Url'] = newwopisrc.replace('&access_token', '?access_token')
+    putrelmd['Url'] = url_unquote(newwopisrc).replace('&access_token', '?access_token')
     putrelmd['HostEditUrl'] = '%s%s%s' % (acctok['appediturl'], '&' if '?' in acctok['appediturl'] else '?', newwopisrc)
     putrelmd['HostViewUrl'] = '%s%s%s' % (acctok['appviewurl'], '&' if '?' in acctok['appediturl'] else '?', newwopisrc)
     resp = flask.Response(json.dumps(putrelmd), mimetype='application/json')
