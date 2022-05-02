@@ -93,7 +93,7 @@ def stat(endpoint, fileref, userid, versioninv=1):
         raise IOError(common.ENOENT_MSG if statInfo.status.code == cs3code.CODE_NOT_FOUND else statInfo.status.message)
 
     if statInfo.info.type == cs3spr.RESOURCE_TYPE_CONTAINER:
-        log.info('msg="Invoked stat" fileref="%s" result="ISDIR" elapsedTimems="%.1f"' % (fileref, (tend - tstart) * 1000))
+        log.info('msg="Invoked stat" fileref="%s" trace="%s" result="ISDIR"' % (fileref, statInfo.status.trace))
         raise IOError('Is a directory')
 
     if statInfo.info.type not in (cs3spr.RESOURCE_TYPE_FILE, cs3spr.RESOURCE_TYPE_SYMLINK):

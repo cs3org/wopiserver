@@ -73,7 +73,6 @@ def getredirecturl(isreadwrite, wopisrc, acctok, wopilock, displayname):
     return appexturl + url + '?apiKey=' + apikey
 
 
-
 # Cloud storage to CodiMD
 ##########################
 

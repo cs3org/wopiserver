@@ -92,8 +92,8 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args):
                              (cmd, subcmd, args, msg.replace('error:', ''), rc.strip('\00')))
                     raise IOError(common.ENOENT_MSG)
                 if EXCL_XATTR_MSG in msg:
-                    log.info('msg="Invoked setxattr on an already locked entity" cmd="%s" subcmd="%s" args="%s" result="%s" rc="%s"' %
-                             (cmd, subcmd, args, msg.replace('error:', ''), rc.strip('\00')))
+                    log.info('msg="Invoked setxattr on an already locked entity" args="%s" result="%s" rc="%s"' %
+                             (args, msg.replace('error:', ''), rc.strip('\00')))
                     raise IOError(EXCL_XATTR_MSG)
                 # anything else (including permission errors) are logged as errors
                 log.error('msg="Error with xroot" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' %
@@ -202,20 +202,18 @@ def statx(endpoint, fileref, userid, versioninv=1):
     # now stat the corresponding version folder to get an inode invariant to save operations, see CERNBOX-1216
     # also, use the owner's as opposed to the user's credentials to bypass any restriction (e.g. with single-share files)
     verFolder = os.path.dirname(filepath) + os.path.sep + EOSVERSIONPREFIX + os.path.basename(filepath)
-    rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder)
-                            + _eosargs(statxdata[5] + ':' + statxdata[6]) + '&mgm.pcmd=stat')
+    ownerarg = _eosargs(statxdata[5] + ':' + statxdata[6])
+    rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder) + ownerarg + '&mgm.pcmd=stat')
     tend = time.time()
     infov = infov.decode()
     try:
         if OK_MSG not in str(rcv) or 'retc=2' in infov:
-            # the version folder does not exist: create it (on behalf of the owner)
-            # cf. https://github.com/cernbox/revaold/blob/master/api/public_link_manager_owncloud/public_link_manager_owncloud.go#L127
-            rcmkdir = _getxrdfor(endpoint).mkdir(_getfilepath(verFolder) + _eosargs(statxdata[5] + ':' + statxdata[6]), MkDirFlags.MAKEPATH)
+            # the version folder does not exist: create it (on behalf of the owner) as it is done in Reva
+            rcmkdir = _getxrdfor(endpoint).mkdir(_getfilepath(verFolder) + ownerarg, MkDirFlags.MAKEPATH)
             if OK_MSG not in str(rcmkdir):
                 raise IOError(rcmkdir)
             log.debug('msg="Invoked mkdir on version folder" filepath="%s" rc="%s"' % (_getfilepath(verFolder), rcmkdir))
-            rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder)
-                                                    + _eosargs(statxdata[5] + ':' + statxdata[6]) + '&mgm.pcmd=stat')
+            rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder) + ownerarg + '&mgm.pcmd=stat')
             tend = time.time()
             infov = infov.decode()
             if OK_MSG not in str(rcv) or 'retc=' in infov:
@@ -225,7 +223,8 @@ def statx(endpoint, fileref, userid, versioninv=1):
                   (endpoint, _getfilepath(verFolder), str(rcv).strip('\n'), infov, (tend-tstart)*1000))
     except IOError as e:
         # here we should really raise the error, but for now we just log it
-        log.error('msg="Failed to mkdir/stat version folder, returning file metadata instead" filepath="%s" rc="%s"' % (_getfilepath(filepath), e))
+        log.error('msg="Failed to mkdir/stat version folder, returning file metadata instead" filepath="%s" rc="%s"' %
+                  (_getfilepath(filepath), e))
         statxvdata = statxdata
     # return the metadata of the given file, with the inode taken from the version folder
     endpoint = _geturlfor(endpoint)
@@ -270,9 +269,11 @@ def setlock(endpoint, filepath, userid, appname, value, recurse=False):
     The special option "c" (create-if-not-exists) is used to be atomic'''
     try:
         log.debug('msg="Invoked setlock" filepath="%s" value="%s"' % (filepath, value))
-        setxattr(endpoint, filepath, userid, common.LOCKKEY, common.genrevalock(appname, value) + '&mgm.option=c', None)
+        setxattr(endpoint, filepath, userid, common.LOCKKEY,
+                 common.genrevalock(appname, value) + '&mgm.option=c', None)
     except IOError as e:
-        if EXCL_XATTR_MSG in str(e) or 'flock already held' in str(e):  # TODO need to confirm this error message once EOS-5145 is implemented
+        # TODO need to confirm this error message once EOS-5145 is implemented
+        if EXCL_XATTR_MSG in str(e) or 'flock already held' in str(e):
             # check for pre-existing stale locks (this is now not atomic)
             if not getlock(endpoint, filepath, userid) and not recurse:
                 setlock(endpoint, filepath, userid, appname, value, recurse=True)

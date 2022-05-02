@@ -18,8 +18,9 @@ config = None
 log = None
 homepath = None
 
-# a conventional value recognized by _checklock()
+# a conventional value used by _checklock()
 LOCK = '__LOCK__'
+
 
 class Flock:
     '''A simple class to lock/unlock when entering/leaving a runtime context

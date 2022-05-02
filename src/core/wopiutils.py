@@ -289,8 +289,8 @@ def storeWopiLock(fileid, operation, lock, oldlock, acctok):
                     lockholder = retrievedlolock.split(',')[1] if ',' in retrievedlolock else ''
                     log.warning('msg="WOPI lock denied because of an existing LibreOffice lock" filename="%s" holder="%s"' %
                                 (acctok['filename'], lockholder if lockholder else retrievedlolock))
-                    return makeConflictResponse(operation, 'External App', lock, oldlock, acctok['filename'],
-                        'The file was locked by ' + ((lockholder + ' via LibreOffice') if lockholder else 'a LibreOffice user'))
+                    reason = 'File locked by ' + ((lockholder + ' via LibreOffice') if lockholder else 'a LibreOffice user')
+                    return makeConflictResponse(operation, 'External App', lock, oldlock, acctok['filename'], reason)
                 # else it's our previous lock or it had expired: all right, move on
             else:
                 # any other error is logged but not raised as this is optimistically not blocking WOPI operations

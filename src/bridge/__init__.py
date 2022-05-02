@@ -129,7 +129,8 @@ def appopen(wopisrc, acctok):
     filemd = res.json()
     app = BRIDGE_EXT_PLUGINS.get(os.path.splitext(filemd['BaseFileName'])[1][1:])
     if not app or not WB.plugins[app]:
-        WB.log.warning('msg="Open: file type not supported or missing plugin" filename="%s" token="%s"' % (filemd['BaseFileName'], acctok[-20:]))
+        WB.log.warning('msg="Open: file type not supported or missing plugin" filename="%s" token="%s"' %
+                       (filemd['BaseFileName'], acctok[-20:]))
         raise FailedOpen('File type not supported', http.client.BAD_REQUEST)
     WB.log.debug('msg="Processing open in supported app" app="%s" plugin="%s"' % (app, WB.plugins[app]))
     app = WB.plugins[app]
@@ -308,11 +309,13 @@ class SaveThread(threading.Thread):
                     # attempt to save to local storage to help for later recovery: this is a feature of the core wopiserver
                     content = rc = None
                     if app:
-                        content, rc = WB.plugins[app].savetostorage(wopisrc, openfile['acctok'], False, {'docid': openfile['docid']}, onlyfetch=True)
+                        content, rc = WB.plugins[app].savetostorage(wopisrc, openfile['acctok'],
+                                                                    False, {'docid': openfile['docid']}, onlyfetch=True)
                         if rc == http.client.OK:
                             utils.storeForRecovery(content, wopisrc[wopisrc.rfind('/') + 1:], openfile['acctok'][-20:], ile)
                     if rc != http.client.OK:
-                        WB.log.error('msg="SaveThread: failed to fetch file for recovery to local storage" token="%s" docid="%s" app="%s" response="%s"' %
+                        WB.log.error('msg="SaveThread: failed to fetch file for recovery to local storage" '
+                                     + 'token="%s" docid="%s" app="%s" response="%s"' %
                                      (openfile['acctok'][-20:], openfile['docid'], app, content))
                     # set some 'fake' metadata, will be automatically cleaned up later
                     openfile['lastsave'] = int(time.time())
@@ -394,7 +397,8 @@ class SaveThread(threading.Thread):
 def stopsavethread():
     '''Exit handler to cleanly stop the storage sync thread'''
     if WB.savethread:
-        WB.log.info('msg="Waiting for SaveThread to complete"')  # TODO when this handler is called, the logger is not accessible any longer
+        # TODO when this handler is called, the logger is not accessible any longer
+        WB.log.info('msg="Waiting for SaveThread to complete"')
         with WB.savecv:
             WB.active = False
             WB.savecv.notify()
