@@ -463,7 +463,7 @@ def wopiFilesPost(fileid):
         return core.wopi.deleteFile(fileid, headers, acctok)
     if op == 'RENAME_FILE':
         return core.wopi.renameFile(fileid, headers, acctok)
-    # elif op == 'PUT_USER_INFO':   https://wopirest.readthedocs.io/en/latest/files/PutUserInfo.html
+    # elif op == 'PUT_USER_INFO':
     # Any other op is unsupported
     Wopi.log.warning('msg="Unknown/unsupported operation" operation="%s"' % op)
     return 'Not supported operation found in header', http.client.NOT_IMPLEMENTED

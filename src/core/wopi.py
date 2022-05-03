@@ -29,7 +29,6 @@ enablerename = False
 
 def checkFileInfo(fileid):
     '''Implements the CheckFileInfo WOPI call'''
-    '''cf. http://wopi.readthedocs.io/projects/wopirest/en/latest/files/CheckFileInfo.html'''
     srv.refreshconfig()
     try:
         acctok = jwt.decode(flask.request.args['access_token'], srv.wopisecret, algorithms=['HS256'])
@@ -153,7 +152,6 @@ def getFile(fileid):
 #
 def setLock(fileid, reqheaders, acctok):
     '''Implements the Lock, RefreshLock, and UnlockAndRelock WOPI calls'''
-    # cf. http://wopi.readthedocs.io/projects/wopirest/en/latest/files/Lock.html
     op = reqheaders['X-WOPI-Override']
     lock = reqheaders['X-WOPI-Lock']
     oldLock = reqheaders.get('X-WOPI-OldLock')
@@ -252,7 +250,6 @@ def unlock(fileid, reqheaders, acctok):
 
 def putRelative(fileid, reqheaders, acctok):
     '''Implements the PutRelative WOPI call. Corresponds to the 'Save as...' menu entry.'''
-    # cf. http://wopi.readthedocs.io/projects/wopirest/en/latest/files/PutRelativeFile.html
     suggTarget = reqheaders.get('X-WOPI-SuggestedTarget')
     relTarget = reqheaders.get('X-WOPI-RelativeTarget')
     overwriteTarget = bool(reqheaders.get('X-WOPI-OverwriteRelativeTarget'))
