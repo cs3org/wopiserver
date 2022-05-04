@@ -1,5 +1,11 @@
 ## Changelog for the WOPI server
 
+### Wed May  4 2022 - v8.2.0
+- Improved support for ownCloud WOPI proxy
+- Simplified SetLock logic
+- Fixed some metadata responses following Microsoft
+  WOPI validation tests
+
 ### Fri Apr 29 2022 - v8.1.0
 - Fixed handling of files with a `&` char in xroot
 - Improved stat/version folder logic and logging in xroot
