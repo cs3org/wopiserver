@@ -343,11 +343,11 @@ def putRelative(fileid, reqheaders, acctok):
     '''Implements the PutRelative WOPI call. Corresponds to the 'Save as...' menu entry.'''
     suggTarget = reqheaders.get('X-WOPI-SuggestedTarget')
     relTarget = reqheaders.get('X-WOPI-RelativeTarget')
-    overwriteTarget = bool(reqheaders.get('X-WOPI-OverwriteRelativeTarget'))
+    overwriteTarget = str(reqheaders.get('X-WOPI-OverwriteRelativeTarget')).upper() == 'TRUE'
     log.info('msg="PutRelative" user="%s" filename="%s" fileid="%s" suggTarget="%s" relTarget="%s" '
-             'overwrite="%r" token="%s"' %
-             (acctok['userid'], acctok['filename'], fileid,
-              suggTarget, relTarget, overwriteTarget, flask.request.args['access_token'][-20:]))
+             'overwrite="%r" wopitimestamp="%s" token="%s"' %
+             (acctok['userid'], acctok['filename'], fileid, suggTarget, relTarget,
+              overwriteTarget, reqheaders.get('X-WOPI-TimeStamp'), flask.request.args['access_token'][-20:]))
     # either one xor the other must be present; note we can't use `^` as we have a mix of str and NoneType
     if (suggTarget and relTarget) or (not suggTarget and not relTarget):
         return '', http.client.NOT_IMPLEMENTED
@@ -366,7 +366,7 @@ def putRelative(fileid, reqheaders, acctok):
                 name, ext = os.path.splitext(targetName)
                 targetName = name + '_copy' + ext
             except IOError as e:
-                if 'No such file or directory' in str(e):
+                if common.ENOENT_MSG in str(e):
                     # OK, the targetName is good to go
                     break
                 # we got another error with this file, fail
@@ -377,19 +377,19 @@ def putRelative(fileid, reqheaders, acctok):
     else:
         # the relative target is a UTF7-encoded filename to be respected, and that may overwrite an existing file
         relTarget = os.path.dirname(acctok['filename']) + os.path.sep + relTarget.encode().decode('utf-7')  # make full path
-        try:
-            # check for file existence + lock
-            fileExists = st.stat(acctok['endpoint'], relTarget, acctok['userid'])
-            retrievedTargetLock, _ = utils.retrieveWopiLock(fileid, 'PUT_RELATIVE', None, acctok, overridefn=relTarget)
-        except IOError:
-            fileExists = False
-        if fileExists and (not overwriteTarget or retrievedTargetLock):
-            return utils.makeConflictResponse('PUT_RELATIVE', retrievedTargetLock, 'NA', 'NA', relTarget,
-                                              {'message': 'Target file already exists',
-                                               # specs (the WOPI validator) require these to be populated with valid values
-                                               'Name': os.path.basename(relTarget),
-                                               'Url': utils.generateWopiSrc('0', acctok['appname'] == srv.proxiedappname),
-                                               })
+        if not overwriteTarget:
+            try:
+                # check for file existence + lock
+                st.stat(acctok['endpoint'], relTarget, acctok['userid'])
+                retrievedTargetLock, _ = utils.retrieveWopiLock(fileid, 'PUT_RELATIVE', None, acctok, overridefn=relTarget)
+                return utils.makeConflictResponse('PUT_RELATIVE', retrievedTargetLock, 'NA', 'NA', relTarget,
+                                                  {'message': 'Target file already exists',
+                                                   # specs (the WOPI validator) require these to be populated with valid values
+                                                   'Name': os.path.basename(relTarget),
+                                                   'Url': utils.generateWopiSrc('0', acctok['appname'] == srv.proxiedappname),
+                                                  })
+            except IOError:
+                pass
         # else we can use the relative target
         targetName = relTarget
     # either way, we now have a targetName to save the file: attempt to do so
@@ -416,7 +416,7 @@ def putRelative(fileid, reqheaders, acctok):
     putrelmd['HostViewUrl'] = '%s%s%s' % (acctok['appviewurl'], '&' if '?' in acctok['appediturl'] else '?', newwopisrc)
     resp = flask.Response(json.dumps(putrelmd), mimetype='application/json')
     putrelmd['Url'] = putrelmd['HostEditUrl'] = putrelmd['HostViewUrl'] = '_redacted_'
-    log.debug('msg="PutRelative response" token="%s" metadata="%s"' % (newacctok[-20:], putrelmd))
+    log.info('msg="PutRelative response" token="%s" metadata="%s"' % (newacctok[-20:], putrelmd))
     return resp
 
 
