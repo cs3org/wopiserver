@@ -313,7 +313,7 @@ def unlock(fileid, reqheaders, acctok):
         statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
         st.unlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'], utils.encodeLock(lock))
     except IOError as e:
-        if common.ENOENT_MSG in e:
+        if common.ENOENT_MSG in str(e):
             return 'File not found', http.client.NOT_FOUND
         return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
 
