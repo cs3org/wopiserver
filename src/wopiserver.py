@@ -104,6 +104,7 @@ class Wopi:
                 cls.nonofficetypes = cls.config.get('general', 'nonofficetypes').split()
             except (TypeError, configparser.NoOptionError):
                 cls.nonofficetypes = []
+            cls.codetypes = cls.config.get('general', 'codeofficetypes', fallback='.odt .ods .odp').split()
             with open(cls.config.get('security', 'wopisecretfile')) as s:
                 cls.wopisecret = s.read().strip('\n')
             with open(cls.config.get('security', 'iopsecretfile')) as s:
@@ -148,6 +149,7 @@ class Wopi:
             utils.srv = core.wopi.srv = cls
             utils.log = core.wopi.log = core.discovery.log = cls.log
             utils.st = core.wopi.st = storage
+            core.discovery.codetypes = cls.codetypes
             core.discovery.config = cls.config
             utils.endpoints = core.discovery.endpoints
         except (configparser.NoOptionError, OSError) as e:

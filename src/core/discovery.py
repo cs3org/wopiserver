@@ -16,6 +16,7 @@ import bridge
 
 # convenience references to global entities
 config = None
+codetypes = None
 log = None
 
 # map of all registered apps' endpoints
@@ -39,7 +40,6 @@ def registerapp(appname, appurl, appinturl, apikey=None):
         urlsrc = discXml.find('net-zone/app')[0].attrib['urlsrc']
         if urlsrc.find('loleaflet') > 0:
             # this is Collabora
-            codetypes = config.get('general', 'codeofficetypes', fallback='.odt .ods .odp').split()
             for t in codetypes:
                 endpoints[t] = {}
                 endpoints[t]['view'] = urlsrc + 'permission=readonly'

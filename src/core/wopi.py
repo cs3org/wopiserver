@@ -49,8 +49,8 @@ def checkFileInfo(fileid):
         acctok['viewmode'] = utils.ViewMode(acctok['viewmode'])
         statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
         # compute some entities for the response
-        wopiSrc = 'WOPISrc=%s&access_token=%s' % (utils.generateWopiSrc(fileid, acctok['appname'] == srv.proxiedappname), \
-            flask.request.args['access_token'])
+        wopiSrc = 'WOPISrc=%s&access_token=%s' % (utils.generateWopiSrc(fileid, acctok['appname'] == srv.proxiedappname),
+                                                  flask.request.args['access_token'])
         # populate metadata for this file
         fmd = {}
         fmd['BaseFileName'] = fmd['BreadcrumbDocName'] = os.path.basename(acctok['filename'])
@@ -182,9 +182,9 @@ def setLock(fileid, reqheaders, acctok):
             return utils.makeConflictResponse(op, None, lock, oldLock, acctok['filename'],
                                               'The file was not locked' + ' and got modified' if validateTarget else '')
 
-    # now check "external" locks if required
+    # now create an "external" lock if required
     if srv.config.get('general', 'detectexternallocks', fallback='True').upper() == 'TRUE' and \
-       os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes:
+       os.path.splitext(acctok['filename'])[1] in srv.codetypes:
         try:
             # create a LibreOffice-compatible lock file for interoperability purposes, making sure to
             # not overwrite any existing or being created lock
@@ -316,8 +316,8 @@ def unlock(fileid, reqheaders, acctok):
             return 'File not found', http.client.NOT_FOUND
         return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
 
-    checkext = srv.config.get('general', 'detectexternallocks', fallback='True').upper() == 'TRUE'
-    if checkext:
+    if srv.config.get('general', 'detectexternallocks', fallback='True').upper() == 'TRUE':
+        # and os.path.splitext(acctok['filename'])[1] in srv.codetypes:
         try:
             # also remove the LibreOffice-compatible lock file when relevant
             if os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes:
@@ -571,7 +571,8 @@ def putFile(fileid):
                                           'The file being edited got moved or overwritten, please contact support to recover it')
 
     # keep track of this action in the original file's xattr
-    st.setxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY, 0, utils.encodeLock(retrievedLock))
+    st.setxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY, 0,
+                utils.encodeLock(retrievedLock))
     log.info('msg="Conflicting copy created" user="%s" savetime="%s" lastmtime="%s" newfilename="%s" token="%s"' %
              (acctok['userid'][-20:], savetime, mtime, newname, flask.request.args['access_token'][-20:]))
     # and report failure to the application: note we use a CONFLICT response as it is better handled by the app

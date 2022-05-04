@@ -14,7 +14,6 @@ import json
 from enum import Enum
 from random import choice
 from string import ascii_lowercase
-from datetime import datetime
 from base64 import b64encode, b64decode
 from binascii import Error as B64Error
 import http.client
@@ -92,8 +91,8 @@ def logGeneralExceptionAndReturn(ex, req):
 
 def logExpiredTokenAndReturn(ex, req):
     '''Convenience function to log about an expired JWT token and return HTTP 401'''
-    log.warning('msg="Expired or malformed token" client="%s" requestedUrl="%s" error="%s" token="%s"' %
-                (req.remote_addr, req.base_url, ex, req.args['access_token']))
+    log.info('msg="Expired or malformed token" client="%s" requestedUrl="%s" error="%s" token="%s"' %
+             (req.remote_addr, req.base_url, ex, req.args['access_token']))
     return 'Invalid access token', http.client.UNAUTHORIZED
 
 
@@ -172,7 +171,7 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
     return statinfo['inode'], acctok
 
 
-def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefilename=None):
+def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefn=None):
     '''Retrieves and logs a lock for a given file: returns the lock and its holder, or (None, None) if no lock found'''
     encacctok = flask.request.args['access_token'][-20:] if 'access_token' in flask.request.args else 'NA'
 
@@ -183,7 +182,7 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefilename=Non
         try:
             # first try to look for a MS Office lock
             mslockstat = st.stat(acctok['endpoint'], getMicrosoftOfficeLockName(acctok['filename']), acctok['userid'])
-            log.info('msg="%s" user="%s" filename="%s" token="%s" status="Found existing Microsoft Office lock" lockmtime="%ld"' %
+            log.info('msg="%s" user="%s" filename="%s" token="%s" status="Found existing MS Office lock" lockmtime="%ld"' %
                      (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, mslockstat['mtime']))
             return 'External', 'Microsoft Office for Desktop'
         except IOError:
@@ -193,32 +192,36 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefilename=Non
             lolockstat = st.statx(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], versioninv=0)
             lolock = next(st.readfile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], None))
             if isinstance(lolock, IOError):
-                # this might be an access error, therefore we can't tell here if it's our lock: optimistically move on
+                # this might be an access error, optimistically move on
                 raise lolock
             lolock = lolock.decode()
             if 'WOPIServer' not in lolock:
                 lolockholder = lolock.split(',')[1] if ',' in lolock else lolockstat['ownerid']
-                log.info('msg="%s" user="%s" filename="%s" token="%s" status="Found existing LibreOffice lock" lockmtime="%ld" holder="%s"' %
-                         (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, lolockstat['mtime'], lolockholder))
+                log.info('msg="%s" user="%s" filename="%s" token="%s" status="Found existing LibreOffice lock" '
+                         'lockmtime="%ld" holder="%s"' %
+                         (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok,
+                          lolockstat['mtime'], lolockholder))
                 return 'External', 'LibreOffice for Desktop'
         except (IOError, StopIteration):
             pass
 
     try:
         # fetch and decode the lock
-        lockcontent = st.getlock(acctok['endpoint'], overridefilename if overridefilename else acctok['filename'], acctok['userid'])
+        lockcontent = st.getlock(acctok['endpoint'], overridefn if overridefn else acctok['filename'], acctok['userid'])
         # here we used to check the last save time to "extend" the validity of an otherwise expired lock:
         # however, this goes against isolating the lock expiration logic in the storage interfaces and ultimately
         # violates the WOPI specifications, therefore it was dropped
         if not lockcontent:
             log.info('msg="%s: no lock found" user="%s" filename="%s" token="%s"' %
                      (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok))
-            # lazily remove the LibreOffice-compatible lock file, if it was detected and has the expected signature - cf. storeWopiLock()
+            # lazily remove the LibreOffice-compatible lock file, if it was detected and has
+            # the expected signature - cf. storeWopiLock()
             try:
                 if lolock:
                     st.removefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], True)
             except IOError as e:
-                log.warning('msg="Unable to delete stale LibreOffice-compatible lock file" user="%s" filename="%s" fileid="%s" error="%s"' %
+                log.warning('msg="Unable to delete stale LibreOffice-compatible lock file" user="%s" filename="%s" '
+                            'fileid="%s" error="%s"' %
                             (acctok['userid'][-20:], acctok['filename'], fileid, e))
             return None, None
         storedlock = lockcontent['lock_id']
@@ -226,9 +229,9 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefilename=Non
     except IOError as e:
         log.info('msg="%s" user="%s" filename="%s" token="%s" status="Found non-compatible or unreadable lock" error="%s"' %
                  (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, e))
-        return 'External', 'another app or user'
+        return 'External', 'Another app or user'
 
-    log.info('msg="%s" user="%s" filename="%s" fileid="%s" lock="%s" retrievedlock="%s" expTime="%s" token="%s"' %
+    log.info('msg="%s: retrieved" user="%s" filename="%s" fileid="%s" lock="%s" retrievedlock="%s" expTime="%s" token="%s"' %
              (operation.title(), acctok['userid'][-20:], acctok['filename'], fileid, lockforlog, lockcontent['lock_id'],
               time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(lockcontent['expiration']['seconds'])), encacctok))
     return lockcontent['lock_id'], lockcontent['app_name']
@@ -269,14 +272,16 @@ def compareWopiLocks(lock1, lock2):
         try:
             l2 = json.loads(lock2)
             if 'S' in l1 and 'S' in l2:
-                log.debug('msg="compareLocks" lock1="%s" lock2="%s" strict="False" result="%r"' % (lock1, lock2, l1['S'] == l2['S']))
+                log.debug('msg="compareLocks" lock1="%s" lock2="%s" strict="False" result="%r"' %
+                          (lock1, lock2, l1['S'] == l2['S']))
                 return l1['S'] == l2['S']         # used by Word
             log.debug('msg="compareLocks" lock1="%s" lock2="%s" strict="False" result="False"' % (lock1, lock2))
             return False
         except (TypeError, ValueError):
             # lock2 is not a JSON dictionary
             if 'S' in l1:
-                log.debug('msg="compareLocks" lock1="%s" lock2="%s" strict="False" result="%r"' % (lock1, lock2, l1['S'] == lock2))
+                log.debug('msg="compareLocks" lock1="%s" lock2="%s" strict="False" result="%r"' %
+                          (lock1, lock2, l1['S'] == lock2))
                 return l1['S'] == lock2                    # also used by Word (BUG!)
     except (TypeError, ValueError):
         # lock1 is not a JSON dictionary: log the lock values and fail the comparison
