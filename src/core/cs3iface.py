@@ -117,6 +117,7 @@ def stat(endpoint, fileref, userid, versioninv=1):
         'etag': statInfo.info.etag,
     }
 
+
 def statx(endpoint, fileref, userid, versioninv=1):
     '''Get extended stat info (inode, filepath, ownerid, size, mtime, etag). Equivalent to stat.'''
     return stat(endpoint, fileref, userid, versioninv)

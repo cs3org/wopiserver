@@ -380,14 +380,14 @@ def putRelative(fileid, reqheaders, acctok):
         if not overwriteTarget:
             try:
                 # check for file existence + lock
-                st.stat(acctok['endpoint'], relTarget, acctok['userid'])
+                statInfo = st.statx(acctok['endpoint'], relTarget, acctok['userid'])
                 retrievedTargetLock, _ = utils.retrieveWopiLock(fileid, 'PUT_RELATIVE', None, acctok, overridefn=relTarget)
-                return utils.makeConflictResponse('PUT_RELATIVE', retrievedTargetLock, 'NA', 'NA', relTarget,
-                                                  {'message': 'Target file already exists',
-                                                   # specs (the WOPI validator) require these to be populated with valid values
-                                                   'Name': os.path.basename(relTarget),
-                                                   'Url': utils.generateWopiSrc('0', acctok['appname'] == srv.proxiedappname),
-                                                  })
+                return utils.makeConflictResponse('PUT_RELATIVE', retrievedTargetLock, 'NA', 'NA', relTarget, {
+                    'message': 'Target file already exists',
+                    # specs (the WOPI validator) require these to be populated with valid values
+                    'Name': os.path.basename(relTarget),
+                    'Url': utils.generateWopiSrc(statInfo['inode'], acctok['appname'] == srv.proxiedappname),
+                })
             except IOError:
                 pass
         # else we can use the relative target
@@ -398,7 +398,7 @@ def putRelative(fileid, reqheaders, acctok):
     except IOError as e:
         utils.storeForRecovery(flask.request.get_data(), acctok['username'], targetName,
                                flask.request.args['access_token'][-20:], e)
-        return '', http.client.INTERNAL_SERVER_ERROR
+        return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
     # generate an access token for the new file
     log.info('msg="PutRelative: generating new access token" user="%s" filename="%s" '
              'mode="ViewMode.READ_WRITE" friendlyname="%s"' %
