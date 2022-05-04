@@ -3,9 +3,11 @@
 ### Wed May  4 2022 - v8.2.0
 - Improved support for ownCloud WOPI proxy
 - Simplified SetLock logic
-- Fixed some metadata responses following Microsoft
+- Added support for etags to represent file versions (#65)
+- Fixed some metadata responses (#76) following Microsoft
   WOPI validation tests. In particular, WOPISrc
-  values are now URL-encoded as per specifications
+  values are now URL-encoded as per specifications,
+  and PutRelative is fully compliant
 
 ### Fri Apr 29 2022 - v8.1.0
 - Fixed handling of files with a `&` char in xroot
