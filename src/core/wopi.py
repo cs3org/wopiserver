@@ -431,6 +431,8 @@ def deleteFile(fileid, _reqheaders_unused, acctok):
         st.removefile(acctok['endpoint'], acctok['filename'], acctok['userid'])
         return 'OK', http.client.OK
     except IOError as e:
+        if common.ENOENT_MSG in str(e):
+            return 'File not found', http.client.NOT_FOUND
         log.info('msg="DeleteFile" token="%s" error="%s"' % (flask.request.args['access_token'][-20:], e))
         return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
 
