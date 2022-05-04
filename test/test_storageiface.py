@@ -93,6 +93,12 @@ class TestStorage(unittest.TestCase):
         '''Call statx() and test if fileid-based stat is supported'''
         self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, databuf, None)
         statInfo = self.storage.statx(self.endpoint, self.homepath + '/test.txt', self.userid, versioninv=0)
+        self.assertTrue('inode' in statInfo, 'Missing inode from statx output')
+        self.assertTrue('filepath' in statInfo, 'Missing filepath from statx output')
+        self.assertTrue('ownerid' in statInfo, 'Missing ownerid from stat output')
+        self.assertTrue('size' in statInfo, 'Missing size from stat output')
+        self.assertTrue('mtime' in statInfo, 'Missing mtime from stat output')
+        self.assertTrue('etag' in statInfo, 'Missing etag from stat output')
         if self.endpoint in str(statInfo['inode']):
             # detected CS3 storage, test if fileid-based stat is supported
             # (notably, homepath is not part of the fileid)
