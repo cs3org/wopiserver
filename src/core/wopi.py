@@ -409,12 +409,12 @@ def putRelative(fileid, reqheaders, acctok):
     # prepare and send the response as JSON
     putrelmd = {}
     putrelmd['Name'] = os.path.basename(targetName)
-    putrelmd['Url'] = '%s?access_token=%s' % (utils.generateWopiSrc(inode, acctok['appname'] == srv.proxiedappname), newacctok)
-    putrelmd['HostEditUrl'] = '%s%sWOPISrc=%s&access_token=%s' % \
-                              (acctok['appediturl'], '&' if '?' in acctok['appediturl'] else '?',
-                               utils.generateWopiSrc(inode, acctok['appname'] == srv.proxiedappname), newacctok)
+    newwopisrc = '%s&access_token=%s' % (utils.generateWopiSrc(inode, acctok['appname'] == srv.proxiedappname), newacctok)
+    putrelmd['Url'] = newwopisrc.replace('&access_token', '?access_token')
+    putrelmd['HostEditUrl'] = '%s%s%s' % (acctok['appediturl'], '&' if '?' in acctok['appediturl'] else '?', newwopisrc)
+    putrelmd['HostViewUrl'] = '%s%s%s' % (acctok['appviewurl'], '&' if '?' in acctok['appediturl'] else '?', newwopisrc)
     resp = flask.Response(json.dumps(putrelmd), mimetype='application/json')
-    putrelmd['Url'] = putrelmd['HostEditUrl'] = '_redacted_'
+    putrelmd['Url'] = putrelmd['HostEditUrl'] = putrelmd['HostViewUrl'] = '_redacted_'
     log.debug('msg="PutRelative response" token="%s" metadata="%s"' % (newacctok[-20:], putrelmd))
     return resp
 
