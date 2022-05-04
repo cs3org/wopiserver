@@ -8,7 +8,6 @@ Main author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 
 import time
 import os
-from stat import S_ISDIR
 from pwd import getpwnam
 from XRootD import client as XrdClient
 from XRootD.client.flags import OpenFlags, QueryCode, MkDirFlags, StatInfoFlags
@@ -83,13 +82,13 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args):
         res = b''.join(f.readlines()).decode().split('&')
         if len(res) == 3:        # we may only just get stdout: in that case, assume it's all OK
             rc = res[2].strip('\n')
-            rc = rc[rc.find('=') + 1:]
+            rc = rc[rc.find('=') + 1:].strip('\00')
             if rc != '0':
                 # failure: get info from stderr, log and raise
                 msg = res[1][res[1].find('=') + 1:].strip('\n')
-                if common.ENOENT_MSG.lower() in msg or 'unable to get attribute' in msg:
+                if common.ENOENT_MSG.lower() in msg or 'unable to get attribute' in msg or rc == '2':
                     log.info('msg="Invoked xroot on non-existing entity" cmd="%s" subcmd="%s" args="%s" result="%s" rc="%s"' %
-                             (cmd, subcmd, args, msg.replace('error:', ''), rc.strip('\00')))
+                             (cmd, subcmd, args, msg.replace('error:', ''), rc))
                     raise IOError(common.ENOENT_MSG)
                 if EXCL_XATTR_MSG in msg:
                     log.info('msg="Invoked setxattr on an already locked entity" args="%s" result="%s" rc="%s"' %
@@ -160,7 +159,6 @@ def statx(endpoint, fileref, userid, versioninv=1):
         rc = _xrootcmd(endpoint, 'fileinfo', '', userid, 'mgm.path=pid:' + fileref)
         log.info('msg="Invoked stat" fileid="%s"' % fileref)
         # output looks like:
-        # ```
         # Directory: '/eos/.../.sys.v#.filename/'  Treesize: 562\\n  Container: 0  Files: 9  Flags: 40700  Clock: 16b4ea335b36bb06
         # Modify: Sat Nov  6 10:14:27 2021 Timestamp: 1636190067.768903475
         # Change: Tue Oct 12 17:11:58 2021 Timestamp: 1634051518.588282898
@@ -168,49 +166,44 @@ def statx(endpoint, fileref, userid, versioninv=1):
         # Birth : Tue Oct 12 17:11:58 2021 Timestamp: 1634051518.588282898
         # CUid: 4179 CGid: 2763 Fxid: 000b80fe Fid: 753918 Pid: 2571 Pxid: 00000a0b
         # ETAG: b80fe:1636190067.768
-        # ```
         filepath = rc[rc.find('Directory:')+12:rc.find('Treesize')-4].replace(EOSVERSIONPREFIX, '').replace('#and#', '&')  # noqa:
     else:
         filepath = fileref
-    rc, statInfo = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(filepath, encodeamp=True)
-                                              + _eosargs(userid) + '&mgm.pcmd=stat')
-    # alternative: stat with -m flag
-    # fileInfoV = _xrootcmd(endpoint, 'fileinfo', '', userid, 'mgm.path=pid:' + fileref + '&mgm.file.info.option=-m')
-    # keylength.file=35 file=/eos/.../filename size=2915 mtime=1599649863.0 ctime=1599649866.280468540 btime=1599649866.280468540 clock=0 mode=0644
-    # uid=4179 gid=2763 fxid=19ab8b68 fid=430672744 ino=115607834422411264 pid=1713958 pxid=001a2726 xstype=adler xs=a2dfcdf9
-    # etag="115607834422411264:a2dfcdf9" detached=0 layout=replica nstripes=2 lid=00100112 nrep=2 xattrn=sys.eos.btime xattrv=1599649866.280468540
-    # uid:xxxx[username] gid:xxxx[group] tident:xxx name:username dn: prot:https host:xxxx.cern.ch domain:cern.ch geo: sudo:0 fsid=305 fsid=486
-    # cf. https://gitlab.cern.ch/dss/eos/-/blob/master/archive/eosarch/utils.py
-    log.info('msg="Invoked stat" filepath="%s" rc="%s"' % (_getfilepath(filepath), str(rc).strip('\n')))
-    if OK_MSG not in str(rc) or not statInfo:
-        raise IOError(str(rc).strip('\n'))
-    statInfo = statInfo.decode()
-    if 'stat: retc=2' in statInfo:
-        raise IOError(common.ENOENT_MSG)     # convert ENOENT
-    if 'retc=' in statInfo:
-        raise IOError(statInfo.strip('\n'))
-    statxdata = statInfo.split()
-    # we got now a full record according to https://gitlab.cern.ch/dss/eos/-/blob/master/mgm/XrdMgmOfs/fsctl/Stat.cc#L53
-    if S_ISDIR(int(statxdata[3])):
-        raise IOError('Is a directory')            # EISDIR
+    # now stat with the -m flag, so to obtain a k=v list
+    statInfo = _xrootcmd(endpoint, 'fileinfo', '', userid, 'mgm.path=' + _getfilepath(filepath, encodeamp=True)
+                         + '&mgm.pcmd=fileinfo&mgm.file.info.option=-m')
+    try:
+        # output looks like:
+        # keylength.file=35 file=/eos/.../filename size=2915 mtime=1599649863.0 ctime=1599649866.280468540 btime=1599649866.280468540 clock=0 mode=0644
+        # uid=4179 gid=2763 fxid=19ab8b68 fid=430672744 ino=115607834422411264 pid=1713958 pxid=001a2726 xstype=adler xs=a2dfcdf9
+        # etag="115607834422411264:a2dfcdf9" detached=0 layout=replica nstripes=2 lid=00100112 nrep=2 xattrn=sys.eos.btime xattrv=1599649866.280468540
+        # uid:xxxx[username] gid:xxxx[group] tident:xxx name:username dn: prot:https host:xxxx.cern.ch domain:cern.ch geo: sudo:0 fsid=305 fsid=486
+        # cf. https://gitlab.cern.ch/dss/eos/-/blob/master/archive/eosarch/utils.py
+        kvlist = [kv.split('=') for kv in statInfo.split()]
+        statxdata = {k: v.strip('"') for k, v in [kv for kv in kvlist if len(kv) == 2]}
+    except ValueError as e:
+        log.error('msg="Invoked fileinfo but failed to parse output" result="%s" exception="%s"' % (statInfo, e))
+        raise IOError('Failed to parse fileinfo response')
+    if 'treesize' in statxdata:
+        raise IOError('Is a directory')      # EISDIR
     if versioninv == 0:
-        # classic statx info of the given file:
+        # statx info of the given file:
         # we extract the eosinstance from endpoint, which looks like e.g. root://eosinstance[.cern.ch]
         endpoint = _geturlfor(endpoint)
-        inode = common.encodeinode(endpoint[7:] if endpoint.find('.') == -1 else endpoint[7:endpoint.find('.')], statxdata[2])
+        inode = common.encodeinode(endpoint[7:] if endpoint.find('.') == -1 else endpoint[7:endpoint.find('.')], statxdata['ino'])
         log.debug('msg="Invoked stat return" inode="%s" filepath="%s"' % (inode, _getfilepath(filepath)))
         return {
             'inode': inode,
             'filepath': filepath,
-            'ownerid': statxdata[5] + ':' + statxdata[6],
-            'size': int(statxdata[8]),
-            'mtime': int(statxdata[12]),
-            'etag': statxdata[12],   # TODO extract the ETAG from a fileinfo query
+            'ownerid': statxdata['uid'] + ':' + statxdata['gid'],
+            'size': int(statxdata['size']),
+            'mtime': int(float(statxdata['mtime'])),
+            'etag': statxdata['etag'],
         }
     # now stat the corresponding version folder to get an inode invariant to save operations, see CERNBOX-1216
     # also, use the owner's as opposed to the user's credentials to bypass any restriction (e.g. with single-share files)
     verFolder = os.path.dirname(filepath) + os.path.sep + EOSVERSIONPREFIX + os.path.basename(filepath)
-    ownerarg = _eosargs(statxdata[5] + ':' + statxdata[6])
+    ownerarg = _eosargs(statxdata['uid'] + ':' + statxdata['gid'])
     rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder) + ownerarg + '&mgm.pcmd=stat')
     tend = time.time()
     infov = infov.decode()
@@ -226,25 +219,25 @@ def statx(endpoint, fileref, userid, versioninv=1):
             infov = infov.decode()
             if OK_MSG not in str(rcv) or 'retc=' in infov:
                 raise IOError(rcv)
-        statxvdata = infov.split()
+        # infov is a full record according to https://gitlab.cern.ch/dss/eos/-/blob/master/mgm/XrdMgmOfs/fsctl/Stat.cc#L53
+        statxdata['ino'] = infov.split()[2]
         log.debug('msg="Invoked stat on version folder" endpoint="%s" filepath="%s" rc="%s" result="%s" elapsedTimems="%.1f"' %
                   (endpoint, _getfilepath(verFolder), str(rcv).strip('\n'), infov, (tend-tstart)*1000))
     except IOError as e:
         # here we should really raise the error, but for now we just log it
         log.error('msg="Failed to mkdir/stat version folder, returning file metadata instead" filepath="%s" rc="%s"' %
                   (_getfilepath(filepath), e))
-        statxvdata = statxdata
     # return the metadata of the given file, with the inode taken from the version folder
     endpoint = _geturlfor(endpoint)
-    inode = common.encodeinode(endpoint[7:] if endpoint.find('.') == -1 else endpoint[7:endpoint.find('.')], statxvdata[2])
+    inode = common.encodeinode(endpoint[7:] if endpoint.find('.') == -1 else endpoint[7:endpoint.find('.')], statxdata['ino'])
     log.debug('msg="Invoked stat return" inode="%s" filepath="%s"' % (inode, _getfilepath(verFolder)))
     return {
         'inode': inode,
         'filepath': filepath,
-        'ownerid': statxdata[5] + ':' + statxdata[6],
-        'size': int(statxdata[8]),
-        'mtime': int(statxdata[12]),
-        'etag': statxdata[12],    # TODO extract the ETAG from a fileinfo query
+        'ownerid': statxdata['uid'] + ':' + statxdata['gid'],
+        'size': int(statxdata['size']),
+        'mtime': int(float(statxdata['mtime'])),
+        'etag': statxdata['etag'],
     }
 
 
