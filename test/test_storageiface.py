@@ -194,7 +194,7 @@ class TestStorage(unittest.TestCase):
                    args=[self.endpoint, self.homepath + '/testwriterace', self.userid, databuf, None], kwargs={'islock': True})
         t.start()
         with self.assertRaises(IOError) as context:
-            time.sleep(0.01)
+            time.sleep(0.001)
             self.storage.writefile(self.endpoint, self.homepath + '/testwriterace', self.userid, databuf, None, islock=True)
         self.assertIn(EXCL_ERROR, str(context.exception))
         t.join()
@@ -260,6 +260,7 @@ class TestStorage(unittest.TestCase):
                    args=[self.endpoint, self.homepath + '/testlockrace', self.userid, 'myapp', 'testlock'])
         t.start()
         with self.assertRaises(IOError) as context:
+            time.sleep(0.001)
             self.storage.setlock(self.endpoint, self.homepath + '/testlockrace', self.userid, 'myapp', 'testlock2')
         self.assertIn(EXCL_ERROR, str(context.exception))
         self.storage.removefile(self.endpoint, self.homepath + '/testlockrace', self.userid)
