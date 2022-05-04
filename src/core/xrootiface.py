@@ -213,7 +213,7 @@ def statx(endpoint, fileref, userid, versioninv=1):
             rcmkdir = _getxrdfor(endpoint).mkdir(_getfilepath(verFolder) + ownerarg, MkDirFlags.MAKEPATH)
             if OK_MSG not in str(rcmkdir):
                 raise IOError(rcmkdir)
-            log.debug('msg="Invoked mkdir on version folder" filepath="%s" rc="%s"' % (_getfilepath(verFolder), rcmkdir))
+            log.debug('msg="Invoked mkdir on version folder" filepath="%s"' % _getfilepath(verFolder))
             rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder) + ownerarg + '&mgm.pcmd=stat')
             tend = time.time()
             infov = infov.decode()
