@@ -377,19 +377,21 @@ def putRelative(fileid, reqheaders, acctok):
     else:
         # the relative target is a UTF7-encoded filename to be respected, and that may overwrite an existing file
         relTarget = os.path.dirname(acctok['filename']) + os.path.sep + relTarget.encode().decode('utf-7')  # make full path
-        if not overwriteTarget:
-            try:
-                # check for file existence + lock
-                statInfo = st.statx(acctok['endpoint'], relTarget, acctok['userid'])
-                retrievedTargetLock, _ = utils.retrieveWopiLock(fileid, 'PUT_RELATIVE', None, acctok, overridefn=relTarget)
+        try:
+            # check for file existence
+            statInfo = st.statx(acctok['endpoint'], relTarget, acctok['userid'])
+            # the file exists, check lock
+            retrievedTargetLock, _ = utils.retrieveWopiLock(fileid, 'PUT_RELATIVE', None, acctok, overridefn=relTarget)
+            # deny if lock is valid or if overwriteTarget is False
+            if not overwriteTarget or retrievedTargetLock:
                 return utils.makeConflictResponse('PUT_RELATIVE', retrievedTargetLock, 'NA', 'NA', relTarget, {
                     'message': 'Target file already exists',
                     # specs (the WOPI validator) require these to be populated with valid values
                     'Name': os.path.basename(relTarget),
                     'Url': utils.generateWopiSrc(statInfo['inode'], acctok['appname'] == srv.proxiedappname),
                 })
-            except IOError:
-                pass
+        except IOError:
+            pass
         # else we can use the relative target
         targetName = relTarget
     # either way, we now have a targetName to save the file: attempt to do so
