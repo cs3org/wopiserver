@@ -442,7 +442,9 @@ def deleteFile(fileid, _reqheaders_unused, acctok):
 def renameFile(fileid, reqheaders, acctok):
     '''Implements the RenameFile WOPI call.'''
     try:
+        renamemd = {}
         targetName = reqheaders['X-WOPI-RequestedName'].encode().decode('utf-7')
+        renamemd['Name'] = os.path.splitext(targetName)[0]
     except KeyError as e:
         log.warning('msg="Missing argument" client="%s" requestedUrl="%s" error="%s" token="%s"' %
                     (flask.request.remote_addr, flask.request.base_url, e, flask.request.args.get('access_token')[-20:]))
@@ -452,8 +454,9 @@ def renameFile(fileid, reqheaders, acctok):
     if retrievedLock is not None and not utils.compareWopiLocks(retrievedLock, lock):
         return utils.makeConflictResponse('RENAMEFILE', retrievedLock, lock, 'NA', acctok['filename'])
     try:
-        # the destination name comes without base path and without extension
-        targetName = os.path.dirname(acctok['filename']) + '/' + targetName + os.path.splitext(acctok['filename'])[1]
+        # the destination name comes without base path and typically without extension
+        targetName = os.path.dirname(acctok['filename']) + os.path.sep + targetName \
+            + os.path.splitext(acctok['filename'])[1] if targetName.find('.') < 0 else ''
         log.info('msg="RenameFile" user="%s" filename="%s" token="%s" targetname="%s"' %
                  (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:], targetName))
         st.renamefile(acctok['endpoint'], acctok['filename'], targetName, acctok['userid'], utils.encodeLock(retrievedLock))
@@ -461,9 +464,7 @@ def renameFile(fileid, reqheaders, acctok):
         if os.path.splitext(acctok['filename'])[1] in srv.codetypes:
             st.renamefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']),
                           utils.getLibreOfficeLockName(targetName), acctok['userid'], None)
-        # prepare and send the response as JSON
-        renamemd = {}
-        renamemd['Name'] = reqheaders['X-WOPI-RequestedName']
+        # send the response as JSON
         return flask.Response(json.dumps(renamemd), mimetype='application/json')
     except IOError as e:
         if common.ENOENT_MSG in str(e):
