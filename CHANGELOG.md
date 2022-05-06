@@ -1,9 +1,10 @@
 ## Changelog for the WOPI server
 
-### Wed May  4 2022 - v8.2.0
+### Fri May  6 2022 - v8.2.0
+- Added support for etags to represent file versions (#65)
+- Use relative references for CS3-compatible storages (#74)
 - Improved support for ownCloud WOPI proxy
 - Simplified SetLock logic
-- Added support for etags to represent file versions (#65)
 - Fixed some metadata responses (#76) following Microsoft
   WOPI validation tests. In particular, WOPISrc
   values are now URL-encoded as per specifications,
