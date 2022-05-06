@@ -441,8 +441,13 @@ def deleteFile(fileid, _reqheaders_unused, acctok):
 
 def renameFile(fileid, reqheaders, acctok):
     '''Implements the RenameFile WOPI call.'''
-    targetName = reqheaders['X-WOPI-RequestedName']
-    lock = reqheaders['X-WOPI-Lock'] if 'X-WOPI-Lock' in reqheaders else None
+    try:
+        targetName = reqheaders['X-WOPI-RequestedName'].encode().decode('utf-7')
+    except KeyError as e:
+        log.warning('msg="Missing argument" client="%s" requestedUrl="%s" error="%s" token="%s"' %
+                    (flask.request.remote_addr, flask.request.base_url, e, flask.request.args.get('access_token')[-20:]))
+        return 'Missing argument', http.client.BAD_REQUEST
+    lock = reqheaders.get('X-WOPI-Lock')
     retrievedLock, _ = utils.retrieveWopiLock(fileid, 'RENAMEFILE', lock, acctok)
     if retrievedLock is not None and not utils.compareWopiLocks(retrievedLock, lock):
         return utils.makeConflictResponse('RENAMEFILE', retrievedLock, lock, 'NA', acctok['filename'])
@@ -452,8 +457,8 @@ def renameFile(fileid, reqheaders, acctok):
         log.info('msg="RenameFile" user="%s" filename="%s" token="%s" targetname="%s"' %
                  (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:], targetName))
         st.renamefile(acctok['endpoint'], acctok['filename'], targetName, acctok['userid'], utils.encodeLock(retrievedLock))
-        # also rename the locks
-        if os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes:
+        # also rename the lock if applicable
+        if os.path.splitext(acctok['filename'])[1] in srv.codetypes:
             st.renamefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']),
                           utils.getLibreOfficeLockName(targetName), acctok['userid'], None)
         # prepare and send the response as JSON
@@ -461,7 +466,8 @@ def renameFile(fileid, reqheaders, acctok):
         renamemd['Name'] = reqheaders['X-WOPI-RequestedName']
         return flask.Response(json.dumps(renamemd), mimetype='application/json')
     except IOError as e:
-        # assume the rename failed because of the destination filename and report the error
+        if common.ENOENT_MSG in str(e):
+            return 'File not found', http.client.NOT_FOUND
         log.info('msg="RenameFile" token="%s" error="%s"' % (flask.request.args['access_token'][-20:], e))
         resp = flask.Response()
         resp.headers['X-WOPI-InvalidFileNameError'] = 'Failed to rename: %s' % e
