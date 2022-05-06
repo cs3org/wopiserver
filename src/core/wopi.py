@@ -49,12 +49,13 @@ def checkFileInfo(fileid):
                  (acctok['userid'][-20:], acctok['filename'], fileid, flask.request.args['access_token'][-20:], wopits))
         acctok['viewmode'] = utils.ViewMode(acctok['viewmode'])
         statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
-        # compute some entities for the response
-        wopiSrc = 'WOPISrc=%s&access_token=%s' % (utils.generateWopiSrc(fileid, acctok['appname'] == srv.proxiedappname),
-                                                  flask.request.args['access_token'])
         # populate metadata for this file
         fmd = {}
         fmd['BaseFileName'] = fmd['BreadcrumbDocName'] = os.path.basename(acctok['filename'])
+        wopiSrc = 'WOPISrc=%s&access_token=%s' % (utils.generateWopiSrc(fileid, acctok['appname'] == srv.proxiedappname),
+                                                  flask.request.args['access_token'])
+        fmd['HostViewUrl'] = '%s%s%s' % (acctok['appviewurl'], '&' if '?' in acctok['appviewurl'] else '?', wopiSrc)
+        fmd['HostEditUrl'] = '%s%s%s' % (acctok['appediturl'], '&' if '?' in acctok['appediturl'] else '?', wopiSrc)
         furl = acctok['folderurl']
         fmd['BreadcrumbFolderUrl'] = furl if furl != '/' else srv.wopiurl   # the WOPI URL is a placeholder
         if acctok['username'] == '':
@@ -72,7 +73,7 @@ def checkFileInfo(fileid):
         if furl == '/':    # if no target folder URL was given, override the above and completely hide it
             fmd['BreadcrumbFolderName'] = ''
         if acctok['viewmode'] in (utils.ViewMode.READ_ONLY, utils.ViewMode.READ_WRITE):
-            fmd['DownloadUrl'] = '%s?access_token=%s' % \
+            fmd['DownloadUrl'] = fmd['FileUrl'] = '%s?access_token=%s' % \
                 (srv.config.get('general', 'downloadurl'), flask.request.args['access_token'])
         fmd['OwnerId'] = statInfo['ownerid']
         fmd['UserId'] = acctok['wopiuser']     # typically same as OwnerId; different when accessing shared documents
@@ -83,11 +84,10 @@ def checkFileInfo(fileid):
         fmd['SupportsUpdate'] = fmd['UserCanWrite'] = fmd['SupportsLocks'] = \
             fmd['SupportsDeleteFile'] = acctok['viewmode'] == utils.ViewMode.READ_WRITE
         fmd['UserCanNotWriteRelative'] = acctok['viewmode'] != utils.ViewMode.READ_WRITE
+        fmd['SupportsRename'] = fmd['UserCanRename'] = enablerename and (acctok['viewmode'] == utils.ViewMode.READ_WRITE)
         fmd['SupportsContainers'] = False    # TODO this is all to be implemented
         fmd['SupportsUserInfo'] = False      # TODO https://docs.microsoft.com/en-us/openspecs/office_protocols/ms-wopi/371e25ae-e45b-47ab-aec3-9111e962919d
-        fmd['HostViewUrl'] = '%s%s%s' % (acctok['appviewurl'], '&' if '?' in acctok['appviewurl'] else '?', wopiSrc)
-        fmd['HostEditUrl'] = '%s%s%s' % (acctok['appediturl'], '&' if '?' in acctok['appediturl'] else '?', wopiSrc)
-        fmd['SupportsRename'] = fmd['UserCanRename'] = enablerename and (acctok['viewmode'] == utils.ViewMode.READ_WRITE)
+
         # populate app-specific metadata
         if acctok['appname'].find('Microsoft') > 0:
             # the following is to enable the 'Edit in Word/Excel/PowerPoint' (desktop) action (probably broken)
