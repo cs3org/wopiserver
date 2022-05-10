@@ -263,13 +263,19 @@ def setLock(fileid, reqheaders, acctok):
                                                   'The file is locked by %s' %
                                                   (lockHolder if lockHolder != 'wopi' else 'another online editor'))
             # else it's our own lock, refresh it and return
-            st.refreshlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'], utils.encodeLock(lock))
-            log.info('msg="%s" filename="%s" token="%s" lock="%s" result="refreshed"' %
-                     (op.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
-            resp = flask.Response()
-            resp.status_code = http.client.OK
-            resp.headers['X-WOPI-ItemVersion'] = 'v%s' % statInfo['etag']
-            return resp
+            try:
+                st.refreshlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'],
+                               utils.encodeLock(lock))
+                log.info('msg="%s" filename="%s" token="%s" lock="%s" result="refreshed"' %
+                         (op.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
+                resp = flask.Response()
+                resp.status_code = http.client.OK
+                resp.headers['X-WOPI-ItemVersion'] = 'v%s' % statInfo['etag']
+                return resp
+            except IOError as e:
+                # this is unexpected now
+                log.error('msg="%s: unable to refresh WOPI lock" filename="%s" token="%s" lock="%s" reason="%s"' %
+                          (op.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
         # any other error is raised
         log.error('msg="%s: unable to store WOPI lock" filename="%s" token="%s" lock="%s" reason="%s"' %
                   (op.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))

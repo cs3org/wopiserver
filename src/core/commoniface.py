@@ -88,7 +88,8 @@ def validatelock(filepath, appname, oldlock, op, log):
         log.warning('msg="Failed to %s" filepath="%s" appname="%s" reason="%s"' %
                     (op, filepath, appname, 'File was not locked or lock had expired'))
         raise IOError('File was not locked or lock had expired')
-    if oldlock['app_name'] != appname and oldlock['app_name'] != 'wopi' and oldlock['app_name'] != '':
+    if oldlock['app_name'] != 'wopi' and appname != 'wopi' and oldlock['app_name'] and appname \
+       and oldlock['app_name'] != appname:
         log.warning('msg="Failed to %s" filepath="%s" appname="%s" reason="%s"' %
                     (op, filepath, appname, 'File is locked by %s' % oldlock['app_name']))
         raise IOError('File is locked by %s' % oldlock['app_name'])
