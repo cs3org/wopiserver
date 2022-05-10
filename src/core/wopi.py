@@ -72,7 +72,8 @@ def checkFileInfo(fileid):
             fmd['BreadcrumbFolderName'] = 'Back to ' + os.path.dirname(acctok['filename'])
         if furl == '/':    # if no target folder URL was given, override the above and completely hide it
             fmd['BreadcrumbFolderName'] = ''
-        if acctok['viewmode'] in (utils.ViewMode.READ_ONLY, utils.ViewMode.READ_WRITE):
+        if acctok['viewmode'] in (utils.ViewMode.READ_ONLY, utils.ViewMode.READ_WRITE) \
+           and srv.config.get('general', 'downloadurl', fallback=None):
             fmd['DownloadUrl'] = fmd['FileUrl'] = '%s?access_token=%s' % \
                 (srv.config.get('general', 'downloadurl'), flask.request.args['access_token'])
         fmd['OwnerId'] = statInfo['ownerid']

@@ -130,7 +130,6 @@ class Wopi:
                 os.makedirs(cls.recoverypath)
             except FileExistsError:
                 pass
-            _ = cls.config.get('general', 'downloadurl')   # make sure this is defined
             _ = cls.config.getint('general', 'wopilockexpiration')   # make sure this is defined as an int
             # WOPI proxy configuration (optional)
             cls.wopiproxy = cls.config.get('general', 'wopiproxy', fallback='')
