@@ -493,7 +493,7 @@ def _createNewFile(fileid, acctok):
             # a 0-size file is equivalent to not existing
             raise IOError
         log.warning('msg="PutFile" error="File exists but no WOPI lock provided" filename="%s" token="%s"' %
-                    (acctok['filename'], flask.request.args['access_token']))
+                    (acctok['filename'], flask.request.args['access_token'][-20:]))
         return 'File exists', http.client.CONFLICT
     except IOError:
         # indeed the file did not exist, so we write it for the first time
