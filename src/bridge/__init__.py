@@ -7,6 +7,7 @@ Main author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 import os
 import sys
 import time
+import socket
 import traceback
 import threading
 import atexit
@@ -23,7 +24,7 @@ import core.wopiutils as utils
 
 
 # The supported plugins integrated with this WOPI Bridge
-BRIDGE_EXT_PLUGINS = {'md': 'codimd', 'txt': 'codimd', 'zmd': 'codimd', 'mds': 'codimd', 'epd': 'etherpad'}
+BRIDGE_EXT_PLUGINS = {'md': 'codimd', 'txt': 'codimd', 'zmd': 'codimd', 'mds': 'codimd', 'epd': 'etherpad', 'zep': 'etherpad'}
 
 # a standard message to be displayed by the app when some content might be lost: this would only
 # appear in case of uncaught exceptions or bugs handling the webhook callbacks
@@ -85,10 +86,13 @@ class WB:
             cls.plugins[p].log = cls.log
             cls.plugins[p].sslverify = cls.sslverify
             cls.plugins[p].disablezip = cls.disablezip
+            cls.plugins[p].remoteaddr = socket.gethostbyname(urlparse.urlparse(appinturl).netloc.split(':')[0])
+            cls.plugins[p].appname = appname
             cls.plugins[p].init(appurl, appinturl, apikey)
             cls.log.info('msg="Imported plugin for application" app="%s" plugin="%s"' % (p, cls.plugins[p]))
         except Exception as e:
-            cls.log.info('msg="Disabled plugin following failed initialization" app="%s" message="%s"' % (p, e))
+            cls.log.info('msg="Disabled plugin following failed initialization" app="%s" URL="%s" exception="%s"' %
+                         (p, appinturl, e))
             cls.plugins[p] = None
             raise ValueError(appname)
 
@@ -107,6 +111,14 @@ def issupported(appname):
 def isextsupported(fileext):
     '''One-liner to return if a given file extension is supported by one of the bridge extensions'''
     return fileext.lower() in set(BRIDGE_EXT_PLUGINS.keys())
+
+
+def _getappnamebyaddr(remoteaddr):
+    '''One-liner to return the appname of a (supported) app given its remote IP address'''
+    for p in WB.plugins.values():
+        if p.remoteaddr == remoteaddr:
+            return p.appname
+    raise ValueError('App at remote address %s not registered as plugin' % remoteaddr)
 
 
 def _gendocid(wopisrc):
@@ -171,12 +183,13 @@ def appopen(wopisrc, acctok):
                 WB.openfiles[wopisrc]['acctok'] = acctok
                 WB.openfiles[wopisrc]['toclose'] = wopilock['toclose']
             else:
-                WB.openfiles[wopisrc] = {'acctok': acctok, 'tosave': False,
-                                         'lastsave': int(time.time()) - WB.saveinterval,
-                                         'toclose': {acctok[-20:]: False},
-                                         'docid': wopilock['docid'],
-                                         'app': os.path.splitext(filemd['BaseFileName'])[1][1:],
-                                         }
+                WB.openfiles[wopisrc] = {
+                    'acctok': acctok, 'tosave': False,
+                    'lastsave': int(time.time()) - WB.saveinterval,
+                    'toclose': {acctok[-20:]: False},
+                    'docid': wopilock['docid'],
+                    'app': app.appname,
+                    }
             # also clear any potential stale response for this document
             try:
                 del WB.saveresponses[wopisrc]
@@ -207,6 +220,8 @@ def appsave(docid):
         isclose = flask.request.args.get('close') == 'true'
         if not docid:
             raise ValueError
+        # this ensures a save request can go ahead only when coming from registered plugins
+        appname = _getappnamebyaddr(flask.request.remote_addr)
         WB.log.info('msg="BridgeSave: requested action" isclose="%s" docid="%s" wopisrc="%s" token="%s"' %
                     (isclose, docid, wopisrc, acctok[-20:]))
     except (KeyError, ValueError) as e:
@@ -223,11 +238,13 @@ def appsave(docid):
             WB.openfiles[wopisrc]['toclose'][acctok[-20:]] = isclose
         else:
             WB.log.info('msg="Save: repopulating missing metadata" wopisrc="%s" token="%s"' % (wopisrc, acctok[-20:]))
-            WB.openfiles[wopisrc] = {'acctok': acctok, 'tosave': True,
-                                     'lastsave': int(time.time() - WB.saveinterval),
-                                     'toclose': {acctok[-20:]: isclose},
-                                     'docid': docid,
-                                     }
+            WB.openfiles[wopisrc] = {
+                'acctok': acctok, 'tosave': True,
+                'lastsave': int(time.time() - WB.saveinterval),
+                'toclose': {acctok[-20:]: isclose},
+                'docid': docid,
+                'app': appname,
+            }
             # if it's the first time we heard about this wopisrc, remove any potential stale response
             try:
                 del WB.saveresponses[wopisrc]
@@ -297,7 +314,7 @@ class SaveThread(threading.Thread):
         wopilock = None
         if openfile['tosave'] and (_intersection(openfile['toclose'])
                                    or (openfile['lastsave'] < time.time() - WB.saveinterval)):
-            app = BRIDGE_EXT_PLUGINS.get(openfile['app']) if 'app' in openfile else None
+            appname = openfile['app']
             try:
                 wopilock = wopic.getlock(wopisrc, openfile['acctok'])
             except wopic.InvalidLock:
@@ -305,19 +322,17 @@ class SaveThread(threading.Thread):
                             (openfile['acctok'][-20:], openfile['docid']))
                 try:
                     wopilock = WB.saveresponses[wopisrc] = wopic.relock(
-                        wopisrc, openfile['acctok'], openfile['docid'], _intersection(openfile['toclose']))
+                        wopisrc, openfile['acctok'], openfile['docid'], appname, _intersection(openfile['toclose']))
                 except wopic.InvalidLock as ile:
                     # even this attempt failed, give up
                     WB.saveresponses[wopisrc] = wopic.jsonify(str(ile)), http.client.INTERNAL_SERVER_ERROR
                     # attempt to save to local storage to help for later recovery: this is a feature of the core wopiserver
-                    content = rc = None
-                    if app:
-                        content, rc = WB.plugins[app].savetostorage(wopisrc, openfile['acctok'],
+                    content, rc = WB.plugins[appname].savetostorage(wopisrc, openfile['acctok'],
                                                                     False, {'docid': openfile['docid']}, onlyfetch=True)
-                        if rc == http.client.OK:
-                            utils.storeForRecovery(content, 'unknown', wopisrc[wopisrc.rfind('/') + 1:],
-                                                   openfile['acctok'][-20:], ile)
-                    if rc != http.client.OK:
+                    if rc == http.client.OK:
+                        utils.storeForRecovery(content, 'unknown', wopisrc[wopisrc.rfind('/') + 1:],
+                                               openfile['acctok'][-20:], ile)
+                    else:
                         WB.log.error('msg="SaveThread: failed to fetch file for recovery to local storage" '
                                      + 'token="%s" docid="%s" app="%s" response="%s"' %
                                      (openfile['acctok'][-20:], openfile['docid'], app, rc))
@@ -326,18 +341,13 @@ class SaveThread(threading.Thread):
                     openfile['tosave'] = False
                     openfile['toclose'] = {'invalid-lock': True}
                     return None
-            if not app:
-                app = BRIDGE_EXT_PLUGINS.get(wopilock['app'])
-            if not app:
-                WB.log.error('msg="SaveThread: malformed app attribute in WOPI lock" lock="%s"' % wopilock)
-                WB.saveresponses[wopisrc] = wopic.jsonify('Unrecognized app for this file'), http.client.BAD_REQUEST
-            else:
-                WB.log.info('msg="SaveThread: saving file" token="%s" docid="%s"' %
-                            (openfile['acctok'][-20:], openfile['docid']))
-                WB.saveresponses[wopisrc] = WB.plugins[app].savetostorage(
-                    wopisrc, openfile['acctok'], _intersection(openfile['toclose']), wopilock)
-                openfile['lastsave'] = int(time.time())
-                openfile['tosave'] = False
+
+            WB.log.info('msg="SaveThread: saving file" token="%s" docid="%s"' %
+                        (openfile['acctok'][-20:], openfile['docid']))
+            WB.saveresponses[wopisrc] = WB.plugins[appname].savetostorage(
+                wopisrc, openfile['acctok'], _intersection(openfile['toclose']), wopilock)
+            openfile['lastsave'] = int(time.time())
+            openfile['tosave'] = False
         return wopilock
 
     def closewhenidle(self, openfile, wopisrc, wopilock):

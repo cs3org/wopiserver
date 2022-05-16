@@ -6,7 +6,6 @@ A set of WOPI client functions for the WOPI bridge service.
 Main author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 '''
 
-import os
 import json
 import http.client
 import requests
@@ -54,11 +53,11 @@ def generatelock(docid, filemd, digest, app, acctok, isclose):
     '''return a dict to be used as WOPI lock, in the format { docid, filename, digest, app, toclose },
        where toclose is like in the openfiles map'''
     return {
-        'docid': '/' + docid.strip('/'),
-        'filename': filemd['BaseFileName'],
-        'digest': digest,
-        'app': app if app else os.path.splitext(filemd['BaseFileName'])[1][1:],
-        'toclose': {acctok[-20:]: isclose},
+        'doc': '/' + docid.strip('/'),
+        'fn': filemd['BaseFileName'],
+        'dig': digest,
+        'app': app,
+        'tocl': {acctok[-20:]: isclose},
     }
 
 
@@ -119,7 +118,7 @@ def refreshlock(wopisrc, acctok, wopilock, digest=None, toclose=None):
     raise InvalidLock('Failed to refresh the lock')
 
 
-def relock(wopisrc, acctok, docid, isclose):
+def relock(wopisrc, acctok, docid, app, isclose):
     '''Relock again a given document and return a valid WOPI lock, or raise InvalidLock otherwise (cf. SaveThread)'''
     # first get again the file metadata
     res = request(wopisrc, acctok, 'GET')
@@ -130,7 +129,7 @@ def relock(wopisrc, acctok, docid, isclose):
     filemd = res.json()
 
     # lock the file again: we assume we are alone as the previous lock had been released
-    wopilock = generatelock(docid, filemd, 'dirty', None, acctok, isclose)
+    wopilock = generatelock(docid, filemd, 'dirty', app, acctok, isclose)
     lockheaders = {
         'X-WOPI-Lock': json.dumps(wopilock),
         'X-WOPI-Override': 'REFRESH_LOCK',

@@ -113,7 +113,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
         log.error('msg="Exception raised attempting to connect to Etherpad" exception="%s"' % e)
         raise AppFailure
     # generate and return a WOPI lock structure for this document
-    return wopic.generatelock(docid, filemd, h.hexdigest(), None, acctok, False)
+    return wopic.generatelock(docid, filemd, h.hexdigest(), 'epd', acctok, False)
 
 
 # Etherpad to cloud storage
