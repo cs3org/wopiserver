@@ -168,6 +168,23 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
     return statinfo['inode'], acctok
 
 
+def encodeLock(lock):
+    '''Generates the lock payload for the storage given the raw metadata'''
+    if lock:
+        return common.WEBDAV_LOCK_PREFIX + ' ' + b64encode(lock.encode()).decode()
+    return None
+
+
+def _decodeLock(storedlock):
+    '''Restores the lock payload reverting the `encodeLock` format. May raise IOError'''
+    try:
+        if storedlock and storedlock.find(common.WEBDAV_LOCK_PREFIX) == 0:
+            return b64decode(storedlock[len(common.WEBDAV_LOCK_PREFIX) + 1:].encode()).decode()
+        raise IOError('Non-WOPI lock found')     # it's not our lock, though it's likely valid
+    except B64Error as e:
+        raise IOError(e)
+
+
 def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefn=None):
     '''Retrieves and logs a lock for a given file: returns the lock and its holder, or (None, None) if no lock found'''
     encacctok = flask.request.args['access_token'][-20:] if 'access_token' in flask.request.args else 'NA'
@@ -228,27 +245,10 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefn=None):
                  (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, e))
         return 'External', 'Another app or user'
 
-    log.info('msg="%s: retrieved" user="%s" filename="%s" fileid="%s" lock="%s" retrievedlock="%s" expTime="%s" token="%s"' %
+    log.info('msg="%s: retrieved lock" user="%s" filename="%s" fileid="%s" lock="%s" retrievedlock="%s" expTime="%s" token="%s"' %
              (operation.title(), acctok['userid'][-20:], acctok['filename'], fileid, lockforlog, lockcontent['lock_id'],
               time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(lockcontent['expiration']['seconds'])), encacctok))
     return lockcontent['lock_id'], lockcontent['app_name']
-
-
-def encodeLock(lock):
-    '''Generates the lock payload for the storage given the raw metadata'''
-    if lock:
-        return common.WEBDAV_LOCK_PREFIX + ' ' + b64encode(lock.encode()).decode()
-    return None
-
-
-def _decodeLock(storedlock):
-    '''Restores the lock payload reverting the `encodeLock` format. May raise IOError'''
-    try:
-        if storedlock and storedlock.find(common.WEBDAV_LOCK_PREFIX) == 0:
-            return b64decode(storedlock[len(common.WEBDAV_LOCK_PREFIX) + 1:].encode()).decode()
-        raise IOError('Non-WOPI lock found')     # it's not our lock, though it's likely valid
-    except B64Error as e:
-        raise IOError(e)
 
 
 def compareWopiLocks(lock1, lock2):
@@ -284,6 +284,35 @@ def compareWopiLocks(lock1, lock2):
         # lock1 is not a JSON dictionary: log the lock values and fail the comparison
         log.debug('msg="compareLocks" lock1="%s" lock2="%s" strict="False" result="False"' % (lock1, lock2))
         return False
+
+
+def forceSmartUnlock(operation, retrievedlock, lockholder, lock, acctok):
+    '''Handle the case when the retrieved lock is different from the given one but a "smart unlock" could be executed'''
+    if srv.config.get('general', 'wopismartunlock', fallback='False').upper() == 'FALSE':
+        return False
+    if lockholder != acctok['appname']:
+        # smart-unlock only applies if the retrieved lock and the current one belong to the same app
+        log.info('msg="%s" filename="%s" appname="%s" token="%s" lock="%s" result="found another lock holder"' %
+                 (operation.title(), acctok['filename'], acctok['appname'], flask.request.args['access_token'][-20:], lock))
+        return False
+    try:
+        savetime = st.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], LASTSAVETIMEKEY)
+        if not savetime or not savetime.isdigit():
+            # attribute not found, play safe and assume the session is active
+            savetime = time.time()
+        if int(savetime) < time.time() - srv.config.getint("general", "wopilockexpiration"):
+            # don't execute the unlock-relock yet for the time being
+            #st.unlock(acctok['endpoint'], acctok['filename'], acctok['userid'], lockholder, encodeLock(retrievedlock))
+            #st.setlock(acctok['endpoint'], acctok['filename'], acctok['userid'], lockholder, encodeLock(lock))
+            log.warning('msg="%s" filename="%s" token="%s" lock="%s" result="might be forced"' %
+                        (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
+            return True
+        log.info('msg="%s" filename="%s" savetime="%d" token="%s" lock="%s" result="found another active session"' %
+                 (operation.title(), acctok['filename'], int(savetime), flask.request.args['access_token'][-20:], lock))
+    except IOError as e:
+        log.warning('msg="%s: failed attempt to force relock" filename="%s" token="%s" lock="%s" error="%s"' %
+                    (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
+    return False
 
 
 def makeConflictResponse(operation, retrievedlock, lock, oldlock, filename, reason=None):

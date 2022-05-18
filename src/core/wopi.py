@@ -256,18 +256,24 @@ def setLock(fileid, reqheaders, acctok):
         if common.EXCL_ERROR in str(e):
             # another session was faster than us, or the file was already WOPI-locked:
             # get the lock that was set
+            forced = False
             if not retrievedLock:
                 retrievedLock, lockHolder = utils.retrieveWopiLock(fileid, op, lock, acctok)
             if retrievedLock and not utils.compareWopiLocks(retrievedLock, (oldLock if oldLock else lock)):
-                return utils.makeConflictResponse(op, retrievedLock, lock, oldLock, acctok['filename'],
-                                                  'The file is locked by %s' %
-                                                  (lockHolder if lockHolder != 'wopi' else 'another online editor'))
+                # try and see if the lock can be forced
+                forced = utils.forceSmartUnlock(op, retrievedLock, lockHolder, lock, acctok)
+                if not forced:
+                    return utils.makeConflictResponse(op, retrievedLock, lock, oldLock, acctok['filename'],
+                                                      'The file is locked by %s' %
+                                                      (lockHolder if lockHolder != 'wopi' else 'another online editor'))
             # else it's our own lock, refresh it and return
             try:
-                st.refreshlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'],
-                               utils.encodeLock(lock))
-                log.info('msg="%s" filename="%s" token="%s" lock="%s" result="refreshed"' %
-                         (op.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
+                if not forced:
+                    st.refreshlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'],
+                                   utils.encodeLock(lock))
+                    log.info('msg="%s" filename="%s" token="%s" lock="%s" result="refreshed"' %
+                             (op.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
+                # else we don't need to refresh it again
                 resp = flask.Response()
                 resp.status_code = http.client.OK
                 resp.headers['X-WOPI-ItemVersion'] = 'v%s' % statInfo['etag']
