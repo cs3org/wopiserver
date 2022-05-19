@@ -100,7 +100,7 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args):
                 raise IOError(msg)
     # all right, return everything that came in stdout
     log.debug('msg="Invoked xroot" cmd="%s%s" url="%s" res="%s" elapsedTimems="%.1f"' %
-              (cmd, ('/' + subcmd if subcmd else ''), url, res, (tend - tstart) * 1000))
+              (cmd, ('/' + subcmd if subcmd else ''), url, (res if cmd != 'fileinfo' else '_redacted_'), (tend - tstart) * 1000))
     return res[0][res[0].find('stdout=') + 7:].strip('\n')
 
 
