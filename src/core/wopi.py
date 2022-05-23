@@ -164,10 +164,11 @@ def setLock(fileid, reqheaders, acctok):
         # validate that the underlying file is still there (it might have been moved/deleted)
         statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
     except IOError as e:
-        log.warning('msg="%s: target file not found any longer" filename="%s" token="%s" reason="%s"' %
+        log.warning('msg="Error with target file" lockop="%s" filename="%s" token="%s" error="%s"' %
                     (op.title(), acctok['filename'], flask.request.args['access_token'][-20:], e))
-        return utils.makeConflictResponse(op, 'External App', lock, oldLock, acctok['filename'],
-                                          'The file got moved or deleted')
+        if common.ENOENT_MSG in str(e):
+            return 'File not found', http.client.NOT_FOUND
+        return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
 
     # perform the required checks for the validity of the new lock
     if op == 'REFRESH_LOCK' and not retrievedLock:
