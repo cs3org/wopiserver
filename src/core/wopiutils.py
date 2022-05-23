@@ -196,7 +196,7 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefn=None):
         try:
             # first try to look for a MS Office lock
             mslockstat = st.stat(acctok['endpoint'], getMicrosoftOfficeLockName(acctok['filename']), acctok['userid'])
-            log.info('msg="%s" user="%s" filename="%s" token="%s" status="Found existing MS Office lock" lockmtime="%ld"' %
+            log.info('msg="Found existing MS Office lock" lockop="%s" user="%s" filename="%s" token="%s" lockmtime="%ld"' %
                      (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, mslockstat['mtime']))
             return 'External', 'Microsoft Office for Desktop'
         except IOError:
@@ -211,7 +211,7 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefn=None):
             lolock = lolock.decode()
             if 'WOPIServer' not in lolock:
                 lolockholder = lolock.split(',')[1] if ',' in lolock else lolockstat['ownerid']
-                log.info('msg="%s" user="%s" filename="%s" token="%s" status="Found existing LibreOffice lock" '
+                log.info('msg="Found existing LibreOffice lock" lockop="%s" user="%s" filename="%s" token="%s" '
                          'lockmtime="%ld" holder="%s"' %
                          (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok,
                           lolockstat['mtime'], lolockholder))
@@ -226,7 +226,7 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefn=None):
         # however, this goes against isolating the lock expiration logic in the storage interfaces and ultimately
         # violates the WOPI specifications, therefore it was dropped
         if not lockcontent:
-            log.info('msg="%s: no lock found" user="%s" filename="%s" token="%s"' %
+            log.info('msg="No lock found" lockop="%s" user="%s" filename="%s" token="%s"' %
                      (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok))
             # lazily remove the LibreOffice-compatible lock file, if it was detected and has
             # the expected signature - cf. setLock()
@@ -234,18 +234,19 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefn=None):
                 if lolock:
                     st.removefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], True)
             except IOError as e:
-                log.warning('msg="Unable to delete stale LibreOffice-compatible lock file" user="%s" filename="%s" '
+                log.warning('msg="Unable to delete stale LibreOffice-compatible lock file" lockop="%s" user="%s" filename="%s" '
                             'fileid="%s" error="%s"' %
-                            (acctok['userid'][-20:], acctok['filename'], fileid, e))
+                            (operation.title(), acctok['userid'][-20:], acctok['filename'], fileid, e))
             return None, None
         storedlock = lockcontent['lock_id']
         lockcontent['lock_id'] = _decodeLock(storedlock)
     except IOError as e:
-        log.info('msg="%s" user="%s" filename="%s" token="%s" status="Found non-compatible or unreadable lock" error="%s"' %
+        log.info('msg="Found non-compatible or unreadable lock" lockop="%s" user="%s" filename="%s" token="%s" error="%s"' %
                  (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, e))
         return 'External', 'Another app or user'
 
-    log.info('msg="%s: retrieved lock" user="%s" filename="%s" fileid="%s" lock="%s" retrievedlock="%s" expTime="%s" token="%s"' %
+    log.info('msg="Retrieved lock" lockop="%s" user="%s" filename="%s" fileid="%s" lock="%s" '
+             'retrievedlock="%s" expTime="%s" token="%s"' %
              (operation.title(), acctok['userid'][-20:], acctok['filename'], fileid, lockforlog, lockcontent['lock_id'],
               time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(lockcontent['expiration']['seconds'])), encacctok))
     return lockcontent['lock_id'], lockcontent['app_name']
@@ -292,7 +293,7 @@ def forceSmartUnlock(operation, retrievedlock, lockholder, lock, acctok):
         return False
     if lockholder != acctok['appname']:
         # smart-unlock only applies if the retrieved lock and the current one belong to the same app
-        log.info('msg="%s" filename="%s" appname="%s" token="%s" lock="%s" result="found another lock holder"' %
+        log.info('msg="Found another lock holder" lockop="%s" filename="%s" appname="%s" token="%s" lock="%s"' %
                  (operation.title(), acctok['filename'], acctok['appname'], flask.request.args['access_token'][-20:], lock))
         return False
     try:
@@ -304,13 +305,13 @@ def forceSmartUnlock(operation, retrievedlock, lockholder, lock, acctok):
             # don't execute the unlock-relock yet for the time being
             #st.unlock(acctok['endpoint'], acctok['filename'], acctok['userid'], lockholder, encodeLock(retrievedlock))
             #st.setlock(acctok['endpoint'], acctok['filename'], acctok['userid'], lockholder, encodeLock(lock))
-            log.warning('msg="%s" filename="%s" token="%s" lock="%s" result="might be forced"' %
+            log.warning('msg="Lock might be forced" lockop="%s" filename="%s" token="%s" lock="%s"' %
                         (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
             return True
-        log.info('msg="%s" filename="%s" savetime="%d" token="%s" lock="%s" result="found another active session"' %
+        log.info('msg="Found another active session" lockop="%s" filename="%s" savetime="%d" token="%s" lock="%s"' %
                  (operation.title(), acctok['filename'], int(savetime), flask.request.args['access_token'][-20:], lock))
     except IOError as e:
-        log.warning('msg="%s: failed attempt to force relock" filename="%s" token="%s" lock="%s" error="%s"' %
+        log.warning('msg="Failed attempt to force relock" lockop="%s" filename="%s" token="%s" lock="%s" error="%s"' %
                     (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
     return False
 
@@ -326,7 +327,8 @@ def makeConflictResponse(operation, retrievedlock, lock, oldlock, filename, reas
             reason = {'message': reason}
         resp.headers['X-WOPI-LockFailureReason'] = reason['message']
         resp.data = json.dumps(reason)
-    log.warning('msg="%s: returning conflict" filename="%s" token="%s" lock="%s" oldlock="%s" retrievedlock="%s" reason="%s"' %
+    log.warning('msg="Returning conflict" lockop="%s" filename="%s" token="%s" lock="%s" '
+                'oldlock="%s" retrievedlock="%s" reason="%s"' %
                 (operation.title(), filename, flask.request.args['access_token'][-20:],
                  lock, oldlock, retrievedlock, (reason['message'] if reason else 'NA')))
     return resp
