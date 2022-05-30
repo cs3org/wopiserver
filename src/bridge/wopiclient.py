@@ -193,5 +193,5 @@ def saveas(wopisrc, acctok, wopilock, targetname, content):
         else:
             log.info('msg="Previous file unlocked and removed successfully" token="%s"' % acctok[-20:])
 
-    log.info('msg="Final save completed" filename"%s" token="%s"' % (newname, acctok[-20:]))
+    log.info('msg="Final save completed" filename="%s" token="%s"' % (newname, acctok[-20:]))
     return jsonify('File saved successfully'), http.client.OK
