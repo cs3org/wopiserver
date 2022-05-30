@@ -316,7 +316,7 @@ def forceSmartUnlock(operation, retrievedlock, lockholder, lock, acctok):
     return False
 
 
-def makeConflictResponse(operation, retrievedlock, lock, oldlock, filename, reason=None):
+def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, filename, reason=None):
     '''Generates and logs an HTTP 409 response in case of locks conflict'''
     resp = flask.Response(mimetype='application/json')
     resp.headers['X-WOPI-Lock'] = retrievedlock if retrievedlock else ''
@@ -327,9 +327,9 @@ def makeConflictResponse(operation, retrievedlock, lock, oldlock, filename, reas
             reason = {'message': reason}
         resp.headers['X-WOPI-LockFailureReason'] = reason['message']
         resp.data = json.dumps(reason)
-    log.warning('msg="Returning conflict" lockop="%s" filename="%s" token="%s" lock="%s" '
+    log.warning('msg="Returning conflict" lockop="%s" user="%s" filename="%s" token="%s" lock="%s" '
                 'oldlock="%s" retrievedlock="%s" reason="%s"' %
-                (operation.title(), filename, flask.request.args['access_token'][-20:],
+                (operation.title(), user, filename, flask.request.args['access_token'][-20:],
                  lock, oldlock, retrievedlock, (reason['message'] if reason else 'NA')))
     return resp
 

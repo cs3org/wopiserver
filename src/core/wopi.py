@@ -182,7 +182,7 @@ def setLock(fileid, reqheaders, acctok):
         else:
             savetime = None
         if not savetime:
-            return utils.makeConflictResponse(op, None, lock, oldLock, acctok['filename'],
+            return utils.makeConflictResponse(op, acctok['userid'], None, lock, oldLock, acctok['filename'],
                                               'The file was not locked' + ' and got modified' if validateTarget else '')
 
     # now create an "external" lock if required
@@ -216,7 +216,7 @@ def setLock(fileid, reqheaders, acctok):
                     log.warning('msg="Valid LibreOffice lock found, denying WOPI lock" lockop="%s" filename="%s" holder="%s"' %
                                 (op, acctok['filename'], lockholder if lockholder else retrievedlolock))
                     reason = 'File locked by ' + ((lockholder + ' via LibreOffice') if lockholder else 'a LibreOffice user')
-                    return utils.makeConflictResponse(op, 'External App', lock, oldLock, acctok['filename'], reason)
+                    return utils.makeConflictResponse(op, acctok['userid'], 'External App', lock, oldLock, acctok['filename'], reason)
                 # else it's our previous lock or it had expired: all right, move on
             else:
                 # any other error is logged but not raised as this is optimistically not blocking WOPI operations
@@ -264,7 +264,7 @@ def setLock(fileid, reqheaders, acctok):
                 # try and see if the lock can be forced
                 forced = utils.forceSmartUnlock(op, retrievedLock, lockHolder, lock, acctok)
                 if not forced:
-                    return utils.makeConflictResponse(op, retrievedLock, lock, oldLock, acctok['filename'],
+                    return utils.makeConflictResponse(op, acctok['userid'], retrievedLock, lock, oldLock, acctok['filename'],
                                                       'The file is locked by %s' %
                                                       (lockHolder if lockHolder != 'wopi' else 'another online editor'))
             # else it's our own lock, refresh it and return
@@ -320,7 +320,7 @@ def unlock(fileid, reqheaders, acctok):
     lock = reqheaders['X-WOPI-Lock']
     retrievedLock, _ = utils.retrieveWopiLock(fileid, 'UNLOCK', lock, acctok)
     if not utils.compareWopiLocks(retrievedLock, lock):
-        return utils.makeConflictResponse('UNLOCK', retrievedLock, lock, 'NA', acctok['filename'], 'Lock mismatch')
+        return utils.makeConflictResponse('UNLOCK', acctok['userid'], retrievedLock, lock, 'NA', acctok['filename'], 'Lock mismatch')
     # OK, the lock matches. Remove the lock
     try:
         # validate that the underlying file is still there
@@ -398,7 +398,7 @@ def putRelative(fileid, reqheaders, acctok):
             retrievedTargetLock, _ = utils.retrieveWopiLock(fileid, 'PUT_RELATIVE', None, acctok, overridefn=relTarget)
             # deny if lock is valid or if overwriteTarget is False
             if not overwriteTarget or retrievedTargetLock:
-                return utils.makeConflictResponse('PUT_RELATIVE', retrievedTargetLock, 'NA', 'NA', relTarget, {
+                return utils.makeConflictResponse('PUT_RELATIVE', acctok['userid'], retrievedTargetLock, 'NA', 'NA', relTarget, {
                     'message': 'Target file already exists',
                     # specs (the WOPI validator) require these to be populated with valid values
                     'Name': os.path.basename(relTarget),
@@ -441,7 +441,7 @@ def deleteFile(fileid, _reqheaders_unused, acctok):
     retrievedLock, _ = utils.retrieveWopiLock(fileid, 'DELETE', '', acctok)
     if retrievedLock is not None:
         # file is locked and cannot be deleted
-        return utils.makeConflictResponse('DELETE', retrievedLock, 'NA', 'NA', acctok['filename'],
+        return utils.makeConflictResponse('DELETE', acctok['userid'], retrievedLock, 'NA', 'NA', acctok['filename'],
                                           'Cannot delete a locked file')
     try:
         st.removefile(acctok['endpoint'], acctok['filename'], acctok['userid'])
@@ -466,7 +466,7 @@ def renameFile(fileid, reqheaders, acctok):
     lock = reqheaders.get('X-WOPI-Lock')
     retrievedLock, _ = utils.retrieveWopiLock(fileid, 'RENAMEFILE', lock, acctok)
     if retrievedLock is not None and not utils.compareWopiLocks(retrievedLock, lock):
-        return utils.makeConflictResponse('RENAMEFILE', retrievedLock, lock, 'NA', acctok['filename'])
+        return utils.makeConflictResponse('RENAMEFILE', acctok['userid'], retrievedLock, lock, 'NA', acctok['filename'])
     try:
         # the destination name comes without base path and typically without extension
         targetName = os.path.dirname(acctok['filename']) + os.path.sep + targetName \
@@ -535,10 +535,10 @@ def putFile(fileid):
     lock = flask.request.headers['X-WOPI-Lock']
     retrievedLock, lockHolder = utils.retrieveWopiLock(fileid, 'PUTFILE', lock, acctok)
     if retrievedLock is None:
-        return utils.makeConflictResponse('PUTFILE', retrievedLock, lock, 'NA', acctok['filename'],
+        return utils.makeConflictResponse('PUTFILE', acctok['userid'], retrievedLock, lock, 'NA', acctok['filename'],
                                           'Cannot overwrite unlocked file')
     if not utils.compareWopiLocks(retrievedLock, lock):
-        return utils.makeConflictResponse('PUTFILE', retrievedLock, lock, 'NA', acctok['filename'],
+        return utils.makeConflictResponse('PUTFILE', acctok['userid'], retrievedLock, lock, 'NA', acctok['filename'],
                                           'Cannot overwrite file locked by %s' %
                                           (lockHolder if lockHolder != 'wopi' else 'another application'))
     # OK, we can save the file now
@@ -594,7 +594,7 @@ def putFile(fileid):
                   (acctok['userid'][-20:], savetime, mtime, newname, flask.request.args['access_token'][-20:]))
         utils.storeForRecovery(flask.request.get_data(), acctok['username'], newname,
                                flask.request.args['access_token'][-20:], dorecovery)
-        return utils.makeConflictResponse('PUTFILE', 'External', lock, 'NA', acctok['filename'],
+        return utils.makeConflictResponse('PUTFILE', acctok['userid'], 'External', lock, 'NA', acctok['filename'],
                                           'The file being edited got moved or overwritten, please contact support to recover it')
 
     # keep track of this action in the original file's xattr
@@ -603,5 +603,5 @@ def putFile(fileid):
     log.info('msg="Conflicting copy created" user="%s" savetime="%s" lastmtime="%s" newfilename="%s" token="%s"' %
              (acctok['userid'][-20:], savetime, mtime, newname, flask.request.args['access_token'][-20:]))
     # and report failure to the application: note we use a CONFLICT response as it is better handled by the app
-    return utils.makeConflictResponse('PUTFILE', 'External', lock, 'NA', acctok['filename'],
+    return utils.makeConflictResponse('PUTFILE', acctok['userid'], 'External', lock, 'NA', acctok['filename'],
                                       'The file being edited got moved or overwritten, conflict copy created')
