@@ -14,6 +14,7 @@ import json
 from enum import Enum
 from random import choice
 from string import ascii_lowercase
+from datetime import datetime
 from base64 import b64encode, b64decode
 from binascii import Error as B64Error
 from urllib.parse import quote_plus as url_quote_plus
@@ -90,11 +91,41 @@ def logGeneralExceptionAndReturn(ex, req):
     return 'Internal error, please contact support', http.client.INTERNAL_SERVER_ERROR
 
 
-def logExpiredTokenAndReturn(ex, req):
-    '''Convenience function to log about an expired JWT token and return HTTP 401'''
-    log.info('msg="Expired or malformed token" client="%s" requestedUrl="%s" error="%s" token="%s"' %
-             (req.remote_addr, req.base_url, ex, req.args['access_token']))
-    return 'Invalid access token', http.client.UNAUTHORIZED
+def validateAndLogHeaders(op):
+    '''Convenience function to validate the headers and the access_token, and log some additional header in the request'''
+    srv.refreshconfig()
+    # validate the access token
+    try:
+        acctok = jwt.decode(flask.request.args['access_token'], srv.wopisecret, algorithms=['HS256'])
+        if acctok['exp'] < time.time():
+            raise jwt.exceptions.ExpiredSignatureError
+    except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
+        log.info('msg="Expired or malformed token" client="%s" requestedUrl="%s" error="%s" token="%s"' %
+                 (flask.request.remote_addr, flask.request.base_url, str(type(e)) + ': ' + str(e), flask.request.args['access_token']))
+        return 'Invalid access token', http.client.UNAUTHORIZED
+
+    # validate the WOPI timestamp: this is typically not present, but if it is we must check its expiration
+    # (cf. the WOPI validator tests)
+    wopits = 'None'
+    if 'X-WOPI-TimeStamp' in flask.request.headers:
+        try:
+            wopits = int(flask.request.headers['X-WOPI-Timestamp']) / 10000000   # convert .NET Ticks to seconds since AD 1
+            if wopits < (datetime.utcnow() - datetime(1, 1, 1)).total_seconds() - 20 * 60:
+                # timestamps older than 20 minutes must be considered expired
+                raise ValueError
+        except ValueError:
+            log.warning('msg="%s: invalid X-WOPI-Timestamp" user="%s" filename="%s" request="%s"' %
+                        (op, acctok['userid'][-20:], acctok['filename'], flask.request.__dict__))
+            return 'Invalid or expired X-WOPI-Timestamp header', http.client.UNAUTHORIZED
+
+    # log all relevant headers to help debugging
+    log.debug('msg="%s: client context" user="%s" filename="%s" token="%s" deviceId="%s" reqId="%s" sessionId="%s" '
+              'app="%s" appEndpoint="%s" correlationId="%s" wopits="%s"' %
+              (op.title(), acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:],
+               flask.request.headers.get('X-WOPI-DeviceId'), flask.request.headers.get('X-Request-Id'),
+               flask.request.headers.get('X-WOPI-SessionId'), flask.request.headers.get('X-WOPI-RequestingApplication'),
+               flask.request.headers.get('X-WOPI-AppEndpoint'), flask.request.headers.get('X-WOPI-CorrelationId'), wopits))
+    return acctok, None
 
 
 def generateWopiSrc(fileid, proxy=False):

@@ -14,7 +14,6 @@ import http.client
 from datetime import datetime
 from urllib.parse import unquote_plus as url_unquote
 from more_itertools import peekable
-import jwt
 import flask
 import core.wopiutils as utils
 import core.commoniface as common
@@ -28,25 +27,9 @@ log = None
 enablerename = False
 
 
-def checkFileInfo(fileid):
+def checkFileInfo(fileid, acctok):
     '''Implements the CheckFileInfo WOPI call'''
-    srv.refreshconfig()
     try:
-        acctok = jwt.decode(flask.request.args['access_token'], srv.wopisecret, algorithms=['HS256'])
-        if acctok['exp'] < time.time():
-            raise jwt.exceptions.ExpiredSignatureError
-        wopits = 'NA'
-        if 'X-WOPI-TimeStamp' in flask.request.headers:
-            # typically not present, but if it's there it must be checked for expiration (comes from WOPI validator tests)
-            try:
-                wopits = int(flask.request.headers['X-WOPI-Timestamp']) / 10000000   # convert .NET Ticks to seconds since AD 1
-                if wopits < (datetime.utcnow() - datetime(1, 1, 1)).total_seconds() - 20 * 60:
-                    # timestamps older than 20 minutes must be considered expired
-                    raise ValueError
-            except ValueError:
-                raise KeyError('Invalid or expired X-WOPI-Timestamp header')
-        log.info('msg="CheckFileInfo" user="%s" filename="%s" fileid="%s" token="%s" wopits="%s"' %
-                 (acctok['userid'][-20:], acctok['filename'], fileid, flask.request.args['access_token'][-20:], wopits))
         acctok['viewmode'] = utils.ViewMode(acctok['viewmode'])
         statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
         # populate metadata for this file
@@ -112,22 +95,14 @@ def checkFileInfo(fileid):
         log.info('msg="Requested file not found" filename="%s" token="%s" error="%s"' %
                  (acctok['filename'], flask.request.args['access_token'][-20:], e))
         return 'File not found', http.client.NOT_FOUND
-    except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
-        return utils.logExpiredTokenAndReturn(e, flask.request)
     except KeyError as e:
         log.warning('msg="Invalid access token or request argument" error="%s" request="%s"' % (e, flask.request.__dict__))
         return 'Invalid request', http.client.UNAUTHORIZED
 
 
-def getFile(fileid):
+def getFile(fileid, acctok):
     '''Implements the GetFile WOPI call'''
-    srv.refreshconfig()
     try:
-        acctok = jwt.decode(flask.request.args['access_token'], srv.wopisecret, algorithms=['HS256'])
-        if acctok['exp'] < time.time():
-            raise jwt.exceptions.ExpiredSignatureError
-        log.info('msg="GetFile" user="%s" filename="%s" fileid="%s" token="%s"' %
-                 (acctok['userid'][-20:], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
         # get the file reader generator
         # TODO for the time being we do not look if the file is locked. Once exclusive locks are implemented in Reva,
         # the lock must be fetched prior to the following call in order to access the file.
@@ -145,8 +120,6 @@ def getFile(fileid):
     except StopIteration:
         # File is empty, still return OK (strictly speaking, we should return 204 NO_CONTENT)
         return '', http.client.OK
-    except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
-        return utils.logExpiredTokenAndReturn(e, flask.request)
 
 
 #
@@ -518,16 +491,8 @@ def _createNewFile(fileid, acctok):
             return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
 
 
-def putFile(fileid):
+def putFile(fileid, acctok):
     '''Implements the PutFile WOPI call'''
-    srv.refreshconfig()
-    try:
-        acctok = jwt.decode(flask.request.args['access_token'], srv.wopisecret, algorithms=['HS256'])
-        if acctok['exp'] < time.time():
-            raise jwt.exceptions.ExpiredSignatureError
-    except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
-        return utils.logExpiredTokenAndReturn(e, flask.request)
-
     if 'X-WOPI-Lock' not in flask.request.headers:
         # no lock given: assume we are in creation mode (cf. editnew WOPI action)
         return _createNewFile(fileid, acctok)

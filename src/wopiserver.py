@@ -364,11 +364,10 @@ def iopDownload():
         Wopi.log.info('msg="Error downloading requested file" filename="%s" token="%s" error="%s"' %
                       (acctok['filename'], flask.request.args['access_token'][-20:], e))
         return 'Error downloading file', http.client.INTERNAL_SERVER_ERROR
-    except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
-        return utils.logExpiredTokenAndReturn(e, flask.request)
-    except KeyError as e:
-        Wopi.log.warning('msg="Invalid access token or request argument" error="%s" request="%s"' % (e, flask.request.__dict__))
-        return 'Invalid request', http.client.UNAUTHORIZED
+    except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError, KeyError) as e:
+        Wopi.log.info('msg="Expired or malformed token" client="%s" requestedUrl="%s" error="%s" token="%s"' %
+                      (flask.request.remote_addr, flask.request.base_url, e, flask.request.args['access_token']))
+        return 'Invalid access token', http.client.UNAUTHORIZED
 
 
 @Wopi.app.route("/wopi/iop/list", methods=['GET'])
@@ -424,46 +423,49 @@ def iopWopiTest():
 @Wopi.app.route("/wopi/files/<fileid>", methods=['GET'])
 def wopiCheckFileInfo(fileid):
     '''The CheckFileInfo WOPI call'''
-    return core.wopi.checkFileInfo(fileid)
+    acctokOrMsg, httpcode = utils.validateAndLogHeaders('CheckFileInfo')
+    if httpcode:
+        return acctokOrMsg, httpcode
+    return core.wopi.checkFileInfo(fileid, acctokOrMsg)
 
 
 @Wopi.app.route("/wopi/files/<fileid>/contents", methods=['GET'])
 def wopiGetFile(fileid):
     '''The GetFile WOPI call'''
-    return core.wopi.getFile(fileid)
+    acctokOrMsg, httpcode = utils.validateAndLogHeaders('GetFile')
+    if httpcode:
+        return acctokOrMsg, httpcode
+    return core.wopi.getFile(fileid, acctokOrMsg)
 
 
 @Wopi.app.route("/wopi/files/<fileid>", methods=['POST'])
 def wopiFilesPost(fileid):
     '''A dispatcher metod for all POST operations on files'''
-    Wopi.refreshconfig()
     try:
-        acctok = jwt.decode(flask.request.args['access_token'], Wopi.wopisecret, algorithms=['HS256'])
-        if acctok['exp'] < time.time():
-            raise jwt.exceptions.ExpiredSignatureError
         headers = flask.request.headers
         op = headers['X-WOPI-Override']       # must be one of the following strings, throws KeyError if missing
-    except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
-        return utils.logExpiredTokenAndReturn(e, flask.request)
     except KeyError as e:
         Wopi.log.warning('msg="Missing argument" client="%s" requestedUrl="%s" error="%s" token="%s"' %
                          (flask.request.remote_addr, flask.request.base_url, e, flask.request.args.get('access_token')[-20:]))
         return 'Missing argument', http.client.BAD_REQUEST
-    if op != 'GET_LOCK' and utils.ViewMode(acctok['viewmode']) != utils.ViewMode.READ_WRITE:
+    acctokOrMsg, httpcode = utils.validateAndLogHeaders(op)
+    if httpcode:
+        return acctokOrMsg, httpcode
+    if op != 'GET_LOCK' and utils.ViewMode(acctokOrMsg['viewmode']) != utils.ViewMode.READ_WRITE:
         # protect this call if the WOPI client does not have privileges
         return 'Attempting to perform a write operation using a read-only token', http.client.UNAUTHORIZED
     if op in ('LOCK', 'REFRESH_LOCK'):
-        return core.wopi.setLock(fileid, headers, acctok)
+        return core.wopi.setLock(fileid, headers, acctokOrMsg)
     if op == 'GET_LOCK':
-        return core.wopi.getLock(fileid, headers, acctok)
+        return core.wopi.getLock(fileid, headers, acctokOrMsg)
     if op == 'UNLOCK':
-        return core.wopi.unlock(fileid, headers, acctok)
+        return core.wopi.unlock(fileid, headers, acctokOrMsg)
     if op == 'PUT_RELATIVE':
-        return core.wopi.putRelative(fileid, headers, acctok)
+        return core.wopi.putRelative(fileid, headers, acctokOrMsg)
     if op == 'DELETE':
-        return core.wopi.deleteFile(fileid, headers, acctok)
+        return core.wopi.deleteFile(fileid, headers, acctokOrMsg)
     if op == 'RENAME_FILE':
-        return core.wopi.renameFile(fileid, headers, acctok)
+        return core.wopi.renameFile(fileid, headers, acctokOrMsg)
     # elif op == 'PUT_USER_INFO':
     # Any other op is unsupported
     Wopi.log.warning('msg="Unknown/unsupported operation" operation="%s"' % op)
@@ -473,7 +475,10 @@ def wopiFilesPost(fileid):
 @Wopi.app.route("/wopi/files/<fileid>/contents", methods=['POST'])
 def wopiPutFile(fileid):
     '''The PutFile WOPI call'''
-    return core.wopi.putFile(fileid)
+    acctokOrMsg, httpcode = utils.validateAndLogHeaders('PutFile')
+    if httpcode:
+        return acctokOrMsg, httpcode
+    return core.wopi.putFile(fileid, acctokOrMsg)
 
 
 #
