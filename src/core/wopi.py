@@ -87,9 +87,9 @@ def checkFileInfo(fileid, acctok):
 
         res = flask.Response(json.dumps(fmd), mimetype='application/json')
         # amend sensitive metadata for the logs
-        fmd['HostViewUrl'] = fmd['HostEditUrl'] = fmd['DownloadUrl'] = '_redacted_'
-        log.info('msg="File metadata response" token="%s" session="%s" metadata="%s"' %
-                 (flask.request.args['access_token'][-20:], flask.request.headers.get('X-WOPI-SessionId'), fmd))
+        fmd['HostViewUrl'] = fmd['HostEditUrl'] = fmd['DownloadUrl'] = fmd['FileUrl'] = '_redacted_'
+        log.info('msg="File metadata response" token="%s" metadata="%s"' %
+                 (flask.request.args['access_token'][-20:], fmd))
         return res
     except IOError as e:
         log.info('msg="Requested file not found" filename="%s" token="%s" error="%s"' %
