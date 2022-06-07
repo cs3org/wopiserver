@@ -77,3 +77,11 @@ This is work in progress. Refer to [these notes](test/wopi-validator.md).
 6. Create a config file `/etc/wopi/wopiserver.conf`: start from `docker/etc/wopiserver.conf` for a minimal configuration and add from the defaults file as needed
 7. From the WOPI server folder run: `python3 src/wopiserver.py`
 
+### Test the open-in-app workflow on the local WOPI server
+
+Once the WOPI server runs on top of local storage, the `tools/wopiopen.py` script can be used
+to test the open-in-app workflow. For that, assuming you have e.g. CodiMD deployed in your (docker-compose) cluster:
+
+1. Create a `test.md` file in your local storage folder, e.g. `/var/wopi_local_storage`
+2. From the WOPI server folder, execute `tools/wopiopen.py -a CodiMD -i "internal_CodiMD_URL" -u "user_visible_CodiMD_URL" -k CodiMD_API_Key test.md`
+3. If everything was setup correctly, you'll get a JSON response including an `app-url`. Open it in a browser to access the file. Otherwise, the tool prints the response from the WOPI server and the logs should help troubleshooting the problem.
