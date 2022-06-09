@@ -8,14 +8,21 @@ Author: Giuseppe.LoPresti@cern.ch
 CERN IT/ST
 '''
 
-import sys, os, getopt, configparser, requests
+import sys
+import getopt
+import configparser
+import requests
+sys.path.append('src')         # for tests out of the git repo
 from core.wopiutils import ViewMode
+
 
 # usage function
 def usage(exitcode):
     '''Prints usage'''
-    print('Usage : ' + sys.argv[0] + ' -a|--appname <app_name> -u|--appurl <app_url> [-i|--appinturl <app_url>] [-s|--storage <storage_endpoint>] [-v|--viewmode VIEW_ONLY|READ_ONLY|READ_WRITE] [-x|--x-access-token <reva_token>] <filename>')
+    print('Usage : ' + sys.argv[0] + ' -a|--appname <app_name> -u|--appurl <app_url> [-i|--appinturl <app_url>] '
+          '[-s|--storage <storage_endpoint>] [-v|--viewmode VIEW_ONLY|READ_ONLY|READ_WRITE] [-x|--x-access-token <reva_token>] <filename>')
     sys.exit(exitcode)
+
 
 # first parse the options
 try:
@@ -28,7 +35,7 @@ endpoint = ''
 appname = ''
 appurl = ''
 appinturl = ''
-userid = '0:0'
+revatoken = 'N/A'
 apikey = ''
 for f, v in options:
     if f == '-h' or f == '--help':
@@ -48,7 +55,8 @@ for f, v in options:
     elif f == '-a' or f == '--appname':
         appname = v
     elif f == '-x' or f == '--x-access-token':
-        userid = v
+        # if we need to interact with Reva, this must be a real access token, otherwise it can be omitted
+        revatoken = v
     elif f == '-k' or f == '--apikey':
         apikey = v
     else:
@@ -83,8 +91,8 @@ if endpoint == '':
         endpoint = 'root://eosproject-%s.cern.ch' % filename.split('/')[3]
     else:
         endpoint = 'default'   # good for test purposes on local storage
-if appurl == '':
-    print("Missing appurl argument")
+if appurl == '' or appname == '':
+    print("Missing appname or appurl arguments")
     usage(1)
 if appinturl == '':
     appinturl = appurl
@@ -98,10 +106,9 @@ requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.
 # open the file and get WOPI token
 wopiheaders = {'Authorization': 'Bearer ' + iopsecret}
 wopiparams = {'fileid': filename, 'endpoint': endpoint,
-              'viewmode': viewmode.value, 'username': 'Operator', 'userid': userid, 'folderurl': '/',
+              'viewmode': viewmode.value, 'username': 'Operator', 'userid': '0:0', 'folderurl': '/',
               'appurl': appurl, 'appinturl': appinturl, 'appname': appname}
-# if we need to interact with Reva, this must be a real access token
-wopiheaders['TokenHeader'] = userid
+wopiheaders['TokenHeader'] = revatoken
 # for bridged apps, also set the API key
 if appname == 'CodiMD' or appname == 'Etherpad':
     wopiheaders['ApiKey'] = apikey
