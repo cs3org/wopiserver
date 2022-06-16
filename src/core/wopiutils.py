@@ -318,35 +318,6 @@ def compareWopiLocks(lock1, lock2):
         return False
 
 
-def forceSmartUnlock(operation, retrievedlock, lockholder, lock, acctok):
-    '''Handle the case when the retrieved lock is different from the given one but a "smart unlock" could be executed'''
-    if srv.config.get('general', 'wopismartunlock', fallback='False').upper() == 'FALSE':
-        return False
-    if lockholder != acctok['appname']:
-        # smart-unlock only applies if the retrieved lock and the current one belong to the same app
-        log.info('msg="Found another lock holder" lockop="%s" filename="%s" appname="%s" token="%s" lock="%s"' %
-                 (operation.title(), acctok['filename'], acctok['appname'], flask.request.args['access_token'][-20:], lock))
-        return False
-    try:
-        savetime = st.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], LASTSAVETIMEKEY)
-        if not savetime or not savetime.isdigit():
-            # attribute not found, play safe and assume the session is active
-            savetime = time.time()
-        if int(savetime) < time.time() - srv.config.getint("general", "wopilockexpiration"):
-            # don't execute the unlock-relock yet for the time being
-            #st.unlock(acctok['endpoint'], acctok['filename'], acctok['userid'], lockholder, encodeLock(retrievedlock))
-            #st.setlock(acctok['endpoint'], acctok['filename'], acctok['userid'], lockholder, encodeLock(lock))
-            log.warning('msg="Lock might be forced" lockop="%s" filename="%s" token="%s" lock="%s"' %
-                        (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
-            return True
-        log.info('msg="Found another active session" lockop="%s" filename="%s" savetime="%d" token="%s" lock="%s"' %
-                 (operation.title(), acctok['filename'], int(savetime), flask.request.args['access_token'][-20:], lock))
-    except IOError as e:
-        log.warning('msg="Failed attempt to force relock" lockop="%s" filename="%s" token="%s" lock="%s" error="%s"' %
-                    (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
-    return False
-
-
 def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, filename, reason=None):
     '''Generates and logs an HTTP 409 response in case of locks conflict'''
     resp = flask.Response(mimetype='application/json')
@@ -354,7 +325,7 @@ def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, filename
     resp.status_code = http.client.CONFLICT
     if reason:
         # this is either a simple message or a dictionary: in all cases we want a dictionary to be JSON-ified
-        if type(reason) == str:
+        if isinstance(reason, str):
             reason = {'message': reason}
         resp.headers['X-WOPI-LockFailureReason'] = reason['message']
         resp.data = json.dumps(reason)
