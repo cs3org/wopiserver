@@ -187,7 +187,7 @@ def setLock(fileid, reqheaders, acctok):
                     # the file was externally locked, make this call fail
                     lockholder = retrievedlolock.split(',')[1] if ',' in retrievedlolock else ''
                     log.warning('msg="Valid LibreOffice lock found, denying WOPI lock" lockop="%s" filename="%s" holder="%s"' %
-                                (op, acctok['filename'], lockholder if lockholder else retrievedlolock))
+                                (op.title(), acctok['filename'], lockholder if lockholder else retrievedlolock))
                     reason = 'File locked by ' + ((lockholder + ' via LibreOffice') if lockholder else 'a LibreOffice user')
                     return utils.makeConflictResponse(op, acctok['userid'], 'External App', lock, oldLock, acctok['filename'], reason)
                 # else it's our previous lock or it had expired: all right, move on
@@ -212,7 +212,7 @@ def setLock(fileid, reqheaders, acctok):
         except IOError as e:
             # not fatal, but will generate a conflict file later on, so log a warning
             log.warning('msg="Unable to set lastwritetime xattr" lockop="%s" user="%s" filename="%s" token="%s" reason="%s"' %
-                        (op, acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:], e))
+                        (op.title(), acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:], e))
         # also, keep track of files that have been opened for write: this is for statistical purposes only
         # (cf. the GetLock WOPI call and the /wopi/cbox/open/list action)
         if acctok['filename'] not in srv.openfiles:
@@ -220,7 +220,7 @@ def setLock(fileid, reqheaders, acctok):
         else:
             # the file was already opened but without lock: this happens on new files (cf. editnew action), just log
             log.info('msg="First lock for new file" lockop="%s" user="%s" filename="%s" token="%s"' %
-                     (op, acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:]))
+                     (op.title(), acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:]))
         resp = flask.Response()
         resp.status_code = http.client.OK
         resp.headers['X-WOPI-ItemVersion'] = 'v%s' % statInfo['etag']
