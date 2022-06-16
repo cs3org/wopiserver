@@ -186,6 +186,12 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
             log.critical('msg="No app URLs registered for the given file type" fileext="%s" mimetypescount="%d"' %
                          (fext, len(endpoints) if endpoints else 0))
             raise IOError
+    if srv.config.get('general', 'disablemswriteodf', fallback='False').upper() == 'TRUE' and \
+       fext in srv.codetypes and appname != 'Collabora' and appname != '' and viewmode == ViewMode.READ_WRITE:
+        # we're opening an ODF file and the app is not Collabora (the last check is needed because the legacy endpoint
+        # does not set appname when the app is not proxied, so we optimistically assume it's Collabora and let it go)
+        log.info('msg="Forcing read-only access to ODF file" filename="%s"' % statinfo['filepath'])
+        viewmode = ViewMode.READ_ONLY
     acctok = jwt.encode({'userid': userid, 'wopiuser': wopiuser, 'filename': statinfo['filepath'], 'username': username,
                          'viewmode': viewmode.value, 'folderurl': folderurl, 'endpoint': endpoint,
                          'appname': appname, 'appediturl': appediturl, 'appviewurl': appviewurl, 'exp': exptime},
