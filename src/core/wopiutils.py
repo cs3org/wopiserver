@@ -14,6 +14,7 @@ import json
 from enum import Enum
 from random import choice
 from string import ascii_lowercase
+from datetime import datetime
 from base64 import b64encode, b64decode
 from binascii import Error as B64Error
 from urllib.parse import quote_plus as url_quote_plus
@@ -90,11 +91,41 @@ def logGeneralExceptionAndReturn(ex, req):
     return 'Internal error, please contact support', http.client.INTERNAL_SERVER_ERROR
 
 
-def logExpiredTokenAndReturn(ex, req):
-    '''Convenience function to log about an expired JWT token and return HTTP 401'''
-    log.info('msg="Expired or malformed token" client="%s" requestedUrl="%s" error="%s" token="%s"' %
-             (req.remote_addr, req.base_url, ex, req.args['access_token']))
-    return 'Invalid access token', http.client.UNAUTHORIZED
+def validateAndLogHeaders(op):
+    '''Convenience function to validate the headers and the access_token, and log some additional header in the request'''
+    srv.refreshconfig()
+    # validate the access token
+    try:
+        acctok = jwt.decode(flask.request.args['access_token'], srv.wopisecret, algorithms=['HS256'])
+        if acctok['exp'] < time.time():
+            raise jwt.exceptions.ExpiredSignatureError
+    except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
+        log.info('msg="Expired or malformed token" client="%s" requestedUrl="%s" error="%s" token="%s"' %
+                 (flask.request.remote_addr, flask.request.base_url, str(type(e)) + ': ' + str(e), flask.request.args['access_token']))
+        return 'Invalid access token', http.client.UNAUTHORIZED
+
+    # validate the WOPI timestamp: this is typically not present, but if it is we must check its expiration
+    # (cf. the WOPI validator tests)
+    wopits = 'None'
+    if 'X-WOPI-TimeStamp' in flask.request.headers:
+        try:
+            wopits = int(flask.request.headers['X-WOPI-Timestamp']) / 10000000   # convert .NET Ticks to seconds since AD 1
+            if wopits < (datetime.utcnow() - datetime(1, 1, 1)).total_seconds() - 20 * 60:
+                # timestamps older than 20 minutes must be considered expired
+                raise ValueError
+        except ValueError:
+            log.warning('msg="%s: invalid X-WOPI-Timestamp" user="%s" filename="%s" request="%s"' %
+                        (op, acctok['userid'][-20:], acctok['filename'], flask.request.__dict__))
+            return 'Invalid or expired X-WOPI-Timestamp header', http.client.UNAUTHORIZED
+
+    # log all relevant headers to help debugging
+    log.debug('msg="%s: client context" user="%s" filename="%s" token="%s" deviceId="%s" reqId="%s" sessionId="%s" '
+              'app="%s" appEndpoint="%s" correlationId="%s" wopits="%s"' %
+              (op.title(), acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:],
+               flask.request.headers.get('X-WOPI-DeviceId'), flask.request.headers.get('X-Request-Id'),
+               flask.request.headers.get('X-WOPI-SessionId'), flask.request.headers.get('X-WOPI-RequestingApplication'),
+               flask.request.headers.get('X-WOPI-AppEndpoint'), flask.request.headers.get('X-WOPI-CorrelationId'), wopits))
+    return acctok, None
 
 
 def generateWopiSrc(fileid, proxy=False):
@@ -168,72 +199,6 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
     return statinfo['inode'], acctok
 
 
-def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefn=None):
-    '''Retrieves and logs a lock for a given file: returns the lock and its holder, or (None, None) if no lock found'''
-    encacctok = flask.request.args['access_token'][-20:] if 'access_token' in flask.request.args else 'NA'
-
-    # if required, check if a non-WOPI office lock exists for this file
-    checkext = srv.config.get('general', 'detectexternallocks', fallback='True').upper() == 'TRUE'
-    lolock = lolockstat = None
-    if checkext and os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes:
-        try:
-            # first try to look for a MS Office lock
-            mslockstat = st.stat(acctok['endpoint'], getMicrosoftOfficeLockName(acctok['filename']), acctok['userid'])
-            log.info('msg="%s" user="%s" filename="%s" token="%s" status="Found existing MS Office lock" lockmtime="%ld"' %
-                     (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, mslockstat['mtime']))
-            return 'External', 'Microsoft Office for Desktop'
-        except IOError:
-            pass
-        try:
-            # then try to read a LibreOffice lock
-            lolockstat = st.statx(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], versioninv=0)
-            lolock = next(st.readfile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], None))
-            if isinstance(lolock, IOError):
-                # this might be an access error, optimistically move on
-                raise lolock
-            lolock = lolock.decode()
-            if 'WOPIServer' not in lolock:
-                lolockholder = lolock.split(',')[1] if ',' in lolock else lolockstat['ownerid']
-                log.info('msg="%s" user="%s" filename="%s" token="%s" status="Found existing LibreOffice lock" '
-                         'lockmtime="%ld" holder="%s"' %
-                         (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok,
-                          lolockstat['mtime'], lolockholder))
-                return 'External', 'LibreOffice for Desktop'
-        except (IOError, StopIteration):
-            pass
-
-    try:
-        # fetch and decode the lock
-        lockcontent = st.getlock(acctok['endpoint'], overridefn if overridefn else acctok['filename'], acctok['userid'])
-        # here we used to check the last save time to "extend" the validity of an otherwise expired lock:
-        # however, this goes against isolating the lock expiration logic in the storage interfaces and ultimately
-        # violates the WOPI specifications, therefore it was dropped
-        if not lockcontent:
-            log.info('msg="%s: no lock found" user="%s" filename="%s" token="%s"' %
-                     (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok))
-            # lazily remove the LibreOffice-compatible lock file, if it was detected and has
-            # the expected signature - cf. setLock()
-            try:
-                if lolock:
-                    st.removefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], True)
-            except IOError as e:
-                log.warning('msg="Unable to delete stale LibreOffice-compatible lock file" user="%s" filename="%s" '
-                            'fileid="%s" error="%s"' %
-                            (acctok['userid'][-20:], acctok['filename'], fileid, e))
-            return None, None
-        storedlock = lockcontent['lock_id']
-        lockcontent['lock_id'] = _decodeLock(storedlock)
-    except IOError as e:
-        log.info('msg="%s" user="%s" filename="%s" token="%s" status="Found non-compatible or unreadable lock" error="%s"' %
-                 (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, e))
-        return 'External', 'Another app or user'
-
-    log.info('msg="%s: retrieved" user="%s" filename="%s" fileid="%s" lock="%s" retrievedlock="%s" expTime="%s" token="%s"' %
-             (operation.title(), acctok['userid'][-20:], acctok['filename'], fileid, lockforlog, lockcontent['lock_id'],
-              time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(lockcontent['expiration']['seconds'])), encacctok))
-    return lockcontent['lock_id'], lockcontent['app_name']
-
-
 def encodeLock(lock):
     '''Generates the lock payload for the storage given the raw metadata'''
     if lock:
@@ -249,6 +214,73 @@ def _decodeLock(storedlock):
         raise IOError('Non-WOPI lock found')     # it's not our lock, though it's likely valid
     except B64Error as e:
         raise IOError(e)
+
+
+def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefn=None):
+    '''Retrieves and logs a lock for a given file: returns the lock and its holder, or (None, None) if no lock found'''
+    encacctok = flask.request.args['access_token'][-20:] if 'access_token' in flask.request.args else 'NA'
+
+    # if required, check if a non-WOPI office lock exists for this file
+    checkext = srv.config.get('general', 'detectexternallocks', fallback='True').upper() == 'TRUE'
+    lolock = lolockstat = None
+    if checkext and os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes:
+        try:
+            # first try to look for a MS Office lock
+            mslockstat = st.stat(acctok['endpoint'], getMicrosoftOfficeLockName(acctok['filename']), acctok['userid'])
+            log.info('msg="Found existing MS Office lock" lockop="%s" user="%s" filename="%s" token="%s" lockmtime="%ld"' %
+                     (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, mslockstat['mtime']))
+            return 'External', 'Microsoft Office for Desktop'
+        except IOError:
+            pass
+        try:
+            # then try to read a LibreOffice lock
+            lolockstat = st.statx(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], versioninv=0)
+            lolock = next(st.readfile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], None))
+            if isinstance(lolock, IOError):
+                # this might be an access error, optimistically move on
+                raise lolock
+            lolock = lolock.decode()
+            if 'WOPIServer' not in lolock:
+                lolockholder = lolock.split(',')[1] if ',' in lolock else lolockstat['ownerid']
+                log.info('msg="Found existing LibreOffice lock" lockop="%s" user="%s" filename="%s" token="%s" '
+                         'lockmtime="%ld" holder="%s"' %
+                         (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok,
+                          lolockstat['mtime'], lolockholder))
+                return 'External', 'LibreOffice for Desktop'
+        except (IOError, StopIteration):
+            pass
+
+    try:
+        # fetch and decode the lock
+        lockcontent = st.getlock(acctok['endpoint'], overridefn if overridefn else acctok['filename'], acctok['userid'])
+        # here we used to check the last save time to "extend" the validity of an otherwise expired lock:
+        # however, this goes against isolating the lock expiration logic in the storage interfaces and ultimately
+        # violates the WOPI specifications, therefore it was dropped
+        if not lockcontent:
+            log.info('msg="No lock found" lockop="%s" user="%s" filename="%s" token="%s"' %
+                     (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok))
+            # lazily remove the LibreOffice-compatible lock file, if it was detected and has
+            # the expected signature - cf. setLock()
+            try:
+                if lolock:
+                    st.removefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], True)
+            except IOError as e:
+                log.warning('msg="Unable to delete stale LibreOffice-compatible lock file" lockop="%s" user="%s" filename="%s" '
+                            'fileid="%s" error="%s"' %
+                            (operation.title(), acctok['userid'][-20:], acctok['filename'], fileid, e))
+            return None, None
+        storedlock = lockcontent['lock_id']
+        lockcontent['lock_id'] = _decodeLock(storedlock)
+    except IOError as e:
+        log.info('msg="Found non-compatible or unreadable lock" lockop="%s" user="%s" filename="%s" token="%s" error="%s"' %
+                 (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, e))
+        return 'External', 'Another app or user'
+
+    log.info('msg="Retrieved lock" lockop="%s" user="%s" filename="%s" fileid="%s" lock="%s" '
+             'retrievedlock="%s" expTime="%s" token="%s"' %
+             (operation.title(), acctok['userid'][-20:], acctok['filename'], fileid, lockforlog, lockcontent['lock_id'],
+              time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(lockcontent['expiration']['seconds'])), encacctok))
+    return lockcontent['lock_id'], lockcontent['app_name']
 
 
 def compareWopiLocks(lock1, lock2):
@@ -286,19 +318,20 @@ def compareWopiLocks(lock1, lock2):
         return False
 
 
-def makeConflictResponse(operation, retrievedlock, lock, oldlock, filename, reason=None):
+def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, filename, reason=None):
     '''Generates and logs an HTTP 409 response in case of locks conflict'''
     resp = flask.Response(mimetype='application/json')
     resp.headers['X-WOPI-Lock'] = retrievedlock if retrievedlock else ''
     resp.status_code = http.client.CONFLICT
     if reason:
         # this is either a simple message or a dictionary: in all cases we want a dictionary to be JSON-ified
-        if type(reason) == str:
+        if isinstance(reason, str):
             reason = {'message': reason}
         resp.headers['X-WOPI-LockFailureReason'] = reason['message']
         resp.data = json.dumps(reason)
-    log.warning('msg="%s: returning conflict" filename="%s" token="%s" lock="%s" oldlock="%s" retrievedlock="%s" reason="%s"' %
-                (operation.title(), filename, flask.request.args['access_token'][-20:],
+    log.warning('msg="Returning conflict" lockop="%s" user="%s" filename="%s" token="%s" lock="%s" '
+                'oldlock="%s" retrievedlock="%s" reason="%s"' %
+                (operation.title(), user, filename, flask.request.args['access_token'][-20:],
                  lock, oldlock, retrievedlock, (reason['message'] if reason else 'NA')))
     return resp
 
