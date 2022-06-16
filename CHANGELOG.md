@@ -1,5 +1,15 @@
 ## Changelog for the WOPI server
 
+### Thu Jun 16 2022 - v8.3.0
+- Improved logging around lock conflict handling
+- Added logging of additional headers as provided
+  by MS Office 365
+- Readded tool to test the open-in-app workflow
+- Extend creation of recovery files when a PutFile
+  fails because of a lock mismatch
+- Added support for disabling write access to ODF
+  files when opening with MS Office
+
 ### Fri May  6 2022 - v8.2.0
 - Added support for etags to represent file versions (#65)
 - Use relative references for CS3-compatible storages (#74)
