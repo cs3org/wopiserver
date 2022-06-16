@@ -176,9 +176,9 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
         log.info('msg="Requested file not found or not a file" fileid="%s" error="%s"' % (fileid, e))
         raise
     exptime = int(time.time()) + srv.tokenvalidity
+    fext = os.path.splitext(statinfo['filepath'])[1].lower()
     if not appediturl:
         # deprecated: for backwards compatibility, work out the URLs from the discovered app endpoints
-        fext = os.path.splitext(statinfo['filepath'])[1].lower()
         try:
             appediturl = endpoints[fext]['edit']
             appviewurl = endpoints[fext]['view']
