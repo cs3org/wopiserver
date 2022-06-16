@@ -236,14 +236,14 @@ def setLock(fileid, reqheaders, acctok):
                 # lock mismatch, the WOPI client is supposed to acknowledge the existing lock
                 # or deny write access to the file
                 return utils.makeConflictResponse(op, acctok['userid'], retrievedLock, lock, oldLock, acctok['filename'],
-                                                    'The file is locked by %s' %
-                                                    (lockHolder if lockHolder != 'wopi' else 'another online editor'))
+                                                  'The file is locked by %s' %
+                                                  (lockHolder if lockHolder != 'wopi' else 'another online editor'))
             # else it's our own lock, refresh it and return
             try:
                 st.refreshlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'],
-                                utils.encodeLock(lock))
+                               utils.encodeLock(lock))
                 log.info('msg="Successfully refreshed" lockop="%s" filename="%s" token="%s" lock="%s"' %
-                            (op.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
+                         (op.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
                 # else we don't need to refresh it again
                 resp = flask.Response()
                 resp.status_code = http.client.OK
@@ -290,8 +290,9 @@ def unlock(fileid, reqheaders, acctok):
     lock = reqheaders['X-WOPI-Lock']
     retrievedLock, _ = utils.retrieveWopiLock(fileid, 'UNLOCK', lock, acctok)
     if not utils.compareWopiLocks(retrievedLock, lock):
-        return utils.makeConflictResponse('UNLOCK', acctok['userid'], retrievedLock, lock, 'NA', acctok['filename'], 'Lock mismatch')
-    # OK, the lock matches. Remove the lock
+        return utils.makeConflictResponse('UNLOCK', acctok['userid'], retrievedLock, lock, 'NA',
+                                          acctok['filename'], 'Lock mismatch')
+    # OK, the lock matches, remove it
     try:
         # validate that the underlying file is still there
         statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
