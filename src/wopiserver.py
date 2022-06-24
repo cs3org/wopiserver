@@ -242,7 +242,8 @@ def iopOpenInApp():
     '''Generates a WOPISrc target and an access token to be passed to a WOPI-compatible Office-like app
     for accessing a given file for a given user.
     Headers:
-    - Authorization: a bearer shared secret to protect this call as it provides direct access to any user's file
+    - Authorization: a bearer shared secret to protect this call as it provides direct access to any user's file.
+      This can be omitted if the storage is based on CS3, as Reva would authenticate calls via the TokenHeader below.
     - TokenHeader: an x-access-token to serve as user identity towards Reva
     - ApiKey (optional): a shared secret to be used with the end-user application if required
     Request arguments:
@@ -270,7 +271,7 @@ def iopOpenInApp():
     req = flask.request
 
     # validate tokens
-    if req.headers.get('Authorization') != 'Bearer ' + Wopi.iopsecret:
+    if Wopi.config.get('general', 'storagetype') != 'cs3' and req.headers.get('Authorization') != 'Bearer ' + Wopi.iopsecret:
         Wopi.log.warning('msg="iopOpenInApp: unauthorized access attempt, missing authorization token" '
                          'client="%s" clientAuth="%s"' % (req.remote_addr, req.headers.get('Authorization')))
         return UNAUTHORIZED
