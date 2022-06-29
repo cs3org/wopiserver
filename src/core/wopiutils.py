@@ -344,7 +344,7 @@ def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, filename
 
 def storeWopiFile(request, retrievedlock, acctok, xakey, targetname=''):
     '''Saves a file from an HTTP request to the given target filename (defaulting to the access token's one),
-         and stores the save time as an xattr. Throws IOError in case of any failure'''
+    and stores the save time as an xattr. Throws IOError in case of any failure'''
     if not targetname:
         targetname = acctok['filename']
     st.writefile(acctok['endpoint'], targetname, acctok['userid'], request.get_data(), encodeLock(retrievedlock))
@@ -352,9 +352,44 @@ def storeWopiFile(request, retrievedlock, acctok, xakey, targetname=''):
     st.setxattr(acctok['endpoint'], targetname, acctok['userid'], xakey, int(time.time()), encodeLock(retrievedlock))
 
 
-def getConflictPath(username):
+def _getConflictPath(username):
     '''Returns the path to a suitable conflict path directory for a given user'''
     return srv.conflictpath.replace('user_initial', username[0]).replace('username', username)
+
+
+def storeAfterConflict(acctok, retrievedlock, lock, reason):
+    '''Saves a conflict file in case the original file was externally locked or overwritten.
+    The conflicted copy follows the format `<filename>-webconflict-<time>` and might be stored
+    next to the original one, or to the user's home, or to the recovery path.'''
+    newname, ext = os.path.splitext(acctok['filename'])
+    # typical EFSS formats are like '<filename>_conflict-<date>-<time>', but they're not synchronized: use a similar format
+    newname = '%s-webconflict-%s%s' % (newname, time.strftime('%Y%m%d-%H'), ext.strip())
+    try:
+        dorecovery = None
+        storeWopiFile(flask.request, retrievedlock, acctok, LASTSAVETIMEKEY, newname)
+    except IOError as e:
+        if common.ACCESS_ERROR not in str(e):
+            dorecovery = e
+        else:
+            # let's try the configured conflictpath instead of the current folder
+            newname = _getConflictPath(acctok['username']) + os.path.sep + os.path.basename(newname)
+            try:
+                storeWopiFile(flask.request, retrievedlock, acctok, LASTSAVETIMEKEY, newname)
+            except IOError as e:
+                # even this path did not work
+                dorecovery = e
+
+    if dorecovery:
+        storeForRecovery(flask.request.get_data(), acctok['username'], newname,
+                         flask.request.args['access_token'][-20:], dorecovery)
+        # conflict file was stored on recovery space, tell user (but reason is advisory...)
+        return makeConflictResponse('PUTFILE', acctok['userid'], retrievedlock, lock, 'NA', acctok['filename'],
+                                    reason + ', please contact support to recover it')
+
+    # otherwise, conflict file was saved to user space but we still use a CONFLICT response
+    # as it is better handled by the app to signal the issue to the user
+    return makeConflictResponse('PUTFILE', acctok['userid'], retrievedlock, lock, 'NA', acctok['filename'],
+                                reason + ', conflict copy created')
 
 
 def storeForRecovery(content, username, filename, acctokforlog, exception):
