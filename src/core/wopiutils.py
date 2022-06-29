@@ -352,11 +352,6 @@ def storeWopiFile(request, retrievedlock, acctok, xakey, targetname=''):
     st.setxattr(acctok['endpoint'], targetname, acctok['userid'], xakey, int(time.time()), encodeLock(retrievedlock))
 
 
-def _getConflictPath(username):
-    '''Returns the path to a suitable conflict path directory for a given user'''
-    return srv.conflictpath.replace('user_initial', username[0]).replace('username', username)
-
-
 def storeAfterConflict(acctok, retrievedlock, lock, reason):
     '''Saves a conflict file in case the original file was externally locked or overwritten.
     The conflicted copy follows the format `<filename>-webconflict-<time>` and might be stored
@@ -372,7 +367,8 @@ def storeAfterConflict(acctok, retrievedlock, lock, reason):
             dorecovery = e
         else:
             # let's try the configured conflictpath instead of the current folder
-            newname = _getConflictPath(acctok['username']) + os.path.sep + os.path.basename(newname)
+            newname = srv.conflictpath.replace('user_initial', acctok['username'][0]).replace('username', acctok['username']) \
+                      + os.path.sep + os.path.basename(newname)
             try:
                 storeWopiFile(flask.request, retrievedlock, acctok, LASTSAVETIMEKEY, newname)
             except IOError as e:
