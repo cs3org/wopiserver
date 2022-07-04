@@ -342,12 +342,12 @@ def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, filename
     return resp
 
 
-def storeWopiFile(request, retrievedlock, acctok, xakey, targetname=''):
+def storeWopiFile(acctok, retrievedlock, xakey, targetname=''):
     '''Saves a file from an HTTP request to the given target filename (defaulting to the access token's one),
     and stores the save time as an xattr. Throws IOError in case of any failure'''
     if not targetname:
         targetname = acctok['filename']
-    st.writefile(acctok['endpoint'], targetname, acctok['userid'], request.get_data(), encodeLock(retrievedlock))
+    st.writefile(acctok['endpoint'], targetname, acctok['userid'], flask.request.get_data(), encodeLock(retrievedlock))
     # save the current time for later conflict checking: this is never older than the mtime of the file
     st.setxattr(acctok['endpoint'], targetname, acctok['userid'], xakey, int(time.time()), encodeLock(retrievedlock))
 
@@ -361,7 +361,7 @@ def storeAfterConflict(acctok, retrievedlock, lock, reason):
     newname = '%s-webconflict-%s%s' % (newname, time.strftime('%Y%m%d-%H'), ext.strip())
     try:
         dorecovery = None
-        storeWopiFile(flask.request, retrievedlock, acctok, LASTSAVETIMEKEY, newname)
+        storeWopiFile(acctok, retrievedlock, LASTSAVETIMEKEY, newname)
     except IOError as e:
         if common.ACCESS_ERROR not in str(e):
             dorecovery = e
@@ -370,7 +370,7 @@ def storeAfterConflict(acctok, retrievedlock, lock, reason):
             newname = srv.conflictpath.replace('user_initial', acctok['username'][0]).replace('username', acctok['username']) \
                       + os.path.sep + os.path.basename(newname)
             try:
-                storeWopiFile(flask.request, retrievedlock, acctok, LASTSAVETIMEKEY, newname)
+                storeWopiFile(acctok, retrievedlock, LASTSAVETIMEKEY, newname)
             except IOError as e:
                 # even this path did not work
                 dorecovery = e

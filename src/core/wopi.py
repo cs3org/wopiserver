@@ -381,7 +381,7 @@ def putRelative(fileid, reqheaders, acctok):
         targetName = relTarget
     # either way, we now have a targetName to save the file: attempt to do so
     try:
-        utils.storeWopiFile(flask.request, None, acctok, utils.LASTSAVETIMEKEY, targetName)
+        utils.storeWopiFile(acctok, None, utils.LASTSAVETIMEKEY, targetName)
     except IOError as e:
         utils.storeForRecovery(flask.request.get_data(), acctok['username'], targetName,
                                flask.request.args['access_token'][-20:], e)
@@ -476,7 +476,7 @@ def _createNewFile(fileid, acctok):
     except IOError:
         # indeed the file did not exist, so we write it for the first time
         try:
-            utils.storeWopiFile(flask.request, None, acctok, utils.LASTSAVETIMEKEY)
+            utils.storeWopiFile(acctok, None, utils.LASTSAVETIMEKEY)
             log.info('msg="File stored successfully" action="editnew" user="%s" filename="%s" token="%s"' %
                      (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:]))
             # and we keep track of it as an open file with timestamp = Epoch, despite not having any lock yet.
@@ -518,7 +518,7 @@ def putFile(fileid, acctok):
             # but the previous checks still give the opportunity of a race condition. We just live with it.
             # Also, note we can't get a time resolution better than one second!
             # Anyhow, the EFSS should support versioning for such cases.
-            utils.storeWopiFile(flask.request, retrievedLock, acctok, utils.LASTSAVETIMEKEY)
+            utils.storeWopiFile(acctok, retrievedLock, utils.LASTSAVETIMEKEY)
             log.info('msg="File stored successfully" action="edit" user="%s" filename="%s" token="%s"' %
                      (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:]))
             statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'], versioninv=1)
