@@ -143,10 +143,12 @@ def savetostorage(wopisrc, acctok, isclose, wopilock, onlyfetch=False):
                  (isclose, appurl + '/p' + wopilock['docid'], acctok[-20:]))
         epfile = _fetchfrometherpad(wopilock, acctok)
         if onlyfetch:
-            # this is used only in case of recovery to local storage
+            # this flag is only used in case of recovery to local storage
             return epfile, http.client.OK
     except AppFailure:
-        return wopic.jsonify('Could not save file, failed to fetch document from Etherpad'), http.client.INTERNAL_SERVER_ERROR
+        # return a non-fatal error
+        return wopic.jsonify('File not saved, error in fetching document from Etherpad. Will try again later'), \
+               http.client.FAILED_DEPENDENCY
 
     if isclose and wopilock['digest'] != 'dirty':
         # so far the file was not touched: before forcing a put let's validate the contents
