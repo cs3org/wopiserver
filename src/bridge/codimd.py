@@ -85,7 +85,7 @@ def _unzipattachments(inputbuf):
         fname = zipinfo.filename
         log.debug('msg="Extracting attachment" name="%s"' % fname)
         if os.path.splitext(fname)[1] == '.md':
-            mddoc = inputzip.read(zipinfo)
+            mddoc = inputzip.read(zipinfo).decode()
         else:
             # first check if the file already exists in CodiMD:
             res = requests.head(appurl + '/uploads/' + fname, verify=sslverify)
@@ -107,7 +107,10 @@ def _unzipattachments(inputbuf):
                                 files={'image': (fname, inputzip.read(zipinfo))}, verify=sslverify)
             if res.status_code != http.client.OK:
                 log.error('msg="Failed to push included file" filename="%s" httpcode="%d"' % (fname, res.status_code))
-    return mddoc
+    if mddoc:
+        # for backwards compatibility, drop the hardcoded reverse proxy paths if found in the document
+        mddoc = mddoc.replace('/byoa/codimd/', '/')
+    return mddoc.encode()
 
 
 def _isslides(doc):
