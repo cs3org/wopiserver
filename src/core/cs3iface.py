@@ -53,15 +53,22 @@ def getuseridfromcreds(token, _wopiuser):
 def _getcs3reference(endpoint, fileref):
     '''Generates a CS3 reference for a given fileref, covering the following cases:
     absolute path, relative hybrid path, fully opaque fileid'''
+    # try splitting endpoint
+    parts = endpoint.split("$", 2)
+    endpoint = parts[0]
+    space_id = ""
+    if len(parts) == 2:
+        space_id = parts[1]
+
     if fileref.find('/') > 0:
         # assume we have a relative path in the form `<parent_opaque_id>/<base_filename>`,
         # also works if we get `<parent_opaque_id>/<path>/<filename>`
-        ref = cs3spr.Reference(resource_id=cs3spr.ResourceId(storage_id=endpoint,
+        ref = cs3spr.Reference(resource_id=cs3spr.ResourceId(storage_id=endpoint, space_id=space_id,
                                                              opaque_id=fileref[:fileref.find('/')]),
                                path='.' + fileref[fileref.find('/'):])
     else:
         # assume we have an opaque fileid
-        ref = cs3spr.Reference(resource_id=cs3spr.ResourceId(storage_id=endpoint, opaque_id=fileref), path='.')
+        ref = cs3spr.Reference(resource_id=cs3spr.ResourceId(storage_id=endpoint, space_id=space_id, opaque_id=fileref), path='.')
     return ref
 
 
