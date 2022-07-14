@@ -69,13 +69,14 @@ This is work in progress. Refer to [these notes](test/wopi-validator.md).
 
 ## Run the WOPI server locally for development purposes
 
-1. Install all requirements listed in `requirements.txt`
+1. Install all requirements: `pip install -r requirements.txt`
 2. Add log file directory: `sudo mkdir /var/log/wopi/ && sudo chmod a+rwx /var/log/wopi`
 3. Create the folder for the wopi config: `sudo mkdir /etc/wopi/ && sudo chmod a+rwx /etc/wopi`
-4. Create the files `iopsecret` and `wopiscret` in the folder `/etc/wopi/`, create random strings for the secrets
-5. Copy the provided `wopiserver.conf` to `/etc/wopi/wopiserver.defaults.conf`
-6. Create a config file `/etc/wopi/wopiserver.conf`: start from `docker/etc/wopiserver.conf` for a minimal configuration and add from the defaults file as needed
-7. From the WOPI server folder run: `python3 src/wopiserver.py`
+4. Create recoveryfolder: `sudo mkdir /var/spool/wopirecovery && sudo chmod a+rwx /var/spool/wopirecovery`
+5. Create the files `iopsecret` and `wopiscret` in the folder `/etc/wopi/`, create random strings for the secrets
+6. Copy the provided `wopiserver.conf` to `/etc/wopi/wopiserver.defaults.conf`
+7. Create a config file `/etc/wopi/wopiserver.conf`: start from `docker/etc/wopiserver.conf` for a minimal configuration and add from the defaults file as needed
+8. From the WOPI server folder run: `python3 src/wopiserver.py`
 
 ### Test the open-in-app workflow on the local WOPI server
 
