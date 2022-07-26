@@ -57,21 +57,23 @@ def init(_appurl, _appinturl, _apikey):
         raise AppFailure
 
 
-def getredirecturl(isreadwrite, wopisrc, acctok, wopilock, displayname):
+def getredirecturl(isreadwrite, wopisrc, acctok, docid, displayname):
     '''Return a valid URL to the app for the given WOPI context'''
     if isreadwrite:
-        return appexturl + wopilock['docid'] + '?metadata=' + \
+        return appexturl + docid + '?metadata=' + \
                urlparse.quote_plus('%s?t=%s' % (wopisrc, acctok)) + \
                '&apiKey=' + apikey + '&displayName=' + displayname
-    # read-only mode: in this case redirect to publish mode or normal view
-    # to quickly jump in slide mode depending on the content
-    url = wopilock['docid'] + ('/publish' if wopilock['app'] != 'mds' else '')
-    res = requests.head(appurl + url,
+
+    # read-only mode: first check if we have a CodiMD redirection
+    res = requests.head(appurl + docid,
                         params={'apiKey': apikey},
                         verify=sslverify)
     if res.status_code == http.client.FOUND:
-        return appexturl + '/s/' + urlparse.urlsplit(res.next.url).path.split('/')[-1]
-    return appexturl + url + '?apiKey=' + apikey
+        return appexturl + '/s/' + urlparse.urlsplit(res.next.url).path.split('/')[-1] + '?apiKey=' + apikey
+    # we used to redirect to publish mode or normal view to quickly jump in slide mode depending on the content,
+    # but this was based on a bad side effect - here it would require to add:
+    # ('/publish' if not _isslides(content) else '') before the '?'
+    return appexturl + docid + '/publish?apiKey=' + apikey
 
 
 # Cloud storage to CodiMD
@@ -113,15 +115,15 @@ def _unzipattachments(inputbuf):
     return mddoc
 
 
-def _isslides(doc):
-    '''Heuristically look for signatures of slides in the header of a md document'''
-    return doc[:9].decode() == '---\ntitle' or doc[:8].decode() == '---\ntype' or doc[:16].decode() == '---\nslideOptions'
+#def _isslides(doc):
+#    '''Heuristically look for signatures of slides in the header of a md document'''
+#    return doc[:9].decode() == '---\ntitle' or doc[:8].decode() == '---\ntype' or doc[:16].decode() == '---\nslideOptions'
 
 
 def _fetchfromcodimd(wopilock, acctok):
     '''Fetch a given document from from CodiMD, raise AppFailure in case of errors'''
     try:
-        res = requests.get(appurl + wopilock['docid'] + '/download', verify=sslverify)
+        res = requests.get(appurl + wopilock['doc'] + '/download', verify=sslverify)
         if res.status_code != http.client.OK:
             log.error('msg="Unable to fetch document from CodiMD" token="%s" response="%d: %s"' %
                       (acctok[-20:], res.status_code, res.content.decode()))
@@ -207,7 +209,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
         raise AppFailure('File contains an invalid UTF-8 character, was it corrupted? ' +
                          'Please fix it in a regular editor before opening it in CodiMD.')
     # generate and return a WOPI lock structure for this document
-    return wopic.generatelock(docid, filemd, h.hexdigest(), 'mds' if _isslides(mddoc) else 'md', acctok, False)
+    return wopic.generatelock(docid, filemd, h.hexdigest(), acctok, False)
 
 
 # CodiMD to cloud storage
@@ -242,7 +244,7 @@ def savetostorage(wopisrc, acctok, isclose, wopilock, onlyfetch=False):
     # get document from CodiMD
     try:
         log.info('msg="Fetching file from CodiMD" isclose="%s" appurl="%s" token="%s"' %
-                 (isclose, appurl + wopilock['docid'], acctok[-20:]))
+                 (isclose, appurl + wopilock['doc'], acctok[-20:]))
         mddoc = _fetchfromcodimd(wopilock, acctok)
         if onlyfetch:
             # this flag is only used in case of recovery to local storage
@@ -253,19 +255,19 @@ def savetostorage(wopisrc, acctok, isclose, wopilock, onlyfetch=False):
                http.client.FAILED_DEPENDENCY
 
     h = None
-    if isclose and wopilock['digest'] != 'dirty':
+    if isclose and wopilock['dig'] != 'dirty':
         # so far the file was not touched: before forcing a put let's validate the contents
         h = hashlib.sha1()
         h.update(mddoc)
-        if h.hexdigest() == wopilock['digest']:
+        if h.hexdigest() == wopilock['dig']:
             log.info('msg="File unchanged, skipping save" token="%s"' % acctok[-20:])
             return '{}', http.client.ACCEPTED
 
     # check if we have attachments
-    wasbundle = os.path.splitext(wopilock['filename'])[1] == '.zmd'
+    wasbundle = os.path.splitext(wopilock['fn'])[1] == '.zmd'
     bundlefile = attresponse = None
     if not disablezip or wasbundle:     # in disablezip mode, preserve existing .zmd files but don't create new ones
-        bundlefile, attresponse = _getattachments(mddoc.decode(), wopilock['filename'].replace('.zmd', '.md'),
+        bundlefile, attresponse = _getattachments(mddoc.decode(), wopilock['fn'].replace('.zmd', '.md'),
                                                   (wasbundle and not isclose))
 
     # WOPI PutFile for the file or the bundle if it already existed
@@ -275,13 +277,13 @@ def savetostorage(wopisrc, acctok, isclose, wopilock, onlyfetch=False):
         reply = wopic.handleputfile('PutFile', wopisrc, res)
         if reply:
             return reply
-        if isclose and wopilock['digest'] == 'dirty':
+        if isclose and wopilock['dig'] == 'dirty':
             h = hashlib.sha1()
             h.update(mddoc)
         try:
             wopilock = wopic.refreshlock(wopisrc, acctok, wopilock, digest=(h.hexdigest() if h else 'dirty'))
             log.info('msg="Save completed" filename="%s" isclose="%s" token="%s"' %
-                     (wopilock['filename'], isclose, acctok[-20:]))
+                     (wopilock['fn'], isclose, acctok[-20:]))
             # combine the responses
             return attresponse if attresponse else (wopic.jsonify('File saved successfully'), http.client.OK)
         except wopic.InvalidLock:
@@ -289,5 +291,5 @@ def savetostorage(wopisrc, acctok, isclose, wopilock, onlyfetch=False):
 
     # on close, use saveas for either the new bundle, if this is the first time we have attachments,
     # or the single md file, if there are no more attachments.
-    return wopic.saveas(wopisrc, acctok, wopilock, os.path.splitext(wopilock['filename'])[0] + ('.zmd' if bundlefile else '.md'),
+    return wopic.saveas(wopisrc, acctok, wopilock, os.path.splitext(wopilock['fn'])[0] + ('.zmd' if bundlefile else '.md'),
                         bundlefile if bundlefile else mddoc)

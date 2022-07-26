@@ -66,15 +66,15 @@ def _apicall(method, params, data=None, acctok=None, raiseonnonzerocode=True):
     return res
 
 
-def getredirecturl(isreadwrite, wopisrc, acctok, wopilock, displayname):
+def getredirecturl(isreadwrite, wopisrc, acctok, docid, displayname):
     '''Return a valid URL to the app for the given WOPI context'''
     if not isreadwrite:
         # for read-only mode generate a read-only link
-        res = _apicall('getReadOnlyID', {'padID': wopilock['docid'][1:]}, acctok=acctok)
+        res = _apicall('getReadOnlyID', {'padID': docid[1:]}, acctok=acctok)
         return appexturl + '/p/' + res['data']['readOnlyID']
     # return the URL to the pad (TODO the metadata argument must be picked up by an Etherpad plugin)
     return appexturl + '/p/%s?userName=%s&metadata=%s' % \
-        (wopilock['docid'][1:], displayname, urlparse.quote_plus('%s?t=%s' % (wopisrc, acctok)))
+        (docid[1:], displayname, urlparse.quote_plus('%s?t=%s' % (wopisrc, acctok)))
 
 
 # Cloud storage to Etherpad
@@ -113,7 +113,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
         log.error('msg="Exception raised attempting to connect to Etherpad" exception="%s"' % e)
         raise AppFailure
     # generate and return a WOPI lock structure for this document
-    return wopic.generatelock(docid, filemd, h.hexdigest(), 'epd', acctok, False)
+    return wopic.generatelock(docid, filemd, h.hexdigest(), acctok, False)
 
 
 # Etherpad to cloud storage
@@ -123,7 +123,7 @@ def _fetchfrometherpad(wopilock, acctok):
     '''Fetch a given document from from Etherpad, raise AppFailure in case of errors'''
     try:
         # this operation does not use the API (and it is NOT protected by the API key!), so we use a plain GET
-        res = requests.get(appurl + '/p' + wopilock['docid'] + '/export/etherpad',
+        res = requests.get(appurl + '/p' + wopilock['doc'] + '/export/etherpad',
                            verify=sslverify)
         if res.status_code != http.client.OK:
             log.error('msg="Unable to fetch document from Etherpad" token="%s" response="%d: %s"' %
@@ -140,7 +140,7 @@ def savetostorage(wopisrc, acctok, isclose, wopilock, onlyfetch=False):
     # get document from Etherpad
     try:
         log.info('msg="Fetching file from Etherpad" isclose="%s" appurl="%s" token="%s"' %
-                 (isclose, appurl + '/p' + wopilock['docid'], acctok[-20:]))
+                 (isclose, appurl + '/p' + wopilock['doc'], acctok[-20:]))
         epfile = _fetchfrometherpad(wopilock, acctok)
         if onlyfetch:
             # this flag is only used in case of recovery to local storage
@@ -150,11 +150,11 @@ def savetostorage(wopisrc, acctok, isclose, wopilock, onlyfetch=False):
         return wopic.jsonify('File not saved, error in fetching document from Etherpad. Will try again later'), \
                http.client.FAILED_DEPENDENCY
 
-    if isclose and wopilock['digest'] != 'dirty':
+    if isclose and wopilock['dig'] != 'dirty':
         # so far the file was not touched: before forcing a put let's validate the contents
         h = hashlib.sha1()
         h.update(epfile)
-        if h.hexdigest() == wopilock['digest']:
+        if h.hexdigest() == wopilock['dig']:
             log.info('msg="File unchanged, skipping save" token="%s"' % acctok[-20:])
             return '{}', http.client.ACCEPTED
 
@@ -167,7 +167,7 @@ def savetostorage(wopisrc, acctok, isclose, wopilock, onlyfetch=False):
     try:
         wopilock = wopic.refreshlock(wopisrc, acctok, wopilock, digest='dirty')
         log.info('msg="Save completed" filename="%s" isclose="%s" token="%s"' %
-                 (wopilock['filename'], isclose, acctok[-20:]))
+                 (wopilock['fn'], isclose, acctok[-20:]))
         return wopic.jsonify('File saved successfully'), http.client.OK
     except wopic.InvalidLock:
         return wopic.jsonify('File saved, but failed to refresh lock'), http.client.INTERNAL_SERVER_ERROR

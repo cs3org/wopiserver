@@ -24,7 +24,7 @@ import core.wopiutils as utils
 
 
 # The supported plugins integrated with this WOPI Bridge
-BRIDGE_EXT_PLUGINS = {'md': 'codimd', 'txt': 'codimd', 'zmd': 'codimd', 'mds': 'codimd', 'epd': 'etherpad', 'zep': 'etherpad'}
+BRIDGE_EXT_PLUGINS = {'md': 'codimd', 'txt': 'codimd', 'zmd': 'codimd', 'epd': 'etherpad', 'zep': 'etherpad'}
 
 # a standard message to be displayed by the app when some content might be lost: this would only
 # appear in case of uncaught exceptions or bugs handling the webhook callbacks
@@ -158,7 +158,7 @@ def appopen(wopisrc, acctok):
                 wopilock = wopic.getlock(wopisrc, acctok)
                 WB.log.info('msg="Lock already held" lock="%s" token="%s"' % (wopilock, acctok[-20:]))
                 # add this token to the list, if not already in
-                if acctok[-20:] not in wopilock['toclose']:
+                if acctok[-20:] not in wopilock['tocl']:
                     wopilock = wopic.refreshlock(wopisrc, acctok, wopilock)
             except wopic.InvalidLock as e:
                 if str(e) != str(int(http.client.NOT_FOUND)):
@@ -181,15 +181,16 @@ def appopen(wopisrc, acctok):
             if wopisrc in WB.openfiles:
                 # use the new acctok and the new/current wopilock content
                 WB.openfiles[wopisrc]['acctok'] = acctok
-                WB.openfiles[wopisrc]['toclose'] = wopilock['toclose']
+                WB.openfiles[wopisrc]['toclose'] = wopilock['tocl']
             else:
                 WB.openfiles[wopisrc] = {
-                    'acctok': acctok, 'tosave': False,
+                    'acctok': acctok,
+                    'tosave': False,
                     'lastsave': int(time.time()) - WB.saveinterval,
                     'toclose': {acctok[-20:]: False},
-                    'docid': wopilock['docid'],
+                    'docid': wopilock['doc'],
                     'app': app.appname,
-                    }
+                }
             # also clear any potential stale response for this document
             try:
                 del WB.saveresponses[wopisrc]
@@ -198,13 +199,14 @@ def appopen(wopisrc, acctok):
         else:
             # user has no write privileges, just fetch the document and push it to the app on a random docid
             wopilock = app.loadfromstorage(filemd, wopisrc, acctok, None)
+
+        redirurl = app.getredirecturl(filemd['UserCanWrite'], wopisrc, acctok, wopilock['doc'],
+                                      urlparse.quote_plus(filemd['UserFriendlyName']))
     except app.AppFailure as e:
-        # this can be raised by loadfromstorage
+        # this can be raised by loadfromstorage or getredirecturl
         usermsg = str(e) if str(e) else 'Unable to load the app, please try again later or contact support'
         raise FailedOpen(usermsg, http.client.INTERNAL_SERVER_ERROR)
 
-    redirurl = app.getredirecturl(filemd['UserCanWrite'], wopisrc, acctok, wopilock,
-                                  urlparse.quote_plus(filemd['UserFriendlyName']))
     WB.log.info('msg="Redirecting client to the app" redirecturl="%s"' % redirurl)
     # TODO in the future we should pass some metadata (including access tokens) as a form parameter
     return redirurl, {}
@@ -314,7 +316,7 @@ class SaveThread(threading.Thread):
         wopilock = None
         if openfile['tosave'] and (_intersection(openfile['toclose'])
                                    or (openfile['lastsave'] < time.time() - WB.saveinterval)):
-            appname = openfile['app']
+            appname = openfile['app'].lower()
             try:
                 wopilock = wopic.getlock(wopisrc, openfile['acctok'])
             except wopic.InvalidLock:
@@ -322,7 +324,7 @@ class SaveThread(threading.Thread):
                             (openfile['acctok'][-20:], openfile['docid']))
                 try:
                     wopilock = WB.saveresponses[wopisrc] = wopic.relock(
-                        wopisrc, openfile['acctok'], openfile['docid'], appname, _intersection(openfile['toclose']))
+                        wopisrc, openfile['acctok'], openfile['docid'], _intersection(openfile['toclose']))
                 except wopic.InvalidLock as ile:
                     # even this attempt failed, give up
                     WB.saveresponses[wopisrc] = wopic.jsonify(str(ile)), http.client.INTERNAL_SERVER_ERROR
@@ -385,8 +387,8 @@ class SaveThread(threading.Thread):
                 return
 
             # reconcile list of toclose tokens
-            openfile['toclose'] = {t: wopilock['toclose'][t] or (t in openfile['toclose'] and openfile['toclose'][t])
-                                   for t in wopilock['toclose']}
+            openfile['toclose'] = {t: wopilock['tocl'][t] or (t in openfile['toclose'] and openfile['toclose'][t])
+                                   for t in wopilock['tocl']}
             if _intersection(openfile['toclose']):
                 if openfile['lastsave'] < int(time.time()) - WB.unlockinterval:
                     # nobody is still on this document and some time has passed, unlock
@@ -399,7 +401,7 @@ class SaveThread(threading.Thread):
                         WB.log.info('msg="SaveThread: unlocked document" lastsavetime="%s" token="%s"' %
                                     (openfile['lastsave'], openfile['acctok'][-20:]))
                     del WB.openfiles[wopisrc]
-            elif openfile['toclose'] != wopilock['toclose']:
+            elif openfile['toclose'] != wopilock['tocl']:
                 # some user still on it, refresh lock if the toclose part has changed
                 try:
                     wopic.refreshlock(wopisrc, openfile['acctok'], wopilock, toclose=openfile['toclose'])

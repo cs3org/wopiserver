@@ -49,14 +49,13 @@ def request(wopisrc, acctok, method, contents=None, headers=None):
     return None
 
 
-def generatelock(docid, filemd, digest, app, acctok, isclose):
-    '''return a dict to be used as WOPI lock, in the format { docid, filename, digest, app, toclose },
-       where toclose is like in the openfiles map'''
+def generatelock(docid, filemd, digest, acctok, isclose):
+    '''return a dict to be used as WOPI lock, in the format { docid, fn, dig, tocl },
+       where tocl is like the openfiles['toclose'] map'''
     return {
         'doc': '/' + docid.strip('/'),
         'fn': filemd['BaseFileName'],
         'dig': digest,
-        'app': app,
         'tocl': {acctok[-20:]: isclose},
     }
 
@@ -77,15 +76,15 @@ def getlock(wopisrc, acctok):
 
 def _getheadersforrefreshlock(acctok, wopilock, digest, toclose):
     '''Helper function for refreshlock to generate the old and new lock structures'''
-    newlock = json.loads(json.dumps(wopilock))    # this is a hack for a deep copy, to be redone in Go
+    newlock = json.loads(json.dumps(wopilock))    # this is a hack for a deep copy
     if toclose:
         # we got the full 'toclose' dict, push it as is
-        newlock['toclose'] = toclose
-    elif acctok[-20:] not in wopilock['toclose']:
+        newlock['tocl'] = toclose
+    elif acctok[-20:] not in wopilock['tocl']:
         # if missing, just append the short token to the 'toclose' dict, similarly to the openfiles map
-        newlock['toclose'][acctok[-20:]] = False
-    if digest and wopilock['digest'] != digest:
-        newlock['digest'] = digest
+        newlock['tocl'][acctok[-20:]] = False
+    if digest and wopilock['dig'] != digest:
+        newlock['dig'] = digest
     return {
         'X-Wopi-Override': 'REFRESH_LOCK',
         'X-WOPI-OldLock': json.dumps(wopilock),
@@ -105,8 +104,8 @@ def refreshlock(wopisrc, acctok, wopilock, digest=None, toclose=None):
         currlock = getlock(wopisrc, acctok)
         if toclose:
             # merge toclose token lists
-            for t in currlock['toclose']:
-                toclose[t] = currlock['toclose'][t] or (t in toclose and toclose[t])
+            for t in currlock['tocl']:
+                toclose[t] = currlock['tocl'][t] or (t in toclose and toclose[t])
         # retry with the newly got lock
         h, newlock = _getheadersforrefreshlock(acctok, wopilock, digest, toclose)
         res = request(wopisrc, acctok, 'POST', headers=h)
@@ -118,7 +117,7 @@ def refreshlock(wopisrc, acctok, wopilock, digest=None, toclose=None):
     raise InvalidLock('Failed to refresh the lock')
 
 
-def relock(wopisrc, acctok, docid, app, isclose):
+def relock(wopisrc, acctok, docid, isclose):
     '''Relock again a given document and return a valid WOPI lock, or raise InvalidLock otherwise (cf. SaveThread)'''
     # first get again the file metadata
     res = request(wopisrc, acctok, 'GET')
@@ -129,7 +128,7 @@ def relock(wopisrc, acctok, docid, app, isclose):
     filemd = res.json()
 
     # lock the file again: we assume we are alone as the previous lock had been released
-    wopilock = generatelock(docid, filemd, 'dirty', app, acctok, isclose)
+    wopilock = generatelock(docid, filemd, 'dirty', acctok, isclose)
     lockheaders = {
         'X-WOPI-Lock': json.dumps(wopilock),
         'X-WOPI-Override': 'REFRESH_LOCK',
