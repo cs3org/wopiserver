@@ -332,7 +332,7 @@ def iopOpenInApp():
     res = {}
     if bridge.issupported(appname):
         try:
-            res['app-url'], res['form-parameters'] = bridge.appopen(utils.generateWopiSrc(inode), acctok)
+            res['app-url'], res['form-parameters'] = bridge.appopen(utils.generateWopiSrc(inode), acctok, appname)
         except bridge.FailedOpen as foe:
             return foe.msg, foe.statuscode
     else:
@@ -485,33 +485,10 @@ def wopiPutFile(fileid):
 #
 # Bridge functionality
 #
-def _guireturn(msg):
-    '''One-liner to better render messages that are visible in the UI'''
-    return '<div align="center" style="color:#808080; padding-top:50px; font-family:Verdana">%s</div>' % msg
-
-
-@Wopi.app.route("/wopi/bridge/open", methods=["GET"])
-def bridgeOpen():
-    '''The WOPI bridge open call'''
-    try:
-        wopisrc = url_unquote_plus(flask.request.args['WOPISrc'])
-        acctok = flask.request.args['access_token']
-        Wopi.log.info('msg="BridgeOpen called" client="%s" user-agent="%s" token="%s"' %
-                      (flask.request.remote_addr, flask.request.user_agent, acctok[-20:]))
-        appurl, _ = bridge.appopen(wopisrc, acctok)
-        # for now we know that the second member is {} as in Revaold we only redirect
-        return flask.redirect(appurl)
-    except KeyError as e:
-        Wopi.log.warning('msg="BridgeOpen: unable to open the file, missing WOPI context" error="%s"' % e)
-        return _guireturn('Missing arguments'), http.client.BAD_REQUEST
-    except bridge.FailedOpen as foe:
-        return _guireturn(foe.msg), foe.statuscode
-
-
 @Wopi.app.route("/wopi/bridge/<docid>", methods=["POST"])
 @Wopi.metrics.do_not_track()
 def bridgeSave(docid):
-    '''The WOPI bridge save call'''
+    '''The WOPI bridge save endpoint'''
     return bridge.appsave(docid)
 
 
@@ -599,7 +576,8 @@ def cboxOpen_deprecated():
     if bridge.isextsupported(os.path.splitext(filename)[1][1:]):
         # call the bridgeOpen right away, to not expose the WOPI URL to the user (it might be behind firewall)
         try:
-            appurl, _ = bridge.appopen(utils.generateWopiSrc(inode), acctok)
+            appurl, _ = bridge.appopen(utils.generateWopiSrc(inode), acctok,
+                                       bridge.BRIDGE_EXT_PLUGINS[os.path.splitext(filename)[1][1:]])
             Wopi.log.debug('msg="cboxOpen: returning bridged app" URL="%s"' % appurl[appurl.rfind('/'):])
             return appurl[appurl.rfind('/'):]    # return the payload as the appurl is already known via discovery
         except bridge.FailedOpen as foe:

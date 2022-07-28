@@ -143,7 +143,7 @@ def relock(wopisrc, acctok, docid, isclose):
         log.warning('msg="Failed to relock the file" response="%d" token="%s" reason="%s"' %
                     (res.status_code, acctok[-20:], res.headers.get('X-WOPI-LockFailureReason')))
         raise InvalidLock('Failed to relock the file on save, please refresh this page')
-    # relock was successful, return lock: along with noteids univocally associated to files (WOPISrc's),
+    # relock was successful, return lock: along with docids univocally associated to files (WOPISrc's),
     # we are sure no other updates could have been missed
     return wopilock
 

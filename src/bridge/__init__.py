@@ -4,7 +4,6 @@ The WOPI bridge extension for IOP. This connector service supports CodiMD and Et
 Main author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 '''
 
-import os
 import sys
 import time
 import socket
@@ -114,7 +113,7 @@ def isextsupported(fileext):
 
 
 def _getappnamebyaddr(remoteaddr):
-    '''One-liner to return the appname of a (supported) app given its remote IP address'''
+    '''Return the appname of a (supported) app given its remote IP address'''
     for p in WB.plugins.values():
         if p.remoteaddr == remoteaddr:
             return p.appname
@@ -130,25 +129,25 @@ def _gendocid(wopisrc):
 # The Bridge endpoints start here
 #############################################################################################################
 
-def appopen(wopisrc, acctok):
+def appopen(wopisrc, acctok, appname):
     '''Open a doc by contacting the provided WOPISrc with the given access_token.
     Returns a (app-url, params{}) pair if successful, raises a FailedOpen exception otherwise'''
     wopisrc = urlparse.unquote_plus(wopisrc)
     if not isinstance(acctok, str):
-      acctok = acctok.decode()
+        # TODO when using the wopiopen.py tool, the access token has to be decoded, to be clarified
+        acctok = acctok.decode()
     # WOPI GetFileInfo
     res = wopic.request(wopisrc, acctok, 'GET')
     if res.status_code != http.client.OK:
         WB.log.warning('msg="BridgeOpen: unable to fetch file WOPI metadata" response="%d"' % res.status_code)
         raise FailedOpen('Invalid WOPI context', http.client.NOT_FOUND)
     filemd = res.json()
-    app = BRIDGE_EXT_PLUGINS.get(os.path.splitext(filemd['BaseFileName'])[1][1:])
-    if not app or not WB.plugins[app]:
-        WB.log.warning('msg="Open: file type not supported or missing plugin" filename="%s" token="%s"' %
-                       (filemd['BaseFileName'], acctok[-20:]))
+    app = WB.plugins.get(appname.lower())
+    if not app:
+        WB.log.warning('msg="Open: appname not supported or missing plugin" filename="%s" appname="%s" token="%s"' %
+                       (filemd['BaseFileName'], appname, acctok[-20:]))
         raise FailedOpen('File type not supported', http.client.BAD_REQUEST)
-    WB.log.debug('msg="Processing open in supported app" app="%s" plugin="%s"' % (app, WB.plugins[app]))
-    app = WB.plugins[app]
+    WB.log.debug('msg="Processing open in supported app" appname="%s" plugin="%s"' % (appname, app))
 
     try:
         # use the 'UserCanWrite' attribute to decide whether the file is to be opened in read-only mode
@@ -229,6 +228,7 @@ def appsave(docid):
     except (KeyError, ValueError) as e:
         WB.log.error('msg="BridgeSave: malformed or missing metadata" client="%s" headers="%s" exception="%s" error="%s"' %
                      (flask.request.remote_addr, flask.request.headers, type(e), e))
+        # this should be BAD_REQUEST but requires a change in CodiMD
         return wopic.jsonify('Malformed or missing metadata, could not save. %s' % RECOVER_MSG), http.client.INTERNAL_SERVER_ERROR
 
     # decide whether to notify the save thread
@@ -337,7 +337,7 @@ class SaveThread(threading.Thread):
                     else:
                         WB.log.error('msg="SaveThread: failed to fetch file for recovery to local storage" '
                                      + 'token="%s" docid="%s" app="%s" response="%s"' %
-                                     (openfile['acctok'][-20:], openfile['docid'], app, rc))
+                                     (openfile['acctok'][-20:], openfile['docid'], appname, rc))
                     # set some 'fake' metadata, will be automatically cleaned up later
                     openfile['lastsave'] = int(time.time())
                     openfile['tosave'] = False
