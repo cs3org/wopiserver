@@ -51,8 +51,8 @@ def _getfilepath(filepath):
 
 def init(inconfig, inlog):
     '''Init module-level variables'''
-    global config                 # pylint: disable=global-statement
-    global log                        # pylint: disable=global-statement
+    global config               # pylint: disable=global-statement
+    global log                  # pylint: disable=global-statement
     global homepath             # pylint: disable=global-statement
     common.config = config = inconfig
     log = inlog
@@ -255,7 +255,7 @@ def renamefile(endpoint, origfilepath, newfilepath, userid, lockid):
     _checklock('renamefile', endpoint, origfilepath, userid, lockid)
     try:
         os.rename(_getfilepath(origfilepath), _getfilepath(newfilepath))
-    except (FileNotFoundError, PermissionError, OSError) as e:
+    except OSError as e:
         raise IOError(e)
 
 
@@ -264,5 +264,5 @@ def removefile(_endpoint, filepath, _userid, force=False):
        The force argument is irrelevant and ignored for local storage.'''
     try:
         os.remove(_getfilepath(filepath))
-    except (FileNotFoundError, PermissionError, IsADirectoryError, OSError) as e:
+    except OSError as e:
         raise IOError(e)
