@@ -11,9 +11,6 @@ LABEL maintainer="cernbox-admins@cern.ch" \
   org.opencontainers.image.title="The CERNBox/IOP WOPI server" \
   org.opencontainers.image.version="$VERSION"
 
-# The following is needed for now to keep compatibility with MS Office Online
-#RUN update-crypto-policies --set LEGACY
-
 ADD ./docker/etc/epel8.repo /etc/yum.repos.d/
 
 # prerequisites: until we need to support xrootd (even on C8), we have some EPEL dependencies, easier to install via yum/dnf;
