@@ -106,7 +106,7 @@ requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.
 # open the file and get WOPI token
 wopiheaders = {'Authorization': 'Bearer ' + iopsecret}
 wopiparams = {'fileid': filename, 'endpoint': endpoint,
-              'viewmode': viewmode.value, 'username': 'Operator', 'userid': '0:0', 'folderurl': '/',
+              'viewmode': viewmode.value, 'username': 'Operator', 'userid': 'operator@cs3org', 'folderurl': '/',
               'appurl': appurl, 'appinturl': appinturl, 'appname': appname}
 wopiheaders['TokenHeader'] = revatoken
 # for bridged apps, also set the API key
