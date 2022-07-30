@@ -73,7 +73,7 @@ def retrieverevalock(rawlock):
     try:
         return json.loads(urlsafe_b64decode(rawlock + '==').decode())
     except (B64Error, json.JSONDecodeError) as e:
-        raise IOError(e)
+        raise IOError("Unable to parse existing lock: " + str(e))
 
 
 def encodeinode(endpoint, inode):
