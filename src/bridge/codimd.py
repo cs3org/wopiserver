@@ -277,11 +277,8 @@ def savetostorage(wopisrc, acctok, isclose, wopilock, onlyfetch=False):
         reply = wopic.handleputfile('PutFile', wopisrc, res)
         if reply:
             return reply
-        if isclose and wopilock['dig'] == 'dirty':
-            h = hashlib.sha1()
-            h.update(mddoc)
         try:
-            wopilock = wopic.refreshlock(wopisrc, acctok, wopilock, digest=(h.hexdigest() if h else 'dirty'))
+            wopilock = wopic.refreshlock(wopisrc, acctok, wopilock, digest='dirty')
             log.info('msg="Save completed" filename="%s" isclose="%s" token="%s"' %
                      (wopilock['fn'], isclose, acctok[-20:]))
             # combine the responses
