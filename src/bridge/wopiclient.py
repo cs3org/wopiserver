@@ -106,6 +106,8 @@ def refreshlock(wopisrc, acctok, wopilock, digest=None, toclose=None):
             # merge toclose token lists
             for t in currlock['tocl']:
                 toclose[t] = currlock['tocl'][t] or (t in toclose and toclose[t])
+        if digest:
+            wopilock['dig'] = currlock['dig']
         # retry with the newly got lock
         h, newlock = _getheadersforrefreshlock(acctok, wopilock, digest, toclose)
         res = request(wopisrc, acctok, 'POST', headers=h)
