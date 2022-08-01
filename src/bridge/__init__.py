@@ -330,7 +330,7 @@ class SaveThread(threading.Thread):
                     WB.saveresponses[wopisrc] = wopic.jsonify(str(ile)), http.client.INTERNAL_SERVER_ERROR
                     # attempt to save to local storage to help for later recovery: this is a feature of the core wopiserver
                     content, rc = WB.plugins[appname].savetostorage(wopisrc, openfile['acctok'],
-                                                                    False, {'docid': openfile['docid']}, onlyfetch=True)
+                                                                    False, {'doc': openfile['docid']}, onlyfetch=True)
                     if rc == http.client.OK:
                         utils.storeForRecovery(content, 'unknown', wopisrc[wopisrc.rfind('/') + 1:],
                                                openfile['acctok'][-20:], ile)
