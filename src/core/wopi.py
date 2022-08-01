@@ -249,10 +249,10 @@ def setLock(fileid, reqheaders, acctok):
                 resp.status_code = http.client.OK
                 resp.headers['X-WOPI-ItemVersion'] = 'v%s' % statInfo['etag']
                 return resp
-            except IOError as e:
+            except IOError as rle:
                 # this is unexpected now
                 log.error('msg="Failed to refresh lock" lockop="%s" filename="%s" token="%s" lock="%s" error="%s"' %
-                          (op.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
+                          (op.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, rle))
         # any other error is raised
         log.error('msg="Unable to store WOPI lock" lockop="%s" filename="%s" token="%s" lock="%s" error="%s"' %
                   (op.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
