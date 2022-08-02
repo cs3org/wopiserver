@@ -53,7 +53,7 @@ def _apicall(method, params, data=None, acctok=None, raiseonnonzerocode=True):
                       (method, acctok[-20:] if acctok else 'N/A', res.status_code, res.content.decode()))
             raise AppFailure
     except requests.exceptions.ConnectionError as e:
-        log.error('msg="Exception raised attempting to connect to CodiMD" exception="%s"' % e)
+        log.error('msg="Exception raised attempting to connect to Etherpad" method="%s" exception="%s"' % (method, e))
         raise AppFailure
     res = res.json()
     if res['code'] != 0 and raiseonnonzerocode:
@@ -67,13 +67,28 @@ def _apicall(method, params, data=None, acctok=None, raiseonnonzerocode=True):
 
 def getredirecturl(isreadwrite, wopisrc, acctok, docid, displayname):
     '''Return a valid URL to the app for the given WOPI context'''
+    # first create an author ID if not existing (assume the displayname to be unique)
+    author = _apicall('createAuthorIfNotExistsFor', {'authorMapper': displayname, 'name': displayname}, acctok=acctok)
+    # then pass to Etherpad the required metadata for the save webhook
+    try:
+        res = requests.post(appurl + '/setEFSSMetadata',
+                            params={'authorID': author['data']['authorID'], 'padID': docid[1:],
+                                    'metadata': urlparse.quote_plus('%s?t=%s' % (wopisrc, acctok))},
+                            verify=sslverify)
+        if res.status_code != http.client.OK:
+            log.error('msg="Failed to call Etherpad" method="setEFSSMetadata" token="%s" response="%d: %s"' %
+                      (acctok[-20:], res.status_code, res.content.decode()))
+            raise AppFailure
+    except requests.exceptions.ConnectionError as e:
+        log.error('msg="Exception raised attempting to connect to Etherpad" method="setEFSSMetadata" exception="%s"' % e)
+        raise AppFailure
+
     if not isreadwrite:
         # for read-only mode generate a read-only link
         res = _apicall('getReadOnlyID', {'padID': docid[1:]}, acctok=acctok)
-        return appexturl + '/p/' + res['data']['readOnlyID']
-    # return the URL to the pad (TODO the metadata argument must be picked up by an Etherpad plugin)
-    return appexturl + '/p/%s?userName=%s&metadata=%s' % \
-        (docid[1:], displayname, urlparse.quote_plus('%s?t=%s' % (wopisrc, acctok)))
+        return appexturl + '/p/%s' % res['data']['readOnlyID']
+    # return the URL to the pad
+    return appexturl + '/p/%s' % docid[1:]
 
 
 # Cloud storage to Etherpad
@@ -86,6 +101,8 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
     if res.status_code != http.client.OK:
         raise AppFailure('Unable to fetch file from storage, got HTTP %d' % res.status_code)
     epfile = res.content
+    if not epfile:
+        epfile = b'{}'   # this represents an empty Etherpad file
     try:
         if not docid:
             docid = ''.join([choice(ascii_lowercase) for _ in range(20)])
@@ -97,7 +114,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
                  acctok=acctok, raiseonnonzerocode=False)
         # push content
         res = requests.post(appurl + '/p/' + docid + '/import',
-                            files={'file': (docid + '.etherpad', epfile)},    # a .etherpad file is imported as raw (JSON) content
+                            files={'file': (docid + '.etherpad', epfile)},  # a .etherpad file is imported as raw (JSON) content
                             params={'apikey': apikey},
                             verify=sslverify)
         if res.status_code != http.client.OK:
@@ -106,7 +123,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
             raise AppFailure
         log.info('msg="Pushed document to Etherpad" docid="%s" token="%s"' % (docid, acctok[-20:]))
     except requests.exceptions.ConnectionError as e:
-        log.error('msg="Exception raised attempting to connect to Etherpad" exception="%s"' % e)
+        log.error('msg="Exception raised attempting to connect to Etherpad" method="import" exception="%s"' % e)
         raise AppFailure
     # generate and return a WOPI lock structure for this document
     return wopic.generatelock(docid, filemd, epfile, acctok, False)
