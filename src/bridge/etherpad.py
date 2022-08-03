@@ -88,7 +88,7 @@ def getredirecturl(isreadwrite, wopisrc, acctok, docid, displayname):
         res = _apicall('getReadOnlyID', {'padID': docid[1:]}, acctok=acctok)
         return appexturl + '/p/%s' % res['data']['readOnlyID']
     # return the URL to the pad
-    return appexturl + '/p/%s' % docid[1:]
+    return appexturl + '/p%s' % docid
 
 
 # Cloud storage to Etherpad

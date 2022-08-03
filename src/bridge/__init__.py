@@ -92,9 +92,9 @@ class WB:
             cls.plugins[p].init(appurl, appinturl, apikey)
             cls.log.info('msg="Imported plugin for application" app="%s" plugin="%s"' % (p, cls.plugins[p]))
         except Exception as e:
-            cls.log.info('msg="Disabled plugin following failed initialization" app="%s" URL="%s" exception="%s"' %
+            cls.log.info('msg="Failed to initialize plugin" app="%s" URL="%s" exception="%s"' %
                          (p, appinturl, e))
-            cls.plugins[p] = None
+            cls.plugins.pop(p, None)   # regardless which step failed, this will remove the failed plugin
             raise ValueError(appname)
 
         # start the thread to perform async save operations if not yet started
@@ -235,7 +235,7 @@ def appsave(docid):
         WB.log.info('msg="BridgeSave: requested action" isclose="%s" docid="%s" app="%s" wopisrc="%s" token="%s"' %
                     (isclose, docid, appname, wopisrc, acctok[-20:]))
     except (KeyError, ValueError) as e:
-        WB.log.error('msg="BridgeSave: malformed or missing metadata" client="%s" headers="%s" exception="%s" error="%s"' %
+        WB.log.error('msg="BridgeSave: malformed/missing metadata or unknown client" client="%s" headers="%s" exception="%s" error="%s"' %
                      (flask.request.remote_addr, flask.request.headers, type(e), e))
         # this should be BAD_REQUEST but requires a change in CodiMD
         return wopic.jsonify('Malformed or missing metadata, could not save. %s' % RECOVER_MSG), http.client.INTERNAL_SERVER_ERROR
