@@ -72,7 +72,7 @@ def getredirecturl(isreadwrite, wopisrc, acctok, docid, displayname):
     # then pass to Etherpad the required metadata for the save webhook
     try:
         res = requests.post(appurl + '/setEFSSMetadata',
-                            params={'authorID': author['data']['authorID'], 'padID': docid[1:],
+                            params={'authorID': author['data']['authorID'], 'padID': docid,
                                     'metadata': urlparse.quote_plus('%s?t=%s' % (wopisrc, acctok))},
                             verify=sslverify)
         if res.status_code != http.client.OK:
@@ -85,10 +85,10 @@ def getredirecturl(isreadwrite, wopisrc, acctok, docid, displayname):
 
     if not isreadwrite:
         # for read-only mode generate a read-only link
-        res = _apicall('getReadOnlyID', {'padID': docid[1:]}, acctok=acctok)
+        res = _apicall('getReadOnlyID', {'padID': docid}, acctok=acctok)
         return appexturl + '/p/%s' % res['data']['readOnlyID']
     # return the URL to the pad
-    return appexturl + '/p%s' % docid
+    return appexturl + '/p/%s' % docid
 
 
 # Cloud storage to Etherpad
