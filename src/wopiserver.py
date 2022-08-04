@@ -312,8 +312,6 @@ def iopOpenInApp():
             bridge.WB.loadplugin(appname, appurl, appinturl, apikey)
         except ValueError:
             return 'Failed to load WOPI bridge plugin for %s' % appname, http.client.INTERNAL_SERVER_ERROR
-        # for the WOPI context, bridge-supported app URLs look like this, though they are not used
-        appurl = appviewurl = Wopi.wopiurl + '/wopi/bridge/open'
 
     try:
         userid = storage.getuseridfromcreds(usertoken, wopiuser)
