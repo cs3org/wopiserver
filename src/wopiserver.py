@@ -351,20 +351,7 @@ def iopDownload():
         acctok = jwt.decode(flask.request.args['access_token'], Wopi.wopisecret, algorithms=['HS256'])
         if acctok['exp'] < time.time():
             raise jwt.exceptions.ExpiredSignatureError
-        # TODO support exclusive locks by getting the lock first and then passing it to readfile()
-        resp = flask.Response(storage.readfile(acctok['endpoint'], acctok['filename'], acctok['userid'], None),
-                              mimetype='application/octet-stream')
-        resp.headers['Content-Disposition'] = 'attachment; filename="%s"' % os.path.basename(acctok['filename'])
-        resp.headers['X-Frame-Options'] = 'sameorigin'
-        resp.headers['X-XSS-Protection'] = '1; mode=block'
-        resp.status_code = http.client.OK
-        Wopi.log.info('msg="cboxDownload: direct download succeeded" filename="%s" user="%s" token="%s"' %
-                      (acctok['filename'], acctok['userid'][-20:], flask.request.args['access_token'][-20:]))
-        return resp
-    except IOError as e:
-        Wopi.log.info('msg="Error downloading requested file" filename="%s" token="%s" error="%s"' %
-                      (acctok['filename'], flask.request.args['access_token'][-20:], e))
-        return 'Error downloading file', http.client.INTERNAL_SERVER_ERROR
+        return core.wopi.getFile(0, acctok)   # note that here we exploit the non-dependency from fileid
     except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError, KeyError) as e:
         Wopi.log.info('msg="Expired or malformed token" client="%s" requestedUrl="%s" error="%s" token="%s"' %
                       (flask.request.remote_addr, flask.request.base_url, e, flask.request.args['access_token']))

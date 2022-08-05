@@ -100,26 +100,36 @@ def checkFileInfo(fileid, acctok):
         return 'Invalid request', http.client.UNAUTHORIZED
 
 
-def getFile(fileid, acctok):
+def getFile(_fileid, acctok):
     '''Implements the GetFile WOPI call'''
     try:
-        # get the file reader generator
         # TODO for the time being we do not look if the file is locked. Once exclusive locks are implemented in Reva,
         # the lock must be fetched prior to the following call in order to access the file.
+        # get the file reader generator
         f = peekable(st.readfile(acctok['endpoint'], acctok['filename'], acctok['userid'], None))
         firstchunk = f.peek()
         if isinstance(firstchunk, IOError):
-            return ('Failed to fetch file from storage: %s' % firstchunk), http.client.INTERNAL_SERVER_ERROR
-        # stat the file to get the version, TODO this should be cached inside the access token
+            log.error('msg="GetFile: download failed" filename="%s" token="%s" error="%s"' %
+                      (acctok['filename'], flask.request.args['access_token'][-20:], firstchunk))
+            return 'Failed to fetch file from storage', http.client.INTERNAL_SERVER_ERROR
+        # stat the file to get the current version
         statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
         # stream file from storage to client
         resp = flask.Response(f, mimetype='application/octet-stream')
         resp.status_code = http.client.OK
+        resp.headers['Content-Disposition'] = 'attachment; filename="%s"' % os.path.basename(acctok['filename'])
+        resp.headers['X-Frame-Options'] = 'sameorigin'
+        resp.headers['X-XSS-Protection'] = '1; mode=block'
         resp.headers['X-WOPI-ItemVersion'] = 'v%s' % statInfo['etag']
         return resp
     except StopIteration:
         # File is empty, still return OK (strictly speaking, we should return 204 NO_CONTENT)
         return '', http.client.OK
+    except IOError as e:
+        # File is readable but statx failed?
+        log.error('msg="GetFile: failed to stat after read, possible race" filename="%s" token="%s" error="%s"' %
+                  (acctok['filename'], flask.request.args['access_token'][-20:], e))
+        return 'Failed to access file', http.client.INTERNAL_SERVER_ERROR
 
 
 #
