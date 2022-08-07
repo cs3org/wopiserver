@@ -1,5 +1,16 @@
 ## Changelog for the WOPI server
 
+### Aug 2022 - v9.0.0
+- Refactored and strengthened save workflow for
+  bridged applications, and simplified lock metadata (#80)
+  [Note: this change is not backwards compatibile and
+  prevents a transparent upgrade]
+- Refactored PutFile logic when handling conflict files (#78)
+- Improved support for Spaces in Reva (#79)
+- Implemented save workflow for Etherpad documents (#81)
+  Fixed direct download in case of errors
+- Updated dependencies and documentation
+
 ### Thu Jun 16 2022 - v8.3.0
 - Improved logging around lock conflict handling
 - Added logging of additional headers as provided
@@ -8,7 +19,7 @@
 - Extend creation of recovery files when a PutFile
   fails because of a lock mismatch
 - Added support for disabling write access to ODF
-  files when opening with MS Office
+  files when opened with MS Office
 
 ### Fri May  6 2022 - v8.2.0
 - Added support for etags to represent file versions (#65)
