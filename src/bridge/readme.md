@@ -3,8 +3,8 @@
 This module includes the code once prototyped at https://github.com/cs3org/wopibridge, to integrate collaborative editors such as CodiMD and Etherpad (partially supported for the time being). The approach is generic to allow for extending the concept to other Office-like applications exposing a minimal load/save REST API.
 
 The module provides two endpoints:
-- `/wopi/bridge/open`   meant to be called by the EFSS with a WOPISrc and a WOPI access token, returns a file displayed in CodiMD
-- `/wopi/bridge/<docid>`   auto-called by the CodiMD backend when some changes are detected on the open document referenced as `<docid>`
+- `/wopi/bridge/<docid>`  auto-called by the app backends when some changes are detected on the open document referenced as `<docid>`
+- `/wopi/bridge/list`  for operators only, it returns a list of all currently opened files in bridge mode
 
 The module implements a stateless server, as all context information is stored in WOPI locks or passed through arguments. Collaborative editing and locking of files is supported by means of the following WOPI APIs:
 * `GetFileInfo`: get all file metadata
@@ -36,6 +36,5 @@ The module implements a stateless server, as all context information is stored i
 
 
 ### Etherpad specifics
-* Support for readonly and read-write files
-* Automatic save still work-in-progress
-
+* Support for readonly and read/write files
+* Automatic save via dedicated `ep_sciencemesh` plugin
