@@ -59,20 +59,20 @@ def init(_appurl, _appinturl, _apikey):
 def getredirecturl(isreadwrite, wopisrc, acctok, docid, displayname):
     '''Return a valid URL to the app for the given WOPI context'''
     if isreadwrite:
-        return appexturl + '/' + docid + '?metadata=' + \
-               urlparse.quote_plus('%s?t=%s' % (wopisrc, acctok)) + \
-               '&apiKey=' + apikey + '&displayName=' + displayname
+        return '%s/%s?wopiSrc=%s&accessToken=%s&apiKey=%s&displayName=%s&metadata=%s' % \
+            (appexturl, docid, urlparse.quote_plus(wopisrc), acctok, apikey, displayname,
+             urlparse.quote_plus('%s?t=%s' % (wopisrc, acctok)))  # TODO this one is deprecated
 
     # read-only mode: first check if we have a CodiMD redirection
     res = requests.head(appurl + '/' + docid,
                         params={'apiKey': apikey},
                         verify=sslverify)
     if res.status_code == http.client.FOUND:
-        return appexturl + '/s/' + urlparse.urlsplit(res.next.url).path.split('/')[-1] + '?apiKey=' + apikey
+        return '%s/s/%s?apiKey=%s' % (appexturl, urlparse.urlsplit(res.next.url).path.split('/')[-1], apikey)
     # we used to redirect to publish mode or normal view to quickly jump in slide mode depending on the content,
     # but this was based on a bad side effect - here it would require to add:
     # ('/publish' if not _isslides(content) else '') before the '?'
-    return appexturl + '/' + docid + '/publish?apiKey=' + apikey
+    return '%s/%s/publish?apiKey=%s' % (appexturl, docid, apikey)
 
 
 # Cloud storage to CodiMD

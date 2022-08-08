@@ -73,12 +73,14 @@ def getredirecturl(isreadwrite, wopisrc, acctok, docid, displayname):
     try:
         res = requests.post(appurl + '/setEFSSMetadata',
                             params={'authorID': author['data']['authorID'], 'padID': docid,
-                                    'metadata': urlparse.quote_plus('%s?t=%s' % (wopisrc, acctok))},
+                                    'wopiSrc': urlparse.quote_plus(wopisrc), 'accessToken': acctok,
+                                    'apikey': apikey},
                             verify=sslverify)
         if res.status_code != http.client.OK:
             log.error('msg="Failed to call Etherpad" method="setEFSSMetadata" token="%s" response="%d: %s"' %
-                      (acctok[-20:], res.status_code, res.content.decode()))
+                      (acctok[-20:], res.status_code, res.content.decode().replace('"', "'")))
             raise AppFailure
+        log.debug('msg="Called Etherpad" method="setEFSSMetadata" token="%s"' % acctok[-20:])
     except requests.exceptions.ConnectionError as e:
         log.error('msg="Exception raised attempting to connect to Etherpad" method="setEFSSMetadata" exception="%s"' % e)
         raise AppFailure
@@ -118,7 +120,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
                                 verify=sslverify)
             if res.status_code != http.client.OK:
                 log.error('msg="Unable to push document to Etherpad" token="%s" response="%d: %s"' %
-                        (acctok[-20:], res.status_code, res.content.decode()))
+                          (acctok[-20:], res.status_code, res.content.decode()))
                 raise AppFailure
             log.info('msg="Pushed document to Etherpad" docid="%s" token="%s"' % (docid, acctok[-20:]))
         else:

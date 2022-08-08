@@ -217,12 +217,15 @@ def appsave(docid):
     '''Save a doc given its WOPI context, and return a JSON-formatted message. The actual save is asynchronous.'''
     # fetch metadata from request
     try:
-        meta = urlparse.unquote(flask.request.headers['X-EFSS-Metadata'])
-        wopisrc = meta[:meta.index('?t=')]
-        acctok = meta[meta.index('?t=') + 3:]
+        if 'X-EFSS-Metadata' in flask.request.headers:
+            # legacy mode, to be removed
+            meta = urlparse.unquote(flask.request.headers['X-EFSS-Metadata'])
+            wopisrc = meta[:meta.index('?t=')]
+            acctok = meta[meta.index('?t=') + 3:]
+        else:
+            wopisrc = urlparse.unquote(flask.request.args['WOPISrc'])
+            acctok = flask.request.args['access_token']
         isclose = flask.request.args.get('close') == 'true'
-        if not docid:
-            raise ValueError
 
         # ensure a save request comes from registered plugins:
         # this is done via remote IP resolution, and can be overridden with a header
@@ -234,11 +237,15 @@ def appsave(docid):
         appname = _getappnamebyaddr(remaddr)
         WB.log.info('msg="BridgeSave: requested action" isclose="%s" docid="%s" app="%s" wopisrc="%s" token="%s"' %
                     (isclose, docid, appname, wopisrc, acctok[-20:]))
-    except (KeyError, ValueError) as e:
-        WB.log.error('msg="BridgeSave: malformed/missing metadata or unknown client" client="%s" headers="%s" exception="%s" error="%s"' %
-                     (flask.request.remote_addr, flask.request.headers, type(e), e))
-        # this should be BAD_REQUEST but requires a change in CodiMD
-        return wopic.jsonify('Malformed or missing metadata, could not save. %s' % RECOVER_MSG), http.client.INTERNAL_SERVER_ERROR
+    except KeyError as e:
+        WB.log.error('msg="BridgeSave: malformed or missing metadata" client="%s" headers="%s" args="%s" error="%s"' %
+                     (flask.request.remote_addr, flask.request.headers, flask.request.args, e))
+        return wopic.jsonify('Malformed or missing metadata, could not save. %s' % RECOVER_MSG), http.client.BAD_REQUEST
+    except ValueError as e:
+        # this is a new condition, handle it separately
+        WB.log.error('msg="BridgeSave: unknown client" client="%s" headers="%s" args="%s" error="%s"' %
+                     (flask.request.remote_addr, flask.request.headers, flask.request.args, e))
+        return wopic.jsonify('Unregistered application, could not save. %s' % RECOVER_MSG), http.client.UNAUTHORIZED
 
     # decide whether to notify the save thread
     donotify = isclose or wopisrc not in WB.openfiles or WB.openfiles[wopisrc]['lastsave'] < time.time() - WB.saveinterval
