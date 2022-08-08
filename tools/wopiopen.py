@@ -19,7 +19,7 @@ from core.wopiutils import ViewMode
 # usage function
 def usage(exitcode):
     '''Prints usage'''
-    print('Usage : ' + sys.argv[0] + ' -a|--appname <app_name> -u|--appurl <app_url> [-i|--appinturl <app_url>] '
+    print('Usage : ' + sys.argv[0] + ' -a|--appname <app_name> -u|--appurl <app_url> [-i|--appinturl <app_url>] -k|--apikey <api_key> '
           '[-s|--storage <storage_endpoint>] [-v|--viewmode VIEW_ONLY|READ_ONLY|READ_WRITE] [-x|--x-access-token <reva_token>] <filename>')
     sys.exit(exitcode)
 

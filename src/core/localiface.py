@@ -1,7 +1,11 @@
 '''
 localiface.py
 
-Local storage interface for the IOP WOPI server
+Local storage interface for the IOP WOPI server.
+Note that this interface is meant for development purposes only,
+and it is supported on Linux and WSL for Windows, not
+on native Windows nor on native MacOS systems as they lack
+support for extended attributes.
 
 Main author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 '''
