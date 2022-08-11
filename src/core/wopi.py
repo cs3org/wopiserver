@@ -142,13 +142,14 @@ def setLock(fileid, reqheaders, acctok):
     oldLock = reqheaders.get('X-WOPI-OldLock')
     validateTarget = reqheaders.get('X-WOPI-Validate-Target')
     retrievedLock, lockHolder = utils.retrieveWopiLock(fileid, op, lock, acctok)
+    fn = acctok['filename']
 
     try:
         # validate that the underlying file is still there (it might have been moved/deleted)
-        statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
+        statInfo = st.statx(acctok['endpoint'], fn, acctok['userid'])
     except IOError as e:
         log.warning('msg="Error with target file" lockop="%s" filename="%s" token="%s" error="%s"' %
-                    (op.title(), acctok['filename'], flask.request.args['access_token'][-20:], e))
+                    (op.title(), fn, flask.request.args['access_token'][-20:], e))
         if common.ENOENT_MSG in str(e):
             return 'File not found', http.client.NOT_FOUND
         return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
@@ -159,30 +160,30 @@ def setLock(fileid, reqheaders, acctok):
             # this is an extension of the API: a REFRESH_LOCK without previous lock but with a Validate-Target header
             # is allowed provided that the target file was last saved by WOPI and not overwritten by external actions
             # (cf. PutFile logic)
-            savetime = st.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY)
+            savetime = st.getxattr(acctok['endpoint'], fn, acctok['userid'], utils.LASTSAVETIMEKEY)
             if savetime and (not savetime.isdigit() or int(savetime) < int(statInfo['mtime'])):
                 savetime = None
         else:
             savetime = None
         if not savetime:
-            return utils.makeConflictResponse(op, acctok['userid'], None, lock, oldLock, acctok['filename'],
+            return utils.makeConflictResponse(op, acctok['userid'], None, lock, oldLock, fn,
                                               'The file was not locked' + ' and got modified' if validateTarget else '')
 
     # now create an "external" lock if required
     if srv.config.get('general', 'detectexternallocks', fallback='True').upper() == 'TRUE' and \
-       os.path.splitext(acctok['filename'])[1] in srv.codetypes:
+       os.path.splitext(fn)[1] in srv.codetypes:
         try:
             # create a LibreOffice-compatible lock file for interoperability purposes, making sure to
             # not overwrite any existing or being created lock
             lockcontent = ',Collaborative Online Editor,%s,%s,WOPIServer;' % \
                           (srv.wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())))
-            st.writefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), acctok['userid'],
+            st.writefile(acctok['endpoint'], utils.getLibreOfficeLockName(fn), acctok['userid'],
                          lockcontent, None, islock=True)
         except IOError as e:
             if common.EXCL_ERROR in str(e):
                 # retrieve the LibreOffice-compatible lock just found
                 try:
-                    retrievedlolock = next(st.readfile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']),
+                    retrievedlolock = next(st.readfile(acctok['endpoint'], utils.getLibreOfficeLockName(fn),
                                                        acctok['userid'], None))
                     if isinstance(retrievedlolock, IOError):
                         raise retrievedlolock
@@ -197,40 +198,40 @@ def setLock(fileid, reqheaders, acctok):
                     # the file was externally locked, make this call fail
                     lockholder = retrievedlolock.split(',')[1] if ',' in retrievedlolock else ''
                     log.warning('msg="Valid LibreOffice lock found, denying WOPI lock" lockop="%s" filename="%s" holder="%s"' %
-                                (op.title(), acctok['filename'], lockholder if lockholder else retrievedlolock))
+                                (op.title(), fn, lockholder if lockholder else retrievedlolock))
                     reason = 'File locked by ' + ((lockholder + ' via LibreOffice') if lockholder else 'a LibreOffice user')
-                    return utils.makeConflictResponse(op, acctok['userid'], 'External App', lock, oldLock, acctok['filename'], reason)
+                    return utils.makeConflictResponse(op, acctok['userid'], 'External App', lock, oldLock, fn, reason)
                 # else it's our previous lock or it had expired: all right, move on
             else:
                 # any other error is logged but not raised as this is optimistically not blocking WOPI operations
                 # this includes the case of access denied (over)writing the LibreOffice lock because of accessing
                 # a single-file share
                 log.warning('msg="Failed to store LibreOffice-compatible lock" lockop="%s" filename="%s" token="%s" error="%s"' %
-                            (op.title(), acctok['filename'], flask.request.args['access_token'][-20:], e))
+                            (op.title(), fn, flask.request.args['access_token'][-20:], e))
 
     try:
         # LOCK or REFRESH_LOCK: atomically set the lock to the given one, including the expiration time,
         # and return conflict response if the file was already locked
-        st.setlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'], utils.encodeLock(lock))
+        st.setlock(acctok['endpoint'], fn, acctok['userid'], acctok['appname'], utils.encodeLock(lock))
         log.info('msg="Successfully locked" lockop="%s" filename="%s" token="%s" lock="%s"' %
-                 (op.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
+                 (op.title(), fn, flask.request.args['access_token'][-20:], lock))
 
         # on first lock, set an xattr with the current time for later conflicts checking
         try:
-            st.setxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY,
+            st.setxattr(acctok['endpoint'], fn, acctok['userid'], utils.LASTSAVETIMEKEY,
                         int(time.time()), utils.encodeLock(lock))
         except IOError as e:
             # not fatal, but will generate a conflict file later on, so log a warning
             log.warning('msg="Unable to set lastwritetime xattr" lockop="%s" user="%s" filename="%s" token="%s" reason="%s"' %
-                        (op.title(), acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:], e))
+                        (op.title(), acctok['userid'][-20:], fn, flask.request.args['access_token'][-20:], e))
         # also, keep track of files that have been opened for write: this is for statistical purposes only
         # (cf. the GetLock WOPI call and the /wopi/cbox/open/list action)
-        if acctok['filename'] not in srv.openfiles:
-            srv.openfiles[acctok['filename']] = (time.asctime(), set([acctok['username']]))
+        if fn not in srv.openfiles:
+            srv.openfiles[fn] = (time.asctime(), set([acctok['username']]))
         else:
             # the file was already opened but without lock: this happens on new files (cf. editnew action), just log
             log.info('msg="First lock for new file" lockop="%s" user="%s" filename="%s" token="%s"' %
-                     (op.title(), acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:]))
+                     (op.title(), acctok['userid'][-20:], fn, flask.request.args['access_token'][-20:]))
         resp = flask.Response()
         resp.status_code = http.client.OK
         resp.headers['X-WOPI-ItemVersion'] = 'v%s' % statInfo['etag']
@@ -245,15 +246,15 @@ def setLock(fileid, reqheaders, acctok):
             if retrievedLock and not utils.compareWopiLocks(retrievedLock, (oldLock if oldLock else lock)):
                 # lock mismatch, the WOPI client is supposed to acknowledge the existing lock
                 # or deny write access to the file
-                return utils.makeConflictResponse(op, acctok['userid'], retrievedLock, lock, oldLock, acctok['filename'],
+                return utils.makeConflictResponse(op, acctok['userid'], retrievedLock, lock, oldLock, fn,
                                                   'The file is locked by %s' %
                                                   (lockHolder if lockHolder != 'wopi' else 'another online editor'))
             # else it's our own lock, refresh it and return
             try:
-                st.refreshlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'],
+                st.refreshlock(acctok['endpoint'], fn, acctok['userid'], acctok['appname'],
                                utils.encodeLock(lock))
                 log.info('msg="Successfully refreshed" lockop="%s" filename="%s" token="%s" lock="%s"' %
-                         (op.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock))
+                         (op.title(), fn, flask.request.args['access_token'][-20:], lock))
                 # else we don't need to refresh it again
                 resp = flask.Response()
                 resp.status_code = http.client.OK
@@ -262,10 +263,10 @@ def setLock(fileid, reqheaders, acctok):
             except IOError as rle:
                 # this is unexpected now
                 log.error('msg="Failed to refresh lock" lockop="%s" filename="%s" token="%s" lock="%s" error="%s"' %
-                          (op.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, rle))
+                          (op.title(), fn, flask.request.args['access_token'][-20:], lock, rle))
         # any other error is raised
         log.error('msg="Unable to store WOPI lock" lockop="%s" filename="%s" token="%s" lock="%s" error="%s"' %
-                  (op.title(), acctok['filename'], flask.request.args['access_token'][-20:], lock, e))
+                  (op.title(), fn, flask.request.args['access_token'][-20:], lock, e))
         return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
 
 
