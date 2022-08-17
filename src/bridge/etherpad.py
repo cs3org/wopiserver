@@ -67,16 +67,13 @@ def _apicall(method, params, data=None, acctok=None, raiseonnonzerocode=True):
 
 def getredirecturl(isreadwrite, wopisrc, acctok, docid, displayname):
     '''Return a valid URL to the app for the given WOPI context'''
-    # first create an author ID if not existing (assume the displayname to be unique)
-    author = _apicall('createAuthorIfNotExistsFor', {'authorMapper': displayname, 'name': displayname}, acctok=acctok)
-    # then pass to Etherpad the required metadata for the save webhook
+    # pass to Etherpad the required metadata for the save webhook
     try:
         res = requests.post(appurl + '/setEFSSMetadata',
-                            params={'authorID': author['data']['authorID'], 'padID': docid,
-                                    'wopiSrc': urlparse.quote_plus(wopisrc), 'accessToken': acctok,
+                            params={'padID': docid, 'wopiSrc': urlparse.quote_plus(wopisrc), 'accessToken': acctok,
                                     'apikey': apikey},
                             verify=sslverify)
-        if res.status_code != http.client.OK:
+        if res.status_code != http.client.OK or res.json()['code'] != 0:
             log.error('msg="Failed to call Etherpad" method="setEFSSMetadata" token="%s" response="%d: %s"' %
                       (acctok[-20:], res.status_code, res.content.decode().replace('"', "'")))
             raise AppFailure
@@ -106,7 +103,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
     try:
         if not docid:
             docid = ''.join([choice(ascii_lowercase) for _ in range(20)])
-            log.debug('msg="Generated random padID for read-only document" docid="%s" token="%s"' % (docid, acctok[-20:]))
+            log.debug('msg="Generated random padID for read-only document" padid="%s" token="%s"' % (docid, acctok[-20:]))
         # first drop previous pad if it exists
         _apicall('deletePad', {'padID': docid}, acctok=acctok, raiseonnonzerocode=False)
         # create pad with the given docid as name
@@ -119,12 +116,12 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
                                 params={'apikey': apikey},
                                 verify=sslverify)
             if res.status_code != http.client.OK:
-                log.error('msg="Unable to push document to Etherpad" token="%s" response="%d: %s"' %
-                          (acctok[-20:], res.status_code, res.content.decode()))
+                log.error('msg="Unable to push document to Etherpad" token="%s" padid="%s" response="%d: %s" content="%s"' %
+                          (acctok[-20:], docid, res.status_code, res.content.decode(), epfile.decode()))
                 raise AppFailure
-            log.info('msg="Pushed document to Etherpad" docid="%s" token="%s"' % (docid, acctok[-20:]))
+            log.info('msg="Pushed document to Etherpad" padid="%s" token="%s"' % (docid, acctok[-20:]))
         else:
-            log.info('msg="Empty document created in Etherpad" docid="%s" token="%s"' % (docid, acctok[-20:]))
+            log.info('msg="Empty document created in Etherpad" padid="%s" token="%s"' % (docid, acctok[-20:]))
     except requests.exceptions.ConnectionError as e:
         log.error('msg="Exception raised attempting to connect to Etherpad" method="import" exception="%s"' % e)
         raise AppFailure
