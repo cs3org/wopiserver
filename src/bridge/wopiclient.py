@@ -7,6 +7,7 @@ Main author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 '''
 
 import json
+import hashlib
 import http.client
 import requests
 from flask import Response
@@ -49,15 +50,33 @@ def request(wopisrc, acctok, method, contents=None, headers=None):
     return None
 
 
-def generatelock(docid, filemd, digest, acctok, isclose):
+def generatelock(docid, filemd, content, acctok, isclose):
     '''return a dict to be used as WOPI lock, in the format { docid, fn, dig, tocl },
-       where tocl is like the openfiles['toclose'] map'''
+       where tocl is like the openfiles['toclose'] map
+       and dig is a SHA1 digest of the content for later checks when the file gets modified'''
+    dig = 'dirty'
+    if content:
+        h = hashlib.sha1()
+        h.update(content)
+        dig = h.hexdigest()
     return {
         'doc': '/' + docid.strip('/'),
         'fn': filemd['BaseFileName'],
-        'dig': digest,
+        'dig': dig,
         'tocl': {acctok[-20:]: isclose},
     }
+
+
+def checkfornochanges(content, wopilock, acctokforlog):
+    '''return True if the content did not change from the digest stored in wopilock'''
+    if wopilock['dig'] != 'dirty':
+        # so far the file was not touched: let's validate the content
+        h = hashlib.sha1()
+        h.update(content)
+        if h.hexdigest() == wopilock['dig']:
+            log.info('msg="File unchanged, skipping save" token="%s"' % acctokforlog[-20:])
+            return True
+    return False
 
 
 def getlock(wopisrc, acctok):
@@ -68,7 +87,7 @@ def getlock(wopisrc, acctok):
             # lock got lost or any other error
             raise InvalidLock(res.status_code)
         # the lock is expected to be a JSON dict, see generatelock()
-        return json.loads(res.headers.get('X-WOPI-Lock'))
+        return json.loads(res.headers['X-WOPI-Lock'])
     except (ValueError, KeyError, json.decoder.JSONDecodeError) as e:
         log.warning('msg="Missing or malformed WOPI lock" exception="%s" error="%s"' % (type(e), e))
         raise InvalidLock(e)
@@ -101,7 +120,12 @@ def refreshlock(wopisrc, acctok, wopilock, digest=None, toclose=None):
     if res.status_code == http.client.CONFLICT:
         # we have a race condition, another thread has updated the lock before us
         log.warning('msg="Got conflict in refreshing lock, retrying" url="%s"' % wopisrc)
-        currlock = getlock(wopisrc, acctok)
+        try:
+            currlock = json.loads(res.headers['X-WOPI-Lock'])
+        except json.decoder.JSONDecodeError as e:
+            log.error('msg="Got unresolvable conflict in RefreshLock" url="%s" previouslock="%s" error="%s"' %
+                      (wopisrc, res.headers.get('X-WOPI-Lock'), e))
+            raise InvalidLock('Found existing malformed lock on refreshlock')
         if toclose:
             # merge toclose token lists
             for t in currlock['tocl']:
@@ -119,6 +143,21 @@ def refreshlock(wopisrc, acctok, wopilock, digest=None, toclose=None):
     raise InvalidLock('Failed to refresh the lock')
 
 
+def refreshdigestandlock(wopisrc, acctok, wopilock, content):
+    '''Following a save operation, recomputes a digest for the given content and refreshes the lock'''
+    dig = None
+    if wopilock['dig'] == 'dirty':
+        h = hashlib.sha1()
+        h.update(content)
+        dig = h.hexdigest()
+    try:
+        wopilock = refreshlock(wopisrc, acctok, wopilock, digest=dig)
+        log.info('msg="Save completed" filename="%s" dig="%s" token="%s"' % (wopilock['fn'], dig, acctok[-20:]))
+        return jsonify('File saved successfully'), http.client.OK
+    except InvalidLock:
+        return jsonify('File saved, but failed to refresh lock'), http.client.INTERNAL_SERVER_ERROR
+
+
 def relock(wopisrc, acctok, docid, isclose):
     '''Relock again a given document and return a valid WOPI lock, or raise InvalidLock otherwise (cf. SaveThread)'''
     # first get again the file metadata
@@ -130,7 +169,7 @@ def relock(wopisrc, acctok, docid, isclose):
     filemd = res.json()
 
     # lock the file again: we assume we are alone as the previous lock had been released
-    wopilock = generatelock(docid, filemd, 'dirty', acctok, isclose)
+    wopilock = generatelock(docid, filemd, None, acctok, isclose)
     lockheaders = {
         'X-WOPI-Lock': json.dumps(wopilock),
         'X-WOPI-Override': 'REFRESH_LOCK',

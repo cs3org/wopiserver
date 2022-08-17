@@ -12,7 +12,6 @@ import zipfile
 import io
 from random import randint
 import json
-import hashlib
 import urllib.parse as urlparse
 import http.client
 import requests
@@ -148,9 +147,6 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
         mddoc = _unzipattachments(mdfile)
     else:
         mddoc = mdfile
-    # compute its SHA1 hash for later checks if the file was modified
-    h = hashlib.sha1()
-    h.update(mddoc)
     try:
         if not docid:
             # read-only case: push the doc to a newly generated note with a random docid
@@ -209,7 +205,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
         raise AppFailure('File contains an invalid UTF-8 character, was it corrupted? ' +
                          'Please fix it in a regular editor before opening it in CodiMD.')
     # generate and return a WOPI lock structure for this document
-    return wopic.generatelock(docid, filemd, h.hexdigest(), acctok, False)
+    return wopic.generatelock(docid, filemd, mddoc, acctok, False)
 
 
 # CodiMD to cloud storage
@@ -254,14 +250,8 @@ def savetostorage(wopisrc, acctok, isclose, wopilock, onlyfetch=False):
         return wopic.jsonify('File not saved, error in fetching document from CodiMD. Will try again later'), \
                http.client.FAILED_DEPENDENCY
 
-    h = None
-    if isclose and wopilock['dig'] != 'dirty':
-        # so far the file was not touched: before forcing a put let's validate the contents
-        h = hashlib.sha1()
-        h.update(mddoc)
-        if h.hexdigest() == wopilock['dig']:
-            log.info('msg="File unchanged, skipping save" token="%s"' % acctok[-20:])
-            return '{}', http.client.ACCEPTED
+    if isclose and wopic.checkfornochanges(mddoc, wopilock, acctok):
+        return '{}', http.client.ACCEPTED
 
     # check if we have attachments
     wasbundle = os.path.splitext(wopilock['fn'])[1] == '.zmd'
@@ -277,14 +267,9 @@ def savetostorage(wopisrc, acctok, isclose, wopilock, onlyfetch=False):
         reply = wopic.handleputfile('PutFile', wopisrc, res)
         if reply:
             return reply
-        try:
-            wopilock = wopic.refreshlock(wopisrc, acctok, wopilock, digest='dirty')
-            log.info('msg="Save completed" filename="%s" isclose="%s" token="%s"' %
-                     (wopilock['fn'], isclose, acctok[-20:]))
-            # combine the responses
-            return attresponse if attresponse else (wopic.jsonify('File saved successfully'), http.client.OK)
-        except wopic.InvalidLock:
-            return wopic.jsonify('File saved, but failed to refresh lock'), http.client.INTERNAL_SERVER_ERROR
+        lockresponse = wopic.refreshdigestandlock(wopisrc, acctok, wopilock, mddoc)
+        # combine the responses
+        return attresponse if attresponse else lockresponse
 
     # on close, use saveas for either the new bundle, if this is the first time we have attachments,
     # or the single md file, if there are no more attachments.

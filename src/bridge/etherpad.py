@@ -9,7 +9,6 @@ Main author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 from random import choice
 from string import ascii_lowercase
 import json
-import hashlib
 import http.client
 import urllib.parse as urlparse
 import requests
@@ -87,9 +86,6 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
     if res.status_code != http.client.OK:
         raise AppFailure('Unable to fetch file from storage, got HTTP %d' % res.status_code)
     epfile = res.content
-    # compute its SHA1 hash for later checks if the file was modified
-    h = hashlib.sha1()
-    h.update(epfile)
     try:
         if not docid:
             docid = ''.join([choice(ascii_lowercase) for _ in range(20)])
@@ -113,7 +109,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
         log.error('msg="Exception raised attempting to connect to Etherpad" exception="%s"' % e)
         raise AppFailure
     # generate and return a WOPI lock structure for this document
-    return wopic.generatelock(docid, filemd, h.hexdigest(), acctok, False)
+    return wopic.generatelock(docid, filemd, epfile, acctok, False)
 
 
 # Etherpad to cloud storage
@@ -150,13 +146,8 @@ def savetostorage(wopisrc, acctok, isclose, wopilock, onlyfetch=False):
         return wopic.jsonify('File not saved, error in fetching document from Etherpad. Will try again later'), \
                http.client.FAILED_DEPENDENCY
 
-    if isclose and wopilock['dig'] != 'dirty':
-        # so far the file was not touched: before forcing a put let's validate the contents
-        h = hashlib.sha1()
-        h.update(epfile)
-        if h.hexdigest() == wopilock['dig']:
-            log.info('msg="File unchanged, skipping save" token="%s"' % acctok[-20:])
-            return '{}', http.client.ACCEPTED
+    if isclose and wopic.checkfornochanges(epfile, wopilock, acctok):
+        return '{}', http.client.ACCEPTED
 
     # WOPI PutFile
     res = wopic.request(wopisrc, acctok, 'POST', headers={'X-WOPI-Lock': json.dumps(wopilock)},
@@ -164,10 +155,4 @@ def savetostorage(wopisrc, acctok, isclose, wopilock, onlyfetch=False):
     reply = wopic.handleputfile('PutFile', wopisrc, res)
     if reply:
         return reply
-    try:
-        wopilock = wopic.refreshlock(wopisrc, acctok, wopilock, digest='dirty')
-        log.info('msg="Save completed" filename="%s" isclose="%s" token="%s"' %
-                 (wopilock['fn'], isclose, acctok[-20:]))
-        return wopic.jsonify('File saved successfully'), http.client.OK
-    except wopic.InvalidLock:
-        return wopic.jsonify('File saved, but failed to refresh lock'), http.client.INTERNAL_SERVER_ERROR
+    return wopic.refreshdigestandlock(wopisrc, acctok, wopilock, epfile)
