@@ -37,6 +37,7 @@ appurl = ''
 appinturl = ''
 revatoken = 'N/A'
 apikey = ''
+userid = '0:0'
 for f, v in options:
     if f == '-h' or f == '--help':
         usage(0)
@@ -81,14 +82,17 @@ if endpoint == '':
         # here we assume the filename has the form storageid:/path/to/file
         if ':/' in filename:
             endpoint, filename = filename.split(':')
+            userid = 'operator@cs3org'
         else:
             print("Invalid argument for filename, storageid:/full/path form required")
             usage(1)
     elif '/eos/user/' in filename:
         # shortcuts for eos (on xrootd)
         endpoint = 'root://eoshome-%s.cern.ch' % filename.split('/')[3]
+        userid = filename.split('/')[4]
     elif '/eos/project' in filename:
-        endpoint = 'root://eosproject-%s.cern.ch' % filename.split('/')[3]
+        print("eosproject storages not supported, please use eoshome")
+        usage(1)
     else:
         endpoint = 'default'   # good for test purposes on local storage
 if appurl == '' or appname == '':
@@ -106,7 +110,7 @@ requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.
 # open the file and get WOPI token
 wopiheaders = {'Authorization': 'Bearer ' + iopsecret}
 wopiparams = {'fileid': filename, 'endpoint': endpoint,
-              'viewmode': viewmode.value, 'username': 'Operator', 'userid': 'operator@cs3org', 'folderurl': '/',
+              'viewmode': viewmode.value, 'username': 'Operator', 'userid': userid, 'folderurl': '/',
               'appurl': appurl, 'appinturl': appinturl, 'appname': appname}
 wopiheaders['TokenHeader'] = revatoken
 # for bridged apps, also set the API key
