@@ -31,6 +31,7 @@ LASTSAVETIMEKEY = 'iop.wopi.lastwritetime'
 st = None
 srv = None
 log = None
+WOPIVER = None
 endpoints = {}
 
 
@@ -194,7 +195,8 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
         viewmode = ViewMode.READ_ONLY
     acctok = jwt.encode({'userid': userid, 'wopiuser': wopiuser, 'filename': statinfo['filepath'], 'username': username,
                          'viewmode': viewmode.value, 'folderurl': folderurl, 'endpoint': endpoint,
-                         'appname': appname, 'appediturl': appediturl, 'appviewurl': appviewurl, 'exp': exptime},
+                         'appname': appname, 'appediturl': appediturl, 'appviewurl': appviewurl,
+                         'exp': exptime, 'iss': 'cs3org:wopiserver:%s' % WOPIVER},    # standard claims
                         srv.wopisecret, algorithm='HS256')
     log.info('msg="Access token generated" userid="%s" wopiuser="%s" mode="%s" endpoint="%s" filename="%s" inode="%s" '
              'mtime="%s" folderurl="%s" appname="%s" expiration="%d" token="%s"' %

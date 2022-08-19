@@ -145,6 +145,7 @@ class Wopi:
             bridge.WB.init(cls.config, cls.log, cls.wopisecret)
             # initialize the submodules
             # TODO improve handling of globals across the whole code base
+            utils.WOPIVER = WOPISERVERVERSION
             utils.srv = core.wopi.srv = cls
             utils.log = core.wopi.log = core.discovery.log = cls.log
             utils.st = core.wopi.st = storage
