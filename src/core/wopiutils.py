@@ -120,9 +120,10 @@ def validateAndLogHeaders(op):
             return 'Invalid or expired X-WOPI-Timestamp header', http.client.UNAUTHORIZED
 
     # log all relevant headers to help debugging
-    log.debug('msg="%s: client context" user="%s" filename="%s" token="%s" deviceId="%s" reqId="%s" sessionId="%s" '
+    log.debug('msg="%s: client context" user="%s" filename="%s" token="%s" client="%s" deviceId="%s" reqId="%s" sessionId="%s" '
               'app="%s" appEndpoint="%s" correlationId="%s" wopits="%s"' %
-              (op.title(), acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:],
+              (op.title(), acctok['userid'][-20:], acctok['filename'],
+               flask.request.args['access_token'][-20:], flask.request.remote_addr,
                flask.request.headers.get('X-WOPI-DeviceId'), flask.request.headers.get('X-Request-Id'),
                flask.request.headers.get('X-WOPI-SessionId'), flask.request.headers.get('X-WOPI-RequestingApplication'),
                flask.request.headers.get('X-WOPI-AppEndpoint'), flask.request.headers.get('X-WOPI-CorrelationId'), wopits))
