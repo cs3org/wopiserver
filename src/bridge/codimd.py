@@ -167,6 +167,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
         else:
             # reserve the given docid in CodiMD via a HEAD request
             res = requests.head(appurl + '/' + docid,
+                                allow_redirects=False,
                                 params={'apiKey': apikey},
                                 verify=sslverify)
             if res.status_code not in (http.client.OK, http.client.FOUND):
