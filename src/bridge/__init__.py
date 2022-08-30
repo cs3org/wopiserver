@@ -85,7 +85,8 @@ class WB:
             cls.plugins[p].log = cls.log
             cls.plugins[p].sslverify = cls.sslverify
             cls.plugins[p].disablezip = cls.disablezip
-            cls.plugins[p].remoteaddr = socket.gethostbyname(urlparse.urlparse(appinturl).netloc.split(':')[0])
+            addrinfo = socket.getaddrinfo(urlparse.urlparse(appinturl).netloc.split(':')[0], None, proto=socket.IPPROTO_TCP)
+            cls.plugins[p].remoteaddrs = list({addr[-1][0] for addr in addrinfo})
             cls.plugins[p].appname = appname
             cls.plugins[p].init(appurl, appinturl, apikey)
             cls.log.info('msg="Imported plugin for application" app="%s" plugin="%s"' % (p, cls.plugins[p]))
@@ -115,7 +116,7 @@ def isextsupported(fileext):
 def _getappnamebyaddr(remoteaddr):
     '''Return the appname of a (supported) app given its remote IP address'''
     for p in WB.plugins.values():
-        if p.remoteaddr == remoteaddr:
+        if remoteaddr in p.remoteaddrs:
             return p.appname
     raise ValueError('App at remote address %s not registered as plugin' % remoteaddr)
 
