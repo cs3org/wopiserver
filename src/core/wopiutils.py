@@ -170,6 +170,8 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
     the file's inode and the URL-encoded access token.'''
     appname, appediturl, appviewurl = app
     username, wopiuser = user
+    log.debug('msg="Generating token" userid="%s" fileid="%s" endpoint="%s" app="%s"' %
+              (userid[-20:], fileid, endpoint, appname))
     try:
         # stat the file to check for existence and get a version-invariant inode and modification time:
         # the inode serves as fileid (and must not change across save operations), the mtime is used for version information.
