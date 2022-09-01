@@ -66,6 +66,7 @@ class WB:
         cls.sslverify = config.get('bridge', 'sslverify', fallback='True').upper() in ('TRUE', 'YES')
         cls.saveinterval = int(config.get('bridge', 'saveinterval', fallback='200'))
         cls.unlockinterval = int(config.get('bridge', 'unlockinterval', fallback='90'))
+        cls.remoteipheader = config.get('bridge', 'remoteipheader', fallback=None)
         cls.disablezip = config.get('bridge', 'disablezip', fallback='False').upper() in ('TRUE', 'YES')
         cls.hashsecret = secret
         cls.log = wopic.log = log
@@ -222,10 +223,17 @@ def appsave(docid):
         isclose = flask.request.args.get('close') == 'true'
         if not docid:
             raise ValueError
-        # this ensures a save request can go ahead only when coming from registered plugins
-        appname = _getappnamebyaddr(flask.request.remote_addr)
-        WB.log.info('msg="BridgeSave: requested action" isclose="%s" docid="%s" wopisrc="%s" token="%s"' %
-                    (isclose, docid, wopisrc, acctok[-20:]))
+
+        # ensure a save request comes from registered plugins:
+        # this is done via remote IP resolution, and can be overridden with a header
+        # (e.g. for configuration with reverse proxies, cf. wopiserver.conf)
+        if WB.remoteipheader in flask.request.headers:
+            remaddr = flask.request.headers[WB.remoteipheader]
+        else:
+            remaddr = flask.request.remote_addr
+        appname = _getappnamebyaddr(remaddr)
+        WB.log.info('msg="BridgeSave: requested action" isclose="%s" docid="%s" app="%s" wopisrc="%s" token="%s"' %
+                    (isclose, docid, appname, wopisrc, acctok[-20:]))
     except (KeyError, ValueError) as e:
         WB.log.error('msg="BridgeSave: malformed or missing metadata" client="%s" headers="%s" exception="%s" error="%s"' %
                      (flask.request.remote_addr, flask.request.headers, type(e), e))
