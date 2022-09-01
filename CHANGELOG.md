@@ -1,10 +1,10 @@
 ## Changelog for the WOPI server
 
-### Aug 2022 - v9.0.0
+### Thu Sep  1 2022 - v9.0.0
 - Refactored and strengthened save workflow for
   bridged applications, and simplified lock metadata (#80)
   [Note: this change is not backwards compatibile and
-  prevents a transparent upgrade]
+  prevents a transparent upgrade; see also wopiserver.conf]
 - Refactored PutFile logic when handling conflict files (#78)
 - Improved support for Spaces in Reva (#79)
 - Implemented save workflow for Etherpad documents (#81)
