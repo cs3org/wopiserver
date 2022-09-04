@@ -85,7 +85,7 @@ def getlock(wopisrc, acctok):
         res = request(wopisrc, acctok, 'POST', headers={'X-Wopi-Override': 'GET_LOCK'})
         if res.status_code != http.client.OK:
             # lock got lost or any other error
-            raise InvalidLock(res.status_code)
+            raise InvalidLock(res.content.decode())
         # the lock is expected to be a JSON dict, see generatelock()
         return json.loads(res.headers['X-WOPI-Lock'])
     except (ValueError, KeyError, json.decoder.JSONDecodeError) as e:
