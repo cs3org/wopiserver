@@ -339,6 +339,8 @@ def iopOpenInApp():
         res['app-url'] += '%sWOPISrc=%s' % ('&' if '?' in res['app-url'] else '?',
                                             utils.generateWopiSrc(inode, appname == Wopi.proxiedappname))
         res['form-parameters'] = {'access_token': acctok}
+
+    Wopi.log.info('msg="iopOpenInApp: redirecting client" appurl="%s"' % res['app-url'])
     return flask.Response(json.dumps(res), mimetype='application/json')
 
 

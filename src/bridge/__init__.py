@@ -90,7 +90,8 @@ class WB:
             cls.plugins[p].remoteaddrs = list({addr[-1][0] for addr in addrinfo})
             cls.plugins[p].appname = appname
             cls.plugins[p].init(appurl, appinturl, apikey)
-            cls.log.info('msg="Imported plugin for application" app="%s" plugin="%s"' % (p, cls.plugins[p]))
+            cls.log.info('msg="Imported plugin for application" app="%s" plugin="%s" authorizedfrom="%s"' %
+                         (p, cls.plugins[p], cls.plugins[p].remoteaddrs))
         except Exception as e:
             cls.log.info('msg="Failed to initialize plugin" app="%s" URL="%s" exception="%s"' %
                          (p, appinturl, e))
@@ -119,7 +120,7 @@ def _getappnamebyaddr(remoteaddr):
     for p in WB.plugins.values():
         if remoteaddr in p.remoteaddrs:
             return p.appname
-    raise ValueError('App at remote address %s not registered as plugin' % remoteaddr)
+    raise ValueError
 
 
 def _gendocid(wopisrc):
@@ -208,7 +209,6 @@ def appopen(wopisrc, acctok, appname):
         usermsg = str(e) if str(e) else 'Unable to load the app, please try again later or contact support'
         raise FailedOpen(usermsg, http.client.INTERNAL_SERVER_ERROR)
 
-    WB.log.info('msg="Redirecting client to the app" redirecturl="%s"' % redirurl)
     # TODO in the future we should pass some metadata (including access tokens) as a form parameter
     return redirurl, {}
 
@@ -228,18 +228,17 @@ def appsave(docid):
             remaddr = flask.request.headers[WB.remoteipheader]
         else:
             remaddr = flask.request.remote_addr
-        appname = _getappnamebyaddr(remaddr)
+        appname = _getappnamebyaddr(remaddr)   # raises ValueError if not found
         WB.log.info('msg="BridgeSave: requested action" isclose="%s" docid="%s" app="%s" wopisrc="%s" token="%s"' %
                     (isclose, docid, appname, wopisrc, acctok[-20:]))
     except KeyError as e:
-        WB.log.error('msg="BridgeSave: malformed or missing metadata" client="%s" headers="%s" args="%s" error="%s"' %
+        WB.log.error('msg="BridgeSave: missing metadata" address="%s" headers="%s" args="%s" error="%s"' %
                      (flask.request.remote_addr, flask.request.headers, flask.request.args, e))
-        return wopic.jsonify('Malformed or missing metadata, could not save. %s' % RECOVER_MSG), http.client.BAD_REQUEST
+        return wopic.jsonify('Missing metadata, could not save. %s' % RECOVER_MSG), http.client.BAD_REQUEST
     except ValueError as e:
-        # this is a new condition, handle it separately
-        WB.log.error('msg="BridgeSave: unknown client" client="%s" headers="%s" args="%s" error="%s"' %
-                     (flask.request.remote_addr, flask.request.headers, flask.request.args, e))
-        return wopic.jsonify('Unregistered application, could not save. %s' % RECOVER_MSG), http.client.UNAUTHORIZED
+        WB.log.error('msg="BridgeSave: unknown application address" address="%s" headers="%s" args="%s"' %
+                     (flask.request.remote_addr, flask.request.headers, flask.request.args))
+        return wopic.jsonify('Unknown application, could not save. %s' % RECOVER_MSG), http.client.UNAUTHORIZED
 
     # decide whether to notify the save thread
     donotify = isclose or wopisrc not in WB.openfiles or WB.openfiles[wopisrc]['lastsave'] < time.time() - WB.saveinterval
