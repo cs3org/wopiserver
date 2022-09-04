@@ -22,8 +22,11 @@ import bridge.wopiclient as wopic
 import core.wopiutils as utils
 
 
-# The supported plugins integrated with this WOPI Bridge
+# The supported plugins integrated with the WOPI Bridge extensions
 BRIDGE_EXT_PLUGINS = {'md': 'codimd', 'txt': 'codimd', 'zmd': 'codimd', 'epd': 'etherpad', 'zep': 'etherpad'}
+
+# The header that bridged apps are expected to send to the save endpoint
+BRIDGED_APP_HEADER = 'X-EFSS-Bridged-App'
 
 # a standard message to be displayed by the app when some content might be lost: this would only
 # appear in case of uncaught exceptions or bugs handling the webhook callbacks
@@ -66,7 +69,6 @@ class WB:
         cls.sslverify = config.get('bridge', 'sslverify', fallback='True').upper() in ('TRUE', 'YES')
         cls.saveinterval = int(config.get('bridge', 'saveinterval', fallback='200'))
         cls.unlockinterval = int(config.get('bridge', 'unlockinterval', fallback='90'))
-        cls.remoteipheader = config.get('bridge', 'remoteipheader', fallback=None)
         cls.disablezip = config.get('bridge', 'disablezip', fallback='False').upper() in ('TRUE', 'YES')
         cls.hashsecret = secret
         cls.log = wopic.log = log
@@ -119,6 +121,14 @@ def _getappnamebyaddr(remoteaddr):
     '''Return the appname of a (supported) app given its remote IP address'''
     for p in WB.plugins.values():
         if remoteaddr in p.remoteaddrs:
+            return p.appname
+    raise ValueError
+
+
+def _validateappname(appname):
+    '''Return the plugin's appname if one of the registered plugins matches (case-insensitive) the given appname'''
+    for p in WB.plugins.values():
+        if appname.lower() == p.appname.lower():
             return p.appname
     raise ValueError
 
@@ -221,14 +231,14 @@ def appsave(docid):
         acctok = flask.request.args['access_token']
         isclose = flask.request.args.get('close') == 'true'
 
-        # ensure a save request comes from registered plugins:
-        # this is done via remote IP resolution, and can be overridden with a header
-        # (e.g. for configuration with reverse proxies, cf. wopiserver.conf)
-        if WB.remoteipheader in flask.request.headers:
-            remaddr = flask.request.headers[WB.remoteipheader]
+        # ensure a save request comes from known/registered applications:
+        # this is done via a specific header, falling back to reverse IP resolution
+        # (note that the latter fails with apps deployed in k8s clusters)
+        # both functions raise ValueError if not found
+        if BRIDGED_APP_HEADER in flask.request.headers:
+            appname = _validateappname(flask.request.headers[BRIDGED_APP_HEADER])
         else:
-            remaddr = flask.request.remote_addr
-        appname = _getappnamebyaddr(remaddr)   # raises ValueError if not found
+            appname = _getappnamebyaddr(flask.request.remote_addr)
         WB.log.info('msg="BridgeSave: requested action" isclose="%s" docid="%s" app="%s" wopisrc="%s" token="%s"' %
                     (isclose, docid, appname, wopisrc, acctok[-20:]))
     except KeyError as e:
@@ -236,7 +246,7 @@ def appsave(docid):
                      (flask.request.remote_addr, flask.request.headers, flask.request.args, e))
         return wopic.jsonify('Missing metadata, could not save. %s' % RECOVER_MSG), http.client.BAD_REQUEST
     except ValueError as e:
-        WB.log.error('msg="BridgeSave: unknown application address" address="%s" headers="%s" args="%s"' %
+        WB.log.error('msg="BridgeSave: unknown application" address="%s" headers="%s" args="%s"' %
                      (flask.request.remote_addr, flask.request.headers, flask.request.args))
         return wopic.jsonify('Unknown application, could not save. %s' % RECOVER_MSG), http.client.UNAUTHORIZED
 
