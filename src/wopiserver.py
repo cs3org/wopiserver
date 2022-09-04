@@ -338,10 +338,12 @@ def iopOpenInApp():
     res = {}
     if bridge.issupported(appname):
         try:
-            res['app-url'], res['form-parameters'] = bridge.appopen(utils.generateWopiSrc(inode), acctok, appname)
+            res['app-url'], res['form-parameters'] = bridge.appopen(utils.generateWopiSrc(inode), acctok, appname, viewmode)
         except bridge.FailedOpen as foe:
             return foe.msg, foe.statuscode
     else:
+        # the base app URL is the editor in READ_WRITE mode, and the viewer in READ_ONLY or PREVIEW mode
+        # as the known WOPI applications all support switching from preview to edit mode
         res['app-url'] = appurl if vm == utils.ViewMode.READ_WRITE else appviewurl
         res['app-url'] += '%sWOPISrc=%s' % ('&' if '?' in res['app-url'] else '?',
                                             utils.generateWopiSrc(inode, appname == Wopi.proxiedappname))
@@ -586,7 +588,7 @@ def cboxOpen_deprecated():
         # call the bridgeOpen right away, to not expose the WOPI URL to the user (it might be behind firewall)
         try:
             appurl, _ = bridge.appopen(utils.generateWopiSrc(inode), acctok,
-                                       bridge.BRIDGE_EXT_PLUGINS[os.path.splitext(filename)[1][1:]])
+                                       bridge.BRIDGE_EXT_PLUGINS[os.path.splitext(filename)[1][1:]], viewmode)
             Wopi.log.debug('msg="cboxOpen: returning bridged app" URL="%s"' % appurl[appurl.rfind('/'):])
             return appurl[appurl.rfind('/'):]    # return the payload as the appurl is already known via discovery
         except bridge.FailedOpen as foe:
