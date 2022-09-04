@@ -13,7 +13,7 @@ import http.client
 import urllib.parse as urlparse
 import requests
 import bridge.wopiclient as wopic
-
+import core.wopiutils as utils
 
 # initialized by the main class or by the init method
 appurl = None
@@ -65,7 +65,7 @@ def _apicall(method, params, data=None, acctok=None, raiseonnonzerocode=True):
     return res
 
 
-def getredirecturl(isreadwrite, wopisrc, acctok, docid, displayname):
+def getredirecturl(viewmode, wopisrc, acctok, docid, displayname):
     '''Return a valid URL to the app for the given WOPI context'''
     # pass to Etherpad the required metadata for the save webhook
     try:
@@ -82,11 +82,11 @@ def getredirecturl(isreadwrite, wopisrc, acctok, docid, displayname):
         log.error('msg="Exception raised attempting to connect to Etherpad" method="setEFSSMetadata" exception="%s"' % e)
         raise AppFailure
 
-    if not isreadwrite:
+    if viewmode in (utils.ViewMode.READ_ONLY, utils.ViewMode.VIEW_ONLY):
         # for read-only mode generate a read-only link
         res = _apicall('getReadOnlyID', {'padID': docid}, acctok=acctok)
         return appexturl + '/p/%s?userName=%s' % (res['data']['readOnlyID'], displayname)
-    # return the URL to the pad
+    # return the URL to the pad (TODO if viewmode is PREVIEW)
     return appexturl + '/p/%s?userName=%s' % (docid, displayname)
 
 

@@ -16,7 +16,7 @@ import urllib.parse as urlparse
 import http.client
 import requests
 import bridge.wopiclient as wopic
-
+import core.wopiutils as utils
 
 TOOLARGE = 'File is too large to be edited in CodiMD. Please reduce its size with a regular text editor and try again.'
 
@@ -56,11 +56,12 @@ def init(_appurl, _appinturl, _apikey):
         raise AppFailure
 
 
-def getredirecturl(isreadwrite, wopisrc, acctok, docid, displayname):
+def getredirecturl(viewmode, wopisrc, acctok, docid, displayname):
     '''Return a valid URL to the app for the given WOPI context'''
-    if isreadwrite:
-        return '%s/%s?wopiSrc=%s&accessToken=%s&displayName=%s' % \
-            (appexturl, docid, urlparse.quote_plus(wopisrc), acctok, displayname)
+    if viewmode in (utils.ViewMode.READ_WRITE, utils.ViewMode.PREVIEW):
+        return '%s/%s?%s&wopiSrc=%s&accessToken=%s&apiKey=%s&displayName=%s' % \
+            (appexturl, docid, ('view' if viewmode == utils.ViewMode.PREVIEW else 'both'),
+             urlparse.quote_plus(wopisrc), acctok, apikey, displayname)
 
     # read-only mode: first check if we have a CodiMD redirection
     res = requests.head(appurl + '/' + docid,
@@ -236,7 +237,7 @@ def savetostorage(wopisrc, acctok, isclose, wopilock, onlyfetch=False):
     '''Copy document from CodiMD back to storage'''
     # get document from CodiMD
     try:
-        log.info('msg="Fetching file from CodiMD" isclose="%s" url="%s" token="%s"' %
+        log.info('msg="Fetching file from CodiMD" isclose="%s" appurl="%s" token="%s"' %
                  (isclose, appurl + wopilock['doc'], acctok[-20:]))
         mddoc = _fetchfromcodimd(wopilock, acctok)
         if onlyfetch:

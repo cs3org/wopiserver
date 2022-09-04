@@ -43,8 +43,10 @@ class ViewMode(Enum):
     VIEW_ONLY = "VIEW_MODE_VIEW_ONLY"
     # The file can be downloaded
     READ_ONLY = "VIEW_MODE_READ_ONLY"
-    # The file can be downloaded and updated
+    # The file can be downloaded and updated, and the app should be shown in edit mode
     READ_WRITE = "VIEW_MODE_READ_WRITE"
+    # The file can be downloaded and updated, and the app should be shown in preview mode
+    PREVIEW = "VIEW_MODE_PREVIEW"
 
 
 class JsonLogger:
@@ -191,8 +193,11 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
             log.critical('msg="No app URLs registered for the given file type" fileext="%s" mimetypescount="%d"' %
                          (fext, len(endpoints) if endpoints else 0))
             raise IOError
+    if viewmode == ViewMode.PREVIEW:
+        # preview mode assumes read/write privileges for the acctok
+        viewmode = ViewMode.READ_WRITE
     if srv.config.get('general', 'disablemswriteodf', fallback='False').upper() == 'TRUE' and \
-       fext in srv.codetypes and appname != 'Collabora' and appname != '' and viewmode == ViewMode.READ_WRITE:
+       fext in srv.codetypes and appname not in ('Collabora', '') and viewmode == ViewMode.READ_WRITE:
         # we're opening an ODF file and the app is not Collabora (the last check is needed because the legacy endpoint
         # does not set appname when the app is not proxied, so we optimistically assume it's Collabora and let it go)
         log.info('msg="Forcing read-only access to ODF file" filename="%s"' % statinfo['filepath'])
