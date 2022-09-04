@@ -59,9 +59,8 @@ def init(_appurl, _appinturl, _apikey):
 def getredirecturl(isreadwrite, wopisrc, acctok, docid, displayname):
     '''Return a valid URL to the app for the given WOPI context'''
     if isreadwrite:
-        return '%s/%s?wopiSrc=%s&accessToken=%s&apiKey=%s&displayName=%s&metadata=%s' % \
-            (appexturl, docid, urlparse.quote_plus(wopisrc), acctok, apikey, displayname,
-             urlparse.quote_plus('%s?t=%s' % (wopisrc, acctok)))  # TODO this one is deprecated
+        return '%s/%s?wopiSrc=%s&accessToken=%s&apiKey=%s&displayName=%s' % \
+            (appexturl, docid, urlparse.quote_plus(wopisrc), acctok, apikey, displayname)
 
     # read-only mode: first check if we have a CodiMD redirection
     res = requests.head(appurl + '/' + docid,

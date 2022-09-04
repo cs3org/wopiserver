@@ -215,16 +215,10 @@ def appopen(wopisrc, acctok, appname):
 
 def appsave(docid):
     '''Save a doc given its WOPI context, and return a JSON-formatted message. The actual save is asynchronous.'''
-    # fetch metadata from request
     try:
-        if 'X-EFSS-Metadata' in flask.request.headers:
-            # legacy mode, to be removed
-            meta = urlparse.unquote(flask.request.headers['X-EFSS-Metadata'])
-            wopisrc = meta[:meta.index('?t=')]
-            acctok = meta[meta.index('?t=') + 3:]
-        else:
-            wopisrc = urlparse.unquote(flask.request.args['WOPISrc'])
-            acctok = flask.request.args['access_token']
+        # fetch required metadata from request, return BAD_REQUEST if missing
+        wopisrc = urlparse.unquote(flask.request.args['WOPISrc'])
+        acctok = flask.request.args['access_token']
         isclose = flask.request.args.get('close') == 'true'
 
         # ensure a save request comes from registered plugins:
