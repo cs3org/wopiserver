@@ -340,10 +340,11 @@ def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, filename
             reason = {'message': reason}
         resp.headers['X-WOPI-LockFailureReason'] = reason['message']
         resp.data = json.dumps(reason)
-    log.warning('msg="Returning conflict" lockop="%s" user="%s" filename="%s" token="%s" lock="%s" '
+    log.warning('msg="Returning conflict" lockop="%s" user="%s" filename="%s" token="%s" sessionId="%s" lock="%s" '
                 'oldlock="%s" retrievedlock="%s" reason="%s"' %
                 (operation.title(), user, filename, flask.request.args['access_token'][-20:],
-                 lock, oldlock, retrievedlock, (reason['message'] if reason else 'NA')))
+                 flask.request.headers.get('X-WOPI-SessionId'), lock, oldlock, retrievedlock,
+                 (reason['message'] if reason else 'NA')))
     return resp
 
 
