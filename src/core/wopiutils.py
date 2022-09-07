@@ -117,7 +117,8 @@ def validateAndLogHeaders(op):
         except ValueError:
             log.warning('msg="%s: invalid X-WOPI-Timestamp" user="%s" filename="%s" request="%s"' %
                         (op, acctok['userid'][-20:], acctok['filename'], flask.request.__dict__))
-            return 'Invalid or expired X-WOPI-Timestamp header', http.client.UNAUTHORIZED
+            # UNAUTHORIZED would seem more appropriate here, but the ProofKeys part of the MS test suite explicitly requires this
+            return 'Invalid or expired X-WOPI-Timestamp header', http.client.INTERNAL_SERVER_ERROR
 
     # log all relevant headers to help debugging
     log.debug('msg="%s: client context" user="%s" filename="%s" token="%s" client="%s" deviceId="%s" reqId="%s" sessionId="%s" '
