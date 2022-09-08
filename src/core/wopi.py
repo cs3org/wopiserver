@@ -46,10 +46,10 @@ def checkFileInfo(fileid, acctok):
             fmd['UserFriendlyName'] = 'Guest ' + utils.randomString(3)
             if '?path' in furl and furl[-1] != '/' and furl[-1] != '=':
                 # this is a subfolder of a public share, show it
-                fmd['BreadcrumbFolderName'] = 'Back to ' + furl[furl.find('?path'):].split('/')[-1]
+                fmd['BreadcrumbFolderName'] = furl[furl.find('?path'):].split('/')[-1]
             else:
                 # this is the top level public share, which is anonymous
-                fmd['BreadcrumbFolderName'] = 'Back to the public share'
+                fmd['BreadcrumbFolderName'] = 'Public share'
         else:
             fmd['UserFriendlyName'] = acctok['username']
             fmd['BreadcrumbFolderName'] = 'Back to ' + os.path.dirname(acctok['filename'])
@@ -59,6 +59,11 @@ def checkFileInfo(fileid, acctok):
            and srv.config.get('general', 'downloadurl', fallback=None):
             fmd['DownloadUrl'] = fmd['FileUrl'] = '%s?access_token=%s' % \
                 (srv.config.get('general', 'downloadurl'), flask.request.args['access_token'])
+        fmd['BreadcrumbBrandName'] = srv.config.get('general', 'brandname', fallback=None)
+        fmd['BreadcrumbBrandUrl'] = fmd['BreadcrumbFolderUrl'] if furl != '/' else None
+        fmd['FileSharingUrl'] = srv.config.get('general', 'filesharingurl', fallback=None)
+        if fmd['FileSharingUrl']:
+            fmd['FileSharingUrl'] = fmd['FileSharingUrl'].replace('<path>', acctok['filename']).replace('<resId>', fileid)
         fmd['OwnerId'] = statInfo['ownerid']
         fmd['UserId'] = acctok['wopiuser']     # typically same as OwnerId; different when accessing shared documents
         fmd['Size'] = statInfo['size']
@@ -87,7 +92,8 @@ def checkFileInfo(fileid, acctok):
 
         res = flask.Response(json.dumps(fmd), mimetype='application/json')
         # amend sensitive metadata for the logs
-        fmd['HostViewUrl'] = fmd['HostEditUrl'] = fmd['DownloadUrl'] = fmd['FileUrl'] = '_redacted_'
+        fmd['HostViewUrl'] = fmd['HostEditUrl'] = fmd['DownloadUrl'] = fmd['FileUrl'] = \
+            fmd['BreadcrumbBrandUrl'] = fmd['FileSharingUrl'] = '_redacted_'
         log.info('msg="File metadata response" token="%s" metadata="%s"' %
                  (flask.request.args['access_token'][-20:], fmd))
         return res
