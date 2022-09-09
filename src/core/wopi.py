@@ -13,6 +13,7 @@ import json
 import http.client
 from datetime import datetime
 from urllib.parse import unquote_plus as url_unquote
+from urllib.parse import quote_plus as url_quote
 from more_itertools import peekable
 import flask
 import core.wopiutils as utils
@@ -59,11 +60,11 @@ def checkFileInfo(fileid, acctok):
            and srv.config.get('general', 'downloadurl', fallback=None):
             fmd['DownloadUrl'] = fmd['FileUrl'] = '%s?access_token=%s' % \
                 (srv.config.get('general', 'downloadurl'), flask.request.args['access_token'])
-        fmd['BreadcrumbBrandName'] = srv.config.get('general', 'brandname', fallback=None)
-        fmd['BreadcrumbBrandUrl'] = fmd['BreadcrumbFolderUrl'] if furl != '/' else None
+        fmd['BreadcrumbBrandName'] = srv.config.get('general', 'brandingname', fallback=None)
+        fmd['BreadcrumbBrandUrl'] = srv.config.get('general', 'brandingurl', fallback=None)
         fmd['FileSharingUrl'] = srv.config.get('general', 'filesharingurl', fallback=None)
         if fmd['FileSharingUrl']:
-            fmd['FileSharingUrl'] = fmd['FileSharingUrl'].replace('<path>', acctok['filename']).replace('<resId>', fileid)
+            fmd['FileSharingUrl'] = fmd['FileSharingUrl'].replace('<path>', url_quote(acctok['filename'])).replace('<resId>', fileid)
         fmd['OwnerId'] = statInfo['ownerid']
         fmd['UserId'] = acctok['wopiuser']     # typically same as OwnerId; different when accessing shared documents
         fmd['Size'] = statInfo['size']
