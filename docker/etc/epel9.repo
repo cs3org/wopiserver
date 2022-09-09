@@ -1,0 +1,8 @@
+[epel]
+name=Extra Packages for Enterprise Linux 9 [HEAD]
+baseurl=http://linuxsoft.cern.ch/epel/9/Everything/x86_64
+enabled=1
+gpgcheck=1
+gpgkey=http://linuxsoft.cern.ch/epel/RPM-GPG-KEY-EPEL-9
+exclude=collectd*,libcollectd*,mcollective,perl-Authen-Krb5,perl-Collectd,puppet
+priority=20

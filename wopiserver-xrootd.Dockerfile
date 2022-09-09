@@ -3,7 +3,7 @@
 # Build: WOPI_DOCKER_TYPE=-xrootd docker-compose -f wopiserver.yaml build --build-arg VERSION=`git describe | sed 's/^v//'` wopiserver
 # Run: docker-compose -f wopiserver.yaml up -d
 
-FROM cern/cs8-base:latest
+FROM cern/cs9-base:latest
 
 ARG VERSION=latest
 
@@ -11,7 +11,7 @@ LABEL maintainer="cernbox-admins@cern.ch" \
   org.opencontainers.image.title="The CERNBox/IOP WOPI server" \
   org.opencontainers.image.version="$VERSION"
 
-ADD ./docker/etc/epel8.repo /etc/yum.repos.d/
+ADD ./docker/etc/epel9.repo /etc/yum.repos.d/
 
 # prerequisites: until we need to support xrootd (even on C8), we have some EPEL dependencies, easier to install via yum/dnf;
 # the rest is actually installed via pip, including the xrootd python bindings
@@ -22,6 +22,7 @@ RUN yum clean all && yum -y install \
         python3-pip \
         python3-devel \
         openssl-devel \
+        zlib-devel \
         xrootd-client \
         xrootd-devel \
         libuuid-devel \
