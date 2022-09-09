@@ -183,17 +183,21 @@ class Wopi:
             cls.log.info('msg="WOPI Server starting in unsecure/embedded mode" port="%d" wopiurl="%s" version="%s"' %
                          (cls.port, cls.wopiurl, WOPISERVERVERSION))
 
-        if cls.config.get('general', 'internalserver', fallback='flask') == 'waitress':
-            try:
-                from waitress import serve
-            except ImportError:
-                cls.log.fatal('msg="Failed to initialize the service, aborting" error="missing module waitress"')
-                print("Missing module waitress, aborting")
-                raise
+        try:
+            if cls.config.get('general', 'internalserver', fallback='flask') == 'waitress':
+                try:
+                    from waitress import serve
+                except ImportError:
+                    cls.log.fatal('msg="Failed to initialize the service, aborting" error="missing module waitress"')
+                    print("Missing module waitress, aborting")
+                    raise
 
-            serve(cls.app, host='0.0.0.0', port=cls.port)
-        else:
-            cls.app.run(host='0.0.0.0', port=cls.port, ssl_context=cls.app.ssl_context)
+                serve(cls.app, host='0.0.0.0', port=cls.port)
+            else:
+                cls.app.run(host='0.0.0.0', port=cls.port, ssl_context=cls.app.ssl_context)
+        except OSError as e:
+            cls.log.fatal('msg="Failed to run the service, aborting" error="%s"' % e)
+            raise
 
 
 @Wopi.app.errorhandler(Exception)
