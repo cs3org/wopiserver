@@ -59,19 +59,18 @@ def init(_appurl, _appinturl, _apikey):
 def getredirecturl(isreadwrite, wopisrc, acctok, docid, displayname):
     '''Return a valid URL to the app for the given WOPI context'''
     if isreadwrite:
-        return '%s/%s?wopiSrc=%s&accessToken=%s&apiKey=%s&displayName=%s' % \
-            (appexturl, docid, urlparse.quote_plus(wopisrc), acctok, apikey, displayname)
+        return '%s/%s?wopiSrc=%s&accessToken=%s&displayName=%s' % \
+            (appexturl, docid, urlparse.quote_plus(wopisrc), acctok, displayname)
 
     # read-only mode: first check if we have a CodiMD redirection
     res = requests.head(appurl + '/' + docid,
-                        params={'apiKey': apikey},
                         verify=sslverify)
     if res.status_code == http.client.FOUND:
-        return '%s/s/%s?apiKey=%s' % (appexturl, urlparse.urlsplit(res.next.url).path.split('/')[-1], apikey)
+        return '%s/s/%s' % (appexturl, urlparse.urlsplit(res.next.url).path.split('/')[-1])
     # we used to redirect to publish mode or normal view to quickly jump in slide mode depending on the content,
     # but this was based on a bad side effect - here it would require to add:
     # ('/publish' if not _isslides(content) else '') before the '?'
-    return '%s/%s/publish?apiKey=%s' % (appexturl, docid, apikey)
+    return '%s/%s/publish' % (appexturl, docid)
 
 
 # Cloud storage to CodiMD
@@ -167,7 +166,6 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
             # reserve the given docid in CodiMD via a HEAD request
             res = requests.head(appurl + '/' + docid,
                                 allow_redirects=False,
-                                params={'apiKey': apikey},
                                 verify=sslverify)
             if res.status_code not in (http.client.OK, http.client.FOUND):
                 log.error('msg="Unable to reserve note hash in CodiMD" token="%s" response="%d"' %
@@ -183,7 +181,6 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
                 log.debug('msg="Got note hash from CodiMD" docid="%s"' % docid)
             # push the document to CodiMD with the update API
             res = requests.put(appurl + '/api/notes/' + docid,
-                               params={'apiKey': apikey},    # possibly required in the future
                                json={'content': mddoc.decode()},
                                verify=sslverify)
             if res.status_code == http.client.FORBIDDEN:
