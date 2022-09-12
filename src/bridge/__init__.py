@@ -26,7 +26,7 @@ import core.wopiutils as utils
 BRIDGE_EXT_PLUGINS = {'md': 'codimd', 'txt': 'codimd', 'zmd': 'codimd', 'epd': 'etherpad', 'zep': 'etherpad'}
 
 # The header that bridged apps are expected to send to the save endpoint
-BRIDGED_APP_HEADER = 'X-EFSS-Bridged-App'
+BRIDGED_APP_HEADER = 'X-Efss-Bridged-App'
 
 # a standard message to be displayed by the app when some content might be lost: this would only
 # appear in case of uncaught exceptions or bugs handling the webhook callbacks
