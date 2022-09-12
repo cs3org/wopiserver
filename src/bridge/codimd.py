@@ -121,7 +121,7 @@ def _unzipattachments(inputbuf):
 def _fetchfromcodimd(wopilock, acctok):
     '''Fetch a given document from from CodiMD, raise AppFailure in case of errors'''
     try:
-        res = requests.get(appurl + '/' + wopilock['doc'] + '/download', verify=sslverify)
+        res = requests.get(appurl + ('/' if wopilock['doc'][0] != '/' else '') + wopilock['doc'] + '/download', verify=sslverify)
         if res.status_code != http.client.OK:
             log.error('msg="Unable to fetch document from CodiMD" token="%s" response="%d: %s"' %
                       (acctok[-20:], res.status_code, res.content.decode()))
@@ -239,8 +239,8 @@ def savetostorage(wopisrc, acctok, isclose, wopilock, onlyfetch=False):
     '''Copy document from CodiMD back to storage'''
     # get document from CodiMD
     try:
-        log.info('msg="Fetching file from CodiMD" isclose="%s" appurl="%s" token="%s"' %
-                 (isclose, appurl + '/' + wopilock['doc'], acctok[-20:]))
+        log.info('msg="Fetching file from CodiMD" isclose="%s" url="%s" token="%s"' %
+                 (isclose, appurl + wopilock['doc'], acctok[-20:]))
         mddoc = _fetchfromcodimd(wopilock, acctok)
         if onlyfetch:
             # this flag is only used in case of recovery to local storage
