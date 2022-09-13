@@ -128,7 +128,7 @@ def _getappnamebyaddr(remoteaddr):
 def _validateappname(appname):
     '''Return the plugin's appname if one of the registered plugins matches (case-insensitive) the given appname'''
     for p in WB.plugins.values():
-        if appname.lower() == p.appname.lower():
+        if appname.lower() in p.appname.lower():
             return p.appname
     raise ValueError
 
