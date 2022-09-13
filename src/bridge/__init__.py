@@ -246,9 +246,11 @@ def appsave(docid):
                      (flask.request.remote_addr, flask.request.headers, flask.request.args, e))
         return wopic.jsonify('Missing metadata, could not save. %s' % RECOVER_MSG), http.client.BAD_REQUEST
     except ValueError as e:
-        WB.log.error('msg="BridgeSave: unknown application" address="%s" headers="%s" args="%s"' %
-                     (flask.request.remote_addr, flask.request.headers, flask.request.args))
-        return wopic.jsonify('Unknown application, could not save. %s' % RECOVER_MSG), http.client.UNAUTHORIZED
+        WB.log.error('msg="BridgeSave: unknown application" address="%s" appHeader="%s" args="%s"' %
+                     (flask.request.remote_addr, flask.request.headers.get(BRIDGED_APP_HEADER), flask.request.args))
+        # temporary override
+        appname = 'CodiMD'
+        #return wopic.jsonify('Unknown application, could not save. %s' % RECOVER_MSG), http.client.UNAUTHORIZED
 
     # decide whether to notify the save thread
     donotify = isclose or wopisrc not in WB.openfiles or WB.openfiles[wopisrc]['lastsave'] < time.time() - WB.saveinterval
