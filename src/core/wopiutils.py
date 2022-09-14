@@ -330,7 +330,7 @@ def compareWopiLocks(lock1, lock2):
         return False
 
 
-def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, filename, reason=None):
+def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, endpoint, filename, reason=None):
     '''Generates and logs an HTTP 409 response in case of locks conflict'''
     resp = flask.Response(mimetype='application/json')
     resp.headers['X-WOPI-Lock'] = retrievedlock if retrievedlock else ''
@@ -341,10 +341,15 @@ def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, filename
             reason = {'message': reason}
         resp.headers['X-WOPI-LockFailureReason'] = reason['message']
         resp.data = json.dumps(reason)
+    savetime = st.getxattr(endpoint, filename, user, LASTSAVETIMEKEY)
+    if savetime:
+        savetime = int(savetime)
+    else:
+        savetime = 0
     log.warning('msg="Returning conflict" lockop="%s" user="%s" filename="%s" token="%s" sessionId="%s" lock="%s" '
-                'oldlock="%s" retrievedlock="%s" reason="%s"' %
+                'oldlock="%s" retrievedlock="%s" fileage="%s" reason="%s"' %
                 (operation.title(), user, filename, flask.request.args['access_token'][-20:],
-                 flask.request.headers.get('X-WOPI-SessionId'), lock, oldlock, retrievedlock,
+                 flask.request.headers.get('X-WOPI-SessionId'), lock, oldlock, retrievedlock, time.time() - savetime,
                  (reason['message'] if reason else 'NA')))
     return resp
 
@@ -386,12 +391,14 @@ def storeAfterConflict(acctok, retrievedlock, lock, reason):
         storeForRecovery(flask.request.get_data(), acctok['username'], newname,
                          flask.request.args['access_token'][-20:], dorecovery)
         # conflict file was stored on recovery space, tell user (but reason is advisory...)
-        return makeConflictResponse('PUTFILE', acctok['userid'], retrievedlock, lock, 'NA', acctok['filename'],
+        return makeConflictResponse('PUTFILE', acctok['userid'], retrievedlock, lock, 'NA',
+                                    acctok['endpoint'], acctok['filename'],
                                     reason + ', please contact support to recover it')
 
     # otherwise, conflict file was saved to user space but we still use a CONFLICT response
     # as it is better handled by the app to signal the issue to the user
-    return makeConflictResponse('PUTFILE', acctok['userid'], retrievedlock, lock, 'NA', acctok['filename'],
+    return makeConflictResponse('PUTFILE', acctok['userid'], retrievedlock, lock, 'NA',
+                                acctok['endpoint'], acctok['filename'],
                                 reason + ', conflict copy created')
 
 
