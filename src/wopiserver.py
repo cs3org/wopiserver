@@ -74,6 +74,9 @@ class Wopi:
                  }
     log = utils.JsonLogger(app.logger)
     openfiles = {}
+    # sets of sessions for which a lock conflict is outstanding or resolved
+    conflictsessions = {'pending': set(), 'resolved': set()}
+
 
     @classmethod
     def init(cls):
@@ -378,6 +381,23 @@ def iopGetOpenFiles():
         jlist[f] = (Wopi.openfiles[f][0], tuple(Wopi.openfiles[f][1]))
     # dump the current list of opened files in JSON format
     Wopi.log.info('msg="iopGetOpenFiles: returning list of open files" client="%s"' % req.remote_addr)
+    return flask.Response(json.dumps(jlist), mimetype='application/json')
+
+
+@Wopi.app.route("/wopi/iop/conflicts", methods=['GET'])
+def iopGetConflicts():
+    '''Returns a list of all currently outstanding and resolved conflicted sessions, for operators only.
+    This call is protected by the same shared secret as the /wopi/iop/openinapp call.'''
+    req = flask.request
+    if req.headers.get('Authorization') != 'Bearer ' + Wopi.iopsecret:
+        Wopi.log.warning('msg="iopGetConflicts: unauthorized access attempt, missing authorization token" '
+                         'client="%s"' % req.remote_addr)
+        return UNAUTHORIZED
+    # dump the current sets in JSON format
+    jlist = {}
+    for l in Wopi.conflictsessions.keys():
+        jlist[l] = list(Wopi.conflictsessions[l])
+    Wopi.log.info('msg="iopGetConflicts: returning outstanding/resolved conflicted sessions" client="%s"' % req.remote_addr)
     return flask.Response(json.dumps(jlist), mimetype='application/json')
 
 

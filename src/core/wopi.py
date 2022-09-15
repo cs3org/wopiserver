@@ -221,8 +221,6 @@ def setLock(fileid, reqheaders, acctok):
         # LOCK or REFRESH_LOCK: atomically set the lock to the given one, including the expiration time,
         # and return conflict response if the file was already locked
         st.setlock(acctok['endpoint'], fn, acctok['userid'], acctok['appname'], utils.encodeLock(lock))
-        log.info('msg="Successfully locked" lockop="%s" filename="%s" token="%s" sessionId="%s" lock="%s"' %
-                 (op.title(), fn, flask.request.args['access_token'][-20:], flask.request.headers.get('X-WOPI-SessionId'), lock))
 
         # on first lock, set an xattr with the current time for later conflicts checking
         try:
@@ -233,17 +231,15 @@ def setLock(fileid, reqheaders, acctok):
             log.warning('msg="Unable to set lastwritetime xattr" lockop="%s" user="%s" filename="%s" token="%s" reason="%s"' %
                         (op.title(), acctok['userid'][-20:], fn, flask.request.args['access_token'][-20:], e))
         # also, keep track of files that have been opened for write: this is for statistical purposes only
-        # (cf. the GetLock WOPI call and the /wopi/cbox/open/list action)
+        # (cf. the GetLock WOPI call and the /wopi/iop/open/list action)
         if fn not in srv.openfiles:
             srv.openfiles[fn] = (time.asctime(), set([acctok['username']]))
         else:
             # the file was already opened but without lock: this happens on new files (cf. editnew action), just log
             log.info('msg="First lock for new file" lockop="%s" user="%s" filename="%s" token="%s"' %
                      (op.title(), acctok['userid'][-20:], fn, flask.request.args['access_token'][-20:]))
-        resp = flask.Response()
-        resp.status_code = http.client.OK
-        resp.headers['X-WOPI-ItemVersion'] = 'v%s' % statInfo['etag']
-        return resp
+
+        return utils.makeLockSuccessResponse(op, fn, lock, 'v%s' % statInfo['etag'])
 
     except IOError as e:
         if common.EXCL_ERROR in str(e):
@@ -257,21 +253,17 @@ def setLock(fileid, reqheaders, acctok):
                 return utils.makeConflictResponse(op, acctok['userid'], retrievedLock, lock, oldLock, acctok['endpoint'], fn,
                                                   'The file is locked by %s' %
                                                   (lockHolder if lockHolder != 'wopi' else 'another online editor'))
+
             # else it's our own lock, refresh it and return
             try:
                 st.refreshlock(acctok['endpoint'], fn, acctok['userid'], acctok['appname'],
                                utils.encodeLock(lock))
-                log.info('msg="Successfully refreshed" lockop="%s" filename="%s" token="%s" sessionId="%s" lock="%s"' %
-                         (op.title(), fn, flask.request.args['access_token'][-20:], flask.request.headers.get('X-WOPI-SessionId'), lock))
-                # else we don't need to refresh it again
-                resp = flask.Response()
-                resp.status_code = http.client.OK
-                resp.headers['X-WOPI-ItemVersion'] = 'v%s' % statInfo['etag']
-                return resp
+                return utils.makeLockSuccessResponse(op, fn, lock, 'v%s' % statInfo['etag'])
             except IOError as rle:
                 # this is unexpected now
                 log.error('msg="Failed to refresh lock" lockop="%s" filename="%s" token="%s" lock="%s" error="%s"' %
                           (op.title(), fn, flask.request.args['access_token'][-20:], lock, rle))
+
         # any other error is raised
         log.error('msg="Unable to store WOPI lock" lockop="%s" filename="%s" token="%s" lock="%s" error="%s"' %
                   (op.title(), fn, flask.request.args['access_token'][-20:], lock, e))
