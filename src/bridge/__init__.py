@@ -6,7 +6,6 @@ Main author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 
 import sys
 import time
-import socket
 import traceback
 import threading
 import atexit
@@ -88,12 +87,9 @@ class WB:
             cls.plugins[p].log = cls.log
             cls.plugins[p].sslverify = cls.sslverify
             cls.plugins[p].disablezip = cls.disablezip
-            addrinfo = socket.getaddrinfo(urlparse.urlparse(appinturl).netloc.split(':')[0], None, proto=socket.IPPROTO_TCP)
-            cls.plugins[p].remoteaddrs = list({addr[-1][0] for addr in addrinfo})
             cls.plugins[p].appname = appname
             cls.plugins[p].init(appurl, appinturl, apikey)
-            cls.log.info('msg="Imported plugin for application" app="%s" plugin="%s" authorizedfrom="%s"' %
-                         (p, cls.plugins[p], cls.plugins[p].remoteaddrs))
+            cls.log.info('msg="Imported plugin for application" app="%s" plugin="%s"' % (p, cls.plugins[p]))
         except Exception as e:
             cls.log.info('msg="Failed to initialize plugin" app="%s" URL="%s" exception="%s"' %
                          (p, appinturl, e))
@@ -115,14 +111,6 @@ def issupported(appname):
 def isextsupported(fileext):
     '''One-liner to return if a given file extension is supported by one of the bridge extensions'''
     return fileext.lower() in set(BRIDGE_EXT_PLUGINS.keys())
-
-
-def _getappnamebyaddr(remoteaddr):
-    '''Return the appname of a (supported) app given its remote IP address'''
-    for p in WB.plugins.values():
-        if remoteaddr in p.remoteaddrs:
-            return p.appname
-    raise ValueError
 
 
 def _validateappname(appname):
@@ -232,13 +220,8 @@ def appsave(docid):
         isclose = flask.request.args.get('close') == 'true'
 
         # ensure a save request comes from known/registered applications:
-        # this is done via a specific header, falling back to reverse IP resolution
-        # (note that the latter fails with apps deployed in k8s clusters)
-        # both functions raise ValueError if not found
-        if BRIDGED_APP_HEADER in flask.request.headers:
-            appname = _validateappname(flask.request.headers[BRIDGED_APP_HEADER])
-        else:
-            appname = _getappnamebyaddr(flask.request.remote_addr)
+        # this is done via a specific header
+        appname = _validateappname(flask.request.headers[BRIDGED_APP_HEADER])
         WB.log.info('msg="BridgeSave: requested action" isclose="%s" docid="%s" app="%s" wopisrc="%s" token="%s"' %
                     (isclose, docid, appname, wopisrc, acctok[-20:]))
     except KeyError as e:
@@ -246,7 +229,7 @@ def appsave(docid):
                      (flask.request.remote_addr, flask.request.headers, flask.request.args, e))
         return wopic.jsonify('Missing metadata, could not save. %s' % RECOVER_MSG), http.client.BAD_REQUEST
     except ValueError as e:
-        WB.log.error('msg="BridgeSave: unknown application" address="%s" appHeader="%s" args="%s"' %
+        WB.log.error('msg="BridgeSave: unknown application" address="%s" appheader="%s" args="%s"' %
                      (flask.request.remote_addr, flask.request.headers.get(BRIDGED_APP_HEADER), flask.request.args))
         # temporary override
         appname = 'CodiMD'
