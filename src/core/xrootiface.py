@@ -25,6 +25,24 @@ xrdfs = {}        # this is to map each endpoint [string] to its XrdClient
 defaultstorage = None
 endpointoverride = None
 homepath = None
+timeout = None
+
+def init(inconfig, inlog):
+    '''Init module-level variables'''
+    global config               # pylint: disable=global-statement
+    global log                  # pylint: disable=global-statement
+    global endpointoverride     # pylint: disable=global-statement
+    global defaultstorage       # pylint: disable=global-statement
+    global homepath             # pylint: disable=global-statement
+    global timeout              # pylint: disable=global-statement
+    common.config = config = inconfig
+    log = inlog
+    endpointoverride = config.get('xroot', 'endpointoverride', fallback='')
+    defaultstorage = config.get('xroot', 'storageserver')
+    homepath = config.get('xroot', 'storagehomepath', fallback='')
+    timeout = int(config.get('xroot', 'timeout', fallback='10'))
+    # prepare the xroot client for the default storageserver
+    _getxrdfor(defaultstorage)
 
 
 def _getxrdfor(endpoint):
@@ -77,8 +95,11 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args):
         url = _geturlfor(endpoint) + '//proc/user/' + _eosargs(userid) + '&mgm.cmd=' + cmd + \
             ('&mgm.subcmd=' + subcmd if subcmd else '') + '&' + args
         tstart = time.time()
-        rc, _ = f.open(url, OpenFlags.READ)
+        rc, _ = f.open(url, OpenFlags.READ, timeout=timeout)
         tend = time.time()
+        if not f.is_open():
+            log.error('msg="Timeout with xroot" cmd="%s" subcmd="%s" args="%s"' % (cmd, subcmd, args))
+            raise IOError('Timeout executing %s' % cmd)
         res = b''.join(f.readlines()).decode().split('&')
         if len(res) == 3:        # we may only just get stdout: in that case, assume it's all OK
             rc = res[2].strip('\n')
@@ -110,22 +131,6 @@ def _getfilepath(filepath, encodeamp=False):
     return homepath + (filepath if not encodeamp else filepath.replace('&', '#AND#'))
 
 
-def init(inconfig, inlog):
-    '''Init module-level variables'''
-    global config               # pylint: disable=global-statement
-    global log                  # pylint: disable=global-statement
-    global endpointoverride     # pylint: disable=global-statement
-    global defaultstorage       # pylint: disable=global-statement
-    global homepath             # pylint: disable=global-statement
-    common.config = config = inconfig
-    log = inlog
-    endpointoverride = config.get('xroot', 'endpointoverride', fallback='')
-    defaultstorage = config.get('xroot', 'storageserver')
-    homepath = config.get('xroot', 'storagehomepath', fallback='')
-    # prepare the xroot client for the default storageserver
-    _getxrdfor(defaultstorage)
-
-
 def getuseridfromcreds(_token, wopiuser):
     '''Maps a Reva token and wopiuser to the credentials to be used to access the storage.
     For the xrootd case, we have to resolve the username to uid:gid'''
@@ -137,7 +142,7 @@ def stat(endpoint, filepath, userid):
     '''Stat a file via xroot on behalf of the given userid, and returns (size, mtime). Uses the default xroot API.'''
     filepath = _getfilepath(filepath, encodeamp=True)
     tstart = time.time()
-    rc, statInfo = _getxrdfor(endpoint).stat(filepath + _eosargs(userid))
+    rc, statInfo = _getxrdfor(endpoint).stat(filepath + _eosargs(userid), timeout=timeout)
     tend = time.time()
     log.info('msg="Invoked stat" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend - tstart) * 1000))
     if not statInfo:
@@ -204,17 +209,19 @@ def statx(endpoint, fileref, userid, versioninv=1):
     # also, use the owner's as opposed to the user's credentials to bypass any restriction (e.g. with single-share files)
     verFolder = os.path.dirname(filepath) + os.path.sep + EOSVERSIONPREFIX + os.path.basename(filepath)
     ownerarg = _eosargs(statxdata['uid'] + ':' + statxdata['gid'])
-    rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder) + ownerarg + '&mgm.pcmd=stat')
+    rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder) + ownerarg + '&mgm.pcmd=stat',
+                                            timeout=timeout)
     tend = time.time()
     infov = infov.decode()
     try:
         if OK_MSG not in str(rcv) or 'retc=2' in infov:
             # the version folder does not exist: create it (on behalf of the owner) as it is done in Reva
-            rcmkdir = _getxrdfor(endpoint).mkdir(_getfilepath(verFolder) + ownerarg, MkDirFlags.MAKEPATH)
+            rcmkdir = _getxrdfor(endpoint).mkdir(_getfilepath(verFolder) + ownerarg, MkDirFlags.MAKEPATH, timeout=timeout)
             if OK_MSG not in str(rcmkdir):
                 raise IOError(rcmkdir)
             log.debug('msg="Invoked mkdir on version folder" filepath="%s"' % _getfilepath(verFolder))
-            rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder) + ownerarg + '&mgm.pcmd=stat')
+            rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder) + ownerarg + '&mgm.pcmd=stat',
+                                                    timeout=timeout)
             tend = time.time()
             infov = infov.decode()
             if OK_MSG not in str(rcv) or 'retc=' in infov:
@@ -320,10 +327,13 @@ def readfile(endpoint, filepath, userid, _lockid):
     '''Read a file via xroot on behalf of the given userid. Note that the function is a generator, managed by Flask.'''
     log.debug('msg="Invoking readFile" filepath="%s"' % filepath)
     with XrdClient.File() as f:
-        fileurl = _geturlfor(endpoint) + '/' + homepath + filepath + _eosargs(userid)
         tstart = time.time()
-        rc, _ = f.open(fileurl, OpenFlags.READ)
+        rc, _ = f.open(_geturlfor(endpoint) + '/' + homepath + filepath + _eosargs(userid),
+                       OpenFlags.READ, timeout=timeout)
         tend = time.time()
+        if not f.is_open():
+            log.error('msg="Timeout with xroot" op="read" filepath="%s"' % filepath)
+            raise IOError('Timeout opening file for read')
         if not rc.ok:
             # the file could not be opened: check the case of ENOENT and log it as info to keep the logs cleaner
             if common.ENOENT_MSG in rc.message:
@@ -354,8 +364,11 @@ def writefile(endpoint, filepath, userid, content, _lockid, islock=False):
     f = XrdClient.File()
     tstart = time.time()
     rc, _ = f.open(_geturlfor(endpoint) + '/' + homepath + filepath + _eosargs(userid, not islock, size),
-                   OpenFlags.NEW if islock else OpenFlags.DELETE)
+                   OpenFlags.NEW if islock else OpenFlags.DELETE, timeout=timeout)
     tend = time.time()
+    if not f.is_open():
+        log.error('msg="Timeout with xroot" op="write" filepath="%s"' % filepath)
+        raise IOError('Timeout opening file for write')
     if not rc.ok:
         if islock and 'File exists' in rc.message:
             # racing against an existing file
