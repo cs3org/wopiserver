@@ -208,7 +208,7 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
               statinfo['filepath'], statinfo['inode'], statinfo['mtime'],
               folderurl, appname, exptime, acctok[-20:]))
     # return the inode == fileid, the filepath and the access token
-    return statinfo['inode'], acctok
+    return statinfo['inode'], acctok, viewmode
 
 
 def encodeLock(lock):

@@ -327,8 +327,8 @@ def iopOpenInApp():
             # this happens in hybrid deployments with xrootd as storage interface:
             # in this case we override the wopiuser with the resolved uid:gid
             wopiuser = userid
-        inode, acctok = utils.generateAccessToken(userid, fileid, viewmode, (username, wopiuser), folderurl, endpoint,
-                                                  (appname, appurl, appviewurl))
+        inode, acctok, vm = utils.generateAccessToken(userid, fileid, viewmode, (username, wopiuser), folderurl, endpoint,
+                                                      (appname, appurl, appviewurl))
     except IOError as e:
         Wopi.log.info('msg="iopOpenInApp: remote error on generating token" client="%s" user="%s" '
                       'friendlyname="%s" mode="%s" endpoint="%s" reason="%s"' %
@@ -342,7 +342,7 @@ def iopOpenInApp():
         except bridge.FailedOpen as foe:
             return foe.msg, foe.statuscode
     else:
-        res['app-url'] = appurl if viewmode == utils.ViewMode.READ_WRITE else appviewurl
+        res['app-url'] = appurl if vm == utils.ViewMode.READ_WRITE else appviewurl
         res['app-url'] += '%sWOPISrc=%s' % ('&' if '?' in res['app-url'] else '?',
                                             utils.generateWopiSrc(inode, appname == Wopi.proxiedappname))
         res['form-parameters'] = {'access_token': acctok}
@@ -423,9 +423,9 @@ def iopWopiTest():
         return 'Missing arguments', http.client.BAD_REQUEST
     if Wopi.useHttps:
         return 'WOPI validator not supported in https mode', http.client.BAD_REQUEST
-    inode, acctok = utils.generateAccessToken(usertoken, filepath, utils.ViewMode.READ_WRITE, ('test', usertoken),
-                                              'http://folderurlfortestonly/', endpoint,
-                                              ('WOPI validator', 'http://fortestonly/', 'http://fortestonly/'))
+    inode, acctok, _ = utils.generateAccessToken(usertoken, filepath, utils.ViewMode.READ_WRITE, ('test', usertoken),
+                                                 'http://folderurlfortestonly/', endpoint,
+                                                 ('WOPI validator', 'http://fortestonly/', 'http://fortestonly/'))
     Wopi.log.info('msg="iopWopiTest: preparing test via WOPI validator" client="%s"' % req.remote_addr)
     return '-e WOPI_URL=http://localhost:%d/wopi/files/%s -e WOPI_TOKEN=%s' % (Wopi.port, inode, acctok)
 
@@ -578,8 +578,8 @@ def cboxOpen_deprecated():
     toproxy = req.args.get('proxy', 'false') == 'true' and filename[-1] == 'x'    # if requested, only proxy OOXML files
     try:
         # here we set wopiuser = userid (i.e. uid:gid) as that's well known to be consistent over time
-        inode, acctok = utils.generateAccessToken(userid, filename, viewmode, (username, userid),
-                                                  folderurl, endpoint, (Wopi.proxiedappname if toproxy else '', '', ''))
+        inode, acctok, _ = utils.generateAccessToken(userid, filename, viewmode, (username, userid),
+                                                     folderurl, endpoint, (Wopi.proxiedappname if toproxy else '', '', ''))
     except IOError as e:
         Wopi.log.warning('msg="cboxOpen: remote error on generating token" client="%s" user="%s" '
                          'friendlyname="%s" mode="%s" endpoint="%s" reason="%s"' %
