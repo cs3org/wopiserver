@@ -182,7 +182,7 @@ def setlock(endpoint, filepath, userid, appname, value):
                        expiration={'seconds': int(time.time() + ctx['lockexpiration'])})
     req = cs3sp.SetLockRequest(ref=reference, lock=lock)
     res = ctx['cs3gw'].SetLock(request=req, metadata=[('x-access-token', userid)])
-    if res.status.code == cs3code.CODE_FAILED_PRECONDITION:
+    if res.status.code in [cs3code.CODE_FAILED_PRECONDITION, cs3code.CODE_ABORTED]:
         log.info('msg="Invoked setlock on an already locked entity" filepath="%s" appname="%s" trace="%s" reason="%s"' %
                  (filepath, appname, res.status.trace, res.status.message.replace('"', "'")))
         raise IOError(common.EXCL_ERROR)
