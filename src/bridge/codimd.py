@@ -59,9 +59,14 @@ def init(_appurl, _appinturl, _apikey):
 def getredirecturl(viewmode, wopisrc, acctok, docid, displayname):
     '''Return a valid URL to the app for the given WOPI context'''
     if viewmode in (utils.ViewMode.READ_WRITE, utils.ViewMode.PREVIEW):
-        return '%s/%s?%s&wopiSrc=%s&accessToken=%s&apiKey=%s&displayName=%s' % \
-            (appexturl, docid, ('view' if viewmode == utils.ViewMode.PREVIEW else 'both'),
-             urlparse.quote_plus(wopisrc), acctok, apikey, displayname)
+        mode = 'view' if viewmode == utils.ViewMode.PREVIEW else 'both'
+        params = {
+            'wopiSrc': wopisrc,
+            'accessToken': acctok,
+            'apiKey': apikey,
+            'displayName': displayname,
+        }
+        return f'{appexturl}/{docid}?{mode}&{urlparse.urlencode(params)}'
 
     # read-only mode: first check if we have a CodiMD redirection
     res = requests.head(appurl + '/' + docid,
@@ -71,7 +76,7 @@ def getredirecturl(viewmode, wopisrc, acctok, docid, displayname):
     # we used to redirect to publish mode or normal view to quickly jump in slide mode depending on the content,
     # but this was based on a bad side effect - here it would require to add:
     # ('/publish' if not _isslides(content) else '') before the '?'
-    return '%s/%s/publish' % (appexturl, docid)
+    return f'{appexturl}/{docid}/publish'
 
 
 # Cloud storage to CodiMD
