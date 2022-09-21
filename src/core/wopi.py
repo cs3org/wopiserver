@@ -218,6 +218,10 @@ def setLock(fileid, reqheaders, acctok):
                             (op.title(), fn, flask.request.args['access_token'][-20:], e))
 
     try:
+        # If LOCK and oldLock provided this is an UnLockAndRelock operation
+        if op == 'LOCK' and oldLock:
+            st.unlock(acctok['endpoint'], fn, acctok['userid'], acctok['appname'], utils.encodeLock(oldLock))
+
         # LOCK or REFRESH_LOCK: atomically set the lock to the given one, including the expiration time,
         # and return conflict response if the file was already locked
         st.setlock(acctok['endpoint'], fn, acctok['userid'], acctok['appname'], utils.encodeLock(lock))

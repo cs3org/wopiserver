@@ -138,7 +138,7 @@ def generateWopiSrc(fileid, proxy=False):
     if not proxy or not srv.wopiproxy:
         return url_quote_plus('%s/wopi/files/%s' % (srv.wopiurl, fileid)).replace('-', '%2D')
     # proxy the WOPI request through an external WOPI proxy service, but only if it was not already proxied
-    if len(fileid) < 50:   # heuristically, proxied fileids are (much) longer than that
+    if len(fileid) < 90:   # heuristically, proxied fileids are (much) longer than that
         log.debug('msg="Generating proxied fileid" fileid="%s" proxy="%s"' % (fileid, srv.wopiproxy))
         fileid = jwt.encode({'u': srv.wopiurl + '/wopi/files/', 'f': fileid}, srv.wopiproxykey, algorithm='HS256')
     else:
