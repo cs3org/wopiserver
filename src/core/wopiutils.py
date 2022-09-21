@@ -348,7 +348,10 @@ def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, endpoint
         savetime = 0
     session = flask.request.headers.get('X-WOPI-SessionId')
     if session:
-        srv.conflictsessions['pending'].add(session)
+        if session in srv.conflictsessions['pending']:
+            srv.conflictsessions['pending'][session] += 1
+        else:
+            srv.conflictsessions['pending'][session] = 1
     log.warning('msg="Returning conflict" lockop="%s" user="%s" filename="%s" token="%s" sessionId="%s" lock="%s" '
                 'oldlock="%s" retrievedlock="%s" fileage="%s" reason="%s"' %
                 (operation.title(), user, filename, flask.request.args['access_token'][-20:],
@@ -361,8 +364,8 @@ def makeLockSuccessResponse(operation, filename, lock, version):
     '''Generates and logs an HTTP 200 response with appropriate headers for Lock/RefreshLock operations'''
     session = flask.request.headers.get('X-WOPI-SessionId')
     if session in srv.conflictsessions['pending']:
-        srv.conflictsessions['pending'].remove(session)
-        srv.conflictsessions['resolved'].add(session)
+        counter = srv.conflictsessions['pending'].pop(session)
+        srv.conflictsessions['resolved'][session] = counter
 
     log.info('msg="Successfully locked" lockop="%s" filename="%s" token="%s" sessionId="%s" lock="%s"' %
              (operation.title(), filename, flask.request.args['access_token'][-20:], session, lock))
