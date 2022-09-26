@@ -100,9 +100,9 @@ def validateAndLogHeaders(op):
     # validate the access token
     try:
         acctok = jwt.decode(flask.request.args['access_token'], srv.wopisecret, algorithms=['HS256'])
-        if acctok['exp'] < time.time():
+        if acctok['exp'] < time.time() or 'cs3org:wopiserver' not in acctok['iss']:
             raise jwt.exceptions.ExpiredSignatureError
-    except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
+    except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError, KeyError) as e:
         log.info('msg="Expired or malformed token" client="%s" requestedUrl="%s" error="%s" token="%s"' %
                  (flask.request.remote_addr, flask.request.base_url, str(type(e)) + ': ' + str(e), flask.request.args['access_token']))
         return 'Invalid access token', http.client.UNAUTHORIZED
