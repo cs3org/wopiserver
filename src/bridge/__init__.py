@@ -348,12 +348,27 @@ class SaveThread(threading.Thread):
                     openfile['toclose'] = {'invalid-lock': True}
                     return None
 
-            WB.log.info('msg="SaveThread: saving file" token="%s" docid="%s"' %
-                        (openfile['acctok'][-20:], openfile['docid']))
-            WB.saveresponses[wopisrc] = WB.plugins[appname].savetostorage(
-                wopisrc, openfile['acctok'], _intersection(openfile['toclose']), wopilock)
+            # now save and log
+            WB.saveresponses[wopisrc] = WB.plugins[appname].savetostorage(wopisrc, openfile['acctok'],
+                                                                          _intersection(openfile['toclose']), wopilock)
             openfile['lastsave'] = int(time.time())
-            openfile['tosave'] = False
+            if WB.saveresponses[wopisrc][1] >= http.client.BAD_REQUEST:
+                # this is hopefully transient, yet we need to try until we get the file back to storage:
+                # the updated lastsave time ensures next retry will happen after the saveinterval time
+                if 'still-dirty' not in openfile['toclose']:
+                    # add a special key that will prevent close/unlock and refresh lock. If the refresh fails,
+                    # the whole process will be retried at next round
+                    openfile['toclose']['still-dirty'] = False
+                    wopilock = wopic.refreshlock(wopisrc, openfile['acctok'], wopilock, toclose=openfile['toclose'])
+                WB.log.warning('msg="SaveThread: failed to save, will retry" token="%s" docid="%s" lasterror="%s" tocl="%s"' %
+                               (openfile['acctok'][-20:], openfile['docid'], WB.saveresponses[wopisrc], wopilock['tocl']))
+            else:
+                openfile['tosave'] = False
+                if 'still-dirty' in openfile['toclose']:     # remove the special key above if present
+                    openfile['toclose'].pop('still-dirty')
+                    wopilock = wopic.refreshlock(wopisrc, openfile['acctok'], wopilock, toclose=openfile['toclose'])
+                WB.log.info('msg="SaveThread: file saved successfully" token="%s" docid="%s" tocl="%s"' %
+                            (openfile['acctok'][-20:], openfile['docid'], wopilock['tocl']))
         return wopilock
 
     def closewhenidle(self, openfile, wopisrc, wopilock):
@@ -410,7 +425,7 @@ class SaveThread(threading.Thread):
                 try:
                     wopic.refreshlock(wopisrc, openfile['acctok'], wopilock, toclose=openfile['toclose'])
                 except wopic.InvalidLock:
-                    WB.log.warning('msg="SaveThread: failed to refresh lock, will try again later" url="%s"' % wopisrc)
+                    WB.log.warning('msg="SaveThread: failed to refresh lock, will retry" url="%s"' % wopisrc)
 
 
 @atexit.register
