@@ -65,7 +65,7 @@ def _apicall(method, params, data=None, acctok=None, raiseonnonzerocode=True):
     return res
 
 
-def getredirecturl(viewmode, wopisrc, acctok, docid, displayname):
+def getredirecturl(viewmode, wopisrc, acctok, docid, _filename, displayname):
     '''Return a valid URL to the app for the given WOPI context'''
     # pass to Etherpad the required metadata for the save webhook
     try:

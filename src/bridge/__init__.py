@@ -200,7 +200,7 @@ def appopen(wopisrc, acctok, appname, viewmode):
             # user has no write privileges, just fetch the document and push it to the app on a random docid
             wopilock = app.loadfromstorage(filemd, wopisrc, acctok, None)
 
-        redirurl = app.getredirecturl(viewmode, wopisrc, acctok, wopilock['doc'][1:],
+        redirurl = app.getredirecturl(viewmode, wopisrc, acctok, wopilock['doc'][1:], filemd['BaseFileName'],
                                       urlparse.quote_plus(filemd['UserFriendlyName']))
     except app.AppFailure as e:
         # this can be raised by loadfromstorage or getredirecturl

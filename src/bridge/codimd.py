@@ -56,7 +56,7 @@ def init(_appurl, _appinturl, _apikey):
         raise AppFailure
 
 
-def getredirecturl(viewmode, wopisrc, acctok, docid, displayname):
+def getredirecturl(viewmode, wopisrc, acctok, docid, filename, displayname):
     '''Return a valid URL to the app for the given WOPI context'''
     if viewmode in (utils.ViewMode.READ_WRITE, utils.ViewMode.PREVIEW):
         mode = 'view' if viewmode == utils.ViewMode.PREVIEW else 'both'
@@ -65,6 +65,7 @@ def getredirecturl(viewmode, wopisrc, acctok, docid, displayname):
             'accessToken': acctok,
             'apiKey': apikey,
             'displayName': displayname,
+            'allowEmbedding': os.path.splitext(filename)[1] == '.zmd',
         }
         return f'{appexturl}/{docid}?{mode}&{urlparse.urlencode(params)}'
 
@@ -147,7 +148,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
     wasbundle = os.path.splitext(filemd['BaseFileName'])[1] == '.zmd'
 
     # if it's a bundled file, unzip it and push the attachments in the appropriate folder
-    if wasbundle:
+    if wasbundle and mdfile:
         mddoc = _unzipattachments(mdfile)
     else:
         mddoc = mdfile
@@ -260,8 +261,7 @@ def savetostorage(wopisrc, acctok, isclose, wopilock, onlyfetch=False):
     wasbundle = os.path.splitext(wopilock['fn'])[1] == '.zmd'
     bundlefile = attresponse = None
     if not disablezip or wasbundle:     # in disablezip mode, preserve existing .zmd files but don't create new ones
-        bundlefile, attresponse = _getattachments(mddoc.decode(), wopilock['fn'].replace('.zmd', '.md'),
-                                                  (wasbundle and not isclose))
+        bundlefile, attresponse = _getattachments(mddoc.decode(), wopilock['fn'].replace('.zmd', '.md'), wasbundle)
 
     # WOPI PutFile for the file or the bundle if it already existed
     if (wasbundle ^ (not bundlefile)) or not isclose:
