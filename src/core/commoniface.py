@@ -81,15 +81,18 @@ def encodeinode(endpoint, inode):
     return endpoint + '-' + urlsafe_b64encode(inode.encode()).decode()
 
 
-def validatelock(filepath, appname, oldlock, op, log):
+def validatelock(filepath, appname, oldlock, oldvalue, op, log):
     '''Common logic for validating locks in the xrootd and local storage interfaces.
        Duplicates some logic implemented in Reva for the cs3 storage interface'''
-    if not oldlock:
+    try:
+        if not oldlock:
+            raise IOError('File was not locked or lock had expired')
+        if oldvalue and oldlock['lock_id'] != oldvalue:
+            raise IOError('Existing lock payload does not match')
+        if appname and oldlock['app_name'] != appname \
+            and oldlock['app_name'] != 'wopi' and appname != 'wopi':    # TODO deprecated, to be removed after CERNBox rollout
+            raise IOError('File is locked by %s' % oldlock['app_name'])
+    except IOError as e:
         log.warning('msg="Failed to %s" filepath="%s" appname="%s" reason="%s"' %
-                    (op, filepath, appname, 'File was not locked or lock had expired'))
-        raise IOError('File was not locked or lock had expired')
-    if oldlock['app_name'] != 'wopi' and appname != 'wopi' and oldlock['app_name'] and appname \
-       and oldlock['app_name'] != appname:
-        log.warning('msg="Failed to %s" filepath="%s" appname="%s" reason="%s"' %
-                    (op, filepath, appname, 'File is locked by %s' % oldlock['app_name']))
-        raise IOError('File is locked by %s' % oldlock['app_name'])
+                    (op, filepath, appname, e))
+        raise

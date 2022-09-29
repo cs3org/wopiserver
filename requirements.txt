@@ -7,5 +7,5 @@ PyJWT
 requests
 more_itertools
 prometheus-flask-exporter
-cs3apis>=0.1.dev95
+cs3apis>=0.1.dev101
 waitress

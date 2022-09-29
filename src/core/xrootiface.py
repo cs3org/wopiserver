@@ -308,9 +308,9 @@ def getlock(endpoint, filepath, userid):
     return None         # no pre-existing lock found, or error attempting to read it: assume it does not exist
 
 
-def refreshlock(endpoint, filepath, userid, appname, value):
+def refreshlock(endpoint, filepath, userid, appname, value, oldvalue=None):
     '''Refresh the lock value as an xattr'''
-    common.validatelock(filepath, appname, getlock(endpoint, filepath, userid), 'refreshlock', log)
+    common.validatelock(filepath, appname, getlock(endpoint, filepath, userid), oldvalue, 'refreshlock', log)
     log.debug('msg="Invoked refreshlock" filepath="%s" value="%s"' % (filepath, value))
     # this is non-atomic, but the lock was already held
     setxattr(endpoint, filepath, userid, common.LOCKKEY, common.genrevalock(appname, value), None)
@@ -318,7 +318,7 @@ def refreshlock(endpoint, filepath, userid, appname, value):
 
 def unlock(endpoint, filepath, userid, appname, value):
     '''Remove a lock as an xattr'''
-    common.validatelock(filepath, appname, getlock(endpoint, filepath, userid), 'unlock', log)
+    common.validatelock(filepath, appname, getlock(endpoint, filepath, userid), None, 'unlock', log)
     log.debug('msg="Invoked unlock" filepath="%s" value="%s"' % (filepath, value))
     rmxattr(endpoint, filepath, userid, common.LOCKKEY, None)
 
