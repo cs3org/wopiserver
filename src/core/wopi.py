@@ -218,10 +218,6 @@ def setLock(fileid, reqheaders, acctok):
                             (op.title(), fn, flask.request.args['access_token'][-20:], e))
 
     try:
-        # If LOCK and oldLock provided this is an UnLockAndRelock operation
-        if op == 'LOCK' and oldLock:
-            st.unlock(acctok['endpoint'], fn, acctok['userid'], acctok['appname'], utils.encodeLock(oldLock))
-
         # LOCK or REFRESH_LOCK: atomically set the lock to the given one, including the expiration time,
         # and return conflict response if the file was already locked
         st.setlock(acctok['endpoint'], fn, acctok['userid'], acctok['appname'], utils.encodeLock(lock))
@@ -251,6 +247,7 @@ def setLock(fileid, reqheaders, acctok):
             # get the lock that was set
             if not retrievedLock:
                 retrievedLock, lockHolder = utils.retrieveWopiLock(fileid, op, lock, acctok)
+            # validate against either the given lock (RefreshLock case) or the given old lock (UnlockAndRelock case)
             if retrievedLock and not utils.compareWopiLocks(retrievedLock, (oldLock if oldLock else lock)):
                 # lock mismatch, the WOPI client is supposed to acknowledge the existing lock
                 # or deny write access to the file
