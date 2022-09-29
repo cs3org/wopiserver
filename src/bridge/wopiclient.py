@@ -93,8 +93,8 @@ def getlock(wopisrc, acctok):
         raise InvalidLock(e)
 
 
-def _getheadersforrefreshlock(acctok, wopilock, digest, toclose):
-    '''Helper function for refreshlock to generate the old and new lock structures'''
+def _getheadersforrelock(acctok, wopilock, digest, toclose):
+    '''Helper function for relock to generate the old and new lock structures'''
     newlock = json.loads(json.dumps(wopilock))    # this is a hack for a deep copy
     if toclose:
         # we got the full 'toclose' dict, push it as is
@@ -105,7 +105,7 @@ def _getheadersforrefreshlock(acctok, wopilock, digest, toclose):
     if digest and wopilock['dig'] != digest:
         newlock['dig'] = digest
     return {
-        'X-Wopi-Override': 'REFRESH_LOCK',
+        'X-Wopi-Override': 'LOCK',
         'X-WOPI-OldLock': json.dumps(wopilock),
         'X-WOPI-Lock': json.dumps(newlock)
     }, newlock
@@ -113,7 +113,7 @@ def _getheadersforrefreshlock(acctok, wopilock, digest, toclose):
 
 def refreshlock(wopisrc, acctok, wopilock, digest=None, toclose=None):
     '''Refresh an existing WOPI lock. Returns the new lock if successful, None otherwise'''
-    h, newlock = _getheadersforrefreshlock(acctok, wopilock, digest, toclose)
+    h, newlock = _getheadersforrelock(acctok, wopilock, digest, toclose)
     res = request(wopisrc, acctok, 'POST', headers=h)
     if res.status_code == http.client.OK:
         return newlock
@@ -133,7 +133,7 @@ def refreshlock(wopisrc, acctok, wopilock, digest=None, toclose=None):
         if digest:
             wopilock['dig'] = currlock['dig']
         # retry with the newly got lock
-        h, newlock = _getheadersforrefreshlock(acctok, wopilock, digest, toclose)
+        h, newlock = _getheadersforrelock(acctok, wopilock, digest, toclose)
         res = request(wopisrc, acctok, 'POST', headers=h)
         if res.status_code == http.client.OK:
             return newlock
