@@ -241,7 +241,10 @@ class TestStorage(unittest.TestCase):
             self.storage.refreshlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'myapp', 'testlock')
         self.assertIn('File was not locked', str(context.exception))
         self.storage.setlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'myapp', 'testlock')
-        self.storage.refreshlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'myapp', 'testlock2')
+        with self.assertRaises(IOError) as context:
+            self.storage.refreshlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'myapp', 'newlock', 'mismatched')
+        self.assertIn('Existing lock payload does not match', str(context.exception))
+        self.storage.refreshlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'myapp', 'testlock2', 'testlock')
         l = self.storage.getlock(self.endpoint, self.homepath + '/testrlock', self.userid)  # noqa: E741
         self.assertIsInstance(l, dict)
         self.assertEqual(l['lock_id'], 'testlock2')

@@ -222,13 +222,17 @@ def getlock(endpoint, filepath, userid):
     }
 
 
-def refreshlock(endpoint, filepath, userid, appname, value):
+def refreshlock(endpoint, filepath, userid, appname, value, oldvalue=None):
     '''Refresh the lock metadata for the given filepath'''
     reference = _getcs3reference(endpoint, filepath)
     lock = cs3spr.Lock(type=cs3spr.LOCK_TYPE_WRITE, app_name=appname, lock_id=value,
                        expiration={'seconds': int(time.time() + ctx['lockexpiration'])})
-    req = cs3sp.RefreshLockRequest(ref=reference, lock=lock)
+    req = cs3sp.RefreshLockRequest(ref=reference, lock=lock, existing_lock_id=oldvalue)
     res = ctx['cs3gw'].RefreshLock(request=req, metadata=[('x-access-token', userid)])
+    if res.status.code in [cs3code.CODE_FAILED_PRECONDITION, cs3code.CODE_ABORTED]:
+        log.info('msg="Failed precondition on refreshlock" filepath="%s" appname="%s" trace="%s" reason="%s"' %
+                 (filepath, appname, res.status.trace, res.status.message.replace('"', "'")))
+        raise IOError(common.EXCL_ERROR)
     if res.status.code != cs3code.CODE_OK:
         log.warning('msg="Failed to refreshlock" filepath="%s" appname="%s" value="%s" trace="%s" code="%s" reason="%s"' %
                     (filepath, appname, value, res.status.trace, res.status.code, res.status.message.replace('"', "'")))

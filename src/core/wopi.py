@@ -255,10 +255,10 @@ def setLock(fileid, reqheaders, acctok):
                                                   'The file is locked by %s' %
                                                   (lockHolder if lockHolder != 'wopi' else 'another online editor'))
 
-            # else it's our own lock, refresh it and return
+            # else it's our own lock, refresh it (rechecking the oldLock if necessary, for atomicity) and return
             try:
                 st.refreshlock(acctok['endpoint'], fn, acctok['userid'], acctok['appname'],
-                               utils.encodeLock(lock))
+                               utils.encodeLock(lock), utils.encodeLock(oldLock) if oldLock else None)
                 return utils.makeLockSuccessResponse(op, fn, lock, 'v%s' % statInfo['etag'])
             except IOError as rle:
                 # this is unexpected now
