@@ -201,7 +201,7 @@ def appopen(wopisrc, acctok, appname, viewmode):
             wopilock = app.loadfromstorage(filemd, wopisrc, acctok, None)
 
         redirurl = app.getredirecturl(viewmode, wopisrc, acctok, wopilock['doc'][1:], filemd['BaseFileName'],
-                                      urlparse.quote_plus(filemd['UserFriendlyName']))
+                                      filemd['UserFriendlyName'])
     except app.AppFailure as e:
         # this can be raised by loadfromstorage or getredirecturl
         usermsg = str(e) if str(e) else 'Unable to load the app, please try again later or contact support'

@@ -85,9 +85,9 @@ def getredirecturl(viewmode, wopisrc, acctok, docid, _filename, displayname):
     if viewmode in (utils.ViewMode.READ_ONLY, utils.ViewMode.VIEW_ONLY):
         # for read-only mode generate a read-only link
         res = _apicall('getReadOnlyID', {'padID': docid}, acctok=acctok)
-        return appexturl + '/p/%s?userName=%s' % (res['data']['readOnlyID'], displayname)
+        return appexturl + '/p/%s?userName=%s' % (res['data']['readOnlyID'], urlparse.quote_plus(displayname))
     # return the URL to the pad (TODO if viewmode is PREVIEW)
-    return appexturl + '/p/%s?userName=%s' % (docid, displayname)
+    return appexturl + '/p/%s?userName=%s' % (docid, urlparse.quote_plus(displayname))
 
 
 # Cloud storage to Etherpad
