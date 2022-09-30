@@ -300,7 +300,7 @@ def iopOpenInApp():
         Wopi.log.warning('msg="iopOpenInApp: invalid viewmode parameter" client="%s" viewmode="%s" error="%s"' %
                          (req.remote_addr, req.args.get('viewmode'), e))
         return 'Missing or invalid viewmode argument', http.client.BAD_REQUEST
-    username = req.args.get('username', '')
+    username = url_unquote_plus(req.args.get('username', ''))
     # this needs to be a unique identifier: if missing (case of anonymous users), just generate a random string
     wopiuser = req.args.get('userid', utils.randomString(10))
     folderurl = url_unquote_plus(req.args.get('folderurl', '%2F'))   # defaults to `/`
@@ -571,7 +571,7 @@ def cboxOpen_deprecated():
         # backwards compatibility
         viewmode = utils.ViewMode.READ_WRITE if 'canedit' in req.args and req.args['canedit'].lower() == 'true' \
             else utils.ViewMode.READ_ONLY
-    username = req.args.get('username', '')
+    username = url_unquote_plus(req.args.get('username', ''))
     folderurl = url_unquote_plus(req.args.get('folderurl', '%2F'))   # defaults to `/`
     endpoint = req.args.get('endpoint', 'default')
     toproxy = req.args.get('proxy', 'false') == 'true' and filename[-1] == 'x'    # if requested, only proxy OOXML files
