@@ -131,7 +131,7 @@ def getxattr(_endpoint, filepath, _userid, key):
     try:
         return os.getxattr(_getfilepath(filepath), 'user.' + key).decode('UTF-8')
     except OSError as e:
-        log.warn('msg="Failed to getxattr or missing key" filepath="%s" key="%s" exception="%s"' % (filepath, key, e))
+        log.warning('msg="Failed to getxattr or missing key" filepath="%s" key="%s" exception="%s"' % (filepath, key, e))
         return None
 
 
