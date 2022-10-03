@@ -19,6 +19,9 @@ ENOENT_MSG = 'No such file or directory'
 # standard error thrown when attempting to overwrite a file/xattr in O_EXCL mode
 EXCL_ERROR = 'File exists and islock flag requested'
 
+# error thrown when relocking a file and the payload does not match
+LOCK_MISMATCH_ERROR = 'Existing lock payload does not match'
+
 # standard error thrown when attempting an operation without the required access rights
 ACCESS_ERROR = 'Operation not permitted'
 
@@ -88,11 +91,12 @@ def validatelock(filepath, appname, oldlock, oldvalue, op, log):
         if not oldlock:
             raise IOError('File was not locked or lock had expired')
         if oldvalue and oldlock['lock_id'] != oldvalue:
-            raise IOError('Existing lock payload does not match')
+            raise IOError(LOCK_MISMATCH_ERROR)
         if appname and oldlock['app_name'] != appname \
-            and oldlock['app_name'] != 'wopi' and appname != 'wopi':    # TODO deprecated, to be removed after CERNBox rollout
+        and oldlock['app_name'] != 'wopi' and appname != 'wopi':    # TODO deprecated, to be removed after CERNBox rollout
             raise IOError('File is locked by %s' % oldlock['app_name'])
     except IOError as e:
         log.warning('msg="Failed to %s" filepath="%s" appname="%s" reason="%s"' %
                     (op, filepath, appname, e))
         raise
+

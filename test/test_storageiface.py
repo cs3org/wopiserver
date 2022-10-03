@@ -17,7 +17,7 @@ import time
 from threading import Thread
 sys.path.append('src')         # for tests out of the git repo
 sys.path.append('/app')        # for tests within the Docker image
-from core.commoniface import EXCL_ERROR, ENOENT_MSG  # noqa: E402
+from core.commoniface import EXCL_ERROR, LOCK_MISMATCH_ERROR, ENOENT_MSG  # noqa: E402
 
 databuf = b'ebe5tresbsrdthbrdhvdtr'
 
@@ -243,7 +243,7 @@ class TestStorage(unittest.TestCase):
         self.storage.setlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'myapp', 'testlock')
         with self.assertRaises(IOError) as context:
             self.storage.refreshlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'myapp', 'newlock', 'mismatched')
-        self.assertIn('Existing lock payload does not match', str(context.exception))
+        self.assertIn(LOCK_MISMATCH_ERROR, str(context.exception))
         self.storage.refreshlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'myapp', 'testlock2', 'testlock')
         l = self.storage.getlock(self.endpoint, self.homepath + '/testrlock', self.userid)  # noqa: E741
         self.assertIsInstance(l, dict)
