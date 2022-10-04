@@ -65,7 +65,7 @@ def getredirecturl(viewmode, wopisrc, acctok, docid, filename, displayname):
             'accessToken': acctok,
             'apiKey': apikey,
             'displayName': displayname,
-            'allowEmbedding': os.path.splitext(filename)[1] == '.zmd',
+            'disableEmbedding': os.path.splitext(filename)[1] != '.zmd',
         }
         return f'{appexturl}/{docid}?{mode}&{urlparse.urlencode(params)}'
 
