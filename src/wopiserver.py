@@ -23,7 +23,7 @@ try:
     import flask                   # Flask app server
     from werkzeug.exceptions import NotFound as Flask_NotFound
     from werkzeug.exceptions import MethodNotAllowed as Flask_MethodNotAllowed
-    import jwt                     # JSON Web Tokens support
+    from jwcrypto import jwk, jwe, jwt               # JSON Web Tokens support
     from prometheus_flask_exporter import PrometheusMetrics    # Prometheus support
 
 except ImportError:
@@ -110,6 +110,8 @@ class Wopi:
             cls.codetypes = cls.config.get('general', 'codeofficetypes', fallback='.odt .ods .odp').split()
             with open(cls.config.get('security', 'wopisecretfile')) as s:
                 cls.wopisecret = s.read().strip('\n')
+            if cls.config.getboolean('security', "encryptjwetoken"):
+                initEncryptionKey(cls)
             with open(cls.config.get('security', 'iopsecretfile')) as s:
                 cls.iopsecret = s.read().strip('\n')
             cls.tokenvalidity = cls.config.getint('general', 'tokenvalidity')
@@ -358,11 +360,11 @@ def iopDownload():
     '''Returns the file's content for a given valid access token. Used as a download URL,
        so that the path and possibly the x-access-token are never explicitly visible.'''
     try:
-        acctok = jwt.decode(flask.request.args['access_token'], Wopi.wopisecret, algorithms=['HS256'])
+        acctok = utils.decodeAccessToken(flask.request.args['access_token'])
         if acctok['exp'] < time.time():
-            raise jwt.exceptions.ExpiredSignatureError
+            raise jwt.JWTExpired
         return core.wopi.getFile(0, acctok)   # note that here we exploit the non-dependency from fileid
-    except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError, KeyError) as e:
+    except (jwt.JWTMissingKey, jwt.JWTExpired, jwe.InvalidJWEData, ValueError) as e:
         Wopi.log.info('msg="Expired or malformed token" client="%s" requestedUrl="%s" error="%s" token="%s"' %
                       (flask.request.remote_addr, flask.request.base_url, e, flask.request.args['access_token']))
         return 'Invalid access token', http.client.UNAUTHORIZED
@@ -619,6 +621,21 @@ def cboxDownload_deprecated():
     return iopDownload()
 
 
+def initEncryptionKey(cls):
+    try:
+        with open(cls.config.get('security', 'jwesecretfile'), 'r') as kf:
+            key_data = kf.read()
+        key = jwk.JWK.from_json(key_data)
+    except Exception as e:
+        Wopi.log.info('msg="No encryption key file found: %s"' % str(e))
+        try:
+            key = jwk.JWK.generate(kty='oct', size=256)
+            Wopi.log.info('msg="Generating new encryption key"')
+            with open(cls.config.get('security', 'jwesecretfile'), 'w') as kwf:
+                kwf.write(key.export())
+        except Exception as ge:
+            Wopi.log.critical('msg="Error during encryption key generation: %s"' % str(ge))
+    cls.tokensecret = key
 #
 # Start the Flask endless listening loop
 #
