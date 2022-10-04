@@ -20,6 +20,7 @@ Contributors:
 - Gianmaria Del Monte (@gmgigi96)
 - Klaas Freitag (@dragotin)
 - Jörn Friedrich Dreyer (@butonic)
+- Michael Barz (@micbar)
 
 Initial revision: December 2016 <br/>
 First production version for CERNBox: September 2017 (presented at [oCCon17](https://occon17.owncloud.org) - [slides](https://www.slideshare.net/giuseppelopresti/collaborative-editing-and-more-in-cernbox))<br/>

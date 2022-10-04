@@ -1,5 +1,14 @@
 ## Changelog for the WOPI server
 
+### Tue Oct  4 2022 - v9.1.0
+- Introduced support for PREVIEW mode (#82)
+- Improved UnlockAndRelock logic (#85, #87)
+- Switched to python-alpine docker image (#88)
+- Introduced further branding options in CheckFileInfo
+- Further improvements in the bridged apps logic
+- Added more logging and a new endpoint to monitor
+  conflicted sessions
+
 ### Thu Sep  1 2022 - v9.0.0
 - Refactored and strengthened save workflow for
   bridged applications, and simplified lock metadata (#80)
@@ -8,7 +17,7 @@
 - Refactored PutFile logic when handling conflict files (#78)
 - Improved support for Spaces in Reva (#79)
 - Implemented save workflow for Etherpad documents (#81)
-  Fixed direct download in case of errors
+- Fixed direct download in case of errors
 - Updated dependencies and documentation
 
 ### Thu Jun 16 2022 - v8.3.0
