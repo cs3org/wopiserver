@@ -118,6 +118,7 @@ def _validateappname(appname):
     for p in WB.plugins.values():
         if appname.lower() in p.appname.lower():
             return p.appname
+    WB.log.debug('msg="BridgeSave: unknown application" appname="%s" plugins="%s"' % (appname, WB.plugins.values()))
     raise ValueError
 
 
