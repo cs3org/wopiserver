@@ -1,6 +1,6 @@
 ## Changelog for the WOPI server
 
-### Tue Oct  4 2022 - v9.1.0
+### Wed Oct  5 2022 - v9.1.0
 - Introduced support for PREVIEW mode (#82)
 - Improved UnlockAndRelock logic (#85, #87)
 - Switched to python-alpine docker image (#88)
