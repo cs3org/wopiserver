@@ -78,7 +78,11 @@ class WB:
         '''Load plugin for the given appname, if supported by the bridge service'''
         p = appname.lower()
         if p in cls.plugins:
-            # already initialized
+            # already initialized, check that the app URL matches: the current model does not support multiple app backends
+            if appurl != cls.plugins[p].appexturl:
+                cls.log.warning('msg="Attempt to use plugin with another appurl" client="%s" app="%s" appurl="%s"' %
+                                (flask.request.remote_addr, appname, appurl))
+                raise KeyError(appname)
             return
         if not issupported(appname):
             raise ValueError(appname)
@@ -91,8 +95,8 @@ class WB:
             cls.plugins[p].init(appurl, appinturl, apikey)
             cls.log.info('msg="Imported plugin for application" app="%s" plugin="%s"' % (p, cls.plugins[p]))
         except Exception as e:
-            cls.log.info('msg="Failed to initialize plugin" app="%s" URL="%s" exception="%s"' %
-                         (p, appinturl, e))
+            cls.log.warning('msg="Failed to initialize plugin" app="%s" URL="%s" exception="%s"' %
+                            (p, appinturl, e))
             cls.plugins.pop(p, None)   # regardless which step failed, this will remove the failed plugin
             raise ValueError(appname)
 
