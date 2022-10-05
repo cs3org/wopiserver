@@ -117,8 +117,8 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
                             params={'apikey': apikey},
                             verify=sslverify)
         if res.status_code != http.client.OK:
-            log.error('msg="Unable to push document to Etherpad" token="%s" padid="%s" response="%d: %s" content="%s"' %
-                        (acctok[-20:], docid, res.status_code, res.content.decode(), epfile.decode()))
+            log.error('msg="Unable to push document to Etherpad" token="%s" padid="%s" response="%d: %s"' %
+                      (acctok[-20:], docid, res.status_code, res.content.decode()))
             raise AppFailure
         log.info('msg="Pushed document to Etherpad" padid="%s" token="%s"' % (docid, acctok[-20:]))
     except requests.exceptions.ConnectionError as e:
@@ -139,7 +139,7 @@ def _fetchfrometherpad(wopilock, acctok):
                            verify=sslverify)
         if res.status_code != http.client.OK:
             log.error('msg="Unable to fetch document from Etherpad" token="%s" response="%d: %s"' %
-                      (acctok[-20:], res.status_code, res.content.decode()))
+                      (acctok[-20:], res.status_code, res.content.decode()[:50]))
             raise AppFailure
         return res.content
     except requests.exceptions.ConnectionError as e:
