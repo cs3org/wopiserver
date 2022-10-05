@@ -26,7 +26,6 @@ upload_re = re.compile(r'\/uploads\/upload_\w{32}\.\w+')
 # initialized by the main class or by the init method
 appurl = None
 appexturl = None
-apikey = None
 log = None
 sslverify = None
 disablezip = None
@@ -40,10 +39,8 @@ def init(_appurl, _appinturl, _apikey):
     '''Initialize global vars from the environment'''
     global appurl
     global appexturl
-    global apikey
     appexturl = _appurl
     appurl = _appinturl
-    apikey = _apikey
     try:
         # CodiMD integrates Prometheus metrics, let's probe if they exist
         res = requests.head(appurl + '/metrics/codimd', verify=sslverify)
@@ -63,9 +60,8 @@ def getredirecturl(viewmode, wopisrc, acctok, docid, filename, displayname):
         params = {
             'wopiSrc': wopisrc,
             'accessToken': acctok,
-            'apiKey': apikey,
+            'disableEmbedding': ('%s' % (os.path.splitext(filename)[1] != '.zmd')).lower(),
             'displayName': displayname,
-            'disableEmbedding': os.path.splitext(filename)[1] != '.zmd',
         }
         return f'{appexturl}/{docid}?{mode}&{urlparse.urlencode(params)}'
 
