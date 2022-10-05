@@ -358,7 +358,7 @@ def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, endpoint
         else:
             srv.conflictsessions['pending'][session] = 1
     log.warning('msg="Returning conflict" lockop="%s" user="%s" filename="%s" token="%s" sessionId="%s" lock="%s" '
-                'oldlock="%s" retrievedlock="%s" fileage="%s" reason="%s"' %
+                'oldlock="%s" retrievedlock="%s" fileage="%1.1f" reason="%s"' %
                 (operation.title(), user, filename, flask.request.args['access_token'][-20:],
                  session, lock, oldlock, retrievedlock, time.time() - savetime,
                  (reason['message'] if reason else 'NA')))
@@ -383,6 +383,11 @@ def makeLockSuccessResponse(operation, filename, lock, version):
 def storeWopiFile(acctok, retrievedlock, xakey, targetname=''):
     '''Saves a file from an HTTP request to the given target filename (defaulting to the access token's one),
     and stores the save time as an xattr. Throws IOError in case of any failure'''
+    session = flask.request.headers.get('X-WOPI-SessionId')
+    if session in srv.conflictsessions['pending']:
+        counter = srv.conflictsessions['pending'].pop(session)
+        srv.conflictsessions['resolved'][session] = counter
+
     if not targetname:
         targetname = acctok['filename']
     st.writefile(acctok['endpoint'], targetname, acctok['userid'], flask.request.get_data(), encodeLock(retrievedlock))
