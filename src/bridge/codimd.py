@@ -66,8 +66,7 @@ def getredirecturl(viewmode, wopisrc, acctok, docid, filename, displayname):
         return f'{appexturl}/{docid}?{mode}&{urlparse.urlencode(params)}'
 
     # read-only mode: first check if we have a CodiMD redirection
-    res = requests.head(appurl + '/' + docid,
-                        verify=sslverify)
+    res = requests.head(appurl + '/' + docid, verify=sslverify)
     if res.status_code == http.client.FOUND:
         return '%s/s/%s' % (appexturl, urlparse.urlsplit(res.next.url).path.split('/')[-1])
     # we used to redirect to publish mode or normal view to quickly jump in slide mode depending on the content,
@@ -115,7 +114,7 @@ def _unzipattachments(inputbuf):
     return mddoc
 
 
-#def _isslides(doc):
+# def _isslides(doc):
 #    '''Heuristically look for signatures of slides in the header of a md document'''
 #    return doc[:9].decode() == '---\ntitle' or doc[:8].decode() == '---\ntype' or doc[:16].decode() == '---\nslideOptions'
 

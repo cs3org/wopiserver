@@ -27,6 +27,7 @@ endpointoverride = None
 homepath = None
 timeout = None
 
+
 def init(inconfig, inlog):
     '''Init module-level variables'''
     global config               # pylint: disable=global-statement

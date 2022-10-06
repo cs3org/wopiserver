@@ -233,7 +233,7 @@ def appsave(docid):
         WB.log.error('msg="BridgeSave: missing metadata" address="%s" headers="%s" args="%s" error="%s"' %
                      (flask.request.remote_addr, flask.request.headers, flask.request.args, e))
         return wopic.jsonify('Missing metadata, could not save. %s' % RECOVER_MSG), http.client.BAD_REQUEST
-    except ValueError as e:
+    except ValueError:
         WB.log.error('msg="BridgeSave: unknown application" address="%s" appheader="%s" args="%s"' %
                      (flask.request.remote_addr, flask.request.headers.get(BRIDGED_APP_HEADER), flask.request.args))
         # temporary override

@@ -99,4 +99,3 @@ def validatelock(filepath, appname, oldlock, oldvalue, op, log):
         log.warning('msg="Failed to %s" filepath="%s" appname="%s" reason="%s"' %
                     (op, filepath, appname, e))
         raise
-
