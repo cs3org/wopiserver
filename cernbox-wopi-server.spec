@@ -55,7 +55,6 @@ install -m 644 src/cs3iface.py       %buildroot/%_python_lib/cs3iface.py
 install -m 644 wopiserver.service    %buildroot/usr/lib/systemd/system/wopiserver.service
 install -m 644 wopiserver.conf       %buildroot/etc/wopi/wopiserver.defaults.conf
 install -m 644 wopiserver.logrotate  %buildroot/etc/logrotate.d/cernbox-wopi-server
-install -m 755 mon/wopi_grafana_feeder.py  %buildroot/usr/bin/wopi_grafana_feeder.py
 install -m 755 tools/wopicheckfile.py      %buildroot/usr/bin/wopicheckfile.py
 install -m 755 tools/wopilistopenfiles.sh  %buildroot/usr/bin/wopilistopenfiles.sh
 install -m 755 tools/wopiopen.py           %buildroot/usr/bin/wopiopen.py
