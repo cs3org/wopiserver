@@ -86,18 +86,28 @@ class Wopi:
             hostname = os.environ.get('HOST_HOSTNAME')
             if not hostname:
                 hostname = socket.gethostname()
-            # configure the logging
-            loghandler = logging.FileHandler('/var/log/wopi/wopiserver.log')
-            loghandler.setFormatter(logging.Formatter(
-                fmt='{"time": "%(asctime)s.%(msecs)03d", "host": "'
-                + hostname + '", "level": "%(levelname)s", "process": "%(name)s", %(message)s}',
-                datefmt='%Y-%m-%dT%H:%M:%S'))
-            cls.app.logger.handlers = [loghandler]
             # read the configuration
             cls.config = configparser.ConfigParser()
             with open('/etc/wopi/wopiserver.defaults.conf') as fdef:
                 cls.config.read_file(fdef)
             cls.config.read('/etc/wopi/wopiserver.conf')
+            # configure the logging
+            lhandler = cls.config.get('general', 'loghandler', fallback='file').lower()
+            if lhandler == 'stream':
+                logdest = cls.config.get('general', 'logdest', fallback='stdout').lower()
+                if logdest == "stdout":
+                    logdest = sys.stdout
+                else:
+                    logdest = sys.stderr
+                loghandler = logging.StreamHandler(logdest)
+            else:
+                logdest = cls.config.get('general', 'logdest', fallback='/var/log/wopi/wopiserver.log')
+                loghandler = logging.FileHandler(logdest)
+            loghandler.setFormatter(logging.Formatter(
+                fmt='{"time": "%(asctime)s.%(msecs)03d", "host": "'
+                + hostname + '", "level": "%(levelname)s", "process": "%(name)s", %(message)s}',
+                datefmt='%Y-%m-%dT%H:%M:%S'))
+            cls.app.logger.handlers = [loghandler]
             # load the requested storage layer
             storage_layer_import(cls.config.get('general', 'storagetype'))
             # prepare the Flask web app
