@@ -126,7 +126,7 @@ def validateAndLogHeaders(op):
     log.debug('msg="%s: client context" user="%s" filename="%s" token="%s" client="%s" deviceId="%s" reqId="%s" sessionId="%s" '
               'app="%s" appEndpoint="%s" correlationId="%s" wopits="%s"' %
               (op.title(), acctok['userid'][-20:], acctok['filename'],
-               flask.request.args['access_token'][-20:], flask.request.remote_addr,
+               flask.request.args['access_token'][-20:], flask.request.headers.get('X-Real-Ip', flask.request.remote_addr),
                flask.request.headers.get('X-WOPI-DeviceId'), flask.request.headers.get('X-Request-Id'),
                flask.request.headers.get('X-WOPI-SessionId'), flask.request.headers.get('X-WOPI-RequestingApplication'),
                flask.request.headers.get('X-WOPI-AppEndpoint'), flask.request.headers.get('X-WOPI-CorrelationId'), wopits))
