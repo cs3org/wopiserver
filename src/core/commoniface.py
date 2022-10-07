@@ -19,7 +19,7 @@ ENOENT_MSG = 'No such file or directory'
 # standard error thrown when attempting to overwrite a file/xattr in O_EXCL mode
 EXCL_ERROR = 'File exists and islock flag requested'
 
-# error thrown when relocking a file and the payload does not match
+# error thrown on refreshlock when the payload does not match
 LOCK_MISMATCH_ERROR = 'Existing lock payload does not match'
 
 # standard error thrown when attempting an operation without the required access rights
