@@ -13,7 +13,6 @@ import json
 import http.client
 from datetime import datetime
 from urllib.parse import unquote_plus as url_unquote
-from urllib.parse import quote_plus as url_quote
 from more_itertools import peekable
 import flask
 import core.wopiutils as utils
@@ -40,17 +39,17 @@ def checkFileInfo(fileid, acctok):
                                                   flask.request.args['access_token'])
         hosteurl = srv.config.get('general', 'hostediturl', fallback=None)
         if hosteurl:
-            fmd['HostEditUrl'] = utils.generateUrlFromTemplate(hosteurl, acctok, fileid)
+            fmd['HostEditUrl'] = utils.generateUrlFromTemplate(hosteurl, acctok)
         else:
             fmd['HostEditUrl'] = '%s%s%s' % (acctok['appediturl'], '&' if '?' in acctok['appediturl'] else '?', wopiSrc)
         hostvurl = srv.config.get('general', 'hostviewurl', fallback=None)
         if hostvurl:
-            fmd['HostViewUrl'] = utils.generateUrlFromTemplate(hostvurl, acctok, fileid)
+            fmd['HostViewUrl'] = utils.generateUrlFromTemplate(hostvurl, acctok)
         else:
             fmd['HostViewUrl'] = '%s%s%s' % (acctok['appviewurl'], '&' if '?' in acctok['appviewurl'] else '?', wopiSrc)
         fsurl = srv.config.get('general', 'filesharingurl', fallback=None)
         if fsurl:
-            fmd['FileSharingUrl'] = utils.generateUrlFromTemplate(fsurl, acctok, fileid)
+            fmd['FileSharingUrl'] = utils.generateUrlFromTemplate(fsurl, acctok)
         furl = acctok['folderurl']
         fmd['BreadcrumbFolderUrl'] = furl if furl != '/' else srv.wopiurl   # the WOPI URL is a placeholder
         if acctok['username'] == '':
@@ -407,6 +406,8 @@ def putRelative(fileid, reqheaders, acctok):
     # either way, we now have a targetName to save the file: attempt to do so
     try:
         utils.storeWopiFile(acctok, None, utils.LASTSAVETIMEKEY, targetName)
+        newstat = st.statx(acctok['endpoint'], targetName, acctok['userid'])
+        _, newfileid = common.decodeinode(newstat['inode'])
     except IOError as e:
         utils.storeForRecovery(flask.request.get_data(), acctok['username'], targetName,
                                flask.request.args['access_token'][-20:], e)
@@ -420,20 +421,25 @@ def putRelative(fileid, reqheaders, acctok):
                                                     acctok['folderurl'], acctok['endpoint'],
                                                     (acctok['appname'], acctok['appediturl'], acctok['appviewurl']))
     # prepare and send the response as JSON
-    putrelmd = {}
-    putrelmd['Name'] = os.path.basename(targetName)
+    mdforhosturls = {
+        'appname': acctok['appname'],
+        'filename': targetName,
+        'endpoint': acctok['endpoint'],
+        'fileid': newfileid,
+    }
     newwopisrc = '%s&access_token=%s' % (utils.generateWopiSrc(inode, acctok['appname'] == srv.proxiedappname), newacctok)
-    putrelmd['Url'] = url_unquote(newwopisrc).replace('&access_token', '?access_token')
+    putrelmd = {
+        'Name': os.path.basename(targetName),
+        'Url': url_unquote(newwopisrc).replace('&access_token', '?access_token'),
+    }
     hosteurl = srv.config.get('general', 'hostediturl', fallback=None)
     if hosteurl:
-        putrelmd['HostEditUrl'] = utils.generateUrlFromTemplate(hosteurl,
-                                    {'appname': acctok['appname'], 'filename': targetName}, inode)
+        putrelmd['HostEditUrl'] = utils.generateUrlFromTemplate(hosteurl, mdforhosturls)
     else:
         putrelmd['HostEditUrl'] = '%s%s%s' % (acctok['appediturl'], '&' if '?' in acctok['appediturl'] else '?', newwopisrc)
     hostvurl = srv.config.get('general', 'hostviewurl', fallback=None)
     if hostvurl:
-        putrelmd['HostViewUrl'] = utils.generateUrlFromTemplate(hostvurl,
-                                    {'appname': acctok['appname'], 'filename': targetName}, inode)
+        putrelmd['HostViewUrl'] = utils.generateUrlFromTemplate(hostvurl, mdforhosturls)
     else:
         putrelmd['HostViewUrl'] = '%s%s%s' % (acctok['appviewurl'], '&' if '?' in acctok['appviewurl'] else '?', newwopisrc)
     resp = flask.Response(json.dumps(putrelmd), mimetype='application/json')
