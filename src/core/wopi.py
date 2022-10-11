@@ -62,9 +62,9 @@ def checkFileInfo(fileid, acctok):
                 (srv.config.get('general', 'downloadurl'), flask.request.args['access_token'])
         fmd['BreadcrumbBrandName'] = srv.config.get('general', 'brandingname', fallback=None)
         fmd['BreadcrumbBrandUrl'] = srv.config.get('general', 'brandingurl', fallback=None)
-        fmd['FileSharingUrl'] = srv.config.get('general', 'filesharingurl', fallback=None)
-        if fmd['FileSharingUrl']:
-            fmd['FileSharingUrl'] = fmd['FileSharingUrl'].replace('<path>', url_quote(acctok['filename'])).replace('<resId>', fileid)
+        fsurl = srv.config.get('general', 'filesharingurl', fallback=None)
+        if fsurl:
+            fmd['FileSharingUrl'] = fsurl.replace('<path>', url_quote(acctok['filename'])).replace('<resId>', fileid)
         fmd['OwnerId'] = statInfo['ownerid']
         fmd['UserId'] = acctok['wopiuser']     # typically same as OwnerId; different when accessing shared documents
         fmd['Size'] = statInfo['size']
