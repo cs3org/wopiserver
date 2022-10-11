@@ -107,7 +107,11 @@ class Wopi:
                 fmt='{"time": "%(asctime)s.%(msecs)03d", "host": "'
                 + hostname + '", "level": "%(levelname)s", "process": "%(name)s", %(message)s}',
                 datefmt='%Y-%m-%dT%H:%M:%S'))
-            cls.app.logger.handlers = [loghandler]
+            if cls.config.get('general', 'internalserver', fallback='flask') == 'waitress':
+                cls.log.logger.handlers.clear()
+                logging.getLogger().handlers = [loghandler]
+            else:
+                cls.app.logger.handlers = [loghandler]
             # load the requested storage layer
             storage_layer_import(cls.config.get('general', 'storagetype'))
             # prepare the Flask web app
