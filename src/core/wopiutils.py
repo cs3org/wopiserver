@@ -146,6 +146,12 @@ def generateWopiSrc(fileid, proxy=False):
     return url_quote_plus('%s/wopi/files/%s' % (srv.wopiproxy, fileid)).replace('-', '%2D')
 
 
+def generateUrlFromTemplate(url, acctok, fileid):
+    '''One-liner to parse an URL template and return it with actualised placeholders'''
+    return url.replace('<path>', url_quote_plus(acctok['filename'])). \
+               replace('<resId>', fileid).replace('<app>', acctok['appname'])
+
+
 def getLibreOfficeLockName(filename):
     '''Returns the filename of a LibreOffice-compatible lock file.
     This enables interoperability between Online and Desktop applications'''

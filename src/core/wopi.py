@@ -38,8 +38,19 @@ def checkFileInfo(fileid, acctok):
         fmd['BaseFileName'] = fmd['BreadcrumbDocName'] = os.path.basename(acctok['filename'])
         wopiSrc = 'WOPISrc=%s&access_token=%s' % (utils.generateWopiSrc(fileid, acctok['appname'] == srv.proxiedappname),
                                                   flask.request.args['access_token'])
-        fmd['HostViewUrl'] = '%s%s%s' % (acctok['appviewurl'], '&' if '?' in acctok['appviewurl'] else '?', wopiSrc)
-        fmd['HostEditUrl'] = '%s%s%s' % (acctok['appediturl'], '&' if '?' in acctok['appediturl'] else '?', wopiSrc)
+        hosteurl = srv.config.get('general', 'hostediturl', fallback=None)
+        if hosteurl:
+            fmd['HostEditUrl'] = utils.generateUrlFromTemplate(hosteurl, acctok, fileid)
+        else:
+            fmd['HostEditUrl'] = '%s%s%s' % (acctok['appediturl'], '&' if '?' in acctok['appediturl'] else '?', wopiSrc)
+        hostvurl = srv.config.get('general', 'hostviewurl', fallback=None)
+        if hostvurl:
+            fmd['HostViewUrl'] = utils.generateUrlFromTemplate(hostvurl, acctok, fileid)
+        else:
+            fmd['HostViewUrl'] = '%s%s%s' % (acctok['appviewurl'], '&' if '?' in acctok['appviewurl'] else '?', wopiSrc)
+        fsurl = srv.config.get('general', 'filesharingurl', fallback=None)
+        if fsurl:
+            fmd['FileSharingUrl'] = utils.generateUrlFromTemplate(fsurl, acctok, fileid)
         furl = acctok['folderurl']
         fmd['BreadcrumbFolderUrl'] = furl if furl != '/' else srv.wopiurl   # the WOPI URL is a placeholder
         if acctok['username'] == '':
@@ -62,9 +73,6 @@ def checkFileInfo(fileid, acctok):
                 (srv.config.get('general', 'downloadurl'), flask.request.args['access_token'])
         fmd['BreadcrumbBrandName'] = srv.config.get('general', 'brandingname', fallback=None)
         fmd['BreadcrumbBrandUrl'] = srv.config.get('general', 'brandingurl', fallback=None)
-        fsurl = srv.config.get('general', 'filesharingurl', fallback=None)
-        if fsurl:
-            fmd['FileSharingUrl'] = fsurl.replace('<path>', url_quote(acctok['filename'])).replace('<resId>', fileid)
         fmd['OwnerId'] = statInfo['ownerid']
         fmd['UserId'] = acctok['wopiuser']     # typically same as OwnerId; different when accessing shared documents
         fmd['Size'] = statInfo['size']
@@ -416,8 +424,18 @@ def putRelative(fileid, reqheaders, acctok):
     putrelmd['Name'] = os.path.basename(targetName)
     newwopisrc = '%s&access_token=%s' % (utils.generateWopiSrc(inode, acctok['appname'] == srv.proxiedappname), newacctok)
     putrelmd['Url'] = url_unquote(newwopisrc).replace('&access_token', '?access_token')
-    putrelmd['HostEditUrl'] = '%s%s%s' % (acctok['appediturl'], '&' if '?' in acctok['appediturl'] else '?', newwopisrc)
-    putrelmd['HostViewUrl'] = '%s%s%s' % (acctok['appviewurl'], '&' if '?' in acctok['appediturl'] else '?', newwopisrc)
+    hosteurl = srv.config.get('general', 'hostediturl', fallback=None)
+    if hosteurl:
+        putrelmd['HostEditUrl'] = utils.generateUrlFromTemplate(hosteurl,
+                                    {'appname': acctok['appname'], 'filename': targetName}, inode)
+    else:
+        putrelmd['HostEditUrl'] = '%s%s%s' % (acctok['appediturl'], '&' if '?' in acctok['appediturl'] else '?', newwopisrc)
+    hostvurl = srv.config.get('general', 'hostviewurl', fallback=None)
+    if hostvurl:
+        putrelmd['HostViewUrl'] = utils.generateUrlFromTemplate(hostvurl,
+                                    {'appname': acctok['appname'], 'filename': targetName}, inode)
+    else:
+        putrelmd['HostViewUrl'] = '%s%s%s' % (acctok['appviewurl'], '&' if '?' in acctok['appviewurl'] else '?', newwopisrc)
     resp = flask.Response(json.dumps(putrelmd), mimetype='application/json')
     putrelmd['Url'] = putrelmd['HostEditUrl'] = putrelmd['HostViewUrl'] = '_redacted_'
     log.info('msg="PutRelative response" token="%s" metadata="%s"' % (newacctok[-20:], putrelmd))
