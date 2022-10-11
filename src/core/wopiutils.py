@@ -146,10 +146,11 @@ def generateWopiSrc(fileid, proxy=False):
     return url_quote_plus('%s/wopi/files/%s' % (srv.wopiproxy, fileid)).replace('-', '%2D')
 
 
-def generateUrlFromTemplate(url, acctok, fileid):
-    '''One-liner to parse an URL template and return it with actualised placeholders'''
+def generateUrlFromTemplate(url, acctok):
+    '''One-liner to parse an URL template and return it with actualised placeholders. See also common.encodeinode()'''
     return url.replace('<path>', url_quote_plus(acctok['filename'])). \
-               replace('<resId>', fileid).replace('<app>', acctok['appname'])
+               replace('<resId>', acctok['endpoint'] + '!' + acctok['fileid']). \
+               replace('<app>', acctok['appname'])
 
 
 def getLibreOfficeLockName(filename):
@@ -182,8 +183,8 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
     log.debug('msg="Generating token" userid="%s" fileid="%s" endpoint="%s" app="%s"' %
               (userid[-20:], fileid, endpoint, appname))
     try:
-        # stat the file to check for existence and get a version-invariant inode and modification time:
-        # the inode serves as fileid (and must not change across save operations), the mtime is used for version information.
+        # stat the file to check for existence and get a version-invariant inode:
+        # the inode serves as fileid (and must not change across save operations)
         statinfo = st.statx(endpoint, fileid, userid)
     except IOError as e:
         log.info('msg="Requested file not found or not a file" fileid="%s" error="%s"' % (fileid, e))
@@ -208,8 +209,8 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
         # does not set appname when the app is not proxied, so we optimistically assume it's Collabora and let it go)
         log.info('msg="Forcing read-only access to ODF file" filename="%s"' % statinfo['filepath'])
         viewmode = ViewMode.READ_ONLY
-    acctok = jwt.encode({'userid': userid, 'wopiuser': wopiuser, 'filename': statinfo['filepath'], 'username': username,
-                         'viewmode': viewmode.value, 'folderurl': folderurl, 'endpoint': endpoint,
+    acctok = jwt.encode({'userid': userid, 'wopiuser': wopiuser, 'filename': statinfo['filepath'], 'fileid': fileid,
+                         'username': username, 'viewmode': viewmode.value, 'folderurl': folderurl, 'endpoint': endpoint,
                          'appname': appname, 'appediturl': appediturl, 'appviewurl': appviewurl,
                          'exp': exptime, 'iss': 'cs3org:wopiserver:%s' % WOPIVER},    # standard claims
                         srv.wopisecret, algorithm='HS256')
@@ -218,7 +219,6 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
              (userid[-20:], wopiuser if wopiuser != userid else username, viewmode, endpoint,
               statinfo['filepath'], statinfo['inode'], statinfo['mtime'],
               folderurl, appname, exptime, acctok[-20:]))
-    # return the inode == fileid, the filepath and the access token
     return statinfo['inode'], acctok, viewmode
 
 
