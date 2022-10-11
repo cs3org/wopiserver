@@ -79,17 +79,17 @@ def checkFileInfo(fileid, acctok):
         fmd['SupportsUserInfo'] = False      # TODO https://docs.microsoft.com/en-us/openspecs/office_protocols/ms-wopi/371e25ae-e45b-47ab-aec3-9111e962919d
 
         # populate app-specific metadata
-        if acctok['appname'].find('Microsoft') > 0:
-            # the following is to enable the 'Edit in Word/Excel/PowerPoint' (desktop) action (probably broken)
-            try:
-                fmd['ClientUrl'] = srv.config.get('general', 'webdavurl') + '/' + acctok['filename']
-            except configparser.NoOptionError:
-                # if no WebDAV URL is provided, ignore this setting
-                pass
+        # the following is to enable the 'Edit in Word/Excel/PowerPoint' (desktop) action (probably broken)
+        try:
+            fmd['ClientUrl'] = srv.config.get('general', 'webdavurl') + '/' + acctok['filename']
+        except configparser.NoOptionError:
+            # if no WebDAV URL is provided, ignore this setting
+            pass
         # extensions for Collabora Online
-        fmd['EnableOwnerTermination'] = True
-        fmd['DisableExport'] = fmd['DisableCopy'] = fmd['DisablePrint'] = acctok['viewmode'] == utils.ViewMode.VIEW_ONLY
-        # fmd['LastModifiedTime'] = datetime.fromtimestamp(int(statInfo['mtime'])).isoformat()   # this currently breaks
+        if acctok['appname'].find('Collabora') >= 0 or acctok['appname'] == '':
+            fmd['EnableOwnerTermination'] = True
+            fmd['DisableExport'] = fmd['DisableCopy'] = fmd['DisablePrint'] = acctok['viewmode'] == utils.ViewMode.VIEW_ONLY
+            # fmd['LastModifiedTime'] = datetime.fromtimestamp(int(statInfo['mtime'])).isoformat()   # this currently breaks
 
         res = flask.Response(json.dumps(fmd), mimetype='application/json')
         # amend sensitive metadata for the logs
