@@ -81,7 +81,8 @@ def retrieverevalock(rawlock):
 
 def encodeinode(endpoint, inode):
     '''Encodes a given endpoint and inode to be used as a safe WOPISrc: endpoint is assumed to already be URL safe.
-    Note that the separator is chosen to be `!` for compatibility with the ownCloud Web frontend.'''
+    Note that the separator is chosen to be `!` (similar to how the web frontend is implemented) to allow the inverse
+    operation, assuming that `endpoint` does not contain any `!` characters.'''
     return endpoint + '!' + urlsafe_b64encode(inode.encode()).decode()
 
 
