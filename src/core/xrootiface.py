@@ -332,9 +332,6 @@ def readfile(endpoint, filepath, userid, _lockid):
         rc, _ = f.open(_geturlfor(endpoint) + '/' + homepath + filepath + _eosargs(userid),
                        OpenFlags.READ, timeout=timeout)
         tend = time.time()
-        if not f.is_open():
-            log.error('msg="Timeout with xroot" op="read" filepath="%s"' % filepath)
-            raise IOError('Timeout opening file for read')
         if not rc.ok:
             # the file could not be opened: check the case of ENOENT and log it as info to keep the logs cleaner
             if common.ENOENT_MSG in rc.message:
@@ -367,9 +364,6 @@ def writefile(endpoint, filepath, userid, content, _lockid, islock=False):
     rc, _ = f.open(_geturlfor(endpoint) + '/' + homepath + filepath + _eosargs(userid, not islock, size),
                    OpenFlags.NEW if islock else OpenFlags.DELETE, timeout=timeout)
     tend = time.time()
-    if not f.is_open():
-        log.error('msg="Timeout with xroot" op="write" filepath="%s"' % filepath)
-        raise IOError('Timeout opening file for write')
     if not rc.ok:
         if islock and 'File exists' in rc.message:
             # racing against an existing file
