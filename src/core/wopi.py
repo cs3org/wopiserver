@@ -176,10 +176,14 @@ def setLock(fileid, reqheaders, acctok):
             return utils.makeConflictResponse(op, acctok['userid'], None, lock, oldLock, acctok['endpoint'], fn,
                                               'The file was not locked' + ' and got modified' if validateTarget else '')
 
-    # now create an "external" lock if required
+    # now check for and create an "external" lock if required
     if srv.config.get('general', 'detectexternallocks', fallback='True').upper() == 'TRUE' and \
        os.path.splitext(fn)[1] in srv.codetypes:
         try:
+            if retrievedLock == 'External':
+                return utils.makeConflictResponse(op, acctok['userid'], retrievedLock, lock, oldLock,
+                                                  acctok['endpoint'], fn, 'The file is locked by ' + lockHolder)
+
             # create a LibreOffice-compatible lock file for interoperability purposes, making sure to
             # not overwrite any existing or being created lock
             lockcontent = ',Collaborative Online Editor,%s,%s,WOPIServer;' % \

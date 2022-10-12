@@ -352,7 +352,7 @@ def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, endpoint
     else:
         savetime = 0
     session = flask.request.headers.get('X-WOPI-SessionId')
-    if session:
+    if session and retrievedlock != 'External':
         if session in srv.conflictsessions['pending']:
             srv.conflictsessions['pending'][session] += 1
         else:
