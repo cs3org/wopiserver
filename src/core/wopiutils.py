@@ -20,9 +20,9 @@ from binascii import Error as B64Error
 from urllib.parse import quote_plus as url_quote_plus
 import http.client
 import flask
-import jwt
 from werkzeug.utils import secure_filename
 import core.commoniface as common
+from jwcrypto import jwk, jwe, jwt
 
 # this is the xattr key used for conflicts resolution on the remote storage
 LASTSAVETIMEKEY = 'iop.wopi.lastwritetime'
@@ -99,10 +99,10 @@ def validateAndLogHeaders(op):
     srv.refreshconfig()
     # validate the access token
     try:
-        acctok = jwt.decode(flask.request.args['access_token'], srv.wopisecret, algorithms=['HS256'])
+        acctok = decodeAccessToken(flask.request.args['access_token'])
         if acctok['exp'] < time.time() or 'cs3org:wopiserver' not in acctok['iss']:
-            raise jwt.exceptions.ExpiredSignatureError
-    except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError, KeyError) as e:
+            raise jwt.JWTExpired
+    except (jwt.JWTMissingKey, jwt.JWTExpired, jwe.InvalidJWEData, ValueError) as e:
         log.info('msg="Expired or malformed token" client="%s" requestedUrl="%s" error="%s" token="%s"' %
                  (flask.request.remote_addr, flask.request.base_url, str(type(e)) + ': ' + str(e), flask.request.args['access_token']))
         return 'Invalid access token', http.client.UNAUTHORIZED
@@ -202,11 +202,22 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
         # does not set appname when the app is not proxied, so we optimistically assume it's Collabora and let it go)
         log.info('msg="Forcing read-only access to ODF file" filename="%s"' % statinfo['filepath'])
         viewmode = ViewMode.READ_ONLY
-    acctok = jwt.encode({'userid': userid, 'wopiuser': wopiuser, 'filename': statinfo['filepath'], 'username': username,
-                         'viewmode': viewmode.value, 'folderurl': folderurl, 'endpoint': endpoint,
-                         'appname': appname, 'appediturl': appediturl, 'appviewurl': appviewurl,
-                         'exp': exptime, 'iss': 'cs3org:wopiserver:%s' % WOPIVER},    # standard claims
-                        srv.wopisecret, algorithm='HS256')
+
+    acctokValues = {
+        'userid': userid,
+        'wopiuser': wopiuser,
+        'filename': statinfo['filepath'],
+        'username': username,
+        'viewmode': viewmode.value,
+        'folderurl': folderurl,
+        'endpoint': endpoint,
+        'appname': appname,
+        'appediturl': appediturl,
+        'appviewurl': appviewurl,
+        'exp': exptime,
+        'iss': 'cs3org:wopiserver:%s' % WOPIVER
+    }
+    acctok = encodeAccessToken(acctokValues)
     log.info('msg="Access token generated" userid="%s" wopiuser="%s" mode="%s" endpoint="%s" filename="%s" inode="%s" '
              'mtime="%s" folderurl="%s" appname="%s" expiration="%d" token="%s"' %
              (userid[-20:], wopiuser if wopiuser != userid else username, viewmode, endpoint,
@@ -214,6 +225,31 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
               folderurl, appname, exptime, acctok[-20:]))
     # return the inode == fileid, the filepath and the access token
     return statinfo['inode'], acctok, viewmode
+
+
+def encodeAccessToken(acctok):
+    # Create a signed JWT
+    token = jwt.JWT(header={"alg": "HS256"}, claims=acctok)
+    key = jwk.JWK.from_password(srv.wopisecret)
+    token.make_signed_token(key)
+
+    # if enabled, create an encrypted JWT (JWE)
+    if srv.config.getboolean('security', "encryptjwetoken"):
+        token = jwt.JWT(header={"alg": "A256KW", "enc": "A256CBC-HS512"}, claims=token.serialize())
+        token.make_encrypted_token(srv.tokensecret)
+
+    return token.serialize()
+
+
+def decodeAccessToken(token):
+    # if enabled, decrypt the JWE
+    if srv.config.getboolean('security', "encryptjwetoken"):
+        token = jwt.JWT(key=srv.tokensecret, jwt=token, expected_type="JWE").claims
+
+    # decode the signed JWT
+    token = jwt.JWT(key=jwk.JWK.from_password(srv.wopisecret), jwt=token, expected_type="JWS")
+
+    return json.loads(token.claims)
 
 
 def encodeLock(lock):
