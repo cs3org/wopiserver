@@ -135,7 +135,7 @@ def _gendocid(wopisrc):
 # The Bridge endpoints start here
 #############################################################################################################
 
-def appopen(wopisrc, acctok, appname, viewmode):
+def appopen(wopisrc, acctok, appname, viewmode, revatok=None):
     '''Open a doc by contacting the provided WOPISrc with the given access_token.
     Returns a (app-url, params{}) pair if successful, raises a FailedOpen exception otherwise'''
     wopisrc = urlparse.unquote_plus(wopisrc)
@@ -206,7 +206,7 @@ def appopen(wopisrc, acctok, appname, viewmode):
             wopilock = app.loadfromstorage(filemd, wopisrc, acctok, None)
 
         redirurl = app.getredirecturl(viewmode, wopisrc, acctok, wopilock['doc'][1:], filemd['BaseFileName'],
-                                      filemd['UserFriendlyName'])
+                                      filemd['UserFriendlyName'], revatok)
     except app.AppFailure as e:
         # this can be raised by loadfromstorage or getredirecturl
         usermsg = str(e) if str(e) else 'Unable to load the app, please try again later or contact support'

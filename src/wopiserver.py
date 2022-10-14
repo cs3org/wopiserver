@@ -354,7 +354,8 @@ def iopOpenInApp():
     res = {}
     if bridge.issupported(appname):
         try:
-            res['app-url'], res['form-parameters'] = bridge.appopen(utils.generateWopiSrc(inode), acctok, appname, viewmode)
+            res['app-url'], res['form-parameters'] = bridge.appopen(utils.generateWopiSrc(inode), acctok, appname, viewmode,
+                                                                    usertoken)
         except bridge.FailedOpen as foe:
             return foe.msg, foe.statuscode
     else:
