@@ -71,9 +71,6 @@ def getredirecturl(viewmode, wopisrc, acctok, docid, filename, displayname, reva
     res = requests.head(appurl + '/' + docid, verify=sslverify)
     if res.status_code == http.client.FOUND:
         return '%s/s/%s' % (appexturl, urlparse.urlsplit(res.next.url).path.split('/')[-1])
-    # we used to redirect to publish mode or normal view to quickly jump in slide mode depending on the content,
-    # but this was based on a bad side effect - here it would require to add:
-    # ('/publish' if not _isslides(content) else '') before the '?'
     return f'{appexturl}/{docid}/publish'
 
 
@@ -114,11 +111,6 @@ def _unzipattachments(inputbuf):
         # for backwards compatibility, drop the hardcoded reverse proxy paths if found in the document
         mddoc = mddoc.replace(b'/byoa/codimd/', b'/')
     return mddoc
-
-
-# def _isslides(doc):
-#    '''Heuristically look for signatures of slides in the header of a md document'''
-#    return doc[:9].decode() == '---\ntitle' or doc[:8].decode() == '---\ntype' or doc[:16].decode() == '---\nslideOptions'
 
 
 def _fetchfromcodimd(wopilock, acctok):
