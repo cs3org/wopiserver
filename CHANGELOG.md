@@ -1,5 +1,14 @@
 ## Changelog for the WOPI server
 
+### Mon Oct 17 2022 - v9.2.0
+- Added option to use file or stream handler for logging (#91)
+- Introduced configurable hostURLs for CheckFileInfo (#93)
+- Fixed duplicate log entries (#92)
+- CodiMD: added support for direct storage access via
+  the ownCloud file picker (#95)
+- Fixed check for external locks
+- Further fixes to improve coverage of the WOPI validator tests
+
 ### Wed Oct  5 2022 - v9.1.0
 - Introduced support for PREVIEW mode (#82)
 - Improved UnlockAndRelock logic (#85, #87)
