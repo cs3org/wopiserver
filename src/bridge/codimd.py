@@ -67,10 +67,7 @@ def getredirecturl(viewmode, wopisrc, acctok, docid, filename, displayname, reva
             params['revaToken'] = revatok
         return f'{appexturl}/{docid}?{mode}&{urlparse.urlencode(params)}'
 
-    # read-only mode: first check if we have a CodiMD redirection
-    res = requests.head(appurl + '/' + docid, verify=sslverify)
-    if res.status_code == http.client.FOUND:
-        return '%s/s/%s' % (appexturl, urlparse.urlsplit(res.next.url).path.split('/')[-1])
+    # read-only mode: use the publish view of CodiMD
     return f'{appexturl}/{docid}/publish'
 
 
