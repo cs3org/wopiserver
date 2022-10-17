@@ -53,7 +53,7 @@ def init(_appurl, _appinturl, _apikey):
         raise AppFailure
 
 
-def getredirecturl(viewmode, wopisrc, acctok, docid, filename, displayname):
+def getredirecturl(viewmode, wopisrc, acctok, docid, filename, displayname, revatok=None):
     '''Return a valid URL to the app for the given WOPI context'''
     if viewmode in (utils.ViewMode.READ_WRITE, utils.ViewMode.PREVIEW):
         mode = 'view' if viewmode == utils.ViewMode.PREVIEW else 'both'
@@ -63,6 +63,8 @@ def getredirecturl(viewmode, wopisrc, acctok, docid, filename, displayname):
             'disableEmbedding': ('%s' % (os.path.splitext(filename)[1] != '.zmd')).lower(),
             'displayName': displayname,
         }
+        if revatok:
+            params['revaToken'] = revatok
         return f'{appexturl}/{docid}?{mode}&{urlparse.urlencode(params)}'
 
     # read-only mode: first check if we have a CodiMD redirection
