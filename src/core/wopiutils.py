@@ -356,7 +356,7 @@ def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, endpoint
 
     session = flask.request.headers.get('X-WOPI-SessionId')
     if session and retrievedlock != 'External' and session not in srv.conflictsessions['pending']:
-        srv.conflictsessions['pending'][session] = (time.asctime(), retrievedlock)
+        srv.conflictsessions['pending'][session] = {'time': time.asctime(), 'held': retrievedlock}
     savetime = st.getxattr(endpoint, filename, user, LASTSAVETIMEKEY)
     if savetime:
         savetime = int(savetime)
