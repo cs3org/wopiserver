@@ -111,9 +111,9 @@ def _checklock(op, endpoint, filepath, userid, lockid):
         # this is a special value to skip the check, used by the lock operations themselves
         return
     lock = getlock(endpoint, filepath, userid)
-    if lock and lock['lock_id'] != lockid:
+    if lock and lock['lock_id'] != lockid:    # here we could also validate the app/holder
         log.warning('msg="%s: file was locked" filepath="%s" holder="%s"' % (op, filepath, lock['app_name']))
-        raise IOError('File was locked')
+        raise IOError(common.LOCK_MISMATCH_ERROR)
 
 
 def setxattr(endpoint, filepath, userid, key, value, lockid):
@@ -213,13 +213,17 @@ def readfile(_endpoint, filepath, _userid, _lockid):
         yield IOError(e)
 
 
-def writefile(endpoint, filepath, userid, content, lockid, islock=False):
+def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
     '''Write a file via xroot on behalf of the given userid. The entire content is written
     and any pre-existing file is deleted (or moved to the previous version if supported).
     With islock=True, the file is opened with O_CREAT|O_EXCL.'''
     if isinstance(content, str):
         content = bytes(content, 'UTF-8')
     size = len(content)
+    if lockmd:
+        _, lockid = lockmd
+    else:
+        lockid = None
     _checklock('writefile', endpoint, filepath, userid, lockid)
     log.debug('msg="Invoking writeFile" filepath="%s" size="%d"' % (filepath, size))
     tstart = time.time()

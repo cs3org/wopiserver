@@ -290,7 +290,7 @@ def readfile(endpoint, filepath, userid, lockid):
             yield data[i:i + ctx['chunksize']]
 
 
-def writefile(endpoint, filepath, userid, content, lockid, islock=False):
+def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
     '''Write a file using the given userid as access token. The entire content is written
     and any pre-existing file is deleted (or moved to the previous version if supported).
     The islock flag is currently not supported. The backend should at least support
@@ -300,6 +300,10 @@ def writefile(endpoint, filepath, userid, content, lockid, islock=False):
     tstart = time.time()
 
     # prepare endpoint
+    if lockmd:
+        _, lockid = lockmd    # TODO we are not validating the holder on write, only the lock_id
+    else:
+        lockid = None
     if isinstance(content, str):
         content = bytes(content, 'UTF-8')
     size = str(len(content))
@@ -310,6 +314,8 @@ def writefile(endpoint, filepath, userid, content, lockid, islock=False):
     if res.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to initiateFileUpload on write" filepath="%s" trace="%s" code="%s" reason="%s"' %
                   (filepath, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
+        if 'lock' in res.status.message:    # TODO find the error code returned by Reva once this is implemented
+            raise IOError(common.LOCK_MISMATCH_ERROR)
         raise IOError(res.status.message)
     tend = time.time()
     log.debug('msg="writefile: InitiateFileUploadRes returned" trace="%s" protocols="%s"' %

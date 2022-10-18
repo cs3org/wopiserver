@@ -425,11 +425,12 @@ def storeWopiFile(acctok, retrievedlock, xakey, targetname=''):
 
     writeerror = None
     try:
-        st.writefile(acctok['endpoint'], targetname, acctok['userid'], flask.request.get_data(), encodeLock(retrievedlock))
+        st.writefile(acctok['endpoint'], targetname, acctok['userid'], flask.request.get_data(),
+                    (acctok['appname'], encodeLock(retrievedlock)))
     except IOError as e:
         # in case something goes wrong on write, we still want to setxattr but report this error to the caller
         writeerror = e
-    # save the current time for later conflict checking: this is never older than the mtime of the file
+    # in all cases save the current time for later conflict checking: this is never older than the mtime of the file
     st.setxattr(acctok['endpoint'], targetname, acctok['userid'], xakey, int(time.time()), encodeLock(retrievedlock))
     if writeerror:
         raise writeerror

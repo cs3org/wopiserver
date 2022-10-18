@@ -355,17 +355,26 @@ def readfile(endpoint, filepath, userid, _lockid):
                 yield chunk
 
 
-def writefile(endpoint, filepath, userid, content, _lockid, islock=False):
+def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
     '''Write a file via xroot on behalf of the given userid. The entire content is written
          and any pre-existing file is deleted (or moved to the previous version if supported).
          With islock=True, the write explicitly disables versioning, and the file is opened with
          O_CREAT|O_EXCL, preventing race conditions.'''
     size = len(content)
     log.debug('msg="Invoking writeFile" filepath="%s" userid="%s" size="%d" islock="%s"' % (filepath, userid, size, islock))
-    existingLock = getlock(endpoint, filepath, userid)
+    if lockmd:
+        appname, _ = lockmd
+    else:
+        appname = ''
     f = XrdClient.File()
     tstart = time.time()
-    rc, _ = f.open(_geturlfor(endpoint) + '/' + homepath + filepath + _eosargs(userid, not islock, size),
+    if islock:
+        # this is required to trigger the O_EXCL behavior on EOS when creating lock files
+        appname = 'fuse::wopi'
+    else:
+        # this is exclusively used to validate the lock with the app as holder, according to EOS specs (cf. _geneoslock())
+        appname = 'wopi_' + appname.replace(' ', '_').lower()
+    rc, _ = f.open(_geturlfor(endpoint) + '/' + homepath + filepath + _eosargs(userid, appname, size),
                    OpenFlags.NEW if islock else OpenFlags.DELETE, timeout=timeout)
     tend = time.time()
     if not rc.ok:
@@ -376,6 +385,9 @@ def writefile(endpoint, filepath, userid, content, _lockid, islock=False):
         # any other failure is reported as is
         log.error('msg="Error opening the file for write" filepath="%s" elapsedTimems="%.1f" error="%s"' %
                   (filepath, (tend-tstart)*1000, rc.message.strip('\n')))
+        if 'file has a valid extended attribute lock' in rc.message:
+            raise IOError(common.LOCK_MISMATCH_ERROR)
+        # any other failure is reported as is
         raise IOError(rc.message.strip('\n'))
     rc, _ = f.write(content, offset=0, size=size)
     if not rc.ok:
