@@ -215,17 +215,17 @@ class TestStorage(unittest.TestCase):
         self.storage.writefile(self.endpoint, self.homepath + '/testlock', self.userid, databuf, None)
         statInfo = self.storage.stat(self.endpoint, self.homepath + '/testlock', self.userid)
         self.assertIsInstance(statInfo, dict)
-        self.storage.setlock(self.endpoint, self.homepath + '/testlock', self.userid, 'myapp', 'testlock')
+        self.storage.setlock(self.endpoint, self.homepath + '/testlock', self.userid, 'test app', 'testlock')
         l = self.storage.getlock(self.endpoint, self.homepath + '/testlock', self.userid)  # noqa: E741
         self.assertIsInstance(l, dict)
         self.assertEqual(l['lock_id'], 'testlock')
-        self.assertEqual(l['app_name'], 'myapp')
+        self.assertEqual(l['app_name'], 'test app')
         self.assertIsInstance(l['expiration'], dict)
         self.assertIsInstance(l['expiration']['seconds'], int)
         with self.assertRaises(IOError) as context:
-            self.storage.setlock(self.endpoint, self.homepath + '/testlock', self.userid, 'myapp', 'testlock2')
+            self.storage.setlock(self.endpoint, self.homepath + '/testlock', self.userid, 'test app', 'lockmismatch')
         self.assertIn(EXCL_ERROR, str(context.exception))
-        self.storage.unlock(self.endpoint, self.homepath + '/testlock', self.userid, 'myapp', 'testlock')
+        self.storage.unlock(self.endpoint, self.homepath + '/testlock', self.userid, 'test app', 'testlock')
         self.storage.removefile(self.endpoint, self.homepath + '/testlock', self.userid)
 
     def test_refresh_lock(self):
@@ -238,22 +238,23 @@ class TestStorage(unittest.TestCase):
         statInfo = self.storage.stat(self.endpoint, self.homepath + '/testrlock', self.userid)
         self.assertIsInstance(statInfo, dict)
         with self.assertRaises(IOError) as context:
-            self.storage.refreshlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'myapp', 'testlock')
+            self.storage.refreshlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'test app', 'testlock')
         self.assertIn('File was not locked', str(context.exception))
-        self.storage.setlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'myapp', 'testlock')
+        self.storage.setlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'test app', 'testlock')
         with self.assertRaises(IOError) as context:
-            self.storage.refreshlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'myapp', 'newlock', 'mismatched')
+            self.storage.refreshlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'test app', 'newlock', 'mismatch')
         self.assertIn(LOCK_MISMATCH_ERROR, str(context.exception))
-        self.storage.refreshlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'myapp', 'testlock2', 'testlock')
+        self.storage.refreshlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'test app', 'newlock', 'testlock')
         l = self.storage.getlock(self.endpoint, self.homepath + '/testrlock', self.userid)  # noqa: E741
         self.assertIsInstance(l, dict)
-        self.assertEqual(l['lock_id'], 'testlock2')
-        self.assertEqual(l['app_name'], 'myapp')
+        self.assertEqual(l['lock_id'], 'newlock')
+        self.assertEqual(l['app_name'], 'test app')
         self.assertIsInstance(l['expiration'], dict)
         self.assertIsInstance(l['expiration']['seconds'], int)
+        self.storage.refreshlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'test app', 'newlock')
         with self.assertRaises(IOError) as context:
-            self.storage.refreshlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'myapp2', 'testlock2')
-        self.assertIn('File is locked by myapp', str(context.exception))
+            self.storage.refreshlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'mismatched app', 'newlock')
+        self.assertIn('File is locked by test app', str(context.exception))
         self.storage.removefile(self.endpoint, self.homepath + '/testrlock', self.userid)
 
     def test_lock_race(self):
@@ -266,11 +267,11 @@ class TestStorage(unittest.TestCase):
         statInfo = self.storage.stat(self.endpoint, self.homepath + '/testlockrace', self.userid)
         self.assertIsInstance(statInfo, dict)
         t = Thread(target=self.storage.setlock,
-                   args=[self.endpoint, self.homepath + '/testlockrace', self.userid, 'myapp', 'testlock'])
+                   args=[self.endpoint, self.homepath + '/testlockrace', self.userid, 'test app', 'testlock'])
         t.start()
         with self.assertRaises(IOError) as context:
             time.sleep(0.001)
-            self.storage.setlock(self.endpoint, self.homepath + '/testlockrace', self.userid, 'myapp', 'testlock2')
+            self.storage.setlock(self.endpoint, self.homepath + '/testlockrace', self.userid, 'test app', 'testlock2')
         self.assertIn(EXCL_ERROR, str(context.exception))
         self.storage.removefile(self.endpoint, self.homepath + '/testlockrace', self.userid)
 
@@ -283,20 +284,26 @@ class TestStorage(unittest.TestCase):
         self.storage.writefile(self.endpoint, self.homepath + '/testlockop', self.userid, databuf, None)
         statInfo = self.storage.stat(self.endpoint, self.homepath + '/testlockop', self.userid)
         self.assertIsInstance(statInfo, dict)
-        self.storage.setlock(self.endpoint, self.homepath + '/testlockop', self.userid, 'myapp', 'testlock')
-        self.storage.writefile(self.endpoint, self.homepath + '/testlockop', self.userid, databuf, 'testlock')
-        self.storage.setxattr(self.endpoint, self.homepath + '/testlockop', self.userid, 'testkey', 123, 'testlock')
-        self.storage.renamefile(self.endpoint, self.homepath + '/testlockop', self.homepath + '/testlockop_renamed',
-                                self.userid, 'testlock')
-        self.storage.refreshlock(self.endpoint, self.homepath + '/testlockop_renamed', self.userid, 'myapp', 'testlock')
+        self.storage.setlock(self.endpoint, self.homepath + '/testlockop', self.userid, 'test app', 'testlock')
+        self.storage.writefile(self.endpoint, self.homepath + '/testlockop', self.userid, databuf, ('test app', 'testlock'))
         with self.assertRaises(IOError):
-            self.storage.writefile(self.endpoint, self.homepath + '/testlockop_renamed', self.userid, databuf, None)
+            # TODO different interfaces raise exceptions on either mismatching app xor mismatching lock payload,
+            # this is why we test that both mismatch. Could be improved, though we specifically care about the lock paylaod.
+            self.storage.writefile(self.endpoint, self.homepath + '/testlockop', self.userid, databuf,
+                                   ('mismatchapp', 'mismatchlock'))
+        self.storage.refreshlock(self.endpoint, self.homepath + '/testlockop', self.userid, 'test app', 'testlock')
         with self.assertRaises(IOError):
-            self.storage.setxattr(self.endpoint, self.homepath + '/testlockop_renamed', self.userid, 'testkey', 123, None)
+            self.storage.writefile(self.endpoint, self.homepath + '/testlockop', self.userid, databuf, None)
         with self.assertRaises(IOError):
-            self.storage.renamefile(self.endpoint, self.homepath + '/testlockop_renamed', self.homepath + '/testlockop',
+            self.storage.setxattr(self.endpoint, self.homepath + '/testlockop', self.userid, 'testkey', 123, None)
+        with self.assertRaises(IOError):
+            self.storage.rmxattr(self.endpoint, self.homepath + '/testlockop', self.userid, 'testkey', None)
+        with self.assertRaises(IOError):
+            self.storage.renamefile(self.endpoint, self.homepath + '/testlockop', self.homepath + '/testlockop_renamed',
                                     self.userid, None)
-        self.storage.removefile(self.endpoint, self.homepath + '/testlockop_renamed', self.userid)
+        for chunk in self.storage.readfile(self.endpoint, self.homepath + '/testlockop', self.userid, None):
+            self.assertNotIsInstance(chunk, IOError, 'raised by storage.readfile, lock shall be shared')
+        self.storage.removefile(self.endpoint, self.homepath + '/testlockop', self.userid)
 
     def test_expired_locks(self):
         '''Test lock operations on expired locks'''
@@ -307,24 +314,24 @@ class TestStorage(unittest.TestCase):
         self.storage.writefile(self.endpoint, self.homepath + '/testelock', self.userid, databuf, None)
         statInfo = self.storage.stat(self.endpoint, self.homepath + '/testelock', self.userid)
         self.assertIsInstance(statInfo, dict)
-        self.storage.setlock(self.endpoint, self.homepath + '/testelock', self.userid, 'myapp', 'testlock')
+        self.storage.setlock(self.endpoint, self.homepath + '/testelock', self.userid, 'test app', 'testlock')
         time.sleep(2.1)
         l = self.storage.getlock(self.endpoint, self.homepath + '/testelock', self.userid)  # noqa: E741
         self.assertEqual(l, None)
-        self.storage.setlock(self.endpoint, self.homepath + '/testelock', self.userid, 'myapp', 'testlock2')
+        self.storage.setlock(self.endpoint, self.homepath + '/testelock', self.userid, 'test app', 'testlock2')
         time.sleep(2.1)
-        self.storage.setlock(self.endpoint, self.homepath + '/testelock', self.userid, 'myapp', 'testlock3')
+        self.storage.setlock(self.endpoint, self.homepath + '/testelock', self.userid, 'test app', 'testlock3')
         l = self.storage.getlock(self.endpoint, self.homepath + '/testelock', self.userid)  # noqa: E741
         self.assertIsInstance(l, dict)
         self.assertEqual(l['lock_id'], 'testlock3')
         time.sleep(2.1)
         with self.assertRaises(IOError) as context:
-            self.storage.refreshlock(self.endpoint, self.homepath + '/testelock', self.userid, 'myapp', 'testlock4')
+            self.storage.refreshlock(self.endpoint, self.homepath + '/testelock', self.userid, 'test app', 'testlock4')
         self.assertIn('File was not locked', str(context.exception))
-        self.storage.setlock(self.endpoint, self.homepath + '/testelock', self.userid, 'myapp', 'testlock5')
+        self.storage.setlock(self.endpoint, self.homepath + '/testelock', self.userid, 'test app', 'testlock5')
         time.sleep(2.1)
         with self.assertRaises(IOError) as context:
-            self.storage.unlock(self.endpoint, self.homepath + '/testelock', self.userid, 'myapp', 'testlock5')
+            self.storage.unlock(self.endpoint, self.homepath + '/testelock', self.userid, 'test app', 'testlock5')
         self.assertIn('File was not locked', str(context.exception))
         self.storage.removefile(self.endpoint, self.homepath + '/testelock', self.userid)
 
@@ -337,10 +344,11 @@ class TestStorage(unittest.TestCase):
     def test_xattr(self):
         '''Test all xattr methods with special chars'''
         self.storage.writefile(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, databuf, None)
-        self.storage.setxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey', 123, None)
+        self.storage.setlock(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'test app', 'xattrlock')
+        self.storage.setxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey', 123, 'xattrlock')
         v = self.storage.getxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey')
         self.assertEqual(v, '123')
-        self.storage.rmxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey', None)
+        self.storage.rmxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey', 'xattrlock')
         v = self.storage.getxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey')
         self.assertEqual(v, None)
         self.storage.removefile(self.endpoint, self.homepath + '/test&xattr.txt', self.userid)
@@ -348,10 +356,13 @@ class TestStorage(unittest.TestCase):
     def test_rename_statx(self):
         '''Test renaming and statx of a file with special chars'''
         self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, databuf, None)
-        self.storage.renamefile(self.endpoint, self.homepath + '/test.txt', self.homepath + '/test&ren.txt', self.userid, None)
+        self.storage.setlock(self.endpoint, self.homepath + '/test.txt', self.userid, 'test app', 'renamelock')
+        self.storage.renamefile(self.endpoint, self.homepath + '/test.txt', self.homepath + '/test&ren.txt',
+                                self.userid, 'renamelock')
         statInfo = self.storage.statx(self.endpoint, self.homepath + '/test&ren.txt', self.userid)
         self.assertEqual(statInfo['filepath'], self.homepath + '/test&ren.txt')
-        self.storage.renamefile(self.endpoint, self.homepath + '/test&ren.txt', self.homepath + '/test.txt', self.userid, None)
+        self.storage.renamefile(self.endpoint, self.homepath + '/test&ren.txt', self.homepath + '/test.txt',
+                                self.userid, 'renamelock')
         statInfo = self.storage.statx(self.endpoint, self.homepath + '/test.txt', self.userid)
         self.assertEqual(statInfo['filepath'], self.homepath + '/test.txt')
         self.storage.removefile(self.endpoint, self.homepath + '/test.txt', self.userid)
