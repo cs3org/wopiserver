@@ -376,14 +376,13 @@ def makeLockSuccessResponse(operation, acctok, lock, version):
     if session in srv.conflictsessions['pending']:
         srv.conflictsessions['pending'].pop(session)
         srv.conflictsessions['resolved'][session] = time.asctime()
-    try:
-        # keep some accounting of the open files
-        if not session:
-            session = acctok['username']
-        if session not in srv.openfiles[acctok['filename']][1]:
-            srv.openfiles[acctok['filename']][1].add(session)
-    except KeyError:
-        srv.openfiles[acctok['filename']] = (time.asctime(), set(session))
+    # keep some accounting of the open files
+    if not session:
+        session = acctok['username']
+    if acctok['filename'] not in srv.openfiles:
+        srv.openfiles[acctok['filename']] = (time.asctime(), set())
+    if session not in srv.openfiles[acctok['filename']][1]:
+        srv.openfiles[acctok['filename']][1].add(session)
 
     log.info('msg="Successfully locked" lockop="%s" filename="%s" token="%s" sessionId="%s" lock="%s"' %
              (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], session, lock))
@@ -402,14 +401,13 @@ def storeWopiFile(acctok, retrievedlock, xakey, targetname=''):
     if session in srv.conflictsessions['pending']:
         srv.conflictsessions['pending'].pop(session)
         srv.conflictsessions['resolved'][session] = time.asctime()
-    try:
-        # keep some accounting of the open files
-        if not session:
-            session = acctok['username']
-        if session not in srv.openfiles[targetname][1]:
-            srv.openfiles[targetname][1].add(session)
-    except KeyError:
-        srv.openfiles[targetname] = (time.asctime(), set(session))
+    # keep some accounting of the open files
+    if not session:
+        session = acctok['username']
+    if targetname not in srv.openfiles:
+        srv.openfiles[targetname] = (time.asctime(), set())
+    if session not in srv.openfiles[targetname][1]:
+        srv.openfiles[targetname][1].add(session)
 
     st.writefile(acctok['endpoint'], targetname, acctok['userid'], flask.request.get_data(), encodeLock(retrievedlock))
     # save the current time for later conflict checking: this is never older than the mtime of the file
