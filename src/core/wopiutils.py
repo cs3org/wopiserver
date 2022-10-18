@@ -353,17 +353,15 @@ def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, endpoint
             reason = {'message': reason}
         resp.headers['X-WOPI-LockFailureReason'] = reason['message']
         resp.data = json.dumps(reason)
+
+    session = flask.request.headers.get('X-WOPI-SessionId')
+    if session and retrievedlock != 'External' and session not in srv.conflictsessions['pending']:
+        srv.conflictsessions['pending'][session] = (time.asctime(), retrievedlock)
     savetime = st.getxattr(endpoint, filename, user, LASTSAVETIMEKEY)
     if savetime:
         savetime = int(savetime)
     else:
         savetime = 0
-    session = flask.request.headers.get('X-WOPI-SessionId')
-    if session and retrievedlock != 'External':
-        if session in srv.conflictsessions['pending']:
-            srv.conflictsessions['pending'][session] += 1
-        else:
-            srv.conflictsessions['pending'][session] = 1
     log.warning('msg="Returning conflict" lockop="%s" user="%s" filename="%s" token="%s" sessionId="%s" lock="%s" '
                 'oldlock="%s" retrievedlock="%s" fileage="%1.1f" reason="%s"' %
                 (operation.title(), user, filename, flask.request.args['access_token'][-20:],
@@ -372,15 +370,23 @@ def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, endpoint
     return resp
 
 
-def makeLockSuccessResponse(operation, filename, lock, version):
+def makeLockSuccessResponse(operation, acctok, lock, version):
     '''Generates and logs an HTTP 200 response with appropriate headers for Lock/RefreshLock operations'''
     session = flask.request.headers.get('X-WOPI-SessionId')
     if session in srv.conflictsessions['pending']:
-        counter = srv.conflictsessions['pending'].pop(session)
-        srv.conflictsessions['resolved'][session] = counter
+        srv.conflictsessions['pending'].pop(session)
+        srv.conflictsessions['resolved'][session] = time.asctime()
+    try:
+        # keep some accounting of the open files
+        if not session:
+            session = acctok['username']
+        if session not in srv.openfiles[acctok['filename']][1]:
+            srv.openfiles[acctok['filename']][1].add(session)
+    except KeyError:
+        srv.openfiles[acctok['filename']] = (time.asctime(), set(session))
 
     log.info('msg="Successfully locked" lockop="%s" filename="%s" token="%s" sessionId="%s" lock="%s"' %
-             (operation.title(), filename, flask.request.args['access_token'][-20:], session, lock))
+             (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], session, lock))
     resp = flask.Response()
     resp.status_code = http.client.OK
     resp.headers['X-WOPI-ItemVersion'] = version
@@ -390,13 +396,21 @@ def makeLockSuccessResponse(operation, filename, lock, version):
 def storeWopiFile(acctok, retrievedlock, xakey, targetname=''):
     '''Saves a file from an HTTP request to the given target filename (defaulting to the access token's one),
     and stores the save time as an xattr. Throws IOError in case of any failure'''
-    session = flask.request.headers.get('X-WOPI-SessionId')
-    if session in srv.conflictsessions['pending']:
-        counter = srv.conflictsessions['pending'].pop(session)
-        srv.conflictsessions['resolved'][session] = counter
-
     if not targetname:
         targetname = acctok['filename']
+    session = flask.request.headers.get('X-WOPI-SessionId')
+    if session in srv.conflictsessions['pending']:
+        srv.conflictsessions['pending'].pop(session)
+        srv.conflictsessions['resolved'][session] = time.asctime()
+    try:
+        # keep some accounting of the open files
+        if not session:
+            session = acctok['username']
+        if session not in srv.openfiles[targetname][1]:
+            srv.openfiles[targetname][1].add(session)
+    except KeyError:
+        srv.openfiles[targetname] = (time.asctime(), set(session))
+
     st.writefile(acctok['endpoint'], targetname, acctok['userid'], flask.request.get_data(), encodeLock(retrievedlock))
     # save the current time for later conflict checking: this is never older than the mtime of the file
     st.setxattr(acctok['endpoint'], targetname, acctok['userid'], xakey, int(time.time()), encodeLock(retrievedlock))

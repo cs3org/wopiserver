@@ -241,16 +241,8 @@ def setLock(fileid, reqheaders, acctok):
             # not fatal, but will generate a conflict file later on, so log a warning
             log.warning('msg="Unable to set lastwritetime xattr" lockop="%s" user="%s" filename="%s" token="%s" reason="%s"' %
                         (op.title(), acctok['userid'][-20:], fn, flask.request.args['access_token'][-20:], e))
-        # also, keep track of files that have been opened for write: this is for statistical purposes only
-        # (cf. the GetLock WOPI call and the /wopi/iop/open/list action)
-        if fn not in srv.openfiles:
-            srv.openfiles[fn] = (time.asctime(), set([acctok['username']]))
-        else:
-            # the file was already opened but without lock: this happens on new files (cf. editnew action), just log
-            log.info('msg="First lock for new file" lockop="%s" user="%s" filename="%s" token="%s"' %
-                     (op.title(), acctok['userid'][-20:], fn, flask.request.args['access_token'][-20:]))
 
-        return utils.makeLockSuccessResponse(op, fn, lock, 'v%s' % statInfo['etag'])
+        return utils.makeLockSuccessResponse(op, acctok, lock, 'v%s' % statInfo['etag'])
 
     except IOError as e:
         if common.EXCL_ERROR in str(e):
@@ -270,7 +262,7 @@ def setLock(fileid, reqheaders, acctok):
             try:
                 st.refreshlock(acctok['endpoint'], fn, acctok['userid'], acctok['appname'],
                                utils.encodeLock(lock), utils.encodeLock(oldLock) if oldLock else None)
-                return utils.makeLockSuccessResponse(op, fn, lock, 'v%s' % statInfo['etag'])
+                return utils.makeLockSuccessResponse(op, acctok, lock, 'v%s' % statInfo['etag'])
             except IOError as rle:
                 # this is unexpected now
                 log.error('msg="Failed to refresh lock" lockop="%s" filename="%s" token="%s" lock="%s" error="%s"' %
@@ -288,23 +280,6 @@ def getLock(fileid, _reqheaders_unused, acctok):
     lock, _ = utils.retrieveWopiLock(fileid, 'GETLOCK', '', acctok)
     resp.status_code = http.client.OK if lock else http.client.NOT_FOUND
     resp.headers['X-WOPI-Lock'] = lock if lock else ''
-    # for statistical purposes, check whether a lock exists and update internal bookkeeping
-    if lock and lock != 'External':
-        try:
-            # the file was already opened for write, check whether this is a new user
-            if not acctok['username'] in srv.openfiles[acctok['filename']][1]:
-                # yes it's a new user
-                srv.openfiles[acctok['filename']][1].add(acctok['username'])
-                if len(srv.openfiles[acctok['filename']][1]) > 1:
-                    # for later monitoring, explicitly log that this file is being edited by at least two users
-                    log.info('msg="Collaborative editing detected" filename="%s" token="%s" users="%s"' %
-                             (acctok['filename'], flask.request.args['access_token'][-20:],
-                              list(srv.openfiles[acctok['filename']][1])))
-        except KeyError:
-            # existing lock but missing srv.openfiles[acctok['filename']] ?
-            log.warning('msg="Repopulating missing metadata" filename="%s" token="%s" friendlyname="%s"' %
-                        (acctok['filename'], flask.request.args['access_token'][-20:], acctok['username']))
-            srv.openfiles[acctok['filename']] = (time.asctime(), set([acctok['username']]))
     return resp
 
 
@@ -521,9 +496,6 @@ def _createNewFile(fileid, acctok):
             utils.storeWopiFile(acctok, None, utils.LASTSAVETIMEKEY)
             log.info('msg="File stored successfully" action="editnew" user="%s" filename="%s" token="%s"' %
                      (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:]))
-            # and we keep track of it as an open file with timestamp = Epoch, despite not having any lock yet.
-            # XXX this is to work around an issue with concurrent editing of newly created files (cf. iopOpen)
-            srv.openfiles[acctok['filename']] = ('0', set([acctok['username']]))
             return 'OK', http.client.OK
         except IOError as e:
             utils.storeForRecovery(flask.request.get_data(), acctok['username'], acctok['filename'],
