@@ -429,15 +429,14 @@ def storeAfterConflict(acctok, retrievedlock, lock, reason):
         storeForRecovery(flask.request.get_data(), acctok['username'], newname,
                          flask.request.args['access_token'][-20:], dorecovery)
         # conflict file was stored on recovery space, tell user (but reason is advisory...)
-        return makeConflictResponse('PUTFILE', acctok['userid'], retrievedlock, lock, 'NA',
-                                    acctok['endpoint'], acctok['filename'],
-                                    reason + ', please contact support to recover it')
+        reason += ', please contact support to recover it'
+    else:
+        # otherwise, conflict file was saved to user space
+        reason += ', conflict copy created'
 
-    # otherwise, conflict file was saved to user space but we still use a CONFLICT response
-    # as it is better handled by the app to signal the issue to the user
+    # use a CONFLICT response as it is better handled by the app to signal the issue to the user
     return makeConflictResponse('PUTFILE', acctok['userid'], retrievedlock, lock, 'NA',
-                                acctok['endpoint'], acctok['filename'],
-                                reason + ', conflict copy created')
+                                acctok['endpoint'], acctok['filename'], reason)
 
 
 def storeForRecovery(content, username, filename, acctokforlog, exception):
