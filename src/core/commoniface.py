@@ -17,7 +17,7 @@ from binascii import Error as B64Error
 ENOENT_MSG = 'No such file or directory'
 
 # standard error thrown when attempting to overwrite a file/xattr in O_EXCL mode
-EXCL_ERROR = 'File exists and islock flag requested'
+EXCL_ERROR = 'File/xattr exists but EXCL mode requested'
 
 # error thrown on refreshlock when the payload does not match
 LOCK_MISMATCH_ERROR = 'Existing lock payload does not match'
@@ -92,18 +92,18 @@ def decodeinode(inode):
     return e, urlsafe_b64decode(f.encode()).decode()
 
 
-def validatelock(filepath, appname, oldlock, oldvalue, op, log):
+def validatelock(filepath, currlock, appname, value, op, log):
     '''Common logic for validating locks in the xrootd and local storage interfaces.
        Duplicates some logic implemented in Reva for the cs3 storage interface'''
     try:
-        if not oldlock:
+        if not currlock:
             raise IOError('File was not locked or lock had expired')
-        if oldvalue and oldlock['lock_id'] != oldvalue:
+        if appname and currlock['app_name'] != appname \
+        and currlock['app_name'] != 'wopi' and appname != 'wopi':    # TODO deprecated, to be removed after CERNBox rollout
+            raise IOError('File is locked by %s' % currlock['app_name'])
+        if value != currlock['lock_id']:
             raise IOError(LOCK_MISMATCH_ERROR)
-        if appname and oldlock['app_name'] != appname \
-        and oldlock['app_name'] != 'wopi' and appname != 'wopi':    # TODO deprecated, to be removed after CERNBox rollout
-            raise IOError('File is locked by %s' % oldlock['app_name'])
     except IOError as e:
-        log.warning('msg="Failed to %s" filepath="%s" appname="%s" reason="%s"' %
-                    (op, filepath, appname, e))
+        log.warning('msg="Failed to %s" filepath="%s" appname="%s" lockid="%s" currlock="%s" reason="%s"' %
+                    (op, filepath, appname, value, currlock, e))
         raise

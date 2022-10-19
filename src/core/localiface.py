@@ -22,9 +22,6 @@ config = None
 log = None
 homepath = None
 
-# a conventional value used by _checklock()
-LOCK = '__LOCK__'
-
 
 class Flock:
     '''A simple class to lock/unlock when entering/leaving a runtime context
@@ -105,20 +102,10 @@ def statx(endpoint, filepath, userid, versioninv=1):
     return stat(endpoint, filepath, userid)
 
 
-def _checklock(op, endpoint, filepath, userid, lockid):
-    '''Verify if the given lockid matches the existing one on the given filepath, if any'''
-    if lockid == LOCK:
-        # this is a special value to skip the check, used by the lock operations themselves
-        return
-    lock = getlock(endpoint, filepath, userid)
-    if lock and lock['lock_id'] != lockid:    # here we could also validate the app/holder
-        log.warning('msg="%s: file was locked" filepath="%s" holder="%s"' % (op, filepath, lock['app_name']))
-        raise IOError(common.LOCK_MISMATCH_ERROR)
-
-
 def setxattr(endpoint, filepath, userid, key, value, lockid):
     '''Set the extended attribute <key> to <value> on behalf of the given userid'''
-    _checklock('setxattr', endpoint, filepath, userid, lockid)
+    if key != common.LOCKKEY:
+        common.validatelock(filepath, getlock(endpoint, filepath, userid), None, lockid, 'setxattr', log)
     try:
         os.setxattr(_getfilepath(filepath), 'user.' + key, str(value).encode())
     except OSError as e:
@@ -137,7 +124,8 @@ def getxattr(_endpoint, filepath, _userid, key):
 
 def rmxattr(endpoint, filepath, userid, key, lockid):
     '''Remove the extended attribute <key> on behalf of the given userid'''
-    _checklock('rmxattr', endpoint, filepath, userid, lockid)
+    if key != common.LOCKKEY:
+        common.validatelock(filepath, getlock(endpoint, filepath, userid), None, lockid, 'rmxattr', log)
     try:
         os.removexattr(_getfilepath(filepath), 'user.' + key)
     except OSError as e:
@@ -153,7 +141,8 @@ def setlock(endpoint, filepath, userid, appname, value):
         try:
             with fl:
                 if not getlock(endpoint, filepath, userid):
-                    setxattr(endpoint, filepath, '0:0', common.LOCKKEY, common.genrevalock(appname, value), LOCK)
+                    log.debug('msg="setlock: invoking setxattr" filepath="%s" value="%s"' % (filepath, value))
+                    setxattr(endpoint, filepath, '0:0', common.LOCKKEY, common.genrevalock(appname, value), None)
                 else:
                     raise IOError(common.EXCL_ERROR)
         except BlockingIOError as e:
@@ -171,23 +160,27 @@ def getlock(endpoint, filepath, _userid):
             return lock
         # otherwise, the lock had expired: drop it and return None
         log.debug('msg="getlock: removed stale lock" filepath="%s"' % filepath)
-        rmxattr(endpoint, filepath, '0:0', common.LOCKKEY, LOCK)
+        rmxattr(endpoint, filepath, '0:0', common.LOCKKEY, None)
     return None
 
 
 def refreshlock(endpoint, filepath, userid, appname, value, oldvalue=None):
     '''Refresh the lock value as an xattr on behalf of the given userid'''
-    common.validatelock(filepath, appname, getlock(endpoint, filepath, userid), oldvalue, 'refreshlock', log)
+    currlock = getlock(endpoint, filepath, userid)
+    if not oldvalue and currlock:
+        # this is a pure refresh operation
+        oldvalue = currlock['lock_id']
+    common.validatelock(filepath, currlock, appname, oldvalue, 'refreshlock', log)
     # this is non-atomic, but if we get here the lock was already held
     log.debug('msg="Invoked refreshlock" filepath="%s" value="%s"' % (filepath, value))
-    setxattr(endpoint, filepath, '0:0', common.LOCKKEY, common.genrevalock(appname, value), LOCK)
+    setxattr(endpoint, filepath, '0:0', common.LOCKKEY, common.genrevalock(appname, value), None)
 
 
 def unlock(endpoint, filepath, userid, appname, value):
     '''Remove the lock as an xattr on behalf of the given userid'''
-    common.validatelock(filepath, appname, getlock(endpoint, filepath, userid), None, 'unlock', log)
+    common.validatelock(filepath, getlock(endpoint, filepath, userid), appname, value, 'unlock', log)
     log.debug('msg="Invoked unlock" filepath="%s" value="%s"' % (filepath, value))
-    rmxattr(endpoint, filepath, '0:0', common.LOCKKEY, LOCK)
+    rmxattr(endpoint, filepath, '0:0', common.LOCKKEY, None)
 
 
 def readfile(_endpoint, filepath, _userid, _lockid):
@@ -221,10 +214,10 @@ def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
         content = bytes(content, 'UTF-8')
     size = len(content)
     if lockmd:
-        _, lockid = lockmd
-    else:
-        lockid = None
-    _checklock('writefile', endpoint, filepath, userid, lockid)
+        appname, lockid = lockmd
+        common.validatelock(filepath, getlock(endpoint, filepath, userid), appname, lockid, 'writefile', log)
+    elif getlock(endpoint, filepath, userid):
+        raise IOError(common.LOCK_MISMATCH_ERROR)
     log.debug('msg="Invoking writeFile" filepath="%s" size="%d"' % (filepath, size))
     tstart = time.time()
     if islock:
@@ -261,7 +254,7 @@ def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
 
 def renamefile(endpoint, origfilepath, newfilepath, userid, lockid):
     '''Rename a file from origfilepath to newfilepath on behalf of the given userid.'''
-    _checklock('renamefile', endpoint, origfilepath, userid, lockid)
+    common.validatelock(origfilepath, getlock(endpoint, origfilepath, userid), None, lockid, 'renamefile', log)
     try:
         os.rename(_getfilepath(origfilepath), _getfilepath(newfilepath))
     except OSError as e:
