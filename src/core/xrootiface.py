@@ -263,7 +263,16 @@ def statx(endpoint, fileref, userid, versioninv=1):
 def setxattr(endpoint, filepath, userid, key, value, lockid):
     '''Set the extended attribute <key> to <value> via a special open.
     The userid is overridden to make sure it also works on shared files.'''
-    _xrootcmd(endpoint, 'attr', 'set', '0:0', 'mgm.attr.key=user.' + key + '&mgm.attr.value=' + str(value)
+    if key not in (EOSLOCKKEY, common.LOCKKEY):
+        currlock = getlock(endpoint, filepath, userid)
+        if currlock:
+            # enforce lock only if previously set
+            common.validatelock(filepath, currlock, None, lockid, 'setxattr', log)
+    # else skip the check as we're setting the lock itself
+    if 'user' not in key and 'sys' not in key:
+        # if nothing is given, assume it's a user attr
+        key = 'user.' + key
+    _xrootcmd(endpoint, 'attr', 'set', '0:0', 'mgm.attr.key=' + key + '&mgm.attr.value=' + str(value)
               + '&mgm.path=' + _getfilepath(filepath, encodeamp=True))
 
 

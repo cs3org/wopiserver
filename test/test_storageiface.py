@@ -295,6 +295,8 @@ class TestStorage(unittest.TestCase):
         with self.assertRaises(IOError):
             self.storage.writefile(self.endpoint, self.homepath + '/testlockop', self.userid, databuf, None)
         with self.assertRaises(IOError):
+            self.storage.setxattr(self.endpoint, self.homepath + '/testlockop', self.userid, 'testkey', 123, 'mismatchlock')
+        with self.assertRaises(IOError):
             self.storage.setxattr(self.endpoint, self.homepath + '/testlockop', self.userid, 'testkey', 123, None)
         with self.assertRaises(IOError):
             self.storage.rmxattr(self.endpoint, self.homepath + '/testlockop', self.userid, 'testkey', None)
@@ -344,6 +346,7 @@ class TestStorage(unittest.TestCase):
     def test_xattr(self):
         '''Test all xattr methods with special chars'''
         self.storage.writefile(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, databuf, None)
+        self.storage.setxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey', 123, None)
         self.storage.setlock(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'test app', 'xattrlock')
         self.storage.setxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey', 123, 'xattrlock')
         v = self.storage.getxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey')

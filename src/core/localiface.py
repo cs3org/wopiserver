@@ -105,7 +105,10 @@ def statx(endpoint, filepath, userid, versioninv=1):
 def setxattr(endpoint, filepath, userid, key, value, lockid):
     '''Set the extended attribute <key> to <value> on behalf of the given userid'''
     if key != common.LOCKKEY:
-        common.validatelock(filepath, getlock(endpoint, filepath, userid), None, lockid, 'setxattr', log)
+        currlock = getlock(endpoint, filepath, userid)
+        if currlock:
+            # enforce lock only if previously set
+            common.validatelock(filepath, currlock, None, lockid, 'setxattr', log)
     try:
         os.setxattr(_getfilepath(filepath), 'user.' + key, str(value).encode())
     except OSError as e:
