@@ -438,9 +438,8 @@ def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
              (filepath, (tend-tstart)*1000, islock))
 
 
-def renamefile(endpoint, origfilepath, newfilepath, userid, lockid):
+def renamefile(endpoint, origfilepath, newfilepath, userid, _lockid):
     '''Rename a file via a special open from origfilepath to newfilepath on behalf of the given userid.'''
-    common.validatelock(origfilepath, getlock(endpoint, origfilepath, userid), None, lockid, 'renamefile', log)
     _xrootcmd(endpoint, 'file', 'rename', userid, 'mgm.path=' + _getfilepath(origfilepath, encodeamp=True)
               + '&mgm.file.source=' + _getfilepath(origfilepath, encodeamp=True)
               + '&mgm.file.target=' + _getfilepath(newfilepath, encodeamp=True))

@@ -297,12 +297,11 @@ class TestStorage(unittest.TestCase):
             self.storage.setxattr(self.endpoint, self.homepath + '/testlockop', self.userid, 'testkey', 123, None)
         with self.assertRaises(IOError):
             self.storage.rmxattr(self.endpoint, self.homepath + '/testlockop', self.userid, 'testkey', None)
-        with self.assertRaises(IOError):
-            self.storage.renamefile(self.endpoint, self.homepath + '/testlockop', self.homepath + '/testlockop_renamed',
-                                    self.userid, None)
         for chunk in self.storage.readfile(self.endpoint, self.homepath + '/testlockop', self.userid, None):
             self.assertNotIsInstance(chunk, IOError, 'raised by storage.readfile, lock shall be shared')
-        self.storage.removefile(self.endpoint, self.homepath + '/testlockop', self.userid)
+        self.storage.renamefile(self.endpoint, self.homepath + '/testlockop', self.homepath + '/testlockop_renamed',
+                                self.userid, 'testlock')
+        self.storage.removefile(self.endpoint, self.homepath + '/testlockop_renamed', self.userid)
 
     def test_expired_locks(self):
         '''Test lock operations on expired locks'''

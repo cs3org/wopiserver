@@ -255,9 +255,8 @@ def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
              (filepath, (tend - tstart) * 1000, islock))
 
 
-def renamefile(endpoint, origfilepath, newfilepath, userid, lockid):
+def renamefile(endpoint, origfilepath, newfilepath, _userid, _lockid):
     '''Rename a file from origfilepath to newfilepath on behalf of the given userid.'''
-    common.validatelock(origfilepath, getlock(endpoint, origfilepath, userid), None, lockid, 'renamefile', log)
     try:
         os.rename(_getfilepath(origfilepath), _getfilepath(newfilepath))
     except OSError as e:

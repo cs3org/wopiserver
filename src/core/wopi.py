@@ -457,7 +457,7 @@ def renameFile(fileid, reqheaders, acctok):
         log.warning('msg="Missing argument" client="%s" requestedUrl="%s" error="%s" token="%s"' %
                     (flask.request.remote_addr, flask.request.base_url, e, flask.request.args.get('access_token')[-20:]))
         return 'Missing argument', http.client.BAD_REQUEST
-    lock = reqheaders.get('X-WOPI-Lock')
+    lock = reqheaders.get('X-WOPI-Lock')    # may not be specified
     retrievedLock, _ = utils.retrieveWopiLock(fileid, 'RENAMEFILE', lock, acctok)
     if retrievedLock is not None and not utils.compareWopiLocks(retrievedLock, lock):
         return utils.makeConflictResponse('RENAMEFILE', acctok['userid'], retrievedLock, lock, 'NA',
@@ -468,7 +468,12 @@ def renameFile(fileid, reqheaders, acctok):
             + os.path.splitext(acctok['filename'])[1] if targetName.find('.') < 0 else ''
         log.info('msg="RenameFile" user="%s" filename="%s" token="%s" targetname="%s"' %
                  (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:], targetName))
-        st.renamefile(acctok['endpoint'], acctok['filename'], targetName, acctok['userid'], utils.encodeLock(retrievedLock))
+
+        # try to rename and pass the lock if present. Note that WOPI specs do not require files to be locked
+        # on rename operations, but the backend may still fail as renames may be implemented as copy + delete,
+        # which may require to pass a lock.
+        st.renamefile(acctok['endpoint'], acctok['filename'], targetName, acctok['userid'],
+                      utils.encodeLock(retrievedLock) if retrievedLock else None)
         # also rename the lock if applicable
         if os.path.splitext(acctok['filename'])[1] in srv.codetypes:
             st.renamefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']),
@@ -476,12 +481,17 @@ def renameFile(fileid, reqheaders, acctok):
         # send the response as JSON
         return flask.Response(json.dumps(renamemd), mimetype='application/json')
     except IOError as e:
-        if common.ENOENT_MSG in str(e):
-            return 'File not found', http.client.NOT_FOUND
-        log.info('msg="RenameFile" token="%s" error="%s"' % (flask.request.args['access_token'][-20:], e))
+        log.warn('msg="RenameFile" token="%s" error="%s"' % (flask.request.args['access_token'][-20:], e))
         resp = flask.Response()
-        resp.headers['X-WOPI-InvalidFileNameError'] = 'Failed to rename: %s' % e
-        resp.status_code = http.client.BAD_REQUEST
+        if common.ENOENT_MSG in str(e):
+            resp.headers['X-WOPI-InvalidFileNameError'] = 'File not found'
+            resp.status_code = http.client.NOT_FOUND
+        elif common.EXCL_ERROR in str(e):
+            resp.headers['X-WOPI-InvalidFileNameError'] = 'Cannot rename/move unlocked file'
+            resp.status_code = http.client.NOT_IMPLEMENTED
+        else:
+            resp.headers['X-WOPI-InvalidFileNameError'] = 'Failed to rename: %s' % e
+            resp.status_code = http.client.INTERNAL_SERVER_ERROR
         return resp
 
 

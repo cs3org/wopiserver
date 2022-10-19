@@ -317,7 +317,7 @@ def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
     if res.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to initiateFileUpload on write" filepath="%s" trace="%s" code="%s" reason="%s"' %
                   (filepath, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
-        if 'lock' in res.status.message:    # TODO find the error code returned by Reva once this is implemented
+        if '_lock_' in res.status.message:    # TODO find the error code returned by Reva once this is implemented
             raise IOError(common.LOCK_MISMATCH_ERROR)
         raise IOError(res.status.message)
     tend = time.time()
@@ -353,6 +353,10 @@ def renamefile(endpoint, filepath, newfilepath, userid, lockid):
 
     req = cs3sp.MoveRequest(source=reference, destination=newfileref, lock_id=lockid)
     res = ctx['cs3gw'].Move(request=req, metadata=[('x-access-token', userid)])
+    if res.status.code in [cs3code.CODE_FAILED_PRECONDITION, cs3code.CODE_ABORTED]:
+        log.info('msg="Failed precondition on rename" filepath="%s" trace="%s" reason="%s"' %
+                 (filepath, res.status.trace, res.status.message.replace('"', "'")))
+        raise IOError(common.EXCL_ERROR)
     if res.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to rename file" filepath="%s" trace="%s" code="%s" reason="%s"' %
                   (filepath, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
