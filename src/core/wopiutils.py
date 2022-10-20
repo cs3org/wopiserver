@@ -147,8 +147,8 @@ def generateWopiSrc(fileid, proxy=False):
 
 
 def generateUrlFromTemplate(url, acctok):
-    '''One-liner to parse an URL template and return it with actualised placeholders. See also common.encodeinode().'''
-    return url.replace('<path>', url_quote_plus(acctok['filename'])). \
+    '''One-liner to parse an URL template and return it with actualised placeholders'''
+    return url.replace('<path>', acctok['filename']). \
                replace('<endpoint>', acctok['endpoint']). \
                replace('<fileid>', acctok['fileid']). \
                replace('<app>', acctok['appname'])
