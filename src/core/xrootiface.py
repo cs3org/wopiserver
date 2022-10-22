@@ -213,7 +213,7 @@ def statx(endpoint, fileref, userid, versioninv=1):
     rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder) + ownerarg + '&mgm.pcmd=stat',
                                             timeout=timeout)
     tend = time.time()
-    infov = infov.decode()
+    infov = infov.decode() if infov else ''
     try:
         if OK_MSG not in str(rcv) or 'retc=2' in infov:
             # the version folder does not exist: create it (on behalf of the owner) as it is done in Reva
@@ -224,7 +224,7 @@ def statx(endpoint, fileref, userid, versioninv=1):
             rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder) + ownerarg + '&mgm.pcmd=stat',
                                                     timeout=timeout)
             tend = time.time()
-            infov = infov.decode()
+            infov = infov.decode() if infov else ''
             if OK_MSG not in str(rcv) or 'retc=' in infov:
                 raise IOError(rcv)
         # infov is a full record according to https://gitlab.cern.ch/dss/eos/-/blob/master/mgm/XrdMgmOfs/fsctl/Stat.cc#L53
