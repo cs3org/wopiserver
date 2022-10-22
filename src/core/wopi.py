@@ -310,9 +310,13 @@ def unlock(fileid, reqheaders, acctok):
             # ignore, it's not worth to report anything here
             pass
 
-    # and update our internal list of opened files
+    # and update our internal lists of opened files and conflicted sessions
     try:
         del srv.openfiles[acctok['filename']]
+        session = flask.request.headers.get('X-WOPI-SessionId')
+        if session in srv.conflictsessions['pending']:
+            srv.conflictsessions['pending'].pop(session)
+            srv.conflictsessions['resolved'][session] = time.asctime()
     except KeyError:
         # already removed?
         pass
