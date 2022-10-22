@@ -123,13 +123,20 @@ def validateAndLogHeaders(op):
             return 'Invalid or expired X-WOPI-Timestamp header', http.client.INTERNAL_SERVER_ERROR
 
     # log all relevant headers to help debugging
+    session = flask.request.headers.get('X-WOPI-SessionId')
     log.debug('msg="%s: client context" user="%s" filename="%s" token="%s" client="%s" deviceId="%s" reqId="%s" sessionId="%s" '
               'app="%s" appEndpoint="%s" correlationId="%s" wopits="%s"' %
               (op.title(), acctok['userid'][-20:], acctok['filename'],
                flask.request.args['access_token'][-20:], flask.request.headers.get('X-Real-Ip', flask.request.remote_addr),
                flask.request.headers.get('X-WOPI-DeviceId'), flask.request.headers.get('X-Request-Id'),
-               flask.request.headers.get('X-WOPI-SessionId'), flask.request.headers.get('X-WOPI-RequestingApplication'),
+               session, flask.request.headers.get('X-WOPI-RequestingApplication'),
                flask.request.headers.get('X-WOPI-AppEndpoint'), flask.request.headers.get('X-WOPI-CorrelationId'), wopits))
+
+    # update bookkeeping of pending sessions
+    if op.title() == 'Checkfileinfo' and session in srv.conflictsessions['pending'] and \
+        time.mktime(time.strptime(srv.conflictsessions['pending'][session]['time'])) < time.time() - 900:
+        # a previously conflicted session is still around executing Checkfileinfo after 15 minutes, assume it got resolved
+        _resolveSession(session, acctok['filename'])
     return acctok, None
 
 
@@ -370,19 +377,25 @@ def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, endpoint
     return resp
 
 
-def makeLockSuccessResponse(operation, acctok, lock, version):
-    '''Generates and logs an HTTP 200 response with appropriate headers for Lock/RefreshLock operations'''
-    session = flask.request.headers.get('X-WOPI-SessionId')
+def _resolveSession(session, filename):
+    '''Mark a session as resolved and account the given filename in the openfiles map.
+    This is only used for bookkeeping, no functionality is associated to those maps'''
     if session in srv.conflictsessions['pending']:
         srv.conflictsessions['pending'].pop(session)
         srv.conflictsessions['resolved'][session] = time.asctime()
     # keep some accounting of the open files
+    if filename not in srv.openfiles:
+        srv.openfiles[filename] = (time.asctime(), set())
+    if session not in srv.openfiles[filename][1]:
+        srv.openfiles[filename][1].add(session)
+
+
+def makeLockSuccessResponse(operation, acctok, lock, version):
+    '''Generates and logs an HTTP 200 response with appropriate headers for Lock/RefreshLock operations'''
+    session = flask.request.headers.get('X-WOPI-SessionId')
     if not session:
         session = acctok['username']
-    if acctok['filename'] not in srv.openfiles:
-        srv.openfiles[acctok['filename']] = (time.asctime(), set())
-    if session not in srv.openfiles[acctok['filename']][1]:
-        srv.openfiles[acctok['filename']][1].add(session)
+    _resolveSession(session, acctok['filename'])
 
     log.info('msg="Successfully locked" lockop="%s" filename="%s" token="%s" sessionId="%s" lock="%s"' %
              (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], session, lock))
@@ -398,16 +411,9 @@ def storeWopiFile(acctok, retrievedlock, xakey, targetname=''):
     if not targetname:
         targetname = acctok['filename']
     session = flask.request.headers.get('X-WOPI-SessionId')
-    if session in srv.conflictsessions['pending']:
-        srv.conflictsessions['pending'].pop(session)
-        srv.conflictsessions['resolved'][session] = time.asctime()
-    # keep some accounting of the open files
     if not session:
         session = acctok['username']
-    if targetname not in srv.openfiles:
-        srv.openfiles[targetname] = (time.asctime(), set())
-    if session not in srv.openfiles[targetname][1]:
-        srv.openfiles[targetname][1].add(session)
+    _resolveSession(session, targetname)
 
     st.writefile(acctok['endpoint'], targetname, acctok['userid'], flask.request.get_data(), encodeLock(retrievedlock))
     # save the current time for later conflict checking: this is never older than the mtime of the file
