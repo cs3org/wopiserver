@@ -135,13 +135,23 @@ def _gendocid(wopisrc):
 # The Bridge endpoints start here
 #############################################################################################################
 
-def appopen(wopisrc, acctok, appname, viewmode, revatok=None):
+def appopen(wopisrc, acctok, appmd, viewmode, revatok=None):
     '''Open a doc by contacting the provided WOPISrc with the given access_token.
     Returns a (app-url, params{}) pair if successful, raises a FailedOpen exception otherwise'''
     wopisrc = urlparse.unquote_plus(wopisrc)
     if not isinstance(acctok, str):
         # TODO when using the wopiopen.py tool, the access token has to be decoded, to be clarified
         acctok = acctok.decode()
+
+    # load plugin if not done at init time and validate URLs
+    appname, appurl, appinturl, apikey = appmd
+    try:
+        WB.loadplugin(appname, appurl, appinturl, apikey)
+    except ValueError:
+        raise FailedOpen('Failed to load WOPI bridge plugin for %s' % appname, http.client.INTERNAL_SERVER_ERROR)
+    except KeyError:
+        raise FailedOpen('Bridged app %s already configured with a different appurl' % appname, http.client.NOT_IMPLEMENTED)
+
     # WOPI GetFileInfo
     res = wopic.request(wopisrc, acctok, 'GET')
     if res.status_code != http.client.OK:
@@ -150,10 +160,10 @@ def appopen(wopisrc, acctok, appname, viewmode, revatok=None):
     filemd = res.json()
     app = WB.plugins.get(appname.lower())
     if not app:
-        WB.log.warning('msg="Open: appname not supported or missing plugin" filename="%s" appname="%s" token="%s"' %
+        WB.log.warning('msg="BridgeOpen: appname not supported or missing plugin" filename="%s" appname="%s" token="%s"' %
                        (filemd['BaseFileName'], appname, acctok[-20:]))
         raise FailedOpen('File type not supported', http.client.BAD_REQUEST)
-    WB.log.debug('msg="Processing open in supported app" appname="%s" plugin="%s"' % (appname, app))
+    WB.log.debug('msg="BridgeOpen: processing supported app" appname="%s" plugin="%s"' % (appname, app))
 
     try:
         # use the 'UserCanWrite' attribute to decide whether the file is to be opened in read-only mode

@@ -326,17 +326,6 @@ def iopOpenInApp():
         Wopi.log.warning('msg="iopOpenInApp: app-related arguments must be provided" client="%s"' % req.remote_addr)
         return 'Missing appname or appurl arguments', http.client.BAD_REQUEST
 
-    if bridge.issupported(appname):
-        # This is a bridge-supported application, get the extra info to enable it
-        apikey = req.headers.get('ApiKey')
-        appinturl = url_unquote_plus(req.args.get('appinturl', appurl))     # defaults to the external appurl
-        try:
-            bridge.WB.loadplugin(appname, appurl, appinturl, apikey)
-        except ValueError:
-            return 'Failed to load WOPI bridge plugin for %s' % appname, http.client.INTERNAL_SERVER_ERROR
-        except KeyError:
-            return 'Bridged app %s already configured with a different appurl' % appname, http.client.NOT_IMPLEMENTED
-
     try:
         userid = storage.getuseridfromcreds(usertoken, wopiuser)
         if userid != usertoken:
@@ -354,8 +343,9 @@ def iopOpenInApp():
     res = {}
     if bridge.issupported(appname):
         try:
-            res['app-url'], res['form-parameters'] = bridge.appopen(utils.generateWopiSrc(inode), acctok, appname, viewmode,
-                                                                    usertoken)
+            res['app-url'], res['form-parameters'] = bridge.appopen(utils.generateWopiSrc(inode), acctok,
+                    (appname, appurl, url_unquote_plus(req.args.get('appinturl', appurl),  req.headers.get('ApiKey'))),
+                    viewmode, usertoken)
         except bridge.FailedOpen as foe:
             return foe.msg, foe.statuscode
     else:
