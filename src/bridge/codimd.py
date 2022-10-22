@@ -153,7 +153,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
                 log.error('msg="Unable to push read-only document to CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
                 raise AppFailure
-            docid = urlparse.urlsplit(res.next.url).path.split('/')[-1]
+            docid = urlparse.urlsplit(res.headers['location']).path.split('/')[-1]
             log.info('msg="Pushed read-only document to CodiMD" docid="%s" token="%s"' % (docid, acctok[-20:]))
         else:
             # reserve the given docid in CodiMD via a HEAD request
@@ -166,7 +166,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
                 raise AppFailure
             # check if the target docid is real or is a redirect
             if res.status_code == http.client.FOUND:
-                newdocid = urlparse.urlsplit(res.next.url).path.split('/')[-1]
+                newdocid = urlparse.urlsplit(res.headers['location']).path.split('/')[-1]
                 log.info('msg="Document got aliased in CodiMD" olddocid="%s" docid="%s" token="%s"' %
                          (docid, newdocid, acctok[-20:]))
                 docid = newdocid
