@@ -213,8 +213,10 @@ def statx(endpoint, fileref, userid, versioninv=1):
     rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder) + ownerarg + '&mgm.pcmd=stat',
                                             timeout=timeout)
     tend = time.time()
-    infov = infov.decode() if infov else ''
     try:
+        if not infov:
+            raise IOError('xrdquery returned nothing, rcv=%s' + rcv)
+        infov = infov.decode()
         if OK_MSG not in str(rcv) or 'retc=2' in infov:
             # the version folder does not exist: create it (on behalf of the owner) as it is done in Reva
             rcmkdir = _getxrdfor(endpoint).mkdir(_getfilepath(verFolder) + ownerarg, MkDirFlags.MAKEPATH, timeout=timeout)
@@ -224,7 +226,9 @@ def statx(endpoint, fileref, userid, versioninv=1):
             rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder) + ownerarg + '&mgm.pcmd=stat',
                                                     timeout=timeout)
             tend = time.time()
-            infov = infov.decode() if infov else ''
+            if not infov:
+                raise IOError('xrdquery returned nothing, rcv=%s' + rcv)
+            infov = infov.decode()
             if OK_MSG not in str(rcv) or 'retc=' in infov:
                 raise IOError(rcv)
         # infov is a full record according to https://gitlab.cern.ch/dss/eos/-/blob/master/mgm/XrdMgmOfs/fsctl/Stat.cc#L53
@@ -233,7 +237,7 @@ def statx(endpoint, fileref, userid, versioninv=1):
                   (endpoint, _getfilepath(verFolder), str(rcv).strip('\n'), infov, (tend-tstart)*1000))
     except IOError as e:
         # here we should really raise the error, but for now we just log it
-        log.error('msg="Failed to mkdir/stat version folder, returning file metadata instead" filepath="%s" rc="%s"' %
+        log.error('msg="Failed to mkdir/stat version folder, returning file metadata instead" filepath="%s" error="%s"' %
                   (_getfilepath(filepath), e))
     # return the metadata of the given file, with the inode taken from the version folder
     endpoint = _geturlfor(endpoint)
