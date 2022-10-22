@@ -147,7 +147,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
                                 headers={'Content-Type': 'text/markdown'},
                                 verify=sslverify)
             if res.status_code == http.client.REQUEST_ENTITY_TOO_LARGE:
-                log.error('msg="File is too large to be edited in CodiMD" token="%s"')
+                log.error('msg="File is too large to be edited in CodiMD" token="%s"' % acctok[-20:])
                 raise AppFailure(TOOLARGE)
             if res.status_code != http.client.FOUND:
                 log.error('msg="Unable to push read-only document to CodiMD" token="%s" response="%d"' %
@@ -155,6 +155,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
                 raise AppFailure
             docid = urlparse.urlsplit(res.headers['location']).path.split('/')[-1]
             log.info('msg="Pushed read-only document to CodiMD" docid="%s" token="%s"' % (docid, acctok[-20:]))
+
         else:
             # reserve the given docid in CodiMD via a HEAD request
             res = requests.head(appurl + '/' + docid,
@@ -164,14 +165,14 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
                 log.error('msg="Unable to reserve note hash in CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
                 raise AppFailure
+
             # check if the target docid is real or is a redirect
             if res.status_code == http.client.FOUND:
                 newdocid = urlparse.urlsplit(res.headers['location']).path.split('/')[-1]
                 log.info('msg="Document got aliased in CodiMD" olddocid="%s" docid="%s" token="%s"' %
                          (docid, newdocid, acctok[-20:]))
                 docid = newdocid
-            else:
-                log.debug('msg="Got note hash from CodiMD" docid="%s"' % docid)
+
             # push the document to CodiMD with the update API
             res = requests.put(appurl + '/api/notes/' + docid,
                                json={'content': mddoc.decode()},
@@ -180,12 +181,13 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
                 # the file got unlocked because of no activity, yet some user is there: let it go
                 log.warning('msg="Document was being edited in CodiMD, redirecting user" token"%s"' % acctok[-20:])
             elif res.status_code == http.client.REQUEST_ENTITY_TOO_LARGE:
-                log.error('msg="File is too large to be edited in CodiMD" token="%s"')
+                log.error('msg="File is too large to be edited in CodiMD" docid="%s" token="%s"' % (docid, acctok[-20:]))
                 raise AppFailure(TOOLARGE)
             elif res.status_code != http.client.OK:
-                log.error('msg="Unable to push document to CodiMD" token="%s" response="%d"' %
-                          (acctok[-20:], res.status_code))
+                log.error('msg="Unable to push document to CodiMD" docid="%s" token="%s" response="%d"' %
+                          (docid, acctok[-20:], res.status_code))
                 raise AppFailure
+
             log.info('msg="Pushed document to CodiMD" docid="%s" token="%s"' % (docid, acctok[-20:]))
     except requests.exceptions.ConnectionError as e:
         log.error('msg="Exception raised attempting to connect to CodiMD" exception="%s"' % e)
