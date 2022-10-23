@@ -231,6 +231,7 @@ def writefile(endpoint, filepath, userid, content, lockid, islock=False):
             # so we resort to the os-level open(), with some caveats
             fd = os.open(_getfilepath(filepath), os.O_CREAT | os.O_EXCL)
             f = os.fdopen(fd, mode='wb')
+            tend = time.time()
             written = f.write(content)        # os.write(fd, ...) raises EBADF?
             os.close(fd)     # f.close() raises EBADF! while this works
             # as f goes out of scope here, we'd get a false ResourceWarning, which is ignored by the above filter
@@ -243,11 +244,11 @@ def writefile(endpoint, filepath, userid, content, lockid, islock=False):
     else:
         try:
             with open(_getfilepath(filepath), mode='wb') as f:
+                tend = time.time()
                 written = f.write(content)
         except OSError as e:
             log.error('msg="Error writing file" filepath="%s" error="%s"' % (filepath, e))
             raise IOError(e)
-    tend = time.time()
     if written != size:
         raise IOError('Written %d bytes but content is %d bytes' % (written, size))
     log.info('msg="File written successfully" filepath="%s" elapsedTimems="%.1f" islock="%s"' %

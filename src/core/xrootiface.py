@@ -374,20 +374,23 @@ def writefile(endpoint, filepath, userid, content, _lockid, islock=False):
             log.info('msg="File exists on write but islock flag requested" filepath="%s"' % filepath)
             raise IOError(common.EXCL_ERROR)
         # any other failure is reported as is
-        log.warning('msg="Error opening the file for write" filepath="%s" error="%s"' % (filepath, rc.message.strip('\n')))
+        log.error('msg="Error opening the file for write" filepath="%s" elapsedTimems="%.1f" error="%s"' %
+                  (filepath, (tend-tstart)*1000, rc.message.strip('\n')))
         raise IOError(rc.message.strip('\n'))
-    # write the file. In a future implementation, we should find a way to only update the required chunks...
     rc, _ = f.write(content, offset=0, size=size)
     if not rc.ok:
-        log.warning('msg="Error writing the file" filepath="%s" error="%s"' % (filepath, rc.message.strip('\n')))
+        log.error('msg="Error writing the file" filepath="%s" elapsedTimems="%.1f" error="%s"' %
+                  (filepath, (tend-tstart)*1000, rc.message.strip('\n')))
         raise IOError(rc.message.strip('\n'))
     rc, _ = f.truncate(size)
     if not rc.ok:
-        log.warning('msg="Error truncating the file" filepath="%s" error="%s"' % (filepath, rc.message.strip('\n')))
+        log.error('msg="Error truncating the file" filepath="%s" elapsedTimems="%.1f" error="%s"' %
+                  (filepath, (tend-tstart)*1000, rc.message.strip('\n')))
         raise IOError(rc.message.strip('\n'))
     rc, _ = f.close()
     if not rc.ok:
-        log.warning('msg="Error closing the file" filepath="%s" error="%s"' % (filepath, rc.message.strip('\n')))
+        log.error('msg="Error closing the file" filepath="%s" elapsedTimems="%.1f" error="%s"' %
+                  (filepath, (tend-tstart)*1000, rc.message.strip('\n')))
         raise IOError(rc.message.strip('\n'))
     if existingLock:
         try:

@@ -268,6 +268,7 @@ def readfile(endpoint, filepath, userid, lockid):
         log.error('msg="Failed to initiateFileDownload on read" filepath="%s" trace="%s" code="%s" reason="%s"' %
                   (filepath, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
         yield IOError(res.status.message)
+    tend = time.time()
     log.debug('msg="readfile: InitiateFileDownloadRes returned" trace="%s" protocols="%s"' %
               (res.status.trace, res.protocols))
 
@@ -282,7 +283,6 @@ def readfile(endpoint, filepath, userid, lockid):
     except requests.exceptions.RequestException as e:
         log.error('msg="Exception when downloading file from Reva" reason="%s"' % e)
         yield IOError(e)
-    tend = time.time()
     data = fileget.content
     if fileget.status_code != http.client.OK:
         log.error('msg="Error downloading file from Reva" code="%d" reason="%s"' %
@@ -315,6 +315,7 @@ def writefile(endpoint, filepath, userid, content, lockid, islock=False):
         log.error('msg="Failed to initiateFileUpload on write" filepath="%s" trace="%s" code="%s" reason="%s"' %
                   (filepath, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
+    tend = time.time()
     log.debug('msg="writefile: InitiateFileUploadRes returned" trace="%s" protocols="%s"' %
               (res.status.trace, res.protocols))
 
@@ -330,7 +331,6 @@ def writefile(endpoint, filepath, userid, content, lockid, islock=False):
     except requests.exceptions.RequestException as e:
         log.error('msg="Exception when uploading file to Reva" reason="%s"' % e)
         raise IOError(e)
-    tend = time.time()
     if putres.status_code == http.client.UNAUTHORIZED:
         log.warning('msg="Access denied uploading file to Reva" reason="%s"' % putres.reason)
         raise IOError(common.ACCESS_ERROR)
