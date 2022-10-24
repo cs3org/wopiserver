@@ -465,7 +465,8 @@ def wopiFilesPost(fileid):
         op = headers['X-WOPI-Override']       # must be one of the following strings, throws KeyError if missing
     except KeyError as e:
         Wopi.log.warning('msg="Missing argument" client="%s" requestedUrl="%s" error="%s" token="%s"' %
-                         (flask.request.remote_addr, flask.request.base_url, e, flask.request.args.get('access_token')[-20:]))
+                         (flask.request.headers.get(utils.REALIPHEADER, flask.request.remote_addr), flask.request.base_url,
+                          e, flask.request.args.get('access_token')))
         return 'Missing argument', http.client.BAD_REQUEST
     acctokOrMsg, httpcode = utils.validateAndLogHeaders(op)
     if httpcode:

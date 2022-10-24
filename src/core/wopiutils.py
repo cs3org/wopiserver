@@ -27,6 +27,9 @@ import core.commoniface as common
 # this is the xattr key used for conflicts resolution on the remote storage
 LASTSAVETIMEKEY = 'iop.wopi.lastwritetime'
 
+# header used by reverse proxies such as traefik to pass the real remote IP address
+REALIPHEADER = 'X-Real-IP'
+
 # convenience references to global entities
 st = None
 srv = None
@@ -90,7 +93,8 @@ def logGeneralExceptionAndReturn(ex, req):
     '''Convenience function to log a stack trace and return HTTP 500'''
     ex_type, ex_value, ex_traceback = sys.exc_info()
     log.critical('msg="Unexpected exception caught" exception="%s" type="%s" traceback="%s" client="%s" requestedUrl="%s"' %
-                 (ex, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback), req.remote_addr, req.url))
+                 (ex, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback),
+                  flask.request.headers.get(REALIPHEADER, flask.request.remote_addr), req.url))
     return 'Internal error, please contact support', http.client.INTERNAL_SERVER_ERROR
 
 
@@ -104,7 +108,8 @@ def validateAndLogHeaders(op):
             raise jwt.exceptions.ExpiredSignatureError
     except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError, KeyError) as e:
         log.info('msg="Expired or malformed token" client="%s" requestedUrl="%s" error="%s" token="%s"' %
-                 (flask.request.remote_addr, flask.request.base_url, str(type(e)) + ': ' + str(e), flask.request.args['access_token']))
+                 (flask.request.headers.get(REALIPHEADER, flask.request.remote_addr), flask.request.base_url,
+                  str(type(e)) + ': ' + str(e), flask.request.args.get('access_token')))
         return 'Invalid access token', http.client.UNAUTHORIZED
 
     # validate the WOPI timestamp: this is typically not present, but if it is we must check its expiration
@@ -127,7 +132,7 @@ def validateAndLogHeaders(op):
     log.debug('msg="%s: client context" user="%s" filename="%s" token="%s" client="%s" deviceId="%s" reqId="%s" sessionId="%s" '
               'app="%s" appEndpoint="%s" correlationId="%s" wopits="%s"' %
               (op.title(), acctok['userid'][-20:], acctok['filename'],
-               flask.request.args['access_token'][-20:], flask.request.headers.get('X-Real-Ip', flask.request.remote_addr),
+               flask.request.args['access_token'][-20:], flask.request.headers.get(REALIPHEADER, flask.request.remote_addr),
                flask.request.headers.get('X-WOPI-DeviceId'), flask.request.headers.get('X-Request-Id'),
                session, flask.request.headers.get('X-WOPI-RequestingApplication'),
                flask.request.headers.get('X-WOPI-AppEndpoint'), flask.request.headers.get('X-WOPI-CorrelationId'), wopits))
