@@ -62,6 +62,7 @@ def checkFileInfo(fileid, acctok):
                 # this is the top level public share, which is anonymous
                 fmd['BreadcrumbFolderName'] = 'Public share'
         else:
+            fmd['IsAnonymousUser'] = False
             fmd['UserFriendlyName'] = acctok['username']
             fmd['BreadcrumbFolderName'] = 'Back to ' + os.path.dirname(acctok['filename'])
         if furl == '/':    # if no target folder URL was given, override the above and completely hide it
@@ -80,7 +81,12 @@ def checkFileInfo(fileid, acctok):
         fmd['SupportsExtendedLockLength'] = fmd['SupportsGetLock'] = True
         fmd['SupportsUpdate'] = fmd['UserCanWrite'] = fmd['SupportsLocks'] = \
             fmd['SupportsDeleteFile'] = acctok['viewmode'] == utils.ViewMode.READ_WRITE
-        fmd['UserCanNotWriteRelative'] = acctok['viewmode'] != utils.ViewMode.READ_WRITE
+        # SaveAs functionality is enabled only for owners and in READ_WRITE mode. Anonymous and federated users
+        # are never owners despite their wopiuser credentials may match the owner's. Federated/external accounts
+        # are given by Reva with their network domain in parenthesis, that's why we match them.
+        notOwner = fmd['OwnerId'] != fmd['UserId'] or fmd['IsAnonymousUser'] or \
+            ('(' in acctok['username'] and acctok['username'][-1] == ')')
+        fmd['UserCanNotWriteRelative'] = acctok['viewmode'] != utils.ViewMode.READ_WRITE or notOwner
         fmd['SupportsRename'] = fmd['UserCanRename'] = enablerename and (acctok['viewmode'] == utils.ViewMode.READ_WRITE)
         fmd['SupportsContainers'] = False    # TODO this is all to be implemented
         fmd['SupportsUserInfo'] = False      # TODO https://docs.microsoft.com/en-us/openspecs/office_protocols/ms-wopi/371e25ae-e45b-47ab-aec3-9111e962919d
