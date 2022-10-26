@@ -246,6 +246,7 @@ def appsave(docid):
     except ValueError:
         WB.log.error('msg="BridgeSave: unknown application" address="%s" appheader="%s" args="%s"' %
                      (flask.request.remote_addr, flask.request.headers.get(BRIDGED_APP_HEADER), flask.request.args))
+        return wopic.jsonify('Unknown application, could not save. %s' % RECOVER_MSG), http.client.BAD_REQUEST
 
     # decide whether to notify the save thread
     donotify = isclose or wopisrc not in WB.openfiles or WB.openfiles[wopisrc]['lastsave'] < time.time() - WB.saveinterval
@@ -364,7 +365,7 @@ class SaveThread(threading.Thread):
             WB.saveresponses[wopisrc] = WB.plugins[appname].savetostorage(wopisrc, openfile['acctok'],
                                                                           _intersection(openfile['toclose']), wopilock)
             openfile['lastsave'] = int(time.time())
-            if WB.saveresponses[wopisrc][1] >= http.client.BAD_REQUEST:
+            if WB.saveresponses[wopisrc][1] == http.client.FAILED_DEPENDENCY:
                 # this is hopefully transient, yet we need to try until we get the file back to storage:
                 # the updated lastsave time ensures next retry will happen after the saveinterval time
                 if 'still-dirty' not in openfile['toclose']:
