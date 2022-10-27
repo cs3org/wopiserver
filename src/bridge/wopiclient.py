@@ -192,12 +192,17 @@ def relock(wopisrc, acctok, docid, isclose):
 def handleputfile(wopicall, wopisrc, res):
     '''Deal with conflicts or errors following a PutFile/PutRelative request'''
     if res.status_code == http.client.CONFLICT:
+        # this is typically a user issue, return 500 and stop further editing
         log.warning('msg="Conflict when calling WOPI %s" url="%s" reason="%s"' %
                     (wopicall, wopisrc, res.headers.get('X-WOPI-LockFailureReason')))
         return jsonify('Error saving the file. %s' %
                        res.headers.get('X-WOPI-LockFailureReason')), http.client.INTERNAL_SERVER_ERROR
+    if res.status_code == http.client.INTERNAL_SERVER_ERROR:
+        # hopefully this is transient and the server has kept a local copy for later recovery
+        log.error('msg="Calling WOPI %s failed, will retry" url="%s" response="%s"' % (wopicall, wopisrc, res.status_code))
+        return jsonify('Error saving the file, will try again'), http.client.FAILED_DEPENDENCY
     if res.status_code != http.client.OK:
-        # hopefully the server has kept a local copy for later recovery
+        # any other error is considered also fatal
         log.error('msg="Calling WOPI %s failed" url="%s" response="%s"' % (wopicall, wopisrc, res.status_code))
         return jsonify('Error saving the file, please contact support'), http.client.INTERNAL_SERVER_ERROR
     return None
