@@ -471,7 +471,7 @@ def storeAfterConflict(acctok, retrievedlock, lock, reason):
 
 def storeForRecovery(content, username, filename, acctokforlog, exception):
     try:
-        filepath = srv.recoverypath + os.sep + time.strftime('%Y%m%dT%H%M%S') + '_editedby_' + username \
+        filepath = srv.recoverypath + os.sep + time.strftime('%Y%m%dT%H%M%S') + '_editedby_' + secure_filename(username) \
                    + '_origat_' + secure_filename(filename)
         with open(filepath, mode='wb') as f:
             written = f.write(content)
