@@ -56,7 +56,10 @@ def _getcs3reference(endpoint, fileref):
     if len(parts) == 2:
         space_id = parts[1]
 
-    if fileref.find('/') > 0:
+    if fileref.find('/') == 0:
+        # assume we have an absolute path (works in Reva master, not in edge)
+        ref = cs3spr.Reference(path=fileref)
+    elif fileref.find('/') > 0:
         # assume we have a relative path in the form `<parent_opaque_id>/<base_filename>`,
         # also works if we get `<parent_opaque_id>/<path>/<filename>`
         ref = cs3spr.Reference(resource_id=cs3spr.ResourceId(storage_id=endpoint, space_id=space_id,
@@ -72,7 +75,7 @@ def authenticate_for_test(userid, userpwd):
     '''Use basic authentication against Reva for testing purposes'''
     authReq = cs3gw.AuthenticateRequest(type='basic', client_id=userid, client_secret=userpwd)
     authRes = ctx['cs3gw'].Authenticate(authReq)
-    log.debug('msg="Authenticated user" res="%s"' % authRes)
+    log.debug('msg="Authenticated user" userid="%s"' % authRes.user.id)
     if authRes.status.code != cs3code.CODE_OK:
         raise IOError('Failed to authenticate as user ' + userid + ': ' + authRes.status.message)
     return authRes.token
