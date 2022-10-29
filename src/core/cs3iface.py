@@ -367,10 +367,10 @@ def removefile(endpoint, filepath, userid, _force=False):
     req = cs3sp.DeleteRequest(ref=reference)
     res = ctx['cs3gw'].Delete(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
-        if str(res) == common.ENOENT_MSG:
+        if 'path not found' in str(res):
             log.info('msg="Invoked removefile on non-existing file" filepath="%s"' % filepath)
-        else:
-            log.error('msg="Failed to remove file" filepath="%s" trace="%s" code="%s" reason="%s"' %
-                      (filepath, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
+            raise IOError(common.ENOENT_MSG)
+        log.error('msg="Failed to remove file" filepath="%s" trace="%s" code="%s" reason="%s"' %
+                  (filepath, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
     log.debug('msg="Invoked removefile" result="%s"' % res)
