@@ -15,6 +15,7 @@ import sys
 import os
 import time
 from threading import Thread
+from getpass import getpass
 sys.path.append('src')         # for tests out of the git repo
 sys.path.append('/app')        # for tests within the Docker image
 from core.commoniface import EXCL_ERROR, LOCK_MISMATCH_ERROR, ENOENT_MSG  # noqa: E402
@@ -61,7 +62,8 @@ class TestStorage(unittest.TestCase):
             if 'cs3' in storagetype:
                 # we need to login for this case
                 cls.username = cls.userid
-                cls.userid = cls.storage.authenticate_for_test(cls.userid, config.get('cs3', 'userpwd'))
+                pwd = getpass("Please type %s's password to access the storage: " % cls.username)
+                cls.userid = cls.storage.authenticate_for_test(cls.username, pwd)
                 cls.homepath = config.get('cs3', 'storagehomepath')
         except ImportError:
             print("Missing module when attempting to import %s. Please make sure dependencies are met." % storagetype)
@@ -99,11 +101,6 @@ class TestStorage(unittest.TestCase):
         self.assertTrue('size' in statInfo, 'Missing size from stat output')
         self.assertTrue('mtime' in statInfo, 'Missing mtime from stat output')
         self.assertTrue('etag' in statInfo, 'Missing etag from stat output')
-        if self.endpoint in str(statInfo['inode']):
-            # detected CS3 storage, test if fileid-based stat is supported
-            # (notably, homepath is not part of the fileid)
-            statInfoId = self.storage.stat(self.endpoint, 'fileid-' + self.username + '%2Ftest.txt', self.userid)
-            self.assertEqual(statInfo['inode'], statInfoId['inode'])
         self.storage.removefile(self.endpoint, self.homepath + '/test.txt', self.userid)
 
     def test_statx_invariant_fileid(self):
@@ -359,15 +356,15 @@ class TestStorage(unittest.TestCase):
     def test_rename_statx(self):
         '''Test renaming and statx of a file with special chars'''
         self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, databuf, None)
-        self.storage.setlock(self.endpoint, self.homepath + '/test.txt', self.userid, 'test app', 'renamelock')
-        self.storage.renamefile(self.endpoint, self.homepath + '/test.txt', self.homepath + '/test&ren.txt',
-                                self.userid, 'renamelock')
-        statInfo = self.storage.statx(self.endpoint, self.homepath + '/test&ren.txt', self.userid)
-        self.assertEqual(statInfo['filepath'], self.homepath + '/test&ren.txt')
-        self.storage.renamefile(self.endpoint, self.homepath + '/test&ren.txt', self.homepath + '/test.txt',
-                                self.userid, 'renamelock')
         statInfo = self.storage.statx(self.endpoint, self.homepath + '/test.txt', self.userid)
-        self.assertEqual(statInfo['filepath'], self.homepath + '/test.txt')
+        pathref = statInfo['filepath'][:statInfo['filepath'].rfind('/')]
+
+        self.storage.renamefile(self.endpoint, self.homepath + '/test.txt', self.homepath + '/test&ren.txt', self.userid, None)
+        statInfo = self.storage.statx(self.endpoint, self.homepath + '/test&ren.txt', self.userid)
+        self.assertEqual(statInfo['filepath'], pathref + '/test&ren.txt')
+        self.storage.renamefile(self.endpoint, self.homepath + '/test&ren.txt', self.homepath + '/test.txt', self.userid, None)
+        statInfo = self.storage.statx(self.endpoint, self.homepath + '/test.txt', self.userid)
+        self.assertEqual(statInfo['filepath'], pathref + '/test.txt')
         self.storage.removefile(self.endpoint, self.homepath + '/test.txt', self.userid)
 
 
