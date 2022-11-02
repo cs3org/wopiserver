@@ -275,7 +275,11 @@ def appsave(docid):
         # return latest known state for this document
         if wopisrc in WB.saveresponses:
             resp = WB.saveresponses[wopisrc]
-            WB.log.info('msg="BridgeSave: returned response" response="%s" token="%s"' % (resp, acctok[-20:]))
+            if resp[1] == http.client.INTERNAL_SERVER_ERROR:
+                logf = WB.log.error
+            else
+                logf = WB.log.info
+            logf('msg="BridgeSave: returned response" response="%s" token="%s"' % (resp, acctok[-20:]))
             del WB.saveresponses[wopisrc]
             return resp
         WB.log.info('msg="BridgeSave: enqueued action" immediate="%s" token="%s"' % (donotify, acctok[-20:]))
