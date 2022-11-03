@@ -277,7 +277,7 @@ def appsave(docid):
             resp = WB.saveresponses[wopisrc]
             if resp[1] == http.client.INTERNAL_SERVER_ERROR:
                 logf = WB.log.error
-            else
+            else:
                 logf = WB.log.info
             logf('msg="BridgeSave: returned response" response="%s" token="%s"' % (resp, acctok[-20:]))
             del WB.saveresponses[wopisrc]
