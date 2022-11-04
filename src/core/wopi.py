@@ -338,9 +338,9 @@ def putRelative(fileid, reqheaders, acctok):
              'overwrite="%r" wopitimestamp="%s" token="%s"' %
              (acctok['userid'], acctok['filename'], fileid, suggTarget, relTarget,
               overwriteTarget, reqheaders.get('X-WOPI-TimeStamp'), flask.request.args['access_token'][-20:]))
-    # either one xor the other must be present; note we can't use `^` as we have a mix of str and NoneType
+    # either one xor the other MUST be present; note we can't use `^` as we have a mix of str and NoneType
     if (suggTarget and relTarget) or (not suggTarget and not relTarget):
-        return '', http.client.NOT_IMPLEMENTED
+        return 'Conflicting headers given', http.client.BAD_REQUEST
     if suggTarget:
         # the suggested target is a UTF7-encoded (!) filename that can be changed to avoid collisions
         suggTarget = suggTarget.encode().decode('utf-7')
@@ -360,10 +360,10 @@ def putRelative(fileid, reqheaders, acctok):
                     # OK, the targetName is good to go
                     break
                 # we got another error with this file, fail
-                log.warning('msg="PutRelative" user="%s" filename="%s" token="%s" suggTarget="%s" error="%s"' %
-                            (acctok['userid'][-20:], targetName, flask.request.args['access_token'][-20:],
-                             suggTarget, str(e)))
-                return '', http.client.BAD_REQUEST
+                log.error('msg="PutRelative" user="%s" filename="%s" token="%s" suggTarget="%s" error="%s"' %
+                          (acctok['userid'][-20:], targetName, flask.request.args['access_token'][-20:],
+                           suggTarget, str(e)))
+                return 'Error with the given target', http.client.INTERNAL_SERVER_ERROR
     else:
         # the relative target is a UTF7-encoded filename to be respected, and that may overwrite an existing file
         relTarget = os.path.dirname(acctok['filename']) + os.path.sep + relTarget.encode().decode('utf-7')  # make full path
@@ -374,13 +374,14 @@ def putRelative(fileid, reqheaders, acctok):
             retrievedTargetLock, _ = utils.retrieveWopiLock(fileid, 'PUT_RELATIVE', None, acctok, overridefn=relTarget)
             # deny if lock is valid or if overwriteTarget is False
             if not overwriteTarget or retrievedTargetLock:
-                return utils.makeConflictResponse('PUT_RELATIVE', acctok['userid'], retrievedTargetLock, 'NA', 'NA',
-                                                  acctok['endpoint'], relTarget, {
+                respmd = {
                     'message': 'Target file already exists',
                     # specs (the WOPI validator) require these to be populated with valid values
                     'Name': os.path.basename(relTarget),
                     'Url': utils.generateWopiSrc(statInfo['inode'], acctok['appname'] == srv.proxiedappname),
-                })
+                }
+                return utils.makeConflictResponse('PUT_RELATIVE', acctok['userid'], retrievedTargetLock, 'NA', 'NA',
+                                                  acctok['endpoint'], relTarget, respmd)
         except IOError:
             # optimistically assume we're clear
             pass
@@ -391,6 +392,9 @@ def putRelative(fileid, reqheaders, acctok):
         newstat = st.statx(acctok['endpoint'], targetName, acctok['userid'])
         _, newfileid = common.decodeinode(newstat['inode'])
     except IOError as e:
+        if str(e) == common.ACCESS_ERROR:
+            # BAD_REQUEST may seem better but the WOPI validator tests explicitly expect NOT_IMPLEMENTED
+            return 'Unauthorized to perform PutRelative', http.client.NOT_IMPLEMENTED
         utils.storeForRecovery(flask.request.get_data(), acctok['username'], targetName,
                                flask.request.args['access_token'][-20:], e)
         return IO_ERROR, http.client.INTERNAL_SERVER_ERROR

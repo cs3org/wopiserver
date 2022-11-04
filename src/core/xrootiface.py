@@ -415,6 +415,9 @@ def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
         if 'file has a valid extended attribute lock' in rc.message:
             log.warning('msg="Lock mismatch when writing file" filepath="%s"' % filepath)
             raise IOError(common.LOCK_MISMATCH_ERROR)
+        if common.ACCESS_ERROR in rc.message:
+            log.warning('msg="Access denied when writing file" filepath="%s"' % filepath)
+            raise IOError(common.ACCESS_ERROR)
         # any other failure is reported as is
         log.error('msg="Error opening the file for write" filepath="%s" elapsedTimems="%.1f" error="%s"' %
                   (filepath, (tend-tstart)*1000, rc.message.strip('\n')))
