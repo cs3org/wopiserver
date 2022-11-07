@@ -9,3 +9,4 @@ more_itertools
 prometheus-flask-exporter
 cs3apis>=0.1.dev101
 waitress
+wheel>=0.38.0 # not directly required, pinned by Snyk to avoid a vulnerability
