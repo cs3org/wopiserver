@@ -34,11 +34,7 @@ def init(inconfig, inlog):
     ctx['ssl_verify'] = inconfig.getboolean('cs3', 'sslverify', fallback=True)
     ctx['authtokenvalidity'] = inconfig.getint('cs3', 'authtokenvalidity')
     ctx['lockexpiration'] = inconfig.getint('general', 'wopilockexpiration')
-    if inconfig.has_option('cs3', 'revagateway'):
-        revagateway = inconfig.get('cs3', 'revagateway')
-    else:
-        # legacy entry, to be dropped at next major release
-        revagateway = inconfig.get('cs3', 'revahost')
+    revagateway = inconfig.get('cs3', 'revagateway')
     # prepare the gRPC connection
     ch = grpc.insecure_channel(revagateway)
     ctx['cs3gw'] = cs3gw_grpc.GatewayAPIStub(ch)
