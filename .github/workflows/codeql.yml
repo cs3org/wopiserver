@@ -1,0 +1,41 @@
+name: "CodeQL"
+
+on:
+  push:
+    branches: [ "master", "aarnet", "cernbox", "collaboratest", "eoslock", "nginx", "oolock-autoexpire", "ooracefix", "open-for-iop", "perma-inode", "python3", "snyk-fix-0d459d1e2b96d3ef1c5a96800328793e", "snyk-fix-af3411a9b6ac485b96ed2d8f434e9d97", "syslog", "tus-uploads", "wopi4", "xroot-cs9" ]
+  pull_request:
+    branches: [ "master" ]
+  schedule:
+    - cron: "44 11 * * 0"
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ python ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v2
+        with:
+          languages: ${{ matrix.language }}
+          queries: +security-and-quality
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v2
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
+        with:
+          category: "/language:${{ matrix.language }}"
