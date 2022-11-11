@@ -210,6 +210,7 @@ def appopen(wopisrc, acctok, appmd, viewmode, revatok=None):
             try:
                 del WB.saveresponses[wopisrc]
             except KeyError:
+                # nothing found, that's fine
                 pass
         else:
             # user has no write privileges, just fetch the document and push it to the app on a random docid
@@ -268,6 +269,7 @@ def appsave(docid):
             try:
                 del WB.saveresponses[wopisrc]
             except KeyError:
+                # nothing found, that's fine
                 pass
         if donotify:
             # note that the save thread stays locked until we release the context, after return!
@@ -424,11 +426,12 @@ class SaveThread(threading.Thread):
             except wopic.InvalidLock:
                 # nothing to do here, this document may have been closed by another wopibridge
                 if openfile['lastsave'] < time.time() - WB.unlockinterval:
-                    # yet cleanup only after the unlockinterval time, cf. the InvalidLock handling in savedirty()
+                    # yet clean up only after the unlockinterval time, cf. the InvalidLock handling in savedirty()
                     WB.log.info('msg="SaveThread: cleaning up metadata, file already unlocked" url="%s"' % wopisrc)
                     try:
                         del WB.openfiles[wopisrc]
                     except KeyError:
+                        # ignore potential races on this item
                         pass
                 return
 
