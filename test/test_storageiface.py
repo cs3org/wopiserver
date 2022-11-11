@@ -103,7 +103,7 @@ class TestStorage(unittest.TestCase):
             # detected CS3 storage, test if fileid-based stat is supported
             # (notably, homepath is not part of the fileid)
             statInfoId = self.storage.stat(self.endpoint, 'fileid-' + self.username + '%2Ftest.txt', self.userid)
-            self.assertTrue(statInfo['inode'] == statInfoId['inode'])
+            self.assertEqual(statInfo['inode'], statInfoId['inode'])
         self.storage.removefile(self.endpoint, self.homepath + '/test.txt', self.userid)
 
     def test_statx_invariant_fileid(self):
