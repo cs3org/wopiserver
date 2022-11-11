@@ -91,7 +91,8 @@ def registerapp(appname, appurl, appinturl, apikey=None):
             # bridge plugin could not be initialized
             pass
         except requests.exceptions.ConnectionError:
-            pass
+            log.error('msg="Failed to connect to app" appurl="%s"' % appurl)
+            return
 
     # in all other cases, log failure
     log.error('msg="Attempted to register a non WOPI-compatible app" appurl="%s"' % appurl)
