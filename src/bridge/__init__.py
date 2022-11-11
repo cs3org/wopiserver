@@ -340,26 +340,36 @@ class SaveThread(threading.Thread):
             appname = openfile['app'].lower()
             try:
                 wopilock = wopic.getlock(wopisrc, openfile['acctok'])
-            except wopic.InvalidLock:
+            except wopic.InvalidLock as ile1:
+                if str(ile1) == str(http.client.UNAUTHORIZED):
+                    # this token has expired, nothing we can do any longer: by experience this happens on left-over
+                    # browser sessions, and the file was fully saved. Therefore just clean up by using some 'fake' metadata
+                    WB.log.warning('msg="SaveThread: discarding file as token has expired" token="%s" docid="%s"' %
+                                   (openfile['acctok'][-20:], openfile['docid']))
+                    openfile['lastsave'] = int(time.time())
+                    openfile['tosave'] = False
+                    openfile['toclose'] = {'invalid-lock': True}
+                    return None
+
                 WB.log.info('msg="SaveThread: attempting to relock file" token="%s" docid="%s"' %
                             (openfile['acctok'][-20:], openfile['docid']))
                 try:
                     wopilock = WB.saveresponses[wopisrc] = wopic.relock(
                         wopisrc, openfile['acctok'], openfile['docid'], _intersection(openfile['toclose']))
-                except wopic.InvalidLock as ile:
+                except wopic.InvalidLock as ile2:
                     # even this attempt failed, give up
-                    WB.saveresponses[wopisrc] = wopic.jsonify(str(ile)), http.client.INTERNAL_SERVER_ERROR
+                    WB.saveresponses[wopisrc] = wopic.jsonify(str(ile2)), http.client.INTERNAL_SERVER_ERROR
                     # attempt to save to local storage to help for later recovery: this is a feature of the core wopiserver
                     content, rc = WB.plugins[appname].savetostorage(wopisrc, openfile['acctok'],
                                                                     False, {'doc': openfile['docid']}, onlyfetch=True)
                     if rc == http.client.OK:
                         utils.storeForRecovery(content, 'unknown', wopisrc[wopisrc.rfind('/') + 1:],
-                                               openfile['acctok'][-20:], ile)
+                                               openfile['acctok'][-20:], ile2)
                     else:
                         WB.log.error('msg="SaveThread: failed to fetch file for recovery to local storage" '
                                      + 'token="%s" docid="%s" app="%s" response="%s"' %
                                      (openfile['acctok'][-20:], openfile['docid'], appname, rc))
-                    # set some 'fake' metadata, will be automatically cleaned up later
+                    # as above set some 'fake' metadata, will be automatically cleaned up later
                     openfile['lastsave'] = int(time.time())
                     openfile['tosave'] = False
                     openfile['toclose'] = {'invalid-lock': True}
