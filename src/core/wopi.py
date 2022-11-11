@@ -112,12 +112,9 @@ def checkFileInfo(fileid, acctok):
                  (flask.request.args['access_token'][-20:], fmd))
         return res
     except IOError as e:
-        log.info('msg="Requested file not found" filename="%s" token="%s" error="%s"' %
+        log.info('msg="Requested file not found" filename="%s" token="%s" details="%s"' %
                  (acctok['filename'], flask.request.args['access_token'][-20:], e))
         return 'File not found', http.client.NOT_FOUND
-    except KeyError as e:
-        log.warning('msg="Invalid access token or request argument" error="%s" request="%s"' % (e, flask.request.__dict__))
-        return 'Invalid request', http.client.UNAUTHORIZED
 
 
 def getFile(_fileid, acctok):
@@ -446,7 +443,7 @@ def deleteFile(fileid, _reqheaders_unused, acctok):
     except IOError as e:
         if common.ENOENT_MSG in str(e):
             return 'File not found', http.client.NOT_FOUND
-        log.info('msg="DeleteFile" token="%s" error="%s"' % (flask.request.args['access_token'][-20:], e))
+        log.error('msg="DeleteFile" token="%s" error="%s"' % (flask.request.args['access_token'][-20:], e))
         return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
 
 

@@ -107,7 +107,7 @@ def validateAndLogHeaders(op):
         if acctok['exp'] < time.time() or 'cs3org:wopiserver' not in acctok['iss']:
             raise jwt.exceptions.ExpiredSignatureError
     except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError, KeyError) as e:
-        log.info('msg="Expired or malformed token" client="%s" requestedUrl="%s" error="%s" token="%s"' %
+        log.info('msg="Expired or malformed token" client="%s" requestedUrl="%s" details="%s" token="%s"' %
                  (flask.request.headers.get(REALIPHEADER, flask.request.remote_addr), flask.request.base_url,
                   str(type(e)) + ': ' + str(e), flask.request.args.get('access_token')))
         return 'Invalid access token', http.client.UNAUTHORIZED
@@ -122,8 +122,9 @@ def validateAndLogHeaders(op):
                 # timestamps older than 20 minutes must be considered expired
                 raise ValueError
         except ValueError:
-            log.warning('msg="%s: invalid X-WOPI-Timestamp" user="%s" filename="%s" request="%s"' %
-                        (op, acctok['userid'][-20:], acctok['filename'], flask.request.__dict__))
+            log.warning('msg="%s: invalid X-WOPI-Timestamp" user="%s" token="%s" client="%s"' %
+                        (op, acctok['userid'][-20:], flask.request.args['access_token'][-20:],
+                         flask.request.headers.get(REALIPHEADER, flask.request.remote_addr)))
             # UNAUTHORIZED would seem more appropriate here, but the ProofKeys part of the MS test suite explicitly requires this
             return 'Invalid or expired X-WOPI-Timestamp header', http.client.INTERNAL_SERVER_ERROR
 

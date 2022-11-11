@@ -89,7 +89,7 @@ def getlock(wopisrc, acctok):
         # the lock is expected to be a JSON dict, see generatelock()
         return json.loads(res.headers['X-WOPI-Lock'])
     except (ValueError, KeyError, json.decoder.JSONDecodeError) as e:
-        log.warning('msg="Missing or malformed WOPI lock" exception="%s" error="%s"' % (type(e), e))
+        log.warning('msg="Missing or malformed WOPI lock" exception="%s: %s"' % (type(e), e))
         raise InvalidLock(e)
 
 
