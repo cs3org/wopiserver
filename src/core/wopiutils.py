@@ -349,6 +349,8 @@ def compareWopiLocks(lock1, lock2):
                 log.debug('msg="compareLocks" lock1="%s" lock2="%s" strict="False" result="%r"' %
                           (lock1, lock2, l1['S'] == lock2))
                 return l1['S'] == lock2                    # also used by Word (BUG!)
+            log.debug('msg="compareLocks" lock1="%s" lock2="%s" strict="False" result="False"' % (lock1, lock2))
+            return False
     except (TypeError, ValueError):
         # lock1 is not a JSON dictionary: log the lock values and fail the comparison
         log.debug('msg="compareLocks" lock1="%s" lock2="%s" strict="False" result="False"' % (lock1, lock2))
