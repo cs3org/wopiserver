@@ -382,8 +382,8 @@ def putRelative(fileid, reqheaders, acctok):
                     'Url': utils.generateWopiSrc(statInfo['inode'], acctok['appname'] == srv.proxiedappname),
                 })
         except IOError:
+            # optimistically assume we're clear
             pass
-        # else we can use the relative target
         targetName = relTarget
     # either way, we now have a targetName to save the file: attempt to do so
     try:
