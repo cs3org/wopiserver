@@ -106,7 +106,7 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args):
         rc, _ = f.open(url, OpenFlags.READ, timeout=timeout)
         tend = time.time()
         if not f.is_open():
-            log.error('msg="Timeout with xroot" cmd="%s" subcmd="%s" args="%s"' % (cmd, subcmd, args))
+            log.error('msg="Error or timeout with xroot" cmd="%s" subcmd="%s" args="%s" rc="%s"' % (cmd, subcmd, args, rc))
             raise IOError('Timeout executing %s' % cmd)
         res = b''.join(f.readlines()).decode().split('&')
         if len(res) == 3:        # we may only just get stdout: in that case, assume it's all OK
