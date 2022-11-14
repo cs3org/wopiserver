@@ -98,6 +98,16 @@ def checkFileInfo(fileid, acctok):
         except configparser.NoOptionError:
             # if no WebDAV URL is provided, ignore this setting
             pass
+
+        # business flow
+        if acctok['appname'] == srv.proxiedappname:
+            try:
+                if srv.config.get('general', 'businessflowenabled'):
+                    fmd['LicenseCheckForEditIsEnabled'] = True
+            except configparser.NoOptionError:
+                # if business flow configuration is provided, ignore this setting
+                pass
+
         # extensions for Collabora Online
         if acctok['appname'].find('Collabora') >= 0 or acctok['appname'] == '':
             fmd['EnableOwnerTermination'] = True
