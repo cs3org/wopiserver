@@ -554,9 +554,9 @@ def putFile(fileid, acctok):
             # Also, note we can't get a time resolution better than one second!
             # Anyhow, the EFSS should support versioning for such cases.
             utils.storeWopiFile(acctok, retrievedLock, utils.LASTSAVETIMEKEY)
-            log.info('msg="File stored successfully" action="edit" user="%s" filename="%s" token="%s"' %
-                     (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:]))
             statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'], versioninv=1)
+            log.info('msg="File stored successfully" action="edit" user="%s" filename="%s" version="%s" token="%s"' %
+                     (acctok['userid'][-20:], acctok['filename'], statInfo['etag'], flask.request.args['access_token'][-20:]))
             resp = flask.Response()
             resp.status_code = http.client.OK
             resp.headers['X-WOPI-ItemVersion'] = 'v%s' % statInfo['etag']

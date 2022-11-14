@@ -405,8 +405,8 @@ def makeLockSuccessResponse(operation, acctok, lock, version):
         session = acctok['username']
     _resolveSession(session, acctok['filename'])
 
-    log.info('msg="Successfully locked" lockop="%s" filename="%s" token="%s" sessionId="%s" lock="%s"' %
-             (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], session, lock))
+    log.info('msg="Successfully locked" lockop="%s" filename="%s" token="%s" sessionId="%s" lock="%s" version="%s"' %
+             (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], session, lock, version))
     resp = flask.Response()
     resp.status_code = http.client.OK
     resp.headers['X-WOPI-ItemVersion'] = version
