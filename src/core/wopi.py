@@ -89,7 +89,10 @@ def checkFileInfo(fileid, acctok):
         fmd['UserCanNotWriteRelative'] = acctok['viewmode'] != utils.ViewMode.READ_WRITE or notOwner
         fmd['SupportsRename'] = fmd['UserCanRename'] = enablerename and (acctok['viewmode'] == utils.ViewMode.READ_WRITE)
         fmd['SupportsContainers'] = False    # TODO this is all to be implemented
-        fmd['SupportsUserInfo'] = False      # TODO https://docs.microsoft.com/en-us/openspecs/office_protocols/ms-wopi/371e25ae-e45b-47ab-aec3-9111e962919d
+        fmd['SupportsUserInfo'] = True
+        uinfo = st.getxattr(acctok['endpoint'], acctok['filename'], statInfo['ownerid'], utils.USERINFOKEY)
+        if uinfo:
+            fmd['UserInfo'] = uinfo
 
         # populate app-specific metadata
         # the following is to enable the 'Edit in Word/Excel/PowerPoint' (desktop) action (probably broken)
@@ -572,3 +575,16 @@ def putFile(fileid, acctok):
     log.warning('msg="Forcing conflict based on save time" user="%s" filename="%s" savetime="%s" lastmtime="%s" token="%s"' %
                 (acctok['userid'][-20:], acctok['filename'], savetime, mtime, flask.request.args['access_token'][-20:]))
     return utils.storeAfterConflict(acctok, 'External', lock, 'The file being edited got moved or overwritten')
+
+
+def putUserInfo(_fileid, reqbody, acctok):
+    '''Implements the PutUserInfo WOPI call'''
+    try:
+        statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
+        lock = st.getlock(acctok['endpoint'], acctok['filename'], acctok['userid'])
+        st.setxattr(acctok['endpoint'], acctok['filename'], statInfo['ownerid'], utils.USERINFOKEY, reqbody.decode(),
+                    utils.encodeLock(lock) if lock else None)
+        return 'OK', http.client.OK
+    except IOError as e:
+        log.error('msg="PutUserInfo" token="%s" error="%s"' % (flask.request.args['access_token'][-20:], e))
+        return IO_ERROR, http.client.INTERNAL_SERVER_ERROR

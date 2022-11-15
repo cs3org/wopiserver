@@ -27,6 +27,9 @@ import core.commoniface as common
 # this is the xattr key used for conflicts resolution on the remote storage
 LASTSAVETIMEKEY = 'iop.wopi.lastwritetime'
 
+# this is the xattr key used to store user info data from WOPI apps
+USERINFOKEY = 'iop.wopi.userinfo'
+
 # header used by reverse proxies such as traefik to pass the real remote IP address
 REALIPHEADER = 'X-Real-IP'
 
