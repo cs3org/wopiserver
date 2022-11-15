@@ -26,6 +26,7 @@ databuf = b'ebe5tresbsrdthbrdhvdtr'
 class TestStorage(unittest.TestCase):
     '''Simple tests for the storage layers of the WOPI server. See README for how to run the tests for each storage provider'''
     initialized = False
+    storagetype = None
 
     @classmethod
     def globalinit(cls):
@@ -45,6 +46,7 @@ class TestStorage(unittest.TestCase):
                 storagetype = config.get('general', 'storagetype')
             cls.userid = config.get(storagetype, 'userid')
             cls.endpoint = config.get(storagetype, 'endpoint')
+            cls.storagetype = storagetype
         except (KeyError, configparser.NoOptionError):
             print("Missing option or missing configuration, check the wopiserver-test.conf file")
             raise
@@ -332,6 +334,24 @@ class TestStorage(unittest.TestCase):
             self.storage.unlock(self.endpoint, self.homepath + '/testelock', self.userid, 'test app', 'testlock5')
         self.assertIn('File was not locked', str(context.exception))
         self.storage.removefile(self.endpoint, self.homepath + '/testelock', self.userid)
+
+    def test_lock_open_file(self):
+        '''Opens a file for write and tries to grab a lock in a race, which shall fail if the file is still open'''
+        if TestStorage.storagetype != 'xroot':
+            # Possibly to be implemented in CS3; local interface would always fail this test
+           raise unittest.SkipTest('Missing feature in %s' % TestStorage.storagetype)
+        t1 = Thread(target=self.storage.writefile,
+                    args=[self.endpoint, self.homepath + '/testlockopen', self.userid, databuf, None], kwargs={'islock': True})
+        t2 = Thread(target=self.storage.setlock,
+                    args=[self.endpoint, self.homepath + '/testlockopen', self.userid, 'test app', 'testlock'])
+        t1.start()
+        time.sleep(0.001)
+        t2.start()
+        t1.join()
+        t2.join()
+        lock = self.storage.getlock(self.endpoint, self.homepath + '/testlockopen', self.userid)
+        self.storage.removefile(self.endpoint, self.homepath + '/testlockopen', self.userid)
+        self.assertIsNone(lock, 'Lock was set')
 
     def test_remove_nofile(self):
         '''Test removal of a non-existing file'''

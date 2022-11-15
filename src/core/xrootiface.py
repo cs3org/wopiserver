@@ -427,6 +427,7 @@ def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
         log.error('msg="Error writing the file" filepath="%s" elapsedTimems="%.1f" error="%s"' %
                   (filepath, (tend-tstart)*1000, rc.message.strip('\n')))
         raise IOError(rc.message.strip('\n'))
+    log.debug('msg="Write completed" filepath="%s"' % filepath)
     rc, _ = f.truncate(size)
     if not rc.ok:
         log.error('msg="Error truncating the file" filepath="%s" elapsedTimems="%.1f" error="%s"' %
