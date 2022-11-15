@@ -354,6 +354,9 @@ def iopOpenInApp():
         res['app-url'] = appurl if vm == utils.ViewMode.READ_WRITE else appviewurl
         res['app-url'] += '%sWOPISrc=%s' % ('&' if '?' in res['app-url'] else '?',
                                             utils.generateWopiSrc(inode, appname == Wopi.proxiedappname))
+        if Wopi.config.get('general', 'businessflow', fallback='False').upper() == 'TRUE':
+            # tells the app to enable the business flow if appropriate
+            res['app-url'] += '&IsLicensedUser=1'
         res['form-parameters'] = {'access_token': acctok}
 
     Wopi.log.info('msg="iopOpenInApp: redirecting client" appurl="%s"' % res['app-url'])
