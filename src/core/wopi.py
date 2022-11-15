@@ -71,12 +71,15 @@ def checkFileInfo(fileid, acctok):
            and srv.config.get('general', 'downloadurl', fallback=None):
             fmd['DownloadUrl'] = fmd['FileUrl'] = '%s?access_token=%s' % \
                 (srv.config.get('general', 'downloadurl'), flask.request.args['access_token'])
+        if srv.config.get('general', 'businessflow', fallback='False').upper() == 'TRUE':
+            # enable the check for real users, not for public links
+            fmd['LicenseCheckForEditIsEnabled'] = not fmd['IsAnonymousUser']
         fmd['BreadcrumbBrandName'] = srv.config.get('general', 'brandingname', fallback=None)
         fmd['BreadcrumbBrandUrl'] = srv.config.get('general', 'brandingurl', fallback=None)
         fmd['OwnerId'] = statInfo['ownerid']
         fmd['UserId'] = acctok['wopiuser']     # typically same as OwnerId; different when accessing shared documents
         fmd['Size'] = statInfo['size']
-        # note that in ownCloud the version is generated as: `'V' + etag + checksum`
+        # note that in ownCloud 10 the version is generated as: `'V' + etag + checksum`
         fmd['Version'] = 'v%s' % statInfo['etag']
         fmd['SupportsExtendedLockLength'] = fmd['SupportsGetLock'] = True
         fmd['SupportsUpdate'] = fmd['UserCanWrite'] = fmd['SupportsLocks'] = \
