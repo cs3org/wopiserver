@@ -1,6 +1,6 @@
 ## Changelog for the WOPI server
 
-### Mon Nov 14 2022 - v9.3.0
+### ... Nov .. 2022 - v9.3.0
 - Introduced heuristic to log which sessions are allowed
   from opening a collaborative session and which ones are
   prevented by the application
@@ -9,6 +9,7 @@
 - Improved error coverage in case of transient errors
   in bridged apps and in PutFile operations
 - Moved from LGTM to CodeQL workflow on GitHub (#100)
+- Introduced support for PutUserInfo
 
 ### Mon Oct 17 2022 - v9.2.0
 - Added option to use file or stream handler for logging (#91)
