@@ -10,10 +10,11 @@ LABEL maintainer="cernbox-admins@cern.ch" \
   org.opencontainers.image.title="The ScienceMesh IOP WOPI server" \
   org.opencontainers.image.version="$VERSION"
 
-# prerequisites
+# prerequisites: we explicitly install g++ as it is required by grpcio but missing from its dependencies
 WORKDIR /app
 COPY requirements.txt .
-RUN pip3 install --upgrade pip setuptools && \
+RUN apk add g++ && \
+    pip3 install --upgrade pip setuptools && \
     pip3 install --no-cache-dir --upgrade -r requirements.txt
 
 # install software
