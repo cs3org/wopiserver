@@ -433,7 +433,8 @@ def storeWopiFile(acctok, retrievedlock, xakey, targetname=''):
         # something went wrong on write: we still want to setxattr but report this error to the caller
         writeerror = e
     # in all cases save the current time for later conflict checking: this is never older than the mtime of the file
-    st.setxattr(acctok['endpoint'], targetname, acctok['userid'], xakey, int(time.time()), encodeLock(retrievedlock))
+    st.setxattr(acctok['endpoint'], targetname, acctok['userid'], xakey, int(time.time()),
+                (acctok['appname'], encodeLock(retrievedlock)))
     if writeerror:
         raise writeerror
 

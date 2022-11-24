@@ -18,7 +18,7 @@ from threading import Thread
 from getpass import getpass
 sys.path.append('src')         # for tests out of the git repo
 sys.path.append('/app')        # for tests within the Docker image
-from core.commoniface import EXCL_ERROR, LOCK_MISMATCH_ERROR, ENOENT_MSG  # noqa: E402
+from core.commoniface import EXCL_ERROR, ENOENT_MSG  # noqa: E402
 
 databuf = b'ebe5tresbsrdthbrdhvdtr'
 
@@ -238,11 +238,11 @@ class TestStorage(unittest.TestCase):
         self.assertIsInstance(statInfo, dict)
         with self.assertRaises(IOError) as context:
             self.storage.refreshlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'test app', 'testlock')
-        self.assertIn('File was not locked', str(context.exception))
+        self.assertEqual(EXCL_ERROR, str(context.exception))
         self.storage.setlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'test app', 'testlock')
         with self.assertRaises(IOError) as context:
             self.storage.refreshlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'test app', 'newlock', 'mismatch')
-        self.assertIn(LOCK_MISMATCH_ERROR, str(context.exception))
+        self.assertEqual(EXCL_ERROR, str(context.exception))
         self.storage.refreshlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'test app', 'newlock', 'testlock')
         l = self.storage.getlock(self.endpoint, self.homepath + '/testrlock', self.userid)  # noqa: E741
         self.assertIsInstance(l, dict)
@@ -253,7 +253,7 @@ class TestStorage(unittest.TestCase):
         self.storage.refreshlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'test app', 'newlock')
         with self.assertRaises(IOError) as context:
             self.storage.refreshlock(self.endpoint, self.homepath + '/testrlock', self.userid, 'mismatched app', 'newlock')
-        self.assertIn('File is locked by test app', str(context.exception))
+        self.assertIn(EXCL_ERROR, str(context.exception))
         self.storage.removefile(self.endpoint, self.homepath + '/testrlock', self.userid)
 
     def test_lock_race(self):
@@ -294,7 +294,8 @@ class TestStorage(unittest.TestCase):
         with self.assertRaises(IOError):
             self.storage.writefile(self.endpoint, self.homepath + '/testlockop', self.userid, databuf, None)
         with self.assertRaises(IOError):
-            self.storage.setxattr(self.endpoint, self.homepath + '/testlockop', self.userid, 'testkey', 123, 'mismatchlock')
+            self.storage.setxattr(self.endpoint, self.homepath + '/testlockop', self.userid, 'testkey', 123,
+                                  ('mismatch app', 'mismatchlock'))
         with self.assertRaises(IOError):
             self.storage.setxattr(self.endpoint, self.homepath + '/testlockop', self.userid, 'testkey', 123, None)
         with self.assertRaises(IOError):
@@ -302,7 +303,7 @@ class TestStorage(unittest.TestCase):
         for chunk in self.storage.readfile(self.endpoint, self.homepath + '/testlockop', self.userid, None):
             self.assertNotIsInstance(chunk, IOError, 'raised by storage.readfile, lock shall be shared')
         self.storage.renamefile(self.endpoint, self.homepath + '/testlockop', self.homepath + '/testlockop_renamed',
-                                self.userid, 'testlock')
+                                self.userid, ('test app', 'testlock'))
         self.storage.removefile(self.endpoint, self.homepath + '/testlockop_renamed', self.userid)
 
     def test_expired_locks(self):
@@ -327,12 +328,12 @@ class TestStorage(unittest.TestCase):
         time.sleep(2.1)
         with self.assertRaises(IOError) as context:
             self.storage.refreshlock(self.endpoint, self.homepath + '/testelock', self.userid, 'test app', 'testlock4')
-        self.assertIn('File was not locked', str(context.exception))
+        self.assertEqual(EXCL_ERROR, str(context.exception))
         self.storage.setlock(self.endpoint, self.homepath + '/testelock', self.userid, 'test app', 'testlock5')
         time.sleep(2.1)
         with self.assertRaises(IOError) as context:
             self.storage.unlock(self.endpoint, self.homepath + '/testelock', self.userid, 'test app', 'testlock5')
-        self.assertIn('File was not locked', str(context.exception))
+        self.assertEqual(EXCL_ERROR, str(context.exception))
         self.storage.removefile(self.endpoint, self.homepath + '/testelock', self.userid)
 
     def test_remove_nofile(self):
@@ -346,10 +347,10 @@ class TestStorage(unittest.TestCase):
         self.storage.writefile(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, databuf, None)
         self.storage.setxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey', 123, None)
         self.storage.setlock(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'test app', 'xattrlock')
-        self.storage.setxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey', 123, 'xattrlock')
+        self.storage.setxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey', 123, ('test app', 'xattrlock'))
         v = self.storage.getxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey')
         self.assertEqual(v, '123')
-        self.storage.rmxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey', 'xattrlock')
+        self.storage.rmxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey', ('test app', 'xattrlock'))
         v = self.storage.getxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey')
         self.assertEqual(v, None)
         self.storage.removefile(self.endpoint, self.homepath + '/test&xattr.txt', self.userid)

@@ -123,11 +123,14 @@ def statx(endpoint, fileref, userid, versioninv=1):
     return stat(endpoint, fileref, userid, versioninv)
 
 
-def setxattr(endpoint, filepath, userid, key, value, lockid):
+def setxattr(endpoint, filepath, userid, key, value, lockmd):
     '''Set the extended attribute <key> to <value> using the given userid as access token'''
     reference = _getcs3reference(endpoint, filepath)
     md = cs3spr.ArbitraryMetadata()
     md.metadata.update({key: str(value)})        # pylint: disable=no-member
+    lockid = None
+    if lockmd:
+        _, lockid = lockmd
     req = cs3sp.SetArbitraryMetadataRequest(ref=reference, arbitrary_metadata=md, lock_id=lockid)
     res = ctx['cs3gw'].SetArbitraryMetadata(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
@@ -162,9 +165,12 @@ def getxattr(endpoint, filepath, userid, key):
         return None
 
 
-def rmxattr(endpoint, filepath, userid, key, lockid):
+def rmxattr(endpoint, filepath, userid, key, lockmd):
     '''Remove the extended attribute <key> using the given userid as access token'''
     reference = _getcs3reference(endpoint, filepath)
+    lockid = None
+    if lockmd:
+        _, lockid = lockmd
     req = cs3sp.UnsetArbitraryMetadataRequest(ref=reference, arbitrary_metadata_keys=[key], lock_id=lockid)
     res = ctx['cs3gw'].UnsetArbitraryMetadata(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
@@ -318,7 +324,7 @@ def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
         log.error('msg="Failed to initiateFileUpload on write" filepath="%s" trace="%s" code="%s" reason="%s"' %
                   (filepath, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
         if '_lock_' in res.status.message:    # TODO find the error code returned by Reva once this is implemented
-            raise IOError(common.LOCK_MISMATCH_ERROR)
+            raise IOError(common.EXCL_ERROR)
         raise IOError(res.status.message)
     tend = time.time()
     log.debug('msg="writefile: InitiateFileUploadRes returned" trace="%s" protocols="%s"' %
@@ -346,11 +352,13 @@ def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
              (filepath, (tend - tstart) * 1000, islock))
 
 
-def renamefile(endpoint, filepath, newfilepath, userid, lockid):
+def renamefile(endpoint, filepath, newfilepath, userid, lockmd):
     '''Rename a file from origfilepath to newfilepath using the given userid as access token.'''
     reference = _getcs3reference(endpoint, filepath)
     newfileref = _getcs3reference(endpoint, newfilepath)
-
+    lockid = None
+    if lockmd:
+        _, lockid = lockmd
     req = cs3sp.MoveRequest(source=reference, destination=newfileref, lock_id=lockid)
     res = ctx['cs3gw'].Move(request=req, metadata=[('x-access-token', userid)])
     if res.status.code in [cs3code.CODE_FAILED_PRECONDITION, cs3code.CODE_ABORTED]:

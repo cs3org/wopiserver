@@ -74,6 +74,17 @@ def _geturlfor(endpoint):
     return endpoint if endpoint.find('root://') == 0 else ('root://' + endpoint.replace('newproject', 'eosproject') + '.cern.ch')
 
 
+def _appforlock(appname):
+    '''One-liner to generate the app name used for eos locks'''
+    return 'wopi_' + appname.replace(' ', '_').lower()
+
+
+def _geneoslock(appname):
+    '''One-liner to generate an EOS app lock. Type is `shared` (hardcoded) for WOPI apps, `exclusive` is also supported'''
+    return 'expires:%d,type:shared,owner:*:%s' % \
+        (int(time.time()) + config.getint("general", "wopilockexpiration"), _appforlock(appname))
+
+
 def _eosargs(userid, app='wopi', bookingsize=0):
     '''Assume userid is in the form uid:gid and split it into uid, gid
        plus generate extra EOS-specific arguments for the xroot URL'''
@@ -84,23 +95,19 @@ def _eosargs(userid, app='wopi', bookingsize=0):
             raise ValueError
         ruid = int(userid[0])
         rgid = int(userid[1])
+        if app not in ('wopi', 'fuse::wopi'):
+            app = _appforlock(app)
         return '?eos.ruid=%d&eos.rgid=%d' % (ruid, rgid) + '&eos.app=' + app + \
                (('&eos.bookingsize=' + str(bookingsize)) if bookingsize else '')
     except (ValueError, IndexError):
         raise ValueError('Only Unix-based userid is supported with xrootd storage: %s' % userid)
 
 
-def _geneoslock(appname):
-    '''One-liner to generate an EOS app lock. Type is `shared` (hardcoded) for WOPI apps, `exclusive` is also supported'''
-    return 'expires:%d,type:shared,owner:*:wopi_%s' % \
-        (int(time.time()) + config.getint("general", "wopilockexpiration"), appname.replace(' ', '_').lower())
-
-
-def _xrootcmd(endpoint, cmd, subcmd, userid, args):
+def _xrootcmd(endpoint, cmd, subcmd, userid, args, app='wopi'):
     '''Perform the <cmd>/<subcmd> action on the special /proc/user path on behalf of the given userid.
        Note that this is entirely EOS-specific.'''
     with XrdClient.File() as f:
-        url = _geturlfor(endpoint) + '//proc/user/' + _eosargs(userid) + '&mgm.cmd=' + cmd + \
+        url = _geturlfor(endpoint) + '//proc/user/' + _eosargs(userid, app) + '&mgm.cmd=' + cmd + \
             ('&mgm.subcmd=' + subcmd if subcmd else '') + '&' + args
         tstart = time.time()
         rc, _ = f.open(url, OpenFlags.READ, timeout=timeout)
@@ -260,20 +267,17 @@ def statx(endpoint, fileref, userid, versioninv=1):
     }
 
 
-def setxattr(endpoint, filepath, userid, key, value, lockid):
+def setxattr(endpoint, filepath, _userid, key, value, lockmd):
     '''Set the extended attribute <key> to <value> via a special open.
     The userid is overridden to make sure it also works on shared files.'''
-    if key not in (EOSLOCKKEY, common.LOCKKEY):
-        currlock = getlock(endpoint, filepath, userid)
-        if currlock:
-            # enforce lock only if previously set
-            common.validatelock(filepath, currlock, None, lockid, 'setxattr', log)
-    # else skip the check as we're setting the lock itself
+    appname = 'wopi'
+    if lockmd:
+        appname, _ = lockmd
     if 'user' not in key and 'sys' not in key:
         # if nothing is given, assume it's a user attr
         key = 'user.' + key
     _xrootcmd(endpoint, 'attr', 'set', '0:0', 'mgm.attr.key=' + key + '&mgm.attr.value=' + str(value)
-              + '&mgm.path=' + _getfilepath(filepath, encodeamp=True))
+              + '&mgm.path=' + _getfilepath(filepath, encodeamp=True), appname)
 
 
 def getxattr(endpoint, filepath, _userid, key):
@@ -291,15 +295,17 @@ def getxattr(endpoint, filepath, _userid, key):
         return None
 
 
-def rmxattr(endpoint, filepath, userid, key, lockid):
+def rmxattr(endpoint, filepath, _userid, key, lockmd):
     '''Remove the extended attribute <key> via a special open.
     The userid is overridden to make sure it also works on shared files.'''
-    if key not in (EOSLOCKKEY, common.LOCKKEY):
-        common.validatelock(filepath, getlock(endpoint, filepath, userid), None, lockid, 'rmxattr', log)
+    appname = 'wopi'
+    if lockmd:
+        appname, _ = lockmd
     if 'user' not in key and 'sys' not in key:
         # if nothing is given, assume it's a user attr
         key = 'user.' + key
-    _xrootcmd(endpoint, 'attr', 'rm', '0:0', 'mgm.attr.key=' + key + '&mgm.path=' + _getfilepath(filepath, encodeamp=True))
+    _xrootcmd(endpoint, 'attr', 'rm', '0:0',
+              'mgm.attr.key=' + key + '&mgm.path=' + _getfilepath(filepath, encodeamp=True), appname)
 
 
 def setlock(endpoint, filepath, userid, appname, value, recurse=False):
@@ -308,16 +314,15 @@ def setlock(endpoint, filepath, userid, appname, value, recurse=False):
     try:
         log.debug('msg="Invoked setlock" filepath="%s" value="%s"' % (filepath, value))
         setxattr(endpoint, filepath, userid, EOSLOCKKEY, _geneoslock(appname) + '&mgm.option=c', None)
-        setxattr(endpoint, filepath, userid, common.LOCKKEY, common.genrevalock(appname, value), None)
+        setxattr(endpoint, filepath, userid, common.LOCKKEY, common.genrevalock(appname, value), (appname, None))
     except IOError as e:
-        if EXCL_XATTR_MSG in str(e):
+        if common.EXCL_ERROR in str(e):
             # check for pre-existing stale locks (this is now not atomic)
             if not getlock(endpoint, filepath, userid) and not recurse:
-                rmxattr(endpoint, filepath, userid, EOSLOCKKEY, None)
                 setlock(endpoint, filepath, userid, appname, value, recurse=True)
             else:
-                # the lock is valid, raise conflict error
-                raise IOError(common.EXCL_ERROR)
+                # the lock is valid
+                raise
         else:
             # we got a different remote error, raise it
             raise
@@ -392,18 +397,16 @@ def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
          O_CREAT|O_EXCL, preventing race conditions.'''
     size = len(content)
     log.debug('msg="Invoking writeFile" filepath="%s" userid="%s" size="%d" islock="%s"' % (filepath, userid, size, islock))
-    if lockmd:
-        appname, _ = lockmd
-    else:
-        appname = ''
-    f = XrdClient.File()
-    tstart = time.time()
     if islock:
         # this is required to trigger the O_EXCL behavior on EOS when creating lock files
         appname = 'fuse::wopi'
-    else:
+    elif lockmd:
         # this is exclusively used to validate the lock with the app as holder, according to EOS specs (cf. _geneoslock())
-        appname = 'wopi_' + appname.replace(' ', '_').lower()
+        appname, _ = lockmd
+    else:
+        appname = 'wopi'
+    f = XrdClient.File()
+    tstart = time.time()
     rc, _ = f.open(_geturlfor(endpoint) + '/' + homepath + filepath + _eosargs(userid, appname, size),
                    OpenFlags.NEW if islock else OpenFlags.DELETE, timeout=timeout)
     tend = time.time()
@@ -442,11 +445,14 @@ def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
              (filepath, (tend-tstart)*1000, islock))
 
 
-def renamefile(endpoint, origfilepath, newfilepath, userid, _lockid):
+def renamefile(endpoint, origfilepath, newfilepath, userid, lockmd):
     '''Rename a file via a special open from origfilepath to newfilepath on behalf of the given userid.'''
+    appname = 'wopi'
+    if lockmd:
+        appname, _ = lockmd
     _xrootcmd(endpoint, 'file', 'rename', userid, 'mgm.path=' + _getfilepath(origfilepath, encodeamp=True)
               + '&mgm.file.source=' + _getfilepath(origfilepath, encodeamp=True)
-              + '&mgm.file.target=' + _getfilepath(newfilepath, encodeamp=True))
+              + '&mgm.file.target=' + _getfilepath(newfilepath, encodeamp=True), appname)
 
 
 def removefile(endpoint, filepath, userid, force=False):

@@ -244,8 +244,8 @@ def setLock(fileid, reqheaders, acctok):
 
         # on first lock, set an xattr with the current time for later conflicts checking
         try:
-            st.setxattr(acctok['endpoint'], fn, acctok['userid'], utils.LASTSAVETIMEKEY,
-                        int(time.time()), utils.encodeLock(lock))
+            st.setxattr(acctok['endpoint'], fn, acctok['userid'], utils.LASTSAVETIMEKEY, int(time.time()),
+                        (acctok['appname'], utils.encodeLock(lock)))
         except IOError as e:
             # not fatal, but will generate a conflict file later on, so log a warning
             log.warning('msg="Unable to set lastwritetime xattr" lockop="%s" user="%s" filename="%s" token="%s" reason="%s"' %
@@ -262,10 +262,10 @@ def setLock(fileid, reqheaders, acctok):
             # validate against either the given lock (RefreshLock case) or the given old lock (UnlockAndRelock case)
             if retrievedLock and not utils.compareWopiLocks(retrievedLock, (oldLock if oldLock else lock)):
                 # lock mismatch, the WOPI client is supposed to acknowledge the existing lock
-                # or deny write access to the file
+                # and deny access to the file in edit mode otherwise
                 return utils.makeConflictResponse(op, acctok['userid'], retrievedLock, lock, oldLock, acctok['endpoint'], fn,
                                                   'The file is locked by %s' %
-                                                  (lockHolder if lockHolder != 'wopi' else 'another online editor'))
+                                                  (lockHolder if lockHolder != 'wopi' else 'another online editor'))   # TODO cleanup 'wopi' case
 
             # else it's our own lock, refresh it (rechecking the oldLock if necessary, for atomicity) and return
             try:
@@ -298,7 +298,7 @@ def unlock(fileid, reqheaders, acctok):
     retrievedLock, _ = utils.retrieveWopiLock(fileid, 'UNLOCK', lock, acctok)
     if not utils.compareWopiLocks(retrievedLock, lock):
         return utils.makeConflictResponse('UNLOCK', acctok['userid'], retrievedLock, lock, 'NA',
-                                          acctok['endpoint'], acctok['filename'], 'Lock mismatch')
+                                          acctok['endpoint'], acctok['filename'], 'Lock mismatch unlocking file')
     # OK, the lock matches, remove it
     try:
         # validate that the underlying file is still there
@@ -471,7 +471,7 @@ def renameFile(fileid, reqheaders, acctok):
     retrievedLock, _ = utils.retrieveWopiLock(fileid, 'RENAMEFILE', lock, acctok)
     if retrievedLock is not None and not utils.compareWopiLocks(retrievedLock, lock):
         return utils.makeConflictResponse('RENAMEFILE', acctok['userid'], retrievedLock, lock, 'NA',
-                                          acctok['endpoint'], acctok['filename'])
+                                          acctok['endpoint'], acctok['filename'], 'Lock mismatch renaming file')
     try:
         # the destination name comes without base path and typically without extension
         targetName = os.path.dirname(acctok['filename']) + os.path.sep + targetName \
@@ -482,9 +482,9 @@ def renameFile(fileid, reqheaders, acctok):
         # try to rename and pass the lock if present. Note that WOPI specs do not require files to be locked
         # on rename operations, but the backend may still fail as renames may be implemented as copy + delete,
         # which may require to pass a lock.
-        st.renamefile(acctok['endpoint'], acctok['filename'], targetName, acctok['userid'],
-                      utils.encodeLock(retrievedLock) if retrievedLock else None)
-        # also rename the lock if applicable
+        lockmd = (acctok['appname'], utils.encodeLock(retrievedLock)) if retrievedLock else None
+        st.renamefile(acctok['endpoint'], acctok['filename'], targetName, acctok['userid'], lockmd)
+        # also rename the LO lock if applicable
         if os.path.splitext(acctok['filename'])[1] in srv.codetypes:
             st.renamefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']),
                           utils.getLibreOfficeLockName(targetName), acctok['userid'], None)
@@ -584,9 +584,9 @@ def putUserInfo(_fileid, reqbody, acctok):
     '''Implements the PutUserInfo WOPI call'''
     try:
         statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
-        lock = st.getlock(acctok['endpoint'], acctok['filename'], acctok['userid'])
-        st.setxattr(acctok['endpoint'], acctok['filename'], statInfo['ownerid'], utils.USERINFOKEY, reqbody.decode(),
-                    utils.encodeLock(lock) if lock else None)
+        lockmd = st.getlock(acctok['endpoint'], acctok['filename'], acctok['userid'])
+        lockmd = (acctok['appname'], utils.encodeLock(lockmd)) if lockmd else None
+        st.setxattr(acctok['endpoint'], acctok['filename'], statInfo['ownerid'], utils.USERINFOKEY, reqbody.decode(), lockmd)
         return 'OK', http.client.OK
     except IOError as e:
         log.error('msg="PutUserInfo" token="%s" error="%s"' % (flask.request.args['access_token'][-20:], e))
