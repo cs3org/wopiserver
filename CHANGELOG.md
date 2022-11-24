@@ -1,8 +1,8 @@
 ## Changelog for the WOPI server
 
-### ... Nov .. 2022 - v9.3.0
+### Thu Nov 24 2022 - v9.3.0
 - Introduced heuristic to log which sessions are allowed
-  from opening a collaborative session and which ones are
+  to open a collaborative session and which ones are
   prevented by the application
 - Introduced support for app-aware locks in EOS (#94)
 - Disabled SaveAs action when user is not owner
@@ -10,6 +10,7 @@
   in bridged apps and in PutFile operations
 - Moved from LGTM to CodeQL workflow on GitHub (#100)
 - Introduced support for PutUserInfo
+- Added support for the Microsoft "business" flow (#105)
 
 ### Mon Oct 17 2022 - v9.2.0
 - Added option to use file or stream handler for logging (#91)
