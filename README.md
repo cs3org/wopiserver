@@ -1,5 +1,6 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
  [![Gitter chat](https://badges.gitter.im/cs3org/wopiserver.svg)](https://gitter.im/cs3org/wopiserver) [![Build Status](https://drone.cernbox.cern.ch/api/badges/cs3org/wopiserver/status.svg)](https://drone.cernbox.cern.ch/cs3org/wopiserver)
+ [![Codacy Badge](https://app.codacy.com/project/badge/Grade/e4e7c46c39b04bddbf63ade4cacdcc7d)](https://www.codacy.com/gh/cs3org/wopiserver/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=cs3org/wopiserver&amp;utm_campaign=Badge_Grade)
  [![codecov](https://codecov.io/gh/cs3org/wopiserver/branch/master/graph/badge.svg)](https://codecov.io/gh/cs3org/wopiserver)
 ========
 
