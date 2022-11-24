@@ -11,7 +11,7 @@ LABEL maintainer="cernbox-admins@cern.ch" \
   org.opencontainers.image.title="The CERNBox/IOP WOPI server" \
   org.opencontainers.image.version="$VERSION"
 
-ADD ./docker/etc/epel8.repo /etc/yum.repos.d/
+COPY ./docker/etc/epel8.repo /etc/yum.repos.d/
 
 # prerequisites: until we need to support xrootd (even on C8), we have some EPEL dependencies, easier to install via yum/dnf;
 # the rest is actually installed via pip, including the xrootd python bindings
@@ -36,18 +36,18 @@ RUN pip3 --default-timeout=900 install xrootd
 
 # install software
 RUN mkdir -p /app/core /app/bridge /test /etc/wopi /var/log/wopi
-ADD ./src/* ./tools/* /app/
-ADD ./src/core/* /app/core/
-ADD ./src/bridge/* /app/bridge/
+COPY ./src/* ./tools/* /app/
+COPY ./src/core/* /app/core/
+COPY ./src/bridge/* /app/bridge/
 RUN sed -i "s/WOPISERVERVERSION = 'git'/WOPISERVERVERSION = '$VERSION'/" /app/wopiserver.py
 RUN grep 'WOPISERVERVERSION =' /app/wopiserver.py
-ADD wopiserver.conf /etc/wopi/wopiserver.defaults.conf
-ADD test/*py test/*conf /test/
+COPY wopiserver.conf /etc/wopi/wopiserver.defaults.conf
+COPY test/*py test/*conf /test/
 
 # add basic custom configuration; need to contextualize
-ADD ./docker/etc/*secret  ./docker/etc/wopiserver.conf /etc/wopi/
+COPY ./docker/etc/*secret  ./docker/etc/wopiserver.conf /etc/wopi/
 #RUN mkdir /etc/certs
-#ADD ./etc/*.pem /etc/certs/   if certificates shall be added
+#COPY ./etc/*.pem /etc/certs/   if certificates shall be added
 
 CMD ["python3", "/app/wopiserver.py"]
 

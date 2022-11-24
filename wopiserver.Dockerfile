@@ -19,15 +19,15 @@ RUN apk add g++ && \
 
 # install software
 RUN mkdir -p /app/core /app/bridge /test /etc/wopi /var/log/wopi /var/wopi_local_storage
-ADD ./src/* ./tools/* /app/
-ADD ./src/core/* /app/core/
-ADD ./src/bridge/* /app/bridge/
+COPY ./src/* ./tools/* /app/
+COPY ./src/core/* /app/core/
+COPY ./src/bridge/* /app/bridge/
 RUN sed -i "s/WOPISERVERVERSION = 'git'/WOPISERVERVERSION = '$VERSION'/" /app/wopiserver.py && \
     grep 'WOPISERVERVERSION =' /app/wopiserver.py
-ADD wopiserver.conf /etc/wopi/wopiserver.defaults.conf
-ADD test/*py test/*conf /test/
+COPY wopiserver.conf /etc/wopi/wopiserver.defaults.conf
+COPY test/*py test/*conf /test/
 
 # add basic custom configuration; need to contextualize
-ADD ./docker/etc/*secret  ./docker/etc/wopiserver.conf /etc/wopi/
+COPY ./docker/etc/*secret  ./docker/etc/wopiserver.conf /etc/wopi/
 
 ENTRYPOINT ["/app/wopiserver.py"]
