@@ -261,8 +261,8 @@ def setLock(fileid, reqheaders, acctok):
                 retrievedLock, lockHolder = utils.retrieveWopiLock(fileid, op, lock, acctok)
             # validate against either the given lock (RefreshLock case) or the given old lock (UnlockAndRelock case)
             if retrievedLock and not utils.compareWopiLocks(retrievedLock, (oldLock if oldLock else lock)):
-                # lock mismatch, the WOPI client is supposed to acknowledge the existing lock
-                # and deny access to the file in edit mode otherwise
+                # lock mismatch, the WOPI client is supposed to acknowledge the existing lock to start a collab session,
+                # or deny access to the file in edit mode otherwise
                 return utils.makeConflictResponse(op, acctok['userid'], retrievedLock, lock, oldLock, acctok['endpoint'], fn,
                                                   'The file is locked by %s' %
                                                   (lockHolder if lockHolder != 'wopi' else 'another online editor'))   # TODO cleanup 'wopi' case

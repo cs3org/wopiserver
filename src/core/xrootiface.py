@@ -200,10 +200,11 @@ def statx(endpoint, fileref, userid, versioninv=1):
                          + '&mgm.pcmd=fileinfo&mgm.file.info.option=-m')
     try:
         # output looks like:
-        # keylength.file=35 file=/eos/.../filename size=2915 mtime=1599649863.0 ctime=1599649866.280468540 btime=1599649866.280468540 clock=0 mode=0644
-        # uid=4179 gid=2763 fxid=19ab8b68 fid=430672744 ino=115607834422411264 pid=1713958 pxid=001a2726 xstype=adler xs=a2dfcdf9
-        # etag="115607834422411264:a2dfcdf9" detached=0 layout=replica nstripes=2 lid=00100112 nrep=2 xattrn=sys.eos.btime xattrv=1599649866.280468540
-        # uid:xxxx[username] gid:xxxx[group] tident:xxx name:username dn: prot:https host:xxxx.cern.ch domain:cern.ch geo: sudo:0 fsid=305 fsid=486
+        # keylength.file=35 file=/eos/.../filename size=2915 mtime=1599649863.0 ctime=1599649866.280468540
+        # btime=1599649866.280468540 clock=0 mode=0644 uid=xxxx gid=xxxx fxid=19ab8b68 fid=430672744 ino=115607834422411264
+        # pid=1713958 pxid=001a2726 xstype=adler xs=a2dfcdf9 etag="115607834422411264:a2dfcdf9" detached=0 layout=replica
+        # nstripes=2 lid=00100112 nrep=2 xattrn=sys.eos.btime xattrv=1599649866.280468540 uid:xxxx[username] gid:xxxx[group]
+        # tident:xxx name:username dn: prot:https host:xxxx.cern.ch domain:cern.ch geo: sudo:0 fsid=305 fsid=486
         # cf. https://gitlab.cern.ch/dss/eos/-/blob/master/archive/eosarch/utils.py
         kvlist = [kv.split('=') for kv in statInfo.split()]
         statxdata = {k: v.strip('"') for k, v in [kv for kv in kvlist if len(kv) == 2]}

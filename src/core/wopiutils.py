@@ -143,7 +143,7 @@ def validateAndLogHeaders(op):
 
     # update bookkeeping of pending sessions
     if op.title() == 'Checkfileinfo' and session in srv.conflictsessions['pending'] and \
-        time.mktime(time.strptime(srv.conflictsessions['pending'][session]['time'])) < time.time() - 300:
+       time.mktime(time.strptime(srv.conflictsessions['pending'][session]['time'])) < time.time() - 300:
         # a previously conflicted session is still around executing Checkfileinfo after 5 minutes, assume it got resolved
         _resolveSession(session, acctok['filename'])
     return acctok, None

@@ -77,7 +77,6 @@ class Wopi:
     # sets of sessions for which a lock conflict is outstanding or resolved
     conflictsessions = {'pending': {}, 'resolved': {}}
 
-
     @classmethod
     def init(cls):
         '''Initialises the application, bails out in case of failures. Note this is not a __init__ method'''
@@ -344,8 +343,8 @@ def iopOpenInApp():
     if bridge.issupported(appname):
         try:
             res['app-url'], res['form-parameters'] = bridge.appopen(utils.generateWopiSrc(inode), acctok,
-                    (appname, appurl, url_unquote_plus(req.args.get('appinturl', appurl)), req.headers.get('ApiKey')),
-                    viewmode, usertoken)
+                (appname, appurl, url_unquote_plus(req.args.get('appinturl', appurl)), req.headers.get('ApiKey')),  # noqa: E128
+                 viewmode, usertoken)
         except bridge.FailedOpen as foe:
             return foe.msg, foe.statuscode
     else:
