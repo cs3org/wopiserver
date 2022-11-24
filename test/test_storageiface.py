@@ -286,22 +286,25 @@ class TestStorage(unittest.TestCase):
         self.storage.setlock(self.endpoint, self.homepath + '/testlockop', self.userid, 'test app', 'testlock')
         self.storage.writefile(self.endpoint, self.homepath + '/testlockop', self.userid, databuf, ('test app', 'testlock'))
         with self.assertRaises(IOError):
-            # TODO different interfaces raise exceptions on either mismatching app xor mismatching lock payload,
+            # Note that different interfaces raise exceptions on either mismatching app xor mismatching lock payload,
             # this is why we test that both mismatch. Could be improved, though we specifically care about the lock paylaod.
             self.storage.writefile(self.endpoint, self.homepath + '/testlockop', self.userid, databuf,
-                                   ('mismatchapp', 'mismatchlock'))
-        self.storage.refreshlock(self.endpoint, self.homepath + '/testlockop', self.userid, 'test app', 'testlock')
+                                   ('mismatch app', 'mismatchlock'))
         with self.assertRaises(IOError):
-            self.storage.writefile(self.endpoint, self.homepath + '/testlockop', self.userid, databuf, None)
-        with self.assertRaises(IOError):
+            # same as above
             self.storage.setxattr(self.endpoint, self.homepath + '/testlockop', self.userid, 'testkey', 123,
                                   ('mismatch app', 'mismatchlock'))
         with self.assertRaises(IOError):
             self.storage.setxattr(self.endpoint, self.homepath + '/testlockop', self.userid, 'testkey', 123, None)
         with self.assertRaises(IOError):
             self.storage.rmxattr(self.endpoint, self.homepath + '/testlockop', self.userid, 'testkey', None)
+        self.storage.refreshlock(self.endpoint, self.homepath + '/testlockop', self.userid, 'test app', 'testlock')
+        with self.assertRaises(IOError):
+            self.storage.refreshlock(self.endpoint, self.homepath + '/testlockop', self.userid, 'mismatched app', 'mismatchlock')
         for chunk in self.storage.readfile(self.endpoint, self.homepath + '/testlockop', self.userid, None):
             self.assertNotIsInstance(chunk, IOError, 'raised by storage.readfile, lock shall be shared')
+        with self.assertRaises(IOError):
+            self.storage.writefile(self.endpoint, self.homepath + '/testlockop', self.userid, databuf, None)
         self.storage.renamefile(self.endpoint, self.homepath + '/testlockop', self.homepath + '/testlockop_renamed',
                                 self.userid, ('test app', 'testlock'))
         self.storage.removefile(self.endpoint, self.homepath + '/testlockop_renamed', self.userid)

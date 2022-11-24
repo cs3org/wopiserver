@@ -16,6 +16,8 @@ import core.commoniface as common
 
 EOSVERSIONPREFIX = '.sys.v#.'
 EXCL_XATTR_MSG = 'exclusive set for existing attribute'
+LOCK_MISMATCH_MSG = 'file has a valid extended attribute lock'
+FOREIGN_XATTR_MSG = 'foreign attribute lock existing'
 OK_MSG = '[SUCCESS]'     # this is what xroot returns on success
 EOSLOCKKEY = 'sys.app.lock'
 
@@ -123,13 +125,17 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args, app='wopi'):
                 # failure: get info from stderr, log and raise
                 msg = res[1][res[1].find('=') + 1:].strip('\n')
                 if common.ENOENT_MSG.lower() in msg or 'unable to get attribute' in msg or rc == '2':
-                    log.info('msg="Invoked xroot on non-existing entity" cmd="%s" subcmd="%s" args="%s" result="%s" rc="%s"' %
-                             (cmd, subcmd, args, msg.replace('error:', ''), rc))
+                    log.info('msg="Invoked cmd on non-existing entity" cmd="%s" subcmd="%s" args="%s" result="%s" rc="%s"' %
+                             (cmd, subcmd, args, msg.replace('error:', ''), rc.strip('\00')))
                     raise IOError(common.ENOENT_MSG)
                 if EXCL_XATTR_MSG in msg:
                     log.info('msg="Invoked setxattr on an already locked entity" args="%s" result="%s" rc="%s"' %
                              (args, msg.replace('error:', ''), rc.strip('\00')))
-                    raise IOError(EXCL_XATTR_MSG)
+                    raise IOError(common.EXCL_ERROR)
+                if LOCK_MISMATCH_MSG or FOREIGN_XATTR_MSG in msg:
+                    log.info('msg="Mismatched lock" cmd="%s" subcmd="%s" args="%s" app="%s" result="%s" rc="%s"' %
+                             (cmd, subcmd, args, app, msg.replace('error:', ''), rc.strip('\00')))
+                    raise IOError(common.EXCL_ERROR)
                 # anything else (including permission errors) are logged as errors
                 log.error('msg="Error with xroot" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' %
                           (cmd, subcmd, args, msg, rc.strip('\00')))
@@ -229,7 +235,7 @@ def statx(endpoint, fileref, userid, versioninv=1):
     tend = time.time()
     try:
         if not infov:
-            raise IOError('xrdquery returned nothing, rcv=%s' + rcv)
+            raise IOError('xrdquery returned nothing, rcv=%s' % rcv)
         infov = infov.decode()
         if OK_MSG not in str(rcv) or 'retc=2' in infov:
             # the version folder does not exist: create it (on behalf of the owner) as it is done in Reva
@@ -267,12 +273,17 @@ def statx(endpoint, fileref, userid, versioninv=1):
     }
 
 
-def setxattr(endpoint, filepath, _userid, key, value, lockmd):
+def setxattr(endpoint, filepath, userid, key, value, lockmd):
     '''Set the extended attribute <key> to <value> via a special open.
     The userid is overridden to make sure it also works on shared files.'''
     appname = 'wopi'
+    lockid = None
     if lockmd:
-        appname, _ = lockmd
+        appname, lockid = lockmd
+    if key not in (EOSLOCKKEY, common.LOCKKEY):
+        currlock = getlock(endpoint, filepath, userid)
+        if currlock and currlock['lock_id'] != lockid:
+            raise IOError(common.EXCL_ERROR)
     if 'user' not in key and 'sys' not in key:
         # if nothing is given, assume it's a user attr
         key = 'user.' + key
@@ -337,7 +348,8 @@ def getlock(endpoint, filepath, userid):
             log.debug('msg="Invoked getlock" filepath="%s"' % filepath)
             return lock
         # otherwise, the lock had expired: drop it and return None
-        log.debug('msg="getlock: removed stale lock" filepath="%s"' % filepath)
+        log.debug('msg="getlock: removing stale lock" filepath="%s"' % filepath)
+        rmxattr(endpoint, filepath, userid, EOSLOCKKEY, None)
         rmxattr(endpoint, filepath, userid, common.LOCKKEY, None)
     return None
 
@@ -345,22 +357,21 @@ def getlock(endpoint, filepath, userid):
 def refreshlock(endpoint, filepath, userid, appname, value, oldvalue=None):
     '''Refresh the lock value as an xattr'''
     currlock = getlock(endpoint, filepath, userid)
-    if not oldvalue and currlock:
-        # this is a pure refresh operation
-        oldvalue = currlock['lock_id']
-    common.validatelock(filepath, currlock, appname, oldvalue, 'refreshlock', log)
+    if not currlock or (oldvalue and currlock['lock_id'] != oldvalue):
+        raise IOError(common.EXCL_ERROR)
     log.debug('msg="Invoked refreshlock" filepath="%s" value="%s"' % (filepath, value))
     # this is non-atomic, but the lock was already held
-    setxattr(endpoint, filepath, userid, EOSLOCKKEY, _geneoslock(appname), None)
-    setxattr(endpoint, filepath, userid, common.LOCKKEY, common.genrevalock(appname, value), None)
+    setxattr(endpoint, filepath, userid, EOSLOCKKEY, _geneoslock(appname), (appname, None))
+    setxattr(endpoint, filepath, userid, common.LOCKKEY, common.genrevalock(appname, value), (appname, None))
 
 
 def unlock(endpoint, filepath, userid, appname, value):
     '''Remove a lock as an xattr'''
-    common.validatelock(filepath, getlock(endpoint, filepath, userid), appname, value, 'unlock', log)
+    if not getlock(endpoint, filepath, userid):
+        raise IOError(common.EXCL_ERROR)
     log.debug('msg="Invoked unlock" filepath="%s" value="%s"' % (filepath, value))
-    rmxattr(endpoint, filepath, userid, common.LOCKKEY, None)
-    rmxattr(endpoint, filepath, userid, EOSLOCKKEY, None)
+    rmxattr(endpoint, filepath, userid, common.LOCKKEY, (appname, None))
+    rmxattr(endpoint, filepath, userid, EOSLOCKKEY, (appname, None))
 
 
 def readfile(endpoint, filepath, userid, _lockid):
@@ -377,8 +388,8 @@ def readfile(endpoint, filepath, userid, _lockid):
                 log.info('msg="File not found on read" filepath="%s"' % filepath)
                 yield IOError(common.ENOENT_MSG)
             else:
-                log.warning('msg="Error opening the file for read" filepath="%s" code="%d" error="%s"' %
-                            (filepath, rc.shellcode, rc.message.strip('\n')))
+                log.error('msg="Error opening the file for read" filepath="%s" code="%d" error="%s"' %
+                          (filepath, rc.shellcode, rc.message.strip('\n')))
                 yield IOError(rc.message)
         else:
             log.info('msg="File open for read" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend - tstart) * 1000))
@@ -415,9 +426,9 @@ def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
             # racing against an existing file
             log.info('msg="File exists on write but islock flag requested" filepath="%s"' % filepath)
             raise IOError(common.EXCL_ERROR)
-        if 'file has a valid extended attribute lock' in rc.message:
-            log.warning('msg="Lock mismatch when writing file" filepath="%s"' % filepath)
-            raise IOError(common.LOCK_MISMATCH_ERROR)
+        if LOCK_MISMATCH_MSG in rc.message:
+            log.warning('msg="Lock mismatch when writing file" app="%s" filepath="%s"' % (appname, filepath))
+            raise IOError(common.EXCL_ERROR)
         if common.ACCESS_ERROR in rc.message:
             log.warning('msg="Access denied when writing file" filepath="%s"' % filepath)
             raise IOError(common.ACCESS_ERROR)
