@@ -62,6 +62,7 @@ def getredirecturl(viewmode, wopisrc, acctok, docid, filename, displayname, reva
             'accessToken': acctok,
             'disableEmbedding': ('%s' % (os.path.splitext(filename)[1] != '.zmd')).lower(),
             'displayName': displayname,
+            'path': os.path.dirname(filename),
         }
         if revatok:
             params['revaToken'] = revatok

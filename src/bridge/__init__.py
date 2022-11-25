@@ -216,7 +216,23 @@ def appopen(wopisrc, acctok, appmd, viewmode, revatok=None):
             # user has no write privileges, just fetch the document and push it to the app on a random docid
             wopilock = app.loadfromstorage(filemd, wopisrc, acctok, None)
 
-        redirurl = app.getredirecturl(viewmode, wopisrc, acctok, wopilock['doc'][1:], filemd['BaseFileName'],
+        # extract the path from the given folder URL: TODO this works with Reva master, not with Reva edge!
+        try:
+            filepath = urlparse.urlparse(filemd['BreadcrumbFolderUrl']).path
+            if filepath.find('/s/') == 0:
+                filepath = filepath[3:] + '/'    # top of public link, no leading /
+            elif filepath.find('/files/public/show/') == 0:
+                filepath = filepath[19:] + '/'   # subfolder of public link, no leading /
+            elif filepath.find('/files/spaces/') == 0:
+                filepath = filepath[13:] + '/'   # direct path to resource with leading /
+            else:
+                # other folderurl strctures are not supported for the time being
+                filepath = ""
+        except (ValueError, IndexError) as e:
+            WB.log.warning('msg="Failed to parse folderUrl" url="%s" error="%s" token="%s"' %
+                           (filemd['BreadcrumbFolderUrl'], e, acctok[-20:]))
+            filepath = ""
+        redirurl = app.getredirecturl(viewmode, wopisrc, acctok, wopilock['doc'][1:], filepath + filemd['BaseFileName'],
                                       filemd['UserFriendlyName'], revatok)
     except app.AppFailure as e:
         # this can be raised by loadfromstorage or getredirecturl
