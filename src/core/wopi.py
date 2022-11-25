@@ -51,22 +51,18 @@ def checkFileInfo(fileid, acctok):
         if fsurl:
             fmd['FileSharingUrl'] = utils.generateUrlFromTemplate(fsurl, acctok)
         furl = acctok['folderurl']
-        fmd['BreadcrumbFolderUrl'] = furl if furl != '/' else srv.wopiurl   # the WOPI URL is a placeholder
+        if furl != '/':
+            fmd['BreadcrumbFolderUrl'] = furl
         if acctok['username'] == '':
             fmd['IsAnonymousUser'] = True
             fmd['UserFriendlyName'] = 'Guest ' + utils.randomString(3)
-            if '?path' in furl and furl[-1] != '/' and furl[-1] != '=':
-                # this is a subfolder of a public share, show it
-                fmd['BreadcrumbFolderName'] = furl[furl.find('?path'):].split('/')[-1]
-            else:
-                # this is the top level public share, which is anonymous
+            if furl != '/':
                 fmd['BreadcrumbFolderName'] = 'Public share'
         else:
             fmd['IsAnonymousUser'] = False
             fmd['UserFriendlyName'] = acctok['username']
-            fmd['BreadcrumbFolderName'] = 'Back to ' + os.path.dirname(acctok['filename'])
-        if furl == '/':    # if no target folder URL was given, override the above and completely hide it
-            fmd['BreadcrumbFolderName'] = ''
+            if furl != '/':
+                fmd['BreadcrumbFolderName'] = 'Parent folder'
         if acctok['viewmode'] in (utils.ViewMode.READ_ONLY, utils.ViewMode.READ_WRITE) \
            and srv.config.get('general', 'downloadurl', fallback=None):
             fmd['DownloadUrl'] = fmd['FileUrl'] = '%s?access_token=%s' % \
@@ -111,11 +107,10 @@ def checkFileInfo(fileid, acctok):
             # fmd['LastModifiedTime'] = datetime.fromtimestamp(int(statInfo['mtime'])).isoformat()   # this currently breaks
 
         res = flask.Response(json.dumps(fmd), mimetype='application/json')
-        # amend sensitive metadata for the logs
+        # redact sensitive metadata for the logs
         fmd['HostViewUrl'] = fmd['HostEditUrl'] = fmd['DownloadUrl'] = fmd['FileUrl'] = \
             fmd['BreadcrumbBrandUrl'] = fmd['FileSharingUrl'] = '_redacted_'
-        log.info('msg="File metadata response" token="%s" metadata="%s"' %
-                 (flask.request.args['access_token'][-20:], fmd))
+        log.info('msg="File metadata response" token="%s" metadata="%s"' % (flask.request.args['access_token'][-20:], fmd))
         return res
     except IOError as e:
         log.info('msg="Requested file not found" filename="%s" token="%s" details="%s"' %
