@@ -166,6 +166,7 @@ def setLock(fileid, reqheaders, acctok):
     validateTarget = reqheaders.get('X-WOPI-Validate-Target')
     retrievedLock, lockHolder = utils.retrieveWopiLock(fileid, op, lock, acctok)
     fn = acctok['filename']
+    savetime = None
 
     try:
         # validate that the underlying file is still there (it might have been moved/deleted)
@@ -177,20 +178,21 @@ def setLock(fileid, reqheaders, acctok):
             return 'File not found', http.client.NOT_FOUND
         return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
 
-    # perform the required checks for the validity of the new lock
-    if op == 'REFRESH_LOCK' and not retrievedLock:
-        if validateTarget:
-            # this is an extension of the API: a REFRESH_LOCK without previous lock but with a Validate-Target header
-            # is allowed provided that the target file was last saved by WOPI and not overwritten by external actions
-            # (cf. PutFile logic)
-            savetime = st.getxattr(acctok['endpoint'], fn, acctok['userid'], utils.LASTSAVETIMEKEY)
-            if savetime and (not savetime.isdigit() or int(savetime) < int(statInfo['mtime'])):
-                savetime = None
-        else:
+    if retrievedLock or op == 'REFRESH_LOCK':
+        # useful for later checks
+        savetime = st.getxattr(acctok['endpoint'], fn, acctok['userid'], utils.LASTSAVETIMEKEY)
+        if savetime and (not savetime.isdigit() or int(savetime) < int(statInfo['mtime'])):
+            # we had stale information, discard
             savetime = None
-        if not savetime:
-            return utils.makeConflictResponse(op, acctok['userid'], None, lock, oldLock, acctok['endpoint'], fn,
-                                              'The file was not locked' + ' and got modified' if validateTarget else '')
+
+    # perform the required checks for the validity of the new lock
+    if op == 'REFRESH_LOCK' and not retrievedLock and (not validateTarget or savetime):
+        # validateTarget is an extension of the API: a REFRESH_LOCK without previous lock but with a Validate-Target header
+        # is allowed, provided that the target file was last saved by WOPI (i.e. savetime is valid) and not overwritten
+        # by other external actions (cf. PutFile logic)
+        return utils.makeConflictResponse(op, acctok['userid'], None, lock, oldLock, fn,
+                                          'The file was not locked' + (' and got modified' if validateTarget else ''),
+                                          savetime=savetime)
 
     # now check for and create an "external" lock if required
     if srv.config.get('general', 'detectexternallocks', fallback='True').upper() == 'TRUE' and \
@@ -198,7 +200,7 @@ def setLock(fileid, reqheaders, acctok):
         try:
             if retrievedLock == 'External':
                 return utils.makeConflictResponse(op, acctok['userid'], retrievedLock, lock, oldLock,
-                                                  acctok['endpoint'], fn, 'The file is locked by ' + lockHolder)
+                                                  fn, 'The file is locked by ' + lockHolder, savetime=savetime)
 
             # create a LibreOffice-compatible lock file for interoperability purposes, making sure to
             # not overwrite any existing or being created lock
@@ -228,7 +230,7 @@ def setLock(fileid, reqheaders, acctok):
                                 (op.title(), fn, lockholder if lockholder else retrievedlolock))
                     reason = 'File locked by ' + ((lockholder + ' via LibreOffice') if lockholder else 'a LibreOffice user')
                     return utils.makeConflictResponse(op, acctok['userid'], 'External App', lock, oldLock,
-                                                      acctok['endpoint'], fn, reason)
+                                                      fn, reason, savetime=savetime)
                 # else it's our previous lock or it had expired: all right, move on
             else:
                 # any other error is logged but not raised as this is optimistically not blocking WOPI operations
@@ -242,7 +244,7 @@ def setLock(fileid, reqheaders, acctok):
         # and return conflict response if the file was already locked
         st.setlock(acctok['endpoint'], fn, acctok['userid'], acctok['appname'], utils.encodeLock(lock))
 
-        # on first lock, set an xattr with the current time for later conflicts checking
+        # on first lock, set in addition an xattr with the current time for later conflicts checking
         try:
             st.setxattr(acctok['endpoint'], fn, acctok['userid'], utils.LASTSAVETIMEKEY, int(time.time()),
                         (acctok['appname'], utils.encodeLock(lock)))
@@ -263,9 +265,19 @@ def setLock(fileid, reqheaders, acctok):
             if retrievedLock and not utils.compareWopiLocks(retrievedLock, (oldLock if oldLock else lock)):
                 # lock mismatch, the WOPI client is supposed to acknowledge the existing lock to start a collab session,
                 # or deny access to the file in edit mode otherwise
-                return utils.makeConflictResponse(op, acctok['userid'], retrievedLock, lock, oldLock, acctok['endpoint'], fn,
-                                                  'The file is locked by %s' %
-                                                  (lockHolder if lockHolder != 'wopi' else 'another online editor'))   # TODO cleanup 'wopi' case
+                evicted = False
+                if 'forcelock' in acctok and retrievedLock != 'External':
+                    # here we try to evict the existing lock, and if possible we let the user go:
+                    # this is to work around an issue with the Microsoft cloud!
+                    evicted = utils.checkAndEvictLock(acctok['userid'], acctok['appname'], retrievedLock, lock,
+                                                      acctok['endpoint'], fn, int(statInfo['mtime']))
+                if evicted:
+                    return utils.makeLockSuccessResponse(op, acctok, lock, 'v%s' % statInfo['etag'])
+                else:
+                    return utils.makeConflictResponse(op, acctok['userid'], retrievedLock, lock, oldLock, fn,
+                                                      'The file is locked by %s' %
+                                                      (lockHolder if lockHolder != 'wopi' else 'another online editor'),   # TODO cleanup 'wopi' case
+                                                      savetime=savetime)
 
             # else it's our own lock, refresh it (rechecking the oldLock if necessary, for atomicity) and return
             try:
@@ -298,7 +310,7 @@ def unlock(fileid, reqheaders, acctok):
     retrievedLock, _ = utils.retrieveWopiLock(fileid, 'UNLOCK', lock, acctok)
     if not utils.compareWopiLocks(retrievedLock, lock):
         return utils.makeConflictResponse('UNLOCK', acctok['userid'], retrievedLock, lock, 'NA',
-                                          acctok['endpoint'], acctok['filename'], 'Lock mismatch unlocking file')
+                                          acctok['filename'], 'Lock mismatch unlocking file')
     # OK, the lock matches, remove it
     try:
         # validate that the underlying file is still there
@@ -387,7 +399,7 @@ def putRelative(fileid, reqheaders, acctok):
                     'Url': utils.generateWopiSrc(statInfo['inode'], acctok['appname'] == srv.proxiedappname),
                 }
                 return utils.makeConflictResponse('PUT_RELATIVE', acctok['userid'], retrievedTargetLock, 'NA', 'NA',
-                                                  acctok['endpoint'], relTarget, respmd)
+                                                  relTarget, respmd)
         except IOError:
             # optimistically assume we're clear
             pass
@@ -446,7 +458,7 @@ def deleteFile(fileid, _reqheaders_unused, acctok):
     if retrievedLock is not None:
         # file is locked and cannot be deleted
         return utils.makeConflictResponse('DELETE', acctok['userid'], retrievedLock, 'NA', 'NA',
-                                          acctok['endpoint'], acctok['filename'], 'Cannot delete a locked file')
+                                          acctok['filename'], 'Cannot delete a locked file')
     try:
         st.removefile(acctok['endpoint'], acctok['filename'], acctok['userid'])
         return 'OK', http.client.OK
@@ -471,7 +483,7 @@ def renameFile(fileid, reqheaders, acctok):
     retrievedLock, _ = utils.retrieveWopiLock(fileid, 'RENAMEFILE', lock, acctok)
     if retrievedLock is not None and not utils.compareWopiLocks(retrievedLock, lock):
         return utils.makeConflictResponse('RENAMEFILE', acctok['userid'], retrievedLock, lock, 'NA',
-                                          acctok['endpoint'], acctok['filename'], 'Lock mismatch renaming file')
+                                          acctok['filename'], 'Lock mismatch renaming file')
     try:
         # the destination name comes without base path and typically without extension
         targetName = os.path.dirname(acctok['filename']) + os.path.sep + targetName \
@@ -540,7 +552,7 @@ def putFile(fileid, acctok):
     retrievedLock, lockHolder = utils.retrieveWopiLock(fileid, 'PUTFILE', lock, acctok)
     if retrievedLock is None:
         return utils.makeConflictResponse('PUTFILE', acctok['userid'], retrievedLock, lock, 'NA',
-                                          acctok['endpoint'], acctok['filename'], 'Cannot overwrite unlocked file')
+                                          acctok['filename'], 'Cannot overwrite unlocked file')
     if not utils.compareWopiLocks(retrievedLock, lock):
         log.warning('msg="Forcing conflict based on external lock" user="%s" filename="%s" token="%s"' %
                     (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:]))

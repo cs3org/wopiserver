@@ -192,7 +192,7 @@ def randomString(size):
     return ''.join([choice(ascii_lowercase) for _ in range(size)])
 
 
-def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app):
+def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app, forcelock=False):
     '''Generates an access token for a given file and a given user, and returns a tuple with
     the file's inode and the URL-encoded access token.'''
     appname, appediturl, appviewurl = app
@@ -226,16 +226,20 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
         # endpoint does not set appname when the app is not proxied, so we optimistically assume it's Collabora and let it go)
         log.info('msg="Forcing read-only access to ODF file" filename="%s"' % statinfo['filepath'])
         viewmode = ViewMode.READ_ONLY
-    acctok = jwt.encode({'userid': userid, 'wopiuser': wopiuser, 'filename': statinfo['filepath'], 'fileid': fileid,
-                         'username': username, 'viewmode': viewmode.value, 'folderurl': folderurl, 'endpoint': endpoint,
-                         'appname': appname, 'appediturl': appediturl, 'appviewurl': appviewurl,
-                         'exp': exptime, 'iss': 'cs3org:wopiserver:%s' % WOPIVER},    # standard claims
-                        srv.wopisecret, algorithm='HS256')
+    tokmd = {
+        'userid': userid, 'wopiuser': wopiuser, 'filename': statinfo['filepath'], 'fileid': fileid,
+        'username': username, 'viewmode': viewmode.value, 'folderurl': folderurl, 'endpoint': endpoint,
+        'appname': appname, 'appediturl': appediturl, 'appviewurl': appviewurl,
+        'exp': exptime, 'iss': 'cs3org:wopiserver:%s' % WOPIVER    # standard claims
+    }
+    if forcelock:
+        tokmd['forcelock'] = '1'
+    acctok = jwt.encode(tokmd, srv.wopisecret, algorithm='HS256')
     log.info('msg="Access token generated" userid="%s" wopiuser="%s" mode="%s" endpoint="%s" filename="%s" inode="%s" '
-             'mtime="%s" folderurl="%s" appname="%s" expiration="%d" token="%s"' %
+             'mtime="%s" folderurl="%s" appname="%s" expiration="%d" forcelock="%s" token="%s"' %
              (userid[-20:], wopiuser if wopiuser != userid else username, viewmode, endpoint,
               statinfo['filepath'], statinfo['inode'], statinfo['mtime'],
-              folderurl, appname, exptime, acctok[-20:]))
+              folderurl, appname, exptime, '1' if forcelock else '0', acctok[-20:]))
     return statinfo['inode'], acctok, viewmode
 
 
@@ -357,30 +361,63 @@ def compareWopiLocks(lock1, lock2):
     return False
 
 
-def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, endpoint, filename, reason=None):
+def checkAndEvictLock(user, appname, retrievedlock, lock, endpoint, filename, savetime):
+    '''Checks if the current lock can be evicted to overcome issue with Microsoft 365 cloud'''
+    evictlocktime = srv.config.get('general', 'evictlocktime', fallback='')
+    try:
+        evictlocktime = int(evictlocktime)
+    except ValueError:
+        return False
+    session = flask.request.headers.get('X-WOPI-SessionId')
+    if savetime > time.time() - evictlocktime:
+        # file is being edited, don't evict existing lock
+        log.warning('msg="File is actively edited, force-unlock prevented" lockop="Lock" user="%s" '
+                    'filename="%s" fileage="%1.1f" token="%s" sessionId="%s"' %
+                    (user, filename, (time.time() - int(savetime)), flask.request.args['access_token'][-20:], session))
+        return False
+    # ok, remove current lock and set new one
+    try:
+        st.refreshlock(endpoint, filename, user, appname, encodeLock(lock), encodeLock(retrievedlock))
+    except IOError as e:
+        log.error('msg="Failed to force a refreshlock" user="%s" filename="%s" error="%s" token="%s" sessionId="%s"' %
+                  (user, filename, e, flask.request.args['access_token'][-20:], session))
+        return False
+    # and note the stealer and the evicted sessions
+    if session not in srv.conflictsessions['tookover']:
+        try:
+            formersession = json.loads(retrievedlock)['S']
+        except (TypeError, ValueError, KeyError):
+            formersession = retrievedlock
+        srv.conflictsessions['tookover'][session] = {'time': time.asctime(), 'former': formersession}
+    log.warning('msg="Former session was evicted" lockop="Lock" user="%s" filename="%s" fileage="%1.1f" '
+                'formerlock="%s" token="%s" newsession="%s"' %
+                (user, filename, (time.time() - int(savetime)), retrievedlock,
+                 flask.request.args['access_token'][-20:], session))
+    return True
+
+
+def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, filename, reason, savetime=None):
     '''Generates and logs an HTTP 409 response in case of locks conflict'''
     resp = flask.Response(mimetype='application/json')
     resp.headers['X-WOPI-Lock'] = retrievedlock if retrievedlock else ''
     resp.status_code = http.client.CONFLICT
-    if reason:
-        # this is either a simple message or a dictionary: in all cases we want a dictionary to be JSON-ified
-        if isinstance(reason, str):
-            reason = {'message': reason}
-        resp.headers['X-WOPI-LockFailureReason'] = reason['message']
-        resp.data = json.dumps(reason)
+    if isinstance(reason, str):
+        # transform the given message in a dict to be JSON-ified
+        reason = {'message': reason}
+    resp.headers['X-WOPI-LockFailureReason'] = reason['message']
+    resp.data = json.dumps(reason)
 
     session = flask.request.headers.get('X-WOPI-SessionId')
     if session and retrievedlock != 'External' and session not in srv.conflictsessions['pending']:
         srv.conflictsessions['pending'][session] = {'time': time.asctime(), 'held': retrievedlock}
-    savetime = st.getxattr(endpoint, filename, user, LASTSAVETIMEKEY)
     if savetime:
-        savetime = int(savetime)
+        fileage = '%1.1f' % (time.time() - int(savetime))
     else:
-        savetime = 0
+        fileage = 'NA'
     log.warning('msg="Returning conflict" lockop="%s" user="%s" filename="%s" token="%s" sessionId="%s" lock="%s" '
-                'oldlock="%s" retrievedlock="%s" fileage="%1.1f" reason="%s"' %
+                'oldlock="%s" retrievedlock="%s" fileage="%s" reason="%s"' %
                 (operation.title(), user, filename, flask.request.args['access_token'][-20:],
-                 session, lock, oldlock, retrievedlock, time.time() - savetime,
+                 session, lock, oldlock, retrievedlock, fileage,
                  (reason['message'] if reason else 'NA')))
     return resp
 
@@ -473,7 +510,7 @@ def storeAfterConflict(acctok, retrievedlock, lock, reason):
 
     # use a CONFLICT response as it is better handled by the app to signal the issue to the user
     return makeConflictResponse('PUTFILE', acctok['userid'], retrievedlock, lock, 'NA',
-                                acctok['endpoint'], acctok['filename'], reason)
+                                acctok['filename'], reason)
 
 
 def storeForRecovery(content, username, filename, acctokforlog, exception):

@@ -75,7 +75,7 @@ class Wopi:
     log = utils.JsonLogger(app.logger)
     openfiles = {}
     # sets of sessions for which a lock conflict is outstanding or resolved
-    conflictsessions = {'pending': {}, 'resolved': {}}
+    conflictsessions = {'pending': {}, 'resolved': {}, 'tookover': {}}
 
     @classmethod
     def init(cls):
@@ -281,6 +281,7 @@ def iopOpenInApp():
     - string appurl: the URL of the end-user application
     - string appviewurl (optional): the URL of the end-user application in view mode when different (defaults to appurl)
     - string appinturl (optional): the internal URL of the end-user application (applicable with containerized deployments)
+    - string forcelock (optional): if present, will force the lock when possible to work around MS Office issues
     Returns: a JSON response as follows:
     {
       "app-url" : "<URL of the target application with query parameters>",
@@ -321,6 +322,7 @@ def iopOpenInApp():
     appname = url_unquote_plus(req.args.get('appname', ''))
     appurl = url_unquote_plus(req.args.get('appurl', '')).strip('/')
     appviewurl = url_unquote_plus(req.args.get('appviewurl', appurl)).strip('/')
+    forcelock = req.args.get('forcelock', False)
     if not appname or not appurl:
         Wopi.log.warning('msg="iopOpenInApp: app-related arguments must be provided" client="%s"' % req.remote_addr)
         return 'Missing appname or appurl arguments', http.client.BAD_REQUEST
@@ -332,7 +334,7 @@ def iopOpenInApp():
             # in this case we override the wopiuser with the resolved uid:gid
             wopiuser = userid
         inode, acctok, vm = utils.generateAccessToken(userid, fileid, viewmode, (username, wopiuser), folderurl, endpoint,
-                                                      (appname, appurl, appviewurl))
+                                                      (appname, appurl, appviewurl), forcelock=forcelock)
     except IOError as e:
         Wopi.log.info('msg="iopOpenInApp: remote error on generating token" client="%s" user="%s" '
                       'friendlyname="%s" mode="%s" endpoint="%s" reason="%s"' %
