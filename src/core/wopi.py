@@ -580,14 +580,17 @@ def putFile(fileid, acctok):
     return utils.storeAfterConflict(acctok, 'External', lock, 'The file being edited got moved or overwritten')
 
 
-def putUserInfo(_fileid, reqbody, acctok):
+def putUserInfo(fileid, reqbody, acctok):
     '''Implements the PutUserInfo WOPI call'''
     try:
         statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
         lockmd = st.getlock(acctok['endpoint'], acctok['filename'], acctok['userid'])
         lockmd = (acctok['appname'], utils.encodeLock(lockmd)) if lockmd else None
         st.setxattr(acctok['endpoint'], acctok['filename'], statInfo['ownerid'], utils.USERINFOKEY, reqbody.decode(), lockmd)
+        log.info('msg="PutUserInfo" user="%s" filename="%s" fileid="%s" token="%s"' %
+                 (acctok['userid'][-20:], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
         return 'OK', http.client.OK
     except IOError as e:
-        log.error('msg="PutUserInfo" token="%s" error="%s"' % (flask.request.args['access_token'][-20:], e))
+        log.error('msg="PutUserInfo failed" filename="%s" error="%s" token="%s"' %
+                  (acctok['filename'], e, flask.request.args['access_token'][-20:]))
         return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
