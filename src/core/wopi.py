@@ -13,6 +13,7 @@ import json
 import http.client
 from datetime import datetime
 from urllib.parse import unquote_plus as url_unquote
+from urllib.parse import urlparse
 from more_itertools import peekable
 import flask
 import core.wopiutils as utils
@@ -40,6 +41,9 @@ def checkFileInfo(fileid, acctok):
         hosteurl = srv.config.get('general', 'hostediturl', fallback=None)
         if hosteurl:
             fmd['HostEditUrl'] = utils.generateUrlFromTemplate(hosteurl, acctok)
+            host = urlparse(fmd['HostEditUrl'])
+            fmd['PostMessageOrigin'] = host.scheme + '://' + host.netloc
+            fmd['EditModePostMessage'] = fmd['EditNotificationPostMessage'] = True
         else:
             fmd['HostEditUrl'] = '%s%s%s' % (acctok['appediturl'], '&' if '?' in acctok['appediturl'] else '?', wopiSrc)
         hostvurl = srv.config.get('general', 'hostviewurl', fallback=None)
@@ -50,6 +54,7 @@ def checkFileInfo(fileid, acctok):
         fsurl = srv.config.get('general', 'filesharingurl', fallback=None)
         if fsurl:
             fmd['FileSharingUrl'] = utils.generateUrlFromTemplate(fsurl, acctok)
+            fmd['FileSharingPostMessage'] = True
         furl = acctok['folderurl']
         if furl != '/':
             fmd['BreadcrumbFolderUrl'] = furl
