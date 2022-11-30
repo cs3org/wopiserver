@@ -371,8 +371,11 @@ def unlock(endpoint, filepath, userid, appname, value):
     if not getlock(endpoint, filepath, userid):
         raise IOError(common.EXCL_ERROR)
     log.debug('msg="Invoked unlock" filepath="%s" value="%s"' % (filepath, value))
-    rmxattr(endpoint, filepath, userid, common.LOCKKEY, (appname, None))
-    rmxattr(endpoint, filepath, userid, EOSLOCKKEY, (appname, None))
+    try:
+        rmxattr(endpoint, filepath, userid, common.LOCKKEY, (appname, None))
+    finally:
+        # make sure this is attempted regardless the result of the previous operation
+        rmxattr(endpoint, filepath, userid, EOSLOCKKEY, (appname, None))
 
 
 def readfile(endpoint, filepath, userid, _lockid):
