@@ -262,7 +262,8 @@ def setLock(fileid, reqheaders, acctok):
             if not retrievedLock:
                 retrievedLock, lockHolder = utils.retrieveWopiLock(fileid, op, lock, acctok)
             # validate against either the given lock (RefreshLock case) or the given old lock (UnlockAndRelock case)
-            if retrievedLock and not utils.compareWopiLocks(retrievedLock, (oldLock if oldLock else lock)):
+            if not retrievedLock or not utils.compareWopiLocks(retrievedLock, (oldLock if oldLock else lock)):
+                # in the context of the EXCL_ERROR case, retrievedLock may be None only if the storage is holding a user lock
                 # lock mismatch, the WOPI client is supposed to acknowledge the existing lock to start a collab session,
                 # or deny access to the file in edit mode otherwise
                 evicted = False
