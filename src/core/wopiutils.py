@@ -236,10 +236,10 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
         tokmd['forcelock'] = '1'
     acctok = jwt.encode(tokmd, srv.wopisecret, algorithm='HS256')
     log.info('msg="Access token generated" userid="%s" wopiuser="%s" mode="%s" endpoint="%s" filename="%s" inode="%s" '
-             'mtime="%s" folderurl="%s" appname="%s" expiration="%d" forcelock="%s" token="%s"' %
+             'mtime="%s" folderurl="%s" appname="%s" %s expiration="%d" token="%s"' %
              (userid[-20:], wopiuser if wopiuser != userid else username, viewmode, endpoint,
               statinfo['filepath'], statinfo['inode'], statinfo['mtime'],
-              folderurl, appname, exptime, '1' if forcelock else '0', acctok[-20:]))
+              folderurl, appname, 'forcelock="True"' if forcelock else '', exptime, acctok[-20:]))
     return statinfo['inode'], acctok, viewmode
 
 
@@ -373,7 +373,7 @@ def checkAndEvictLock(user, appname, retrievedlock, lock, endpoint, filename, sa
         # file is being edited, don't evict existing lock
         log.warning('msg="File is actively edited, force-unlock prevented" lockop="Lock" user="%s" '
                     'filename="%s" fileage="%1.1f" token="%s" sessionId="%s"' %
-                    (user, filename, (time.time() - int(savetime)), flask.request.args['access_token'][-20:], session))
+                    (user, filename, (time.time() - savetime), flask.request.args['access_token'][-20:], session))
         return False
     # ok, remove current lock and set new one
     try:
