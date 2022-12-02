@@ -328,15 +328,13 @@ def setlock(endpoint, filepath, userid, appname, value, recurse=False):
         setxattr(endpoint, filepath, userid, EOSLOCKKEY, _geneoslock(appname) + '&mgm.option=c', None)
         setxattr(endpoint, filepath, userid, common.LOCKKEY, common.genrevalock(appname, value), (appname, None))
     except IOError as e:
-        if common.EXCL_ERROR in str(e):
-            # check for pre-existing stale locks (this is now not atomic)
-            if not getlock(endpoint, filepath, userid) and not recurse:
-                setlock(endpoint, filepath, userid, appname, value, recurse=True)
-            else:
-                # the lock is valid
-                raise
+        if common.EXCL_ERROR not in str(e):
+            raise
+        # check for pre-existing stale locks (this is now not atomic)
+        if not getlock(endpoint, filepath, userid) and not recurse:
+            setlock(endpoint, filepath, userid, appname, value, recurse=True)
         else:
-            # we got a different remote error, raise it
+            # the lock is valid
             raise
 
 
@@ -357,7 +355,14 @@ def getlock(endpoint, filepath, userid):
 
 def refreshlock(endpoint, filepath, userid, appname, value, oldvalue=None):
     '''Refresh the lock value as an xattr'''
-    currlock = getlock(endpoint, filepath, userid)
+    try:
+        currlock = getlock(endpoint, filepath, userid)
+    except IOError as e:
+        if 'Unable to parse' in e:
+            # ensure we can set the new lock
+            currlock = {'lock_id': oldvalue}
+        else:
+            raise
     if not currlock or (oldvalue and currlock['lock_id'] != oldvalue):
         raise IOError(common.EXCL_ERROR)
     log.debug('msg="Invoked refreshlock" filepath="%s" value="%s"' % (filepath, value))
