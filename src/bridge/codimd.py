@@ -180,7 +180,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
                                verify=sslverify)
             if res.status_code == http.client.FORBIDDEN:
                 # the file got unlocked because of no activity, yet some user is there: let it go
-                log.warning('msg="Document was being edited in CodiMD, redirecting user" token"%s"' % acctok[-20:])
+                log.warning('msg="Document was being edited in CodiMD, redirecting user" token="%s"' % acctok[-20:])
             elif res.status_code == http.client.REQUEST_ENTITY_TOO_LARGE:
                 log.error('msg="File is too large to be edited in CodiMD" docid="%s" token="%s"' % (docid, acctok[-20:]))
                 raise AppFailure(TOOLARGE)
