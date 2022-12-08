@@ -163,8 +163,8 @@ def relock(wopisrc, acctok, docid, isclose):
     # first get again the file metadata
     res = request(wopisrc, acctok, 'GET')
     if res.status_code != http.client.OK:
-        log.warning('msg="Session expired or file renamed when attempting to relock it" response="%d" token="%s"' %
-                    (res.status_code, acctok[-20:]))
+        log.warning('msg="Session expired or file renamed when attempting to relock it" response="%d" docid="%s" token="%s"' %
+                    (res.status_code, docid, acctok[-20:]))
         raise InvalidLock('Session expired, please refresh this page')
     filemd = res.json()
 
