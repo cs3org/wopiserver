@@ -183,6 +183,8 @@ def setLock(fileid, reqheaders, acctok):
         savetime = st.getxattr(acctok['endpoint'], fn, acctok['userid'], utils.LASTSAVETIMEKEY)
         if savetime and (not savetime.isdigit() or int(savetime) < int(statInfo['mtime'])):
             # we had stale information, discard
+            log.warning('msg="Detected external modification" filename="%s" savetime="%s" mtime="%s" token="%s"' %
+                        (fn, savetime, statInfo['mtime'], flask.request.args['access_token'][-20:]))
             savetime = None
 
     # perform the required checks for the validity of the new lock
@@ -190,6 +192,8 @@ def setLock(fileid, reqheaders, acctok):
         # validateTarget is an extension of the API: a REFRESH_LOCK without previous lock but with a Validate-Target header
         # is allowed, provided that the target file was last saved by WOPI (i.e. savetime is valid) and not overwritten
         # by other external actions (cf. PutFile logic)
+        log.debug('msg="Debug conflict" retrievedlock="%s" validateTarget="%s" savetime="%s" mtime="%s"' %
+                  (retrievedLock, validateTarget, savetime, statInfo['mtime']))
         return utils.makeConflictResponse(op, acctok['userid'], None, lock, oldLock, fn,
                                           'The file was not locked' + (' and got modified' if validateTarget else ''),
                                           savetime=savetime)
@@ -588,7 +592,7 @@ def putFile(fileid, acctok):
 
     # no xattr was there or we got our xattr but mtime is more recent: someone may have updated the file
     # from a different source (e.g. FUSE or SMB mount), therefore force conflict and return failure to the application
-    log.warning('msg="Forcing conflict based on save time" user="%s" filename="%s" savetime="%s" lastmtime="%s" token="%s"' %
+    log.warning('msg="Forcing conflict based on save time" user="%s" filename="%s" savetime="%s" mtime="%s" token="%s"' %
                 (acctok['userid'][-20:], acctok['filename'], savetime, mtime, flask.request.args['access_token'][-20:]))
     return utils.storeAfterConflict(acctok, 'External', lock, 'The file being edited got moved or overwritten')
 
