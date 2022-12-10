@@ -143,7 +143,7 @@ def validateAndLogHeaders(op):
 
     # update bookkeeping of pending sessions
     if op.title() == 'Checkfileinfo' and session in srv.conflictsessions['pending'] and \
-       time.mktime(time.strptime(srv.conflictsessions['pending'][session]['time'])) < time.time() - 300:
+       int(srv.conflictsessions['pending'][session]['time']) < time.time() - 300:
         # a previously conflicted session is still around executing Checkfileinfo after 5 minutes, assume it got resolved
         _resolveSession(session, acctok['filename'])
     return acctok, None
@@ -235,6 +235,8 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
     if forcelock:
         tokmd['forcelock'] = '1'
     acctok = jwt.encode(tokmd, srv.wopisecret, algorithm='HS256')
+    if 'MS 365' in appname:
+        srv.allusers.add(userid)
     log.info('msg="Access token generated" userid="%s" wopiuser="%s" mode="%s" endpoint="%s" filename="%s" inode="%s" '
              'mtime="%s" folderurl="%s" appname="%s" %s expiration="%d" token="%s"' %
              (userid[-20:], wopiuser if wopiuser != userid else username, viewmode, endpoint,
@@ -388,7 +390,11 @@ def checkAndEvictLock(user, appname, retrievedlock, lock, endpoint, filename, sa
             formersession = json.loads(retrievedlock)['S']
         except (TypeError, ValueError, KeyError):
             formersession = retrievedlock
-        srv.conflictsessions['tookover'][session] = {'time': time.asctime(), 'former': formersession}
+        srv.conflictsessions['tookover'][session] = {
+            'time': int(time.time()),
+            'user': user,
+            'former': formersession
+        }
     log.warning('msg="Former session was evicted" lockop="Lock" user="%s" filename="%s" fileage="%1.1f" '
                 'formerlock="%s" token="%s" newsession="%s"' %
                 (user, filename, (time.time() - int(savetime)), retrievedlock,
@@ -409,7 +415,11 @@ def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, filename
 
     session = flask.request.headers.get('X-WOPI-SessionId')
     if session and retrievedlock != 'External' and session not in srv.conflictsessions['pending']:
-        srv.conflictsessions['pending'][session] = {'time': time.asctime(), 'held': retrievedlock}
+        srv.conflictsessions['pending'][session] = {
+            'user': user,
+            'time': int(time.time()),
+            'heldby': retrievedlock
+        }
     if savetime:
         fileage = '%1.1f' % (time.time() - int(savetime))
     else:
@@ -426,8 +436,11 @@ def _resolveSession(session, filename):
     '''Mark a session as resolved and account the given filename in the openfiles map.
     This is only used for bookkeeping, no functionality is associated to those maps'''
     if session in srv.conflictsessions['pending']:
-        srv.conflictsessions['pending'].pop(session)
-        srv.conflictsessions['resolved'][session] = time.asctime()
+        s = srv.conflictsessions['pending'].pop(session)
+        srv.conflictsessions['resolved'][session] = {
+            'user': s['user'],
+            'restime': int(time.time() - int(s['time']))
+        }
     # keep some accounting of the open files
     if filename not in srv.openfiles:
         srv.openfiles[filename] = (time.asctime(), set())

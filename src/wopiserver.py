@@ -75,7 +75,8 @@ class Wopi:
     log = utils.JsonLogger(app.logger)
     openfiles = {}
     # sets of sessions for which a lock conflict is outstanding or resolved
-    conflictsessions = {'pending': {}, 'resolved': {}, 'tookover': {}}
+    conflictsessions = {'pending': {}, 'resolved': {}, 'tookover': {}, 'users': 0}
+    allusers = set()
 
     @classmethod
     def init(cls):
@@ -408,6 +409,7 @@ def iopGetConflicts():
         return UNAUTHORIZED
     # dump the current sets in JSON format
     Wopi.log.info('msg="iopGetConflicts: returning outstanding/resolved conflicted sessions" client="%s"' % req.remote_addr)
+    Wopi.conflictsessions['users'] = len(Wopi.allusers)
     return flask.Response(json.dumps(Wopi.conflictsessions), mimetype='application/json')
 
 
