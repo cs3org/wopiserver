@@ -1,8 +1,8 @@
-name: "CodeQL"
+name: CodeQL
 
 on:
   push:
-    branches: [ "master", "aarnet", "cernbox", "collaboratest", "eoslock", "nginx", "oolock-autoexpire", "ooracefix", "open-for-iop", "perma-inode", "python3", "snyk-fix-0d459d1e2b96d3ef1c5a96800328793e", "snyk-fix-af3411a9b6ac485b96ed2d8f434e9d97", "syslog", "tus-uploads", "wopi4", "xroot-cs9" ]
+    branches: [ "master", "cernbox" ]
   pull_request:
     branches: [ "master" ]
   schedule:

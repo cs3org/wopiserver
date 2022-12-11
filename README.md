@@ -1,17 +1,18 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
- [![Gitter chat](https://badges.gitter.im/cs3org/wopiserver.svg)](https://gitter.im/cs3org/wopiserver) [![Build Status](https://drone.cernbox.cern.ch/api/badges/cs3org/wopiserver/status.svg)](https://drone.cernbox.cern.ch/cs3org/wopiserver)
+ [![Gitter chat](https://badges.gitter.im/cs3org/wopiserver.svg)](https://gitter.im/cs3org/wopiserver)
+ [![Build Status](https://github.com/cs3org/wopiserver/actions/workflows/releases.yml/badge.svg)](https://github.com/cs3org/wopiserver/actions)
  [![Codacy Badge](https://app.codacy.com/project/badge/Grade/e4e7c46c39b04bddbf63ade4cacdcc7d)](https://www.codacy.com/gh/cs3org/wopiserver/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=cs3org/wopiserver&amp;utm_campaign=Badge_Grade)
  [![codecov](https://codecov.io/gh/cs3org/wopiserver/branch/master/graph/badge.svg)](https://codecov.io/gh/cs3org/wopiserver)
 ========
 
 # WOPI Server
 
-This service is part of the ScienceMesh Interoperability Platform (IOP) and implements a vendor-neutral application gateway compatible with the Web-application Open Platform Interface ([WOPI](https://docs.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/online)) specifications.
+This service is part of the ScienceMesh Interoperability Platform ([IOP](https://developer.sciencemesh.io)) and implements a vendor-neutral application gateway compatible with the Web-application Open Platform Interface ([WOPI](https://docs.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/online)) specifications.
 
 It enables ScienceMesh EFSS storages to integrate Office Online platforms including Microsoft Office Online and Collabora Online. In addition it implements a [bridge](src/bridge/readme.md) module with dedicated extensions to support apps like CodiMD and Etherpad.
 
 Author: Giuseppe Lo Presti (@glpatcern) <br/>
-Contributors:
+Contributors (oldest contributions first):
 - Michael DSilva (@madsi1m)
 - Lovisa Lugnegaard (@LovisaLugnegard)
 - Samuel Alfageme (@SamuAlfageme)
