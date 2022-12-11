@@ -188,12 +188,10 @@ def setLock(fileid, reqheaders, acctok):
             savetime = None
 
     # perform the required checks for the validity of the new lock
-    if op == 'REFRESH_LOCK' and not retrievedLock and (not validateTarget or savetime):
+    if op == 'REFRESH_LOCK' and not retrievedLock and (not validateTarget or not savetime):
         # validateTarget is an extension of the API: a REFRESH_LOCK without previous lock but with a Validate-Target header
         # is allowed, provided that the target file was last saved by WOPI (i.e. savetime is valid) and not overwritten
         # by other external actions (cf. PutFile logic)
-        log.debug('msg="Debug conflict" retrievedlock="%s" validateTarget="%s" savetime="%s" mtime="%s"' %
-                  (retrievedLock, validateTarget, savetime, statInfo['mtime']))
         return utils.makeConflictResponse(op, acctok['userid'], None, lock, oldLock, fn,
                                           'The file was not locked' + (' and got modified' if validateTarget else ''),
                                           savetime=savetime)
