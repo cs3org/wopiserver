@@ -568,8 +568,7 @@ def cboxOpen_deprecated():
         if ruid == 0 or rgid == 0:
             raise ValueError
     except ValueError:
-        Wopi.log.warning('msg="cboxOpen: invalid or missing user/token in request" client="%s" user="%s"' %
-                         (req.remote_addr, userid))
+        Wopi.log.warning('msg="cboxOpen: invalid or missing user/token in request" client="%s"' % req.remote_addr)
         return UNAUTHORIZED
     filename = url_unquote_plus(req.args.get('filename', ''))
     if filename == '':
