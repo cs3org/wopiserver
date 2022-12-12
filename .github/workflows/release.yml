@@ -10,9 +10,9 @@ jobs:
     strategy:
       matrix:
         include:
-        - tag: wopiserver:${{ github.ref_type }}
+        - tag: wopiserver:${{ github.ref_name }}
           file: wopiserver.Dockerfile
-        - tag: wopiserver:${{ github.ref_type }}-xrootd
+        - tag: wopiserver:${{ github.ref_name }}-xrootd
           file: wopiserver-xrootd.Dockerfile
 
     steps:
