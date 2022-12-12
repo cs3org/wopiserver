@@ -52,8 +52,6 @@ def init(inconfig, inlog):
 def _getxrdfor(endpoint):
     '''Look up the xrootd client for the given endpoint, create it if missing.
     Supports "default" for the defaultstorage endpoint.'''
-    global xrdfs             # pylint: disable=global-statement
-    global defaultstorage    # pylint: disable=global-statement
     if endpointoverride:
         endpoint = endpointoverride
     if endpoint == 'default':
