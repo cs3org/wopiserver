@@ -339,8 +339,11 @@ def unlock(fileid, reqheaders, acctok):
         del srv.openfiles[acctok['filename']]
         session = flask.request.headers.get('X-WOPI-SessionId')
         if session in srv.conflictsessions['pending']:
-            srv.conflictsessions['pending'].pop(session)
-            srv.conflictsessions['resolved'][session] = time.asctime()
+            s = srv.conflictsessions['pending'].pop(session)
+            srv.conflictsessions['resolved'][session] = {
+                'user': s['user'],
+                'restime': int(time.time() - int(s['time']))
+            }
     except KeyError:
         # already removed?
         pass
