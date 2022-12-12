@@ -356,7 +356,7 @@ def refreshlock(endpoint, filepath, userid, appname, value, oldvalue=None):
     try:
         currlock = getlock(endpoint, filepath, userid)
     except IOError as e:
-        if 'Unable to parse' in e:
+        if 'Unable to parse' in str(e):
             # ensure we can set the new lock
             currlock = {'lock_id': oldvalue}
         else:
