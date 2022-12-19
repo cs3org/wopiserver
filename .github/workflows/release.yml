@@ -30,6 +30,8 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Build and push ${{ matrix.tag }}
         uses: docker/build-push-action@v3
+        env:
+          VERSION: ${{ github.ref_name }}
         with:
           context: .
           push: true
