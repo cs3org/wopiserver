@@ -67,11 +67,16 @@ def _apicall(method, params, data=None, acctok=None, raiseonnonzerocode=True):
 
 def getredirecturl(viewmode, wopisrc, acctok, docid, _filename, displayname):
     '''Return a valid URL to the app for the given WOPI context'''
+    if viewmode in (utils.ViewMode.READ_ONLY, utils.ViewMode.VIEW_ONLY):
+        # for read-only mode generate a read-only link
+        res = _apicall('getReadOnlyID', {'padID': docid}, acctok=acctok)
+        return appexturl + '/p/%s?userName=%s' % (res['data']['readOnlyID'], urlparse.quote_plus(displayname))
+
     # pass to Etherpad the required metadata for the save webhook
     try:
         res = requests.post(appurl + '/setEFSSMetadata',
-                            params={'padID': docid, 'wopiSrc': urlparse.quote_plus(wopisrc), 'accessToken': acctok,
-                                    'apikey': apikey},
+                            params={'padID': docid, 'wopiSrc': urlparse.quote_plus(wopisrc),
+                                    'accessToken': acctok, 'apikey': apikey},
                             verify=sslverify)
         if res.status_code != http.client.OK or res.json()['code'] != 0:
             log.error('msg="Failed to call Etherpad" method="setEFSSMetadata" token="%s" response="%d: %s"' %
@@ -82,11 +87,7 @@ def getredirecturl(viewmode, wopisrc, acctok, docid, _filename, displayname):
         log.error('msg="Exception raised attempting to connect to Etherpad" method="setEFSSMetadata" exception="%s"' % e)
         raise AppFailure
 
-    if viewmode in (utils.ViewMode.READ_ONLY, utils.ViewMode.VIEW_ONLY):
-        # for read-only mode generate a read-only link
-        res = _apicall('getReadOnlyID', {'padID': docid}, acctok=acctok)
-        return appexturl + '/p/%s?userName=%s' % (res['data']['readOnlyID'], urlparse.quote_plus(displayname))
-    # return the URL to the pad (TODO if viewmode is PREVIEW)
+    # return the URL to the pad for editing (a PREVIEW viewmode is not supported)
     return appexturl + '/p/%s?userName=%s' % (docid, urlparse.quote_plus(displayname))
 
 
