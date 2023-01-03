@@ -75,7 +75,7 @@ class Wopi:
     log = utils.JsonLogger(app.logger)
     openfiles = {}
     # sets of sessions for which a lock conflict is outstanding or resolved
-    conflictsessions = {'pending': {}, 'resolved': {}, 'tookover': {}, 'users': 0}
+    conflictsessions = {'pending': {}, 'resolved': {}, 'tookover': {}, 'failedtotakeover': {}, 'users': 0}
     allusers = set()
 
     @classmethod

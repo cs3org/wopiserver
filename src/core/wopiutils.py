@@ -363,7 +363,7 @@ def compareWopiLocks(lock1, lock2):
     return False
 
 
-def checkAndEvictLock(user, appname, retrievedlock, lock, endpoint, filename, savetime):
+def checkAndEvictLock(user, appname, retrievedlock, oldlock, lock, endpoint, filename, savetime):
     '''Checks if the current lock can be evicted to overcome issue with Microsoft 365 cloud'''
     evictlocktime = srv.config.get('general', 'evictlocktime', fallback='')
     try:
@@ -373,9 +373,15 @@ def checkAndEvictLock(user, appname, retrievedlock, lock, endpoint, filename, sa
     session = flask.request.headers.get('X-WOPI-SessionId')
     if savetime > time.time() - evictlocktime:
         # file is being edited, don't evict existing lock
-        log.warning('msg="File is actively edited, force-unlock prevented" lockop="Lock" user="%s" '
+        log.warning('msg="File is actively edited, force-unlock prevented" lockop="%s" user="%s" '
                     'filename="%s" fileage="%1.1f" token="%s" sessionId="%s"' %
-                    (user, filename, (time.time() - savetime), flask.request.args['access_token'][-20:], session))
+                    (('UnlockAndRelock' if oldlock else 'Lock'), user, filename, (time.time() - int(savetime)),
+                     flask.request.args['access_token'][-20:], session))
+        if session:
+            srv.conflictsessions['failedtotakeover'][session] = {
+                'time': int(time.time()),
+                'user': user
+            }
         return False
     # ok, remove current lock and set new one
     try:
@@ -395,10 +401,10 @@ def checkAndEvictLock(user, appname, retrievedlock, lock, endpoint, filename, sa
             'user': user,
             'former': formersession
         }
-    log.warning('msg="Former session was evicted" lockop="Lock" user="%s" filename="%s" fileage="%1.1f" '
+    log.warning('msg="Former session was evicted" lockop="%s" user="%s" filename="%s" fileage="%1.1f" '
                 'formerlock="%s" token="%s" newsession="%s"' %
-                (user, filename, (time.time() - int(savetime)), retrievedlock,
-                 flask.request.args['access_token'][-20:], session))
+                (('UnlockAndRelock' if oldlock else 'Lock'), user, filename, (time.time() - int(savetime)),
+                 retrievedlock, flask.request.args['access_token'][-20:], session))
     return True
 
 
@@ -426,8 +432,8 @@ def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, filename
         fileage = 'NA'
     log.warning('msg="Returning conflict" lockop="%s" user="%s" filename="%s" token="%s" sessionId="%s" lock="%s" '
                 'oldlock="%s" retrievedlock="%s" fileage="%s" reason="%s"' %
-                (operation.title(), user, filename, flask.request.args['access_token'][-20:],
-                 session, lock, oldlock, retrievedlock, fileage,
+                (('UnlockAndRelock' if oldlock else operation.title()), user, filename,
+                 flask.request.args['access_token'][-20:], session, lock, oldlock, retrievedlock, fileage,
                  (reason['message'] if reason else 'NA')))
     return resp
 

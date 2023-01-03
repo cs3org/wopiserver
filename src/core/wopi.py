@@ -263,16 +263,16 @@ def setLock(fileid, reqheaders, acctok):
             # get the lock that was set
             if not retrievedLock:
                 retrievedLock, lockHolder = utils.retrieveWopiLock(fileid, op, lock, acctok)
-            # validate against either the given lock (RefreshLock case) or the given old lock (UnlockAndRelock case)
+            # validate against either the given lock (RefreshLock case) or the given old lock (UnlockAndRelock case);
+            # in the context of the EXCL_ERROR case, retrievedLock may be None only if the storage is holding a user lock
             if not retrievedLock or not utils.compareWopiLocks(retrievedLock, (oldLock if oldLock else lock)):
-                # in the context of the EXCL_ERROR case, retrievedLock may be None only if the storage is holding a user lock
                 # lock mismatch, the WOPI client is supposed to acknowledge the existing lock to start a collab session,
                 # or deny access to the file in edit mode otherwise
                 evicted = False
                 if 'forcelock' in acctok and retrievedLock != 'External':
                     # here we try to evict the existing lock, and if possible we let the user go:
                     # this is to work around an issue with the Microsoft cloud!
-                    evicted = utils.checkAndEvictLock(acctok['userid'], acctok['appname'], retrievedLock, lock,
+                    evicted = utils.checkAndEvictLock(acctok['userid'], acctok['appname'], retrievedLock, oldLock, lock,
                                                       acctok['endpoint'], fn, int(statInfo['mtime']))
                 if evicted:
                     return utils.makeLockSuccessResponse(op, acctok, lock, 'v%s' % statInfo['etag'])
