@@ -65,7 +65,7 @@ def _apicall(method, params, data=None, acctok=None, raiseonnonzerocode=True):
     return res
 
 
-def getredirecturl(viewmode, wopisrc, acctok, docid, _filename, displayname):
+def getredirecturl(viewmode, wopisrc, acctok, docid, _filename, displayname, _revatok):
     '''Return a valid URL to the app for the given WOPI context'''
     if viewmode in (utils.ViewMode.READ_ONLY, utils.ViewMode.VIEW_ONLY):
         # for read-only mode generate a read-only link

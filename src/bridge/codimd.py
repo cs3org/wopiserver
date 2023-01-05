@@ -53,7 +53,7 @@ def init(_appurl, _appinturl, _apikey):
         raise AppFailure
 
 
-def getredirecturl(viewmode, wopisrc, acctok, docid, filename, displayname, revatok=None):
+def getredirecturl(viewmode, wopisrc, acctok, docid, filename, displayname, revatok):
     '''Return a valid URL to the app for the given WOPI context'''
     if viewmode in (utils.ViewMode.READ_WRITE, utils.ViewMode.PREVIEW):
         mode = 'view' if viewmode == utils.ViewMode.PREVIEW else 'both'
