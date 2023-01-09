@@ -124,15 +124,15 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args, app='wopi'):
                 msg = res[1][res[1].find('=') + 1:].strip('\n')
                 if common.ENOENT_MSG.lower() in msg or 'unable to get attribute' in msg or rc == '2':
                     log.info('msg="Invoked cmd on non-existing entity" cmd="%s" subcmd="%s" args="%s" result="%s" rc="%s"' %
-                             (cmd, subcmd, args, msg.replace('error:', ''), rc.strip('\00')))
+                             (cmd, subcmd, args, msg.replace('error:', '').strip(), rc.strip('\00')))
                     raise IOError(common.ENOENT_MSG)
                 if EXCL_XATTR_MSG in msg:
                     log.info('msg="Invoked setxattr on an already locked entity" args="%s" result="%s" rc="%s"' %
-                             (args, msg.replace('error:', ''), rc.strip('\00')))
+                             (args, msg.replace('error:', '').strip(), rc.strip('\00')))
                     raise IOError(common.EXCL_ERROR)
                 if LOCK_MISMATCH_MSG or FOREIGN_XATTR_MSG in msg:
                     log.info('msg="Mismatched lock" cmd="%s" subcmd="%s" args="%s" app="%s" result="%s" rc="%s"' %
-                             (cmd, subcmd, args, app, msg.replace('error:', ''), rc.strip('\00')))
+                             (cmd, subcmd, args, app, msg.replace('error:', '').strip(), rc.strip('\00')))
                     raise IOError(common.EXCL_ERROR)
                 # anything else (including permission errors) are logged as errors
                 log.error('msg="Error with xroot" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' %
