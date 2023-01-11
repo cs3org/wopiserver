@@ -24,8 +24,8 @@ import core.wopiutils as utils
 # The supported plugins integrated with the WOPI Bridge extensions
 BRIDGE_EXT_PLUGINS = {'md': 'codimd', 'txt': 'codimd', 'zmd': 'codimd', 'epd': 'etherpad', 'zep': 'etherpad'}
 
-# The header that bridged apps are expected to send to the save endpoint
-BRIDGED_APP_HEADER = 'X-Efss-Bridged-App'
+# A header that bridged apps MUST send to the save endpoint to identify themselves
+BRIDGED_APPNAME_HEADER = 'X-Efss-Bridged-App'
 
 # a standard message to be displayed by the app when some content might be lost: this would only
 # appear in case of uncaught exceptions or bugs handling the webhook callbacks
@@ -72,6 +72,17 @@ class WB:
         cls.hashsecret = secret
         cls.log = wopic.log = log
         wopic.sslverify = cls.sslverify
+        # now look for and load plugins for supported apps if configured
+        for app in BRIDGE_EXT_PLUGINS.values():
+            url = config.get('general', f'{app}url', fallback=None)
+            if url:
+                inturl = config.get('general', f'{app}inturl', fallback=None)
+                try:
+                    with open(f'/var/run/secrets/{app}_apikey', encoding='utf-8') as f:
+                        apikey = f.readline().strip('\n')
+                except FileNotFoundError:
+                    apikey = None
+                cls.loadplugin(app, url, inturl, apikey)
 
     @classmethod
     def loadplugin(cls, appname, appurl, appinturl, apikey):
@@ -143,11 +154,16 @@ def appopen(wopisrc, acctok, appmd, viewmode, revatok=None):
         # TODO when using the wopiopen.py tool, the access token has to be decoded, to be clarified
         acctok = acctok.decode()
 
-    # load plugin if not done at init time and validate URLs
+    # (re)load plugin and validate URLs
     appname, appurl, appinturl, apikey = appmd
     try:
         WB.loadplugin(appname, appurl, appinturl, apikey)
+        appname = _validateappname(appname)
+        app = WB.plugins[appname]
+        WB.log.debug('msg="BridgeOpen: processing supported app" appname="%s" plugin="%s"' % (appname, app))
     except ValueError:
+        WB.log.warning('msg="BridgeOpen: appname not supported or missing plugin" appname="%s" token="%s"' %
+                       (appname, acctok[-20:]))
         raise FailedOpen('Failed to load WOPI bridge plugin for %s' % appname, http.client.INTERNAL_SERVER_ERROR)
     except KeyError:
         raise FailedOpen('Bridged app %s already configured with a different appurl' % appname, http.client.NOT_IMPLEMENTED)
@@ -158,12 +174,6 @@ def appopen(wopisrc, acctok, appmd, viewmode, revatok=None):
         WB.log.warning('msg="BridgeOpen: unable to fetch file WOPI metadata" response="%d"' % res.status_code)
         raise FailedOpen('Invalid WOPI context', http.client.NOT_FOUND)
     filemd = res.json()
-    app = WB.plugins.get(appname.lower())
-    if not app:
-        WB.log.warning('msg="BridgeOpen: appname not supported or missing plugin" filename="%s" appname="%s" token="%s"' %
-                       (filemd['BaseFileName'], appname, acctok[-20:]))
-        raise FailedOpen('File type not supported', http.client.BAD_REQUEST)
-    WB.log.debug('msg="BridgeOpen: processing supported app" appname="%s" plugin="%s"' % (appname, app))
 
     try:
         # use the 'UserCanWrite' attribute to decide whether the file is to be opened in read-only mode
@@ -254,7 +264,7 @@ def appsave(docid):
 
         # ensure a save request comes from known/registered applications:
         # this is done via a specific header
-        appname = _validateappname(flask.request.headers[BRIDGED_APP_HEADER])
+        appname = _validateappname(flask.request.headers[BRIDGED_APPNAME_HEADER])
         WB.log.info('msg="BridgeSave: requested action" isclose="%s" docid="%s" app="%s" wopisrc="%s" token="%s"' %
                     (isclose, docid, appname, wopisrc, acctok[-20:]))
     except KeyError as e:
@@ -263,7 +273,7 @@ def appsave(docid):
         return wopic.jsonify('Missing metadata, could not save. %s' % RECOVER_MSG), http.client.BAD_REQUEST
     except ValueError:
         WB.log.error('msg="BridgeSave: unknown application" address="%s" appheader="%s" args="%s"' %
-                     (flask.request.remote_addr, flask.request.headers.get(BRIDGED_APP_HEADER), flask.request.args))
+                     (flask.request.remote_addr, flask.request.headers.get(BRIDGED_APPNAME_HEADER), flask.request.args))
         return wopic.jsonify('Unknown application, could not save. %s' % RECOVER_MSG), http.client.BAD_REQUEST
 
     # decide whether to notify the save thread
