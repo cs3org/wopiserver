@@ -238,10 +238,10 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
     if 'MS 365' in appname:
         srv.allusers.add(userid)
     log.info('msg="Access token generated" userid="%s" wopiuser="%s" mode="%s" endpoint="%s" filename="%s" inode="%s" '
-             'mtime="%s" folderurl="%s" appname="%s" %s expiration="%d" token="%s"' %
+             'mtime="%s" folderurl="%s" appname="%s"%s expiration="%d" token="%s"' %
              (userid[-20:], wopiuser if wopiuser != userid else username, viewmode, endpoint,
               statinfo['filepath'], statinfo['inode'], statinfo['mtime'],
-              folderurl, appname, 'forcelock="True"' if forcelock else '', exptime, acctok[-20:]))
+              folderurl, appname, ' forcelock="True"' if forcelock else '', exptime, acctok[-20:]))
     return statinfo['inode'], acctok, viewmode
 
 
