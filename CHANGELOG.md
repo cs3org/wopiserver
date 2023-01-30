@@ -1,5 +1,15 @@
 ## Changelog for the WOPI server
 
+### Mon Jan 30 2023 - v9.4.0
+- Introduced support to forcefully evict valid locks
+  to compensate Microsoft Online mishandling of collaborative
+  sessions. This workaround will stay until a proper fix
+  is implemented following Microsoft CSPP team's advices
+- Improved logging, in particular around lock eviction
+- Bridged apps: moved plugin loading apps out of the deprecated
+  discovery module, and fixed some minor bugs
+- CI: moved release builds to GitHub actions
+
 ### Thu Nov 24 2022 - v9.3.0
 - Introduced heuristic to log which sessions are allowed
   to open a collaborative session and which ones are
