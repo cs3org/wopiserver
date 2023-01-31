@@ -36,4 +36,4 @@ jobs:
           context: .
           push: true
           file: ${{ matrix.file }}
-          tags: ${{ format('{0}/{1}', secrets.DOCKERHUB_ORGANIZATION, matrix.tag) }}
+          tags: ${{ format('{0}/{1}', vars.DOCKERHUB_ORGANIZATION, matrix.tag) }}
