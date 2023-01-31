@@ -424,7 +424,8 @@ def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, filename
         srv.conflictsessions['pending'][session] = {
             'user': user,
             'time': int(time.time()),
-            'heldby': retrievedlock
+            'heldby': retrievedlock,
+            'type': os.path.splitext(filename)[1],
         }
     if savetime:
         fileage = '%1.1f' % (time.time() - int(savetime))
@@ -445,7 +446,8 @@ def _resolveSession(session, filename):
         s = srv.conflictsessions['pending'].pop(session)
         srv.conflictsessions['resolved'][session] = {
             'user': s['user'],
-            'restime': int(time.time() - int(s['time']))
+            'restime': int(time.time() - int(s['time'])),
+            'type': s['type'],
         }
     # keep some accounting of the open files
     if filename not in srv.openfiles:
