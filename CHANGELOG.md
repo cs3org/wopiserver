@@ -1,6 +1,6 @@
 ## Changelog for the WOPI server
 
-### Mon Jan 30 2023 - v9.4.0
+### Tue Jan 31 2023 - v9.4.0
 - Introduced support to forcefully evict valid locks
   to compensate Microsoft Online mishandling of collaborative
   sessions. This workaround will stay until a proper fix
