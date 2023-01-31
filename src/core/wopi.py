@@ -256,7 +256,7 @@ def setLock(fileid, reqheaders, acctok):
             log.warning('msg="Unable to set lastwritetime xattr" lockop="%s" user="%s" filename="%s" token="%s" reason="%s"' %
                         (op.title(), acctok['userid'][-20:], fn, flask.request.args['access_token'][-20:], e))
 
-        return utils.makeLockSuccessResponse(op, acctok, lock, 'v%s' % statInfo['etag'])
+        return utils.makeLockSuccessResponse(op, acctok, lock, oldLock, 'v%s' % statInfo['etag'])
 
     except IOError as e:
         if common.EXCL_ERROR in str(e):
@@ -276,7 +276,7 @@ def setLock(fileid, reqheaders, acctok):
                     evicted = utils.checkAndEvictLock(acctok['userid'], acctok['appname'], retrievedLock, oldLock, lock,
                                                       acctok['endpoint'], fn, int(statInfo['mtime']))
                 if evicted:
-                    return utils.makeLockSuccessResponse(op, acctok, lock, 'v%s' % statInfo['etag'])
+                    return utils.makeLockSuccessResponse(op, acctok, lock, oldLock, 'v%s' % statInfo['etag'])
                 else:
                     return utils.makeConflictResponse(op, acctok['userid'], retrievedLock, lock, oldLock, fn,
                                                       'The file is locked by %s' %
@@ -287,7 +287,7 @@ def setLock(fileid, reqheaders, acctok):
             try:
                 st.refreshlock(acctok['endpoint'], fn, acctok['userid'], acctok['appname'],
                                utils.encodeLock(lock), utils.encodeLock(oldLock))
-                return utils.makeLockSuccessResponse(op, acctok, lock, 'v%s' % statInfo['etag'])
+                return utils.makeLockSuccessResponse(op, acctok, lock, oldLock, 'v%s' % statInfo['etag'])
             except IOError as rle:
                 # this is unexpected now
                 log.error('msg="Failed to refresh lock" lockop="%s" filename="%s" token="%s" lock="%s" error="%s"' %

@@ -454,15 +454,17 @@ def _resolveSession(session, filename):
         srv.openfiles[filename][1].add(session)
 
 
-def makeLockSuccessResponse(operation, acctok, lock, version):
+def makeLockSuccessResponse(operation, acctok, lock, oldlock, version):
     '''Generates and logs an HTTP 200 response with appropriate headers for Lock/RefreshLock operations'''
     session = flask.request.headers.get('X-WOPI-SessionId')
     if not session:
         session = acctok['username']
     _resolveSession(session, acctok['filename'])
 
-    log.info('msg="Successfully locked" lockop="%s" filename="%s" token="%s" sessionId="%s" lock="%s" version="%s"' %
-             (operation.title(), acctok['filename'], flask.request.args['access_token'][-20:], session, lock, version))
+    log.info('msg="Successfully locked" lockop="%s" filename="%s" token="%s" sessionId="%s" '
+             'lock="%s" oldlock="%s" version="%s"' %
+             (('UnlockAndRelock' if oldlock else operation.title()), acctok['filename'],
+              flask.request.args['access_token'][-20:], session, lock, oldlock, version))
     resp = flask.Response()
     resp.status_code = http.client.OK
     resp.headers['X-WOPI-ItemVersion'] = version
