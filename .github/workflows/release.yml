@@ -9,7 +9,7 @@ jobs:
     strategy:
       matrix:
         include:
-        - tags: ${{ vars.DOCKERHUB_ORGANIZATION }}/wopiserver:${{ github.ref_name }}
+        - tags: ${{ vars.DOCKERHUB_ORGANIZATION }}/wopiserver:${{ github.ref_name }},${{ vars.DOCKERHUB_ORGANIZATION }}/wopiserver:latest
           file: wopiserver.Dockerfile
         - tags: ${{ vars.DOCKERHUB_ORGANIZATION }}/wopiserver:${{ github.ref_name }}-xrootd
           file: wopiserver-xrootd.Dockerfile
