@@ -20,3 +20,17 @@ jobs:
       tags: ${{ matrix.tags }}
       build-args: VERSION=${{ github.ref_name }}
       push: true
+  release-arm64:
+    strategy:
+      matrix:
+        include:
+        - tags: ${{ vars.DOCKERHUB_ORGANIZATION }}/wopiserver:${{ github.ref_name }}-arm64
+          file: wopiserver-arm64.Dockerfile
+    uses: cs3org/reva/.github/workflows/docker.yml@master
+    secrets: inherit
+    with:
+      file: ${{ matrix.file }}
+      tags: ${{ matrix.tags }}
+      build-args: VERSION=${{ github.ref_name }}
+      push: true
+      platforms: linux/arm64
