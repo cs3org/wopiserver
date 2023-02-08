@@ -1,10 +1,11 @@
 # Dockerfile for WOPI Server
 #
-# Build: make docker or docker-compose -f wopiserver.yaml build --build-arg VERSION=`git describe | sed 's/^v//'` wopiserver
-
-FROM python:3.10-slim-buster
+# Build: make docker or docker-compose -f wopiserver.yaml build --build-arg VERSION=`git describe | sed 's/^v//'` BASEIMAGE=... wopiserver
 
 ARG VERSION=latest
+ARG BASEIMAGE=python:3.11-alpine
+
+FROM $BASEIMAGE
 
 LABEL maintainer="cernbox-admins@cern.ch" \
   org.opencontainers.image.title="The ScienceMesh IOP WOPI server" \
@@ -13,8 +14,12 @@ LABEL maintainer="cernbox-admins@cern.ch" \
 # prerequisites: we explicitly install g++ as it is required by grpcio but missing from its dependencies
 WORKDIR /app
 COPY requirements.txt .
-RUN apt -y install g++ && \
-    pip3 install --upgrade pip setuptools && \
+RUN if [ '$BASEIMAGE' = 'python:3.10-slim-buster' ]; then \
+      apt -y install g++; \
+    else \
+      apk add g++; \
+    fi
+RUN pip3 install --upgrade pip setuptools && \
     pip3 install --no-cache-dir --upgrade -r requirements.txt
 
 # install software

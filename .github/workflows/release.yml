@@ -10,15 +10,22 @@ jobs:
     strategy:
       matrix:
         include:
-        - tags: ${{ vars.DOCKERHUB_ORGANIZATION }}/wopiserver:${{ github.ref_name }},${{ vars.DOCKERHUB_ORGANIZATION }}/wopiserver:latest
-          file: wopiserver.Dockerfile
-        - tags: ${{ vars.DOCKERHUB_ORGANIZATION }}/wopiserver:${{ github.ref_name }}-xrootd
-          file: wopiserver-xrootd.Dockerfile
+        - file: wopiserver.Dockerfile
+          tags: ${{ vars.DOCKERHUB_ORGANIZATION }}/wopiserver:${{ github.ref_name }},${{ vars.DOCKERHUB_ORGANIZATION }}/wopiserver:latest
+          platform: linux/amd64
+          image: python:3.11-alpine
+        - file: wopiserver.Dockerfile
+          tags: ${{ vars.DOCKERHUB_ORGANIZATION }}/wopiserver:${{ github.ref_name }},${{ vars.DOCKERHUB_ORGANIZATION }}/wopiserver:latest
+          platform: linux/arm64
+          image: python:3.10-slim-buster
+        - file: wopiserver-xrootd.Dockerfile
+          tags: ${{ vars.DOCKERHUB_ORGANIZATION }}/wopiserver:${{ github.ref_name }}-xrootd
+          platform: linux/amd64
     uses: cs3org/reva/.github/workflows/docker.yml@master
     secrets: inherit
     with:
       file: ${{ matrix.file }}
       tags: ${{ matrix.tags }}
-      build-args: VERSION=${{ github.ref_name }}
+      build-args: VERSION=${{ github.ref_name }},BASEIMAGE=${{ matrix.image }}
       push: ${{ github.event_name != 'workflow_dispatch' }}
-      platforms: linux/amd64,linux/arm64
+      platforms: ${{ matrix.platform }}
