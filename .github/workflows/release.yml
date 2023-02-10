@@ -44,6 +44,7 @@ jobs:
 #   end of the clone
 
     strategy:
+      fail-fast: false
       matrix:
         include:
         - file: wopiserver.Dockerfile
