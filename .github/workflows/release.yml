@@ -6,7 +6,43 @@ on:
   workflow_dispatch:
 
 jobs:
+# The following is a clone of cs3org/reva/.github/workflows/docker.yml because reusable actions do not (yet) support lists as input types:
+# see https://github.com/community/community/discussions/11692
   release:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3.1.0
+      - name: Set up QEMU
+        if: matrix.platforms != ''
+        uses: docker/setup-qemu-action@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to Docker Hub
+        if: matrix.push
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build ${{ matrix.push && 'and push' || '' }} ${{ matrix.tags }} Docker image
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          tags: ${{ matrix.tags }}
+          push: ${{ matrix.push }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            BASEIMAGE=${{ matrix.image }}
+          platforms: ${{ matrix.platforms }}
+#     - name: Upload ${{ matrix.tags }} Docker image to artifacts
+#       uses: ishworkh/docker-image-artifact-upload@v1
+#       if: ${{ inputs.load }}
+#       with:
+#         image: ${{ inputs.tags }}
+#         retention_days: '1'
+#   end of the clone
+
     strategy:
       matrix:
         include:
@@ -14,18 +50,13 @@ jobs:
           tags: ${{ vars.DOCKERHUB_ORGANIZATION }}/wopiserver:${{ github.ref_name }},${{ vars.DOCKERHUB_ORGANIZATION }}/wopiserver:latest
           platform: linux/amd64
           image: python:3.11-alpine
+          push: ${{ github.event_name != 'workflow_dispatch' }}
         - file: wopiserver.Dockerfile
           tags: ${{ vars.DOCKERHUB_ORGANIZATION }}/wopiserver:${{ github.ref_name }},${{ vars.DOCKERHUB_ORGANIZATION }}/wopiserver:latest
           platform: linux/arm64
           image: python:3.10-slim-buster
+          push: ${{ github.event_name != 'workflow_dispatch' }}
         - file: wopiserver-xrootd.Dockerfile
           tags: ${{ vars.DOCKERHUB_ORGANIZATION }}/wopiserver:${{ github.ref_name }}-xrootd
           platform: linux/amd64
-    uses: cs3org/reva/.github/workflows/docker.yml@master
-    secrets: inherit
-    with:
-      file: ${{ matrix.file }}
-      tags: ${{ matrix.tags }}
-      build-args: VERSION=${{ github.ref_name }},BASEIMAGE=${{ matrix.image }}
-      push: ${{ github.event_name != 'workflow_dispatch' }}
-      platforms: ${{ matrix.platform }}
+          push: ${{ github.event_name != 'workflow_dispatch' }}
