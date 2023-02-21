@@ -57,7 +57,7 @@ def checkFileInfo(fileid, acctok):
             fmd['FileSharingPostMessage'] = True
         furl = acctok['folderurl']
         if furl != '/':
-            fmd['BreadcrumbFolderUrl'] = furl
+            fmd['BreadcrumbFolderUrl'] = furl + '?scrollTo=' + fmd['BaseFileName']
         if acctok['username'] == '':
             fmd['IsAnonymousUser'] = True
             fmd['UserFriendlyName'] = 'Guest ' + utils.randomString(3)
