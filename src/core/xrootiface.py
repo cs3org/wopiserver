@@ -86,10 +86,10 @@ def _geneoslock(appname):
 
 
 def _eosargs(userid, app='wopi', bookingsize=0):
-    '''Assume userid is in the form uid:gid and split it into uid, gid
+    '''Assume userid is in the form username@idp:uid:gid and split it into uid, gid
        plus generate extra EOS-specific arguments for the xroot URL'''
     try:
-        # try to assert that userid must follow a '%d:%d' format
+        # try to assert that userid must follow a '%s:%d:%d' format
         userid = userid.split(':')
         if len(userid) != 2:
             raise ValueError

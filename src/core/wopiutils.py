@@ -237,10 +237,9 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
     acctok = jwt.encode(tokmd, srv.wopisecret, algorithm='HS256')
     if 'MS 365' in appname:
         srv.allusers.add(userid)
-    log.info('msg="Access token generated" userid="%s" wopiuser="%s" mode="%s" endpoint="%s" filename="%s" inode="%s" '
-             'mtime="%s" folderurl="%s" appname="%s"%s expiration="%d" token="%s"' %
-             (userid[-20:], wopiuser if wopiuser != userid else username, viewmode, endpoint,
-              statinfo['filepath'], statinfo['inode'], statinfo['mtime'],
+    log.info('msg="Access token generated" userid="%s" wopiuser="%s" username="%s" mode="%s" endpoint="%s" filename="%s" '
+             'inode="%s" mtime="%s" folderurl="%s" appname="%s"%s expiration="%d" token="%s"' %
+             (userid[-20:], wopiuser, username, viewmode, endpoint, statinfo['filepath'], statinfo['inode'], statinfo['mtime'],
               folderurl, appname, ' forcelock="True"' if forcelock else '', exptime, acctok[-20:]))
     return statinfo['inode'], acctok, viewmode
 
@@ -460,7 +459,7 @@ def makeLockSuccessResponse(operation, acctok, lock, oldlock, version):
     '''Generates and logs an HTTP 200 response with appropriate headers for Lock/RefreshLock operations'''
     session = flask.request.headers.get('X-WOPI-SessionId')
     if not session:
-        session = acctok['username']
+        session = acctok['wopiuser']
     _resolveSession(session, acctok['filename'])
 
     log.info('msg="Successfully locked" lockop="%s" filename="%s" token="%s" sessionId="%s" '
@@ -480,7 +479,7 @@ def storeWopiFile(acctok, retrievedlock, xakey, targetname=''):
         targetname = acctok['filename']
     session = flask.request.headers.get('X-WOPI-SessionId')
     if not session:
-        session = acctok['username']
+        session = acctok['wopiuser']
     _resolveSession(session, targetname)
 
     writeerror = None
@@ -513,8 +512,9 @@ def storeAfterConflict(acctok, retrievedlock, lock, reason):
         if common.ACCESS_ERROR not in str(e):
             dorecovery = e
         else:
-            # let's try the configured conflictpath instead of the current folder
-            newname = srv.conflictpath.replace('user_initial', acctok['username'][0]).replace('username', acctok['username']) \
+            # let's try the configured user's (or owner's) homepath instead of the current folder
+            newname = srv.homepath.replace('user_initial', acctok['wopiuser'][0]). \
+                                   replace('username', acctok['wopiuser'].split('@')[0]) \
                       + os.path.sep + os.path.basename(newname)
             try:
                 storeWopiFile(acctok, retrievedlock, LASTSAVETIMEKEY, newname)
@@ -523,7 +523,7 @@ def storeAfterConflict(acctok, retrievedlock, lock, reason):
                 dorecovery = e
 
     if dorecovery:
-        storeForRecovery(flask.request.get_data(), acctok['username'], newname,
+        storeForRecovery(flask.request.get_data(), acctok['wopiuser'], newname,
                          flask.request.args['access_token'][-20:], dorecovery)
         # conflict file was stored on recovery space, tell user (but reason is advisory...)
         reason += ', please contact support to recover it'
@@ -536,10 +536,10 @@ def storeAfterConflict(acctok, retrievedlock, lock, reason):
                                 acctok['filename'], reason)
 
 
-def storeForRecovery(content, username, filename, acctokforlog, exception):
+def storeForRecovery(content, wopiuser, filename, acctokforlog, exception):
     try:
-        filepath = srv.recoverypath + os.sep + time.strftime('%Y%m%dT%H%M%S') + '_editedby_' + secure_filename(username) \
-                   + '_origat_' + secure_filename(filename)
+        filepath = srv.recoverypath + os.sep + time.strftime('%Y%m%dT%H%M%S') + '_editedby_' \
+                   + secure_filename(wopiuser.split('@')[0]) + '_origat_' + secure_filename(filename)
         with open(filepath, mode='wb') as f:
             written = f.write(content)
         if written != len(content):

@@ -95,7 +95,7 @@ def checkFileInfo(fileid, acctok):
         fmd['SupportsContainers'] = False    # TODO this is all to be implemented
         fmd['SupportsUserInfo'] = True
         uinfo = st.getxattr(acctok['endpoint'], acctok['filename'], statInfo['ownerid'],
-                            utils.USERINFOKEY + '.' + acctok['username'])
+                            utils.USERINFOKEY + '.' + acctok['wopiuser'].split('@')[0])
         if uinfo:
             fmd['UserInfo'] = uinfo
 
@@ -544,7 +544,7 @@ def _createNewFile(fileid, acctok):
                      (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:]))
             return 'OK', http.client.OK
         except IOError as e:
-            utils.storeForRecovery(flask.request.get_data(), acctok['username'], acctok['filename'],
+            utils.storeForRecovery(flask.request.get_data(), acctok['wopiuser'], acctok['filename'],
                                    flask.request.args['access_token'][-20:], e)
             return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
 
@@ -588,7 +588,7 @@ def putFile(fileid, acctok):
             return resp
 
     except IOError as e:
-        utils.storeForRecovery(flask.request.get_data(), acctok['username'], acctok['filename'],
+        utils.storeForRecovery(flask.request.get_data(), acctok['wopiuser'], acctok['filename'],
                                flask.request.args['access_token'][-20:], e)
         return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
 
@@ -606,7 +606,7 @@ def putUserInfo(fileid, reqbody, acctok):
         lockmd = st.getlock(acctok['endpoint'], acctok['filename'], acctok['userid'])
         lockmd = (acctok['appname'], utils.encodeLock(lockmd)) if lockmd else None
         st.setxattr(acctok['endpoint'], acctok['filename'], statInfo['ownerid'],
-                    utils.USERINFOKEY + '.' + acctok['username'], reqbody.decode(), lockmd)
+                    utils.USERINFOKEY + '.' + acctok['wopiuser'].split('@')[0], reqbody.decode(), lockmd)
         log.info('msg="PutUserInfo" user="%s" filename="%s" fileid="%s" token="%s"' %
                  (acctok['userid'][-20:], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
         return 'OK', http.client.OK

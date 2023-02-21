@@ -141,7 +141,8 @@ class Wopi:
                     cls.log.error('msg="Failed to open the provided certificate or key to start in https mode"')
                     raise
             cls.wopiurl = cls.config.get('general', 'wopiurl')
-            cls.conflictpath = cls.config.get('general', 'conflictpath', fallback='/')
+            cls.homepath = cls.config.get('general', 'homepath',
+                                          fallback=cls.config.get('general', 'conflictpath', fallback='/home/username'))
             cls.recoverypath = cls.config.get('io', 'recoverypath', fallback='/var/spool/wopirecovery')
             try:
                 os.makedirs(cls.recoverypath)
@@ -332,8 +333,8 @@ def iopOpenInApp():
         userid = storage.getuseridfromcreds(usertoken, wopiuser)
         if userid != usertoken:
             # this happens in hybrid deployments with xrootd as storage interface:
-            # in this case we override the wopiuser with the resolved uid:gid
-            wopiuser = userid
+            # in this case we decorate the wopiuser with the resolved uid:gid
+            wopiuser += ':' + userid
         inode, acctok, vm = utils.generateAccessToken(userid, fileid, viewmode, (username, wopiuser), folderurl, endpoint,
                                                       (appname, appurl, appviewurl), forcelock=forcelock)
     except IOError as e:
