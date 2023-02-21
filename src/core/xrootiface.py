@@ -123,8 +123,12 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args, app='wopi'):
                 # failure: get info from stderr, log and raise
                 msg = res[1][res[1].find('=') + 1:].strip('\n')
                 if common.ENOENT_MSG.lower() in msg or 'unable to get attribute' in msg or rc == '2':
-                    log.info('msg="Invoked cmd on non-existing entity" cmd="%s" subcmd="%s" args="%s" result="%s" rc="%s"' %
-                             (cmd, subcmd, args, msg.replace('error:', '').strip(), rc.strip('\00')))
+                    if 'attribute' in msg:
+                        log.debug('msg="Missing attribute on file" cmd="%s" subcmd="%s" args="%s" result="%s" rc="%s"' %
+                                  (cmd, subcmd, args, msg.replace('error:', '').strip(), rc.strip('\00')))
+                    else:
+                        log.info('msg="File not found" url="%s" cmd="%s" args="%s" result="%s" rc="%s"' %
+                                 (_geturlfor(endpoint), cmd, args, msg.replace('error:', '').strip(), rc.strip('\00')))
                     raise IOError(common.ENOENT_MSG)
                 if EXCL_XATTR_MSG in msg:
                     log.info('msg="Invoked setxattr on an already locked entity" args="%s" result="%s" rc="%s"' %
