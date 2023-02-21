@@ -373,6 +373,9 @@ def iopDownload():
         acctok = jwt.decode(flask.request.args['access_token'], Wopi.wopisecret, algorithms=['HS256'])
         if acctok['exp'] < time.time():
             raise jwt.exceptions.ExpiredSignatureError
+        Wopi.log.info('msg="iopDownload: returning contents" client="%s" endpoint="%s" filename="%s" token="%s"' %
+                      (flask.request.remote_addr, acctok['endpoint'], acctok['filename'],
+                       flask.request.args['access_token'][-20:]))
         return core.wopi.getFile(0, acctok)   # note that here we exploit the non-dependency from fileid
     except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError, KeyError) as e:
         Wopi.log.info('msg="Expired or malformed token" client="%s" requestedUrl="%s" error="%s" token="%s"' %

@@ -133,8 +133,8 @@ def getFile(_fileid, acctok):
         f = peekable(st.readfile(acctok['endpoint'], acctok['filename'], acctok['userid'], None))
         firstchunk = f.peek()
         if isinstance(firstchunk, IOError):
-            log.error('msg="GetFile: download failed" filename="%s" token="%s" error="%s"' %
-                      (acctok['filename'], flask.request.args['access_token'][-20:], firstchunk))
+            log.error('msg="GetFile: download failed" endpoint="%s" filename="%s" token="%s" error="%s"' %
+                      (acctok['endpoint'], acctok['filename'], flask.request.args['access_token'][-20:], firstchunk))
             return 'Failed to fetch file from storage', http.client.INTERNAL_SERVER_ERROR
         # stat the file to get the current version
         statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
