@@ -103,9 +103,13 @@ def stat(endpoint, fileref, userid, versioninv=1):
         raise IOError('Unexpected type %d' % statInfo.info.type)
 
     inode = common.encodeinode(statInfo.info.id.storage_id, statInfo.info.id.opaque_id)
-    # here we build an hybrid path that can be used to reference the file, as the path is actually just the basename
-    # (and eventually the CS3 APIs should be updated to reflect that): note that as per specs the parent_id MUST be available
-    filepath = statInfo.info.parent_id.opaque_id + '/' + os.path.basename(statInfo.info.path)
+    if statInfo.info.path[0] == '/':
+        # we got an absolute path from Reva, use it
+        filepath = statInfo.info.path
+    else:
+        # we got a relative path (actually, just the basename): build an hybrid path that can be used to reference
+        # the file, using the parent_id that per specs MUST be available
+        filepath = statInfo.info.parent_id.opaque_id + '/' + os.path.basename(statInfo.info.path)
     log.info('msg="Invoked stat" fileref="%s" trace="%s" inode="%s" filepath="%s" elapsedTimems="%.1f"' %
              (fileref, statInfo.status.trace, inode, filepath, (tend-tstart)*1000))
     return {
