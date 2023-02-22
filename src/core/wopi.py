@@ -85,12 +85,11 @@ def checkFileInfo(fileid, acctok):
         fmd['SupportsExtendedLockLength'] = fmd['SupportsGetLock'] = True
         fmd['SupportsUpdate'] = fmd['UserCanWrite'] = fmd['SupportsLocks'] = \
             fmd['SupportsDeleteFile'] = acctok['viewmode'] == utils.ViewMode.READ_WRITE
-        # SaveAs functionality is enabled only for owners and in READ_WRITE mode. Anonymous and federated users
-        # are never owners despite their wopiuser credentials may match the owner's. Federated/external accounts
-        # are given by Reva with their network domain in parenthesis, that's why we match them.
-        notOwner = fmd['OwnerId'] != fmd['UserId'] or fmd['IsAnonymousUser'] or \
-            ('(' in acctok['username'] and acctok['username'][-1] == ')')
-        fmd['UserCanNotWriteRelative'] = acctok['viewmode'] != utils.ViewMode.READ_WRITE or notOwner
+        # SaveAs functionality is disabled for anonymous and federated users when in read-only mode, as they have
+        # no personal space where to save as an alternate location.
+        # Note that single-file r/w shares are optimistically offered a SaveAs option, which may only work for primary users.
+        fmd['UserCanNotWriteRelative'] = acctok['viewmode'] != utils.ViewMode.READ_WRITE \
+                                         and not utils.isPrimaryUser(acctok)
         fmd['SupportsRename'] = fmd['UserCanRename'] = enablerename and (acctok['viewmode'] == utils.ViewMode.READ_WRITE)
         fmd['SupportsContainers'] = False    # TODO this is all to be implemented
         fmd['SupportsUserInfo'] = True
@@ -366,13 +365,19 @@ def putRelative(fileid, reqheaders, acctok):
     # either one xor the other MUST be present; note we can't use `^` as we have a mix of str and NoneType
     if (suggTarget and relTarget) or (not suggTarget and not relTarget):
         return 'Conflicting headers given', http.client.BAD_REQUEST
+    if acctok['viewmode'] != utils.ViewMode.READ_WRITE:
+        # here we must have an authenticated user with no write rights on the current folder: go to the user's homepath
+        targetName = srv.homepath.replace('user_initial', acctok['wopiuser'][0]). \
+                                  replace('username', acctok['wopiuser'].split('@')[0]) + os.path.sep
+    else:
+        targetName = os.path.dirname(acctok['filename'])
     if suggTarget:
         # the suggested target is a UTF7-encoded (!) filename that can be changed to avoid collisions
         suggTarget = suggTarget.encode().decode('utf-7')
         if suggTarget[0] == '.':    # we just have the extension here
-            targetName = os.path.splitext(acctok['filename'])[0] + suggTarget
+            targetName += os.path.basename(os.path.splitext(acctok['filename'])[0]) + suggTarget
         else:
-            targetName = os.path.dirname(acctok['filename']) + os.path.sep + suggTarget
+            targetName += os.path.sep + suggTarget
         # check for existence of the target file and adjust until a non-existing one is obtained
         while True:
             try:
@@ -391,7 +396,7 @@ def putRelative(fileid, reqheaders, acctok):
                 return 'Error with the given target', http.client.INTERNAL_SERVER_ERROR
     else:
         # the relative target is a UTF7-encoded filename to be respected, and that may overwrite an existing file
-        relTarget = os.path.dirname(acctok['filename']) + os.path.sep + relTarget.encode().decode('utf-7')  # make full path
+        relTarget = targetName + os.path.sep + relTarget.encode().decode('utf-7')  # make full path
         try:
             # check for file existence
             statInfo = st.statx(acctok['endpoint'], relTarget, acctok['userid'])
@@ -411,18 +416,29 @@ def putRelative(fileid, reqheaders, acctok):
             # optimistically assume we're clear
             pass
         targetName = relTarget
+
     # either way, we now have a targetName to save the file: attempt to do so
     try:
         utils.storeWopiFile(acctok, None, utils.LASTSAVETIMEKEY, targetName)
-        newstat = st.statx(acctok['endpoint'], targetName, acctok['userid'])
-        _, newfileid = common.decodeinode(newstat['inode'])
     except IOError as e:
-        if str(e) == common.ACCESS_ERROR:
-            # BAD_REQUEST may seem better but the WOPI validator tests explicitly expect NOT_IMPLEMENTED
+        if str(e) != common.ACCESS_ERROR:
+            return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
+        raisenoaccess = True
+        # make an attempt in the user's home if possible
+        if utils.isPrimaryUser(acctok):
+            targetName = srv.homepath.replace('user_initial', acctok['wopiuser'][0]). \
+                                      replace('username', acctok['wopiuser'].split('@')[0]) \
+                         + os.path.sep + os.path.basename(targetName)
+            try:
+                utils.storeWopiFile(acctok, None, utils.LASTSAVETIMEKEY, targetName)
+                raisenoaccess = False
+            except IOError:
+                # at this point give up and return error
+                pass
+        if raisenoaccess:
+            # UNAUTHORIZED may seem better but the WOPI validator tests explicitly expect NOT_IMPLEMENTED
             return 'Unauthorized to perform PutRelative', http.client.NOT_IMPLEMENTED
-        utils.storeForRecovery(flask.request.get_data(), acctok['username'], targetName,
-                               flask.request.args['access_token'][-20:], e)
-        return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
+
     # generate an access token for the new file
     log.info('msg="PutRelative: generating new access token" user="%s" filename="%s" '
              'mode="ViewMode.READ_WRITE" friendlyname="%s"' %
@@ -432,6 +448,7 @@ def putRelative(fileid, reqheaders, acctok):
                                                     acctok['folderurl'], acctok['endpoint'],
                                                     (acctok['appname'], acctok['appediturl'], acctok['appviewurl']))
     # prepare and send the response as JSON
+    _, newfileid = common.decodeinode(inode)
     mdforhosturls = {
         'appname': acctok['appname'],
         'filename': targetName,

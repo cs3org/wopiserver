@@ -173,8 +173,7 @@ class Wopi:
         except (configparser.NoOptionError, OSError, ValueError) as e:
             # any error we get here with the configuration is fatal
             cls.log.fatal('msg="Failed to initialize the service, aborting" error="%s"' % e)
-            print("Failed to initialize the service: %s\n" % e, file=sys.stderr)
-            sys.exit(22)
+            raise
 
     @classmethod
     def refreshconfig(cls):
@@ -481,23 +480,23 @@ def wopiFilesPost(fileid):
     acctokOrMsg, httpcode = utils.validateAndLogHeaders(op)
     if httpcode:
         return acctokOrMsg, httpcode
-    if op not in ('GET_LOCK', 'PUT_USER_INFO') and utils.ViewMode(acctokOrMsg['viewmode']) != utils.ViewMode.READ_WRITE:
-        # protect this call if the WOPI client does not have privileges
+    if op == 'GET_LOCK':
+        return core.wopi.getLock(fileid, headers, acctokOrMsg)
+    if op == 'PUT_USER_INFO':
+        return core.wopi.putUserInfo(fileid,  flask.request.get_data(), acctokOrMsg)
+    if op == 'PUT_RELATIVE':
+        return core.wopi.putRelative(fileid, headers, acctokOrMsg)
+    if utils.ViewMode(acctokOrMsg['viewmode']) != utils.ViewMode.READ_WRITE:
+        # the remaining operations require write privileges
         return 'Attempting to perform a write operation using a read-only token', http.client.UNAUTHORIZED
     if op in ('LOCK', 'REFRESH_LOCK'):
         return core.wopi.setLock(fileid, headers, acctokOrMsg)
-    if op == 'GET_LOCK':
-        return core.wopi.getLock(fileid, headers, acctokOrMsg)
     if op == 'UNLOCK':
         return core.wopi.unlock(fileid, headers, acctokOrMsg)
-    if op == 'PUT_RELATIVE':
-        return core.wopi.putRelative(fileid, headers, acctokOrMsg)
     if op == 'DELETE':
         return core.wopi.deleteFile(fileid, headers, acctokOrMsg)
     if op == 'RENAME_FILE':
         return core.wopi.renameFile(fileid, headers, acctokOrMsg)
-    if op == 'PUT_USER_INFO':
-        return core.wopi.putUserInfo(fileid,  flask.request.get_data(), acctokOrMsg)
     # Any other op is unsupported
     Wopi.log.warning('msg="Unknown/unsupported operation" operation="%s"' % op)
     return 'Not supported operation found in header', http.client.NOT_IMPLEMENTED

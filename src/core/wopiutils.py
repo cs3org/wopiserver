@@ -17,7 +17,7 @@ from string import ascii_lowercase
 from datetime import datetime
 from base64 import b64encode, b64decode
 from binascii import Error as B64Error
-from urllib.parse import quote_plus as url_quote_plus
+from urllib.parse import quote_plus as url_quote_plus, urlparse
 import http.client
 import flask
 import jwt
@@ -32,6 +32,9 @@ USERINFOKEY = 'iop.wopi.userinfo'
 
 # header used by reverse proxies such as traefik to pass the real remote IP address
 REALIPHEADER = 'X-Real-IP'
+
+# the prefix used for public links, cf. reva:pkg/app/provider/wopi/wopi.go
+PUBLINKPREFIX = '/files/link/public'
 
 # convenience references to global entities
 st = None
@@ -190,6 +193,18 @@ def getMicrosoftOfficeLockName(filename):
 def randomString(size):
     '''One liner to get a random string of letters'''
     return ''.join([choice(ascii_lowercase) for _ in range(size)])
+
+
+def isPrimaryUser(acctok):
+    '''Return whether a session belongs to a primary/internal account, in the context of
+    saving a webconflicted file or a SaveAs operation.
+    False means the user is either anonymous or federated/external, which is given by Reva with their
+    network domain in parenthesis, or the context is a public link even if the user is authenticated.
+    TODO in the latter case we should handle operations on behalf of the user with some scoped token,
+    but as for now we impersonate the owner we just consider public links as non-primary users.
+    '''
+    return acctok['username'] != '' and '(' not in acctok['username'] and acctok['username'][-1] != ')' and \
+           urlparse(acctok['appviewurl']).path.find(PUBLINKPREFIX) != 0
 
 
 def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app, forcelock=False):
