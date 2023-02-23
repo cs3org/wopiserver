@@ -40,10 +40,10 @@ def init(inconfig, inlog):
     ctx['cs3gw'] = cs3gw_grpc.GatewayAPIStub(ch)
 
 
-def getuseridfromcreds(token, _wopiuser):
+def getuseridfromcreds(token, wopiuser):
     '''Maps a Reva token and wopiuser to the credentials to be used to access the storage.
-    For the CS3 API case, this is just the token'''
-    return token
+    For the CS3 API case this is the token, and wopiuser is expected to be `username!userid_as_returned_by_stat`'''
+    return token, wopiuser.split('@')[0] + '!' + wopiuser
 
 
 def _getcs3reference(endpoint, fileref):

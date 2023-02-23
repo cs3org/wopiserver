@@ -70,7 +70,7 @@ def init(inconfig, inlog):
 def getuseridfromcreds(_token, _wopiuser):
     '''Maps a Reva token and wopiuser to the credentials to be used to access the storage.
     For the localfs case, this is trivially hardcoded'''
-    return '0:0'
+    return '0:0', 'root!0:0'
 
 
 def stat(_endpoint, filepath, _userid):

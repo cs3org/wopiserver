@@ -156,9 +156,11 @@ def _getfilepath(filepath, encodeamp=False):
 
 def getuseridfromcreds(_token, wopiuser):
     '''Maps a Reva token and wopiuser to the credentials to be used to access the storage.
-    For the xrootd case, we have to resolve the username to uid:gid'''
+    For the xrootd case, we have to resolve the username to uid:gid and return
+    username!uid:gid as wopiuser in order to respect the format `username!userid_as_returned_by_stat`'''
     userid = getpwnam(wopiuser.split('@')[0])    # a wopiuser has the form username@idp
-    return str(userid.pw_uid) + ':' + str(userid.pw_gid)
+    userid = str(userid.pw_uid) + ':' + str(userid.pw_gid)
+    return userid, wopiuser.split('@')[0] + '!' + userid
 
 
 def stat(endpoint, filepath, userid):

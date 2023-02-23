@@ -329,11 +329,7 @@ def iopOpenInApp():
         return 'Missing appname or appurl arguments', http.client.BAD_REQUEST
 
     try:
-        userid = storage.getuseridfromcreds(usertoken, wopiuser)
-        if userid != usertoken:
-            # this happens in hybrid deployments with xrootd as storage interface:
-            # in this case we decorate the wopiuser with the resolved uid:gid
-            wopiuser += ':' + userid
+        userid, wopiuser = storage.getuseridfromcreds(usertoken, wopiuser)
         inode, acctok, vm = utils.generateAccessToken(userid, fileid, viewmode, (username, wopiuser), folderurl, endpoint,
                                                       (appname, appurl, appviewurl), forcelock=forcelock)
     except IOError as e:
@@ -438,7 +434,7 @@ def iopWopiTest():
         return 'Missing arguments', http.client.BAD_REQUEST
     if Wopi.useHttps:
         return 'WOPI validator not supported in https mode', http.client.BAD_REQUEST
-    inode, acctok, _ = utils.generateAccessToken(usertoken, filepath, utils.ViewMode.READ_WRITE, ('test', usertoken),
+    inode, acctok, _ = utils.generateAccessToken(usertoken, filepath, utils.ViewMode.READ_WRITE, ('test', 'test!' + usertoken),
                                                  'http://folderurlfortestonly/', endpoint,
                                                  ('WOPI validator', 'http://fortestonly/', 'http://fortestonly/'))
     Wopi.log.info('msg="iopWopiTest: preparing test via WOPI validator" client="%s"' % req.remote_addr)

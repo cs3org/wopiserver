@@ -78,7 +78,7 @@ def checkFileInfo(fileid, acctok):
         fmd['BreadcrumbBrandName'] = srv.config.get('general', 'brandingname', fallback=None)
         fmd['BreadcrumbBrandUrl'] = srv.config.get('general', 'brandingurl', fallback=None)
         fmd['OwnerId'] = statInfo['ownerid']
-        fmd['UserId'] = acctok['wopiuser']     # typically same as OwnerId; different when accessing shared documents
+        fmd['UserId'] = acctok['wopiuser'].split('!')[-1]     # typically same as OwnerId; different when accessing shared documents
         fmd['Size'] = statInfo['size']
         # note that in ownCloud 10 the version is generated as: `'V' + etag + checksum`
         fmd['Version'] = 'v%s' % statInfo['etag']
@@ -94,7 +94,7 @@ def checkFileInfo(fileid, acctok):
         fmd['SupportsContainers'] = False    # TODO this is all to be implemented
         fmd['SupportsUserInfo'] = True
         uinfo = st.getxattr(acctok['endpoint'], acctok['filename'], statInfo['ownerid'],
-                            utils.USERINFOKEY + '.' + acctok['wopiuser'].split('@')[0])
+                            utils.USERINFOKEY + '.' + acctok['wopiuser'].split('!')[0])
         if uinfo:
             fmd['UserInfo'] = uinfo
 
@@ -368,7 +368,7 @@ def putRelative(fileid, reqheaders, acctok):
     if acctok['viewmode'] != utils.ViewMode.READ_WRITE:
         # here we must have an authenticated user with no write rights on the current folder: go to the user's homepath
         targetName = srv.homepath.replace('user_initial', acctok['wopiuser'][0]). \
-                                  replace('username', acctok['wopiuser'].split('@')[0]) + os.path.sep
+                                  replace('username', acctok['wopiuser'].split('!')[0]) + os.path.sep
     else:
         targetName = os.path.dirname(acctok['filename'])
     if suggTarget:
@@ -427,7 +427,7 @@ def putRelative(fileid, reqheaders, acctok):
         # make an attempt in the user's home if possible
         if utils.isPrimaryUser(acctok):
             targetName = srv.homepath.replace('user_initial', acctok['wopiuser'][0]). \
-                                      replace('username', acctok['wopiuser'].split('@')[0]) \
+                                      replace('username', acctok['wopiuser'].split('!')[0]) \
                          + os.path.sep + os.path.basename(targetName)
             try:
                 utils.storeWopiFile(acctok, None, utils.LASTSAVETIMEKEY, targetName)
@@ -623,7 +623,7 @@ def putUserInfo(fileid, reqbody, acctok):
         lockmd = st.getlock(acctok['endpoint'], acctok['filename'], acctok['userid'])
         lockmd = (acctok['appname'], utils.encodeLock(lockmd)) if lockmd else None
         st.setxattr(acctok['endpoint'], acctok['filename'], statInfo['ownerid'],
-                    utils.USERINFOKEY + '.' + acctok['wopiuser'].split('@')[0], reqbody.decode(), lockmd)
+                    utils.USERINFOKEY + '.' + acctok['wopiuser'].split('!')[0], reqbody.decode(), lockmd)
         log.info('msg="PutUserInfo" user="%s" filename="%s" fileid="%s" token="%s"' %
                  (acctok['userid'][-20:], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
         return 'OK', http.client.OK

@@ -211,7 +211,7 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
     '''Generates an access token for a given file and a given user, and returns a tuple with
     the file's inode and the URL-encoded access token.'''
     appname, appediturl, appviewurl = app
-    username, wopiuser = user
+    friendlyname, wopiuser = user    # wopiuser has the form `username!userid_in_stat_format`
     log.debug('msg="Generating token" userid="%s" fileid="%s" endpoint="%s" app="%s"' %
               (userid[-20:], fileid, endpoint, appname))
     try:
@@ -243,7 +243,7 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
         viewmode = ViewMode.READ_ONLY
     tokmd = {
         'userid': userid, 'wopiuser': wopiuser, 'filename': statinfo['filepath'], 'fileid': fileid,
-        'username': username, 'viewmode': viewmode.value, 'folderurl': folderurl, 'endpoint': endpoint,
+        'username': friendlyname, 'viewmode': viewmode.value, 'folderurl': folderurl, 'endpoint': endpoint,
         'appname': appname, 'appediturl': appediturl, 'appviewurl': appviewurl,
         'exp': exptime, 'iss': 'cs3org:wopiserver:%s' % WOPIVER    # standard claims
     }
@@ -252,9 +252,9 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
     acctok = jwt.encode(tokmd, srv.wopisecret, algorithm='HS256')
     if 'MS 365' in appname:
         srv.allusers.add(userid)
-    log.info('msg="Access token generated" userid="%s" wopiuser="%s" username="%s" mode="%s" endpoint="%s" filename="%s" '
+    log.info('msg="Access token generated" userid="%s" wopiuser="%s" friendlyname="%s" mode="%s" endpoint="%s" filename="%s" '
              'inode="%s" mtime="%s" folderurl="%s" appname="%s"%s expiration="%d" token="%s"' %
-             (userid[-20:], wopiuser, username, viewmode, endpoint, statinfo['filepath'], statinfo['inode'], statinfo['mtime'],
+             (userid[-20:], wopiuser, friendlyname, viewmode, endpoint, statinfo['filepath'], statinfo['inode'], statinfo['mtime'],
               folderurl, appname, ' forcelock="True"' if forcelock else '', exptime, acctok[-20:]))
     return statinfo['inode'], acctok, viewmode
 
@@ -474,7 +474,7 @@ def makeLockSuccessResponse(operation, acctok, lock, oldlock, version):
     '''Generates and logs an HTTP 200 response with appropriate headers for Lock/RefreshLock operations'''
     session = flask.request.headers.get('X-WOPI-SessionId')
     if not session:
-        session = acctok['wopiuser']
+        session = acctok['wopiuser'].split('!')[0]
     _resolveSession(session, acctok['filename'])
 
     log.info('msg="Successfully locked" lockop="%s" filename="%s" token="%s" sessionId="%s" '
@@ -494,7 +494,7 @@ def storeWopiFile(acctok, retrievedlock, xakey, targetname=''):
         targetname = acctok['filename']
     session = flask.request.headers.get('X-WOPI-SessionId')
     if not session:
-        session = acctok['wopiuser']
+        session = acctok['wopiuser'].split('!')[0]
     _resolveSession(session, targetname)
 
     writeerror = None
@@ -529,7 +529,7 @@ def storeAfterConflict(acctok, retrievedlock, lock, reason):
         else:
             # let's try the configured user's (or owner's) homepath instead of the current folder
             newname = srv.homepath.replace('user_initial', acctok['wopiuser'][0]). \
-                                   replace('username', acctok['wopiuser'].split('@')[0]) \
+                                   replace('username', acctok['wopiuser'].split('!')[0]) \
                       + os.path.sep + os.path.basename(newname)
             try:
                 storeWopiFile(acctok, retrievedlock, LASTSAVETIMEKEY, newname)
@@ -554,7 +554,7 @@ def storeAfterConflict(acctok, retrievedlock, lock, reason):
 def storeForRecovery(content, wopiuser, filename, acctokforlog, exception):
     try:
         filepath = srv.recoverypath + os.sep + time.strftime('%Y%m%dT%H%M%S') + '_editedby_' \
-                   + secure_filename(wopiuser.split('@')[0]) + '_origat_' + secure_filename(filename)
+                   + secure_filename(wopiuser.split('!')[0]) + '_origat_' + secure_filename(filename)
         with open(filepath, mode='wb') as f:
             written = f.write(content)
         if written != len(content):
