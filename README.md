@@ -25,8 +25,8 @@ Contributors (oldest contributions first):
 - Michael Barz (@micbar)
 - Robert Kaussow (@xoxys)
 - Javier Ferrer (@javfg)
-  Vasco Guita (@vascoguita)
-  Tomas Zaluckij (@Tomaszal)
+- Vasco Guita (@vascoguita)
+- Tomas Zaluckij (@Tomaszal)
 
 Initial revision: December 2016 <br/>
 First production version for CERNBox: September 2017 (presented at [oCCon17](https://occon17.owncloud.org) - [slides](https://www.slideshare.net/giuseppelopresti/collaborative-editing-and-more-in-cernbox))<br/>
@@ -72,7 +72,8 @@ To run the tests, either run `pytest` if available in your system, or execute th
 
 ### Test using the Microsoft WOPI validator test suite
 
-This is work in progress. Refer to [these notes](test/wopi-validator.md).
+Refer to [these notes](test/wopi-validator.md). Microsoft also provides a graphical version of the test suite
+as part of their Office 365 offer, which is also supported via the Reva open-in-app workflow.
 
 
 ## Run the WOPI server locally for development purposes
@@ -89,8 +90,10 @@ This is work in progress. Refer to [these notes](test/wopi-validator.md).
 ### Test the open-in-app workflow on the local WOPI server
 
 Once the WOPI server runs on top of local storage, the `tools/wopiopen.py` script can be used
-to test the open-in-app workflow. For that, assuming you have e.g. CodiMD deployed in your (docker-compose) cluster:
+to test the open-in-app workflow.
+For that, assuming you have e.g. CodiMD deployed in your (docker-compose) cluster:
 
 1. Create a `test.md` file in your local storage folder, e.g. `/var/wopi_local_storage`
 2. From the WOPI server folder, execute `tools/wopiopen.py -a CodiMD -i "internal_CodiMD_URL" -u "user_visible_CodiMD_URL" -k CodiMD_API_Key test.md`
 3. If everything was setup correctly, you'll get a JSON response including an `app-url`. Open it in a browser to access the file. Otherwise, the tool prints the response from the WOPI server and the logs should help troubleshooting the problem.
+
