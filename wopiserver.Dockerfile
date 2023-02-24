@@ -14,13 +14,8 @@ LABEL maintainer="cernbox-admins@cern.ch" \
 # prerequisites: we explicitly install g++ as it is required by grpcio but missing from its dependencies
 WORKDIR /app
 COPY requirements.txt .
-RUN if command -v apk &> /dev/null; then \
-      echo "Using apk"; apk add curl g++; \
-    elif command -v apt &> /dev/null; then \
-      echo "Using apt"; apt -y install g++; \
-    else \
-      echo "This distribution does not provide a supported package manager"; false; \
-    fi
+RUN command -v apk && apk add curl g++ || true
+RUN command -v apt && apt update && apt -y install curl g++ || true
 RUN pip3 install --upgrade pip setuptools && \
     pip3 install --no-cache-dir --upgrade -r requirements.txt
 
