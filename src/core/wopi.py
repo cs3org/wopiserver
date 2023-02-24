@@ -78,7 +78,7 @@ def checkFileInfo(fileid, acctok):
         fmd['BreadcrumbBrandName'] = srv.config.get('general', 'brandingname', fallback=None)
         fmd['BreadcrumbBrandUrl'] = srv.config.get('general', 'brandingurl', fallback=None)
         fmd['OwnerId'] = statInfo['ownerid']
-        fmd['UserId'] = acctok['wopiuser'].split('!')[-1]     # typically same as OwnerId; different when accessing shared documents
+        fmd['UserId'] = acctok['wopiuser'].split('!')[-1]  # typically same as OwnerId; different when accessing shared documents
         fmd['Size'] = statInfo['size']
         # note that in ownCloud 10 the version is generated as: `'V' + etag + checksum`
         fmd['Version'] = 'v%s' % statInfo['etag']
@@ -360,15 +360,18 @@ def putRelative(fileid, reqheaders, acctok):
     overwriteTarget = str(reqheaders.get('X-WOPI-OverwriteRelativeTarget')).upper() == 'TRUE'
     log.info('msg="PutRelative" user="%s" filename="%s" fileid="%s" suggTarget="%s" relTarget="%s" '
              'overwrite="%r" wopitimestamp="%s" token="%s"' %
-             (acctok['userid'], acctok['filename'], fileid, suggTarget, relTarget,
+             (acctok['userid'][-20:], acctok['filename'], fileid, suggTarget, relTarget,
               overwriteTarget, reqheaders.get('X-WOPI-TimeStamp'), flask.request.args['access_token'][-20:]))
     # either one xor the other MUST be present; note we can't use `^` as we have a mix of str and NoneType
     if (suggTarget and relTarget) or (not suggTarget and not relTarget):
         return 'Conflicting headers given', http.client.BAD_REQUEST
-    if acctok['viewmode'] != utils.ViewMode.READ_WRITE:
+    if utils.ViewMode(acctok['viewmode']) != utils.ViewMode.READ_WRITE:
         # here we must have an authenticated user with no write rights on the current folder: go to the user's homepath
         targetName = srv.homepath.replace('user_initial', acctok['wopiuser'][0]). \
                                   replace('username', acctok['wopiuser'].split('!')[0]) + os.path.sep
+        log.info('msg="PutRelative: set homepath as destination" user="%s" viewmode="%s" filename="%s" target="%s" token="%s"' %
+                 (acctok['userid'][-20:], acctok['viewmode'], acctok['filename'], targetName,
+                  flask.request.args['access_token'][-20:]))
     else:
         targetName = os.path.dirname(acctok['filename'])
     if suggTarget:
@@ -390,7 +393,7 @@ def putRelative(fileid, reqheaders, acctok):
                     # OK, the targetName is good to go
                     break
                 # we got another error with this file, fail
-                log.error('msg="PutRelative" user="%s" filename="%s" token="%s" suggTarget="%s" error="%s"' %
+                log.error('msg="Error in PutRelative" user="%s" filename="%s" token="%s" suggTarget="%s" error="%s"' %
                           (acctok['userid'][-20:], targetName, flask.request.args['access_token'][-20:],
                            suggTarget, str(e)))
                 return 'Error with the given target', http.client.INTERNAL_SERVER_ERROR
@@ -429,6 +432,8 @@ def putRelative(fileid, reqheaders, acctok):
             targetName = srv.homepath.replace('user_initial', acctok['wopiuser'][0]). \
                                       replace('username', acctok['wopiuser'].split('!')[0]) \
                          + os.path.sep + os.path.basename(targetName)
+            log.info('msg="PutRelative: set homepath as destination" user="%s" filename="%s" target="%s" token="%s"' %
+                     (acctok['userid'][-20:], acctok['filename'], targetName, flask.request.args['access_token'][-20:]))
             try:
                 utils.storeWopiFile(acctok, None, utils.LASTSAVETIMEKEY, targetName)
                 raisenoaccess = False
