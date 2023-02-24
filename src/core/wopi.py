@@ -93,7 +93,7 @@ def checkFileInfo(fileid, acctok):
         fmd['SupportsRename'] = fmd['UserCanRename'] = enablerename and (acctok['viewmode'] == utils.ViewMode.READ_WRITE)
         fmd['SupportsContainers'] = False    # TODO this is all to be implemented
         fmd['SupportsUserInfo'] = True
-        uinfo = st.getxattr(acctok['endpoint'], acctok['filename'], statInfo['ownerid'],
+        uinfo = st.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'],
                             utils.USERINFOKEY + '.' + acctok['wopiuser'].split('!')[0])
         if uinfo:
             fmd['UserInfo'] = uinfo
@@ -624,10 +624,9 @@ def putFile(fileid, acctok):
 def putUserInfo(fileid, reqbody, acctok):
     '''Implements the PutUserInfo WOPI call'''
     try:
-        statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
         lockmd = st.getlock(acctok['endpoint'], acctok['filename'], acctok['userid'])
         lockmd = (acctok['appname'], utils.encodeLock(lockmd)) if lockmd else None
-        st.setxattr(acctok['endpoint'], acctok['filename'], statInfo['ownerid'],
+        st.setxattr(acctok['endpoint'], acctok['filename'], acctok['userid'],
                     utils.USERINFOKEY + '.' + acctok['wopiuser'].split('!')[0], reqbody.decode(), lockmd)
         log.info('msg="PutUserInfo" user="%s" filename="%s" fileid="%s" token="%s"' %
                  (acctok['userid'][-20:], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
