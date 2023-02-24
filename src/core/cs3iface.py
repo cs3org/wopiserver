@@ -89,15 +89,17 @@ def stat(endpoint, fileref, userid, versioninv=1):
     ref = _getcs3reference(endpoint, fileref)
     statInfo = ctx['cs3gw'].Stat(request=cs3sp.StatRequest(ref=ref), metadata=[('x-access-token', userid)])
     tend = time.time()
-    if statInfo.status.code != cs3code.CODE_OK:
-        log.info('msg="Failed stat" fileref="%s" trace="%s" reason="%s"' %
-                 (fileref, statInfo.status.trace, statInfo.status.message.replace('"', "'")))
-        raise IOError(common.ENOENT_MSG if statInfo.status.code == cs3code.CODE_NOT_FOUND else statInfo.status.message)
 
+    if statInfo.status.code == cs3code.CODE_NOT_FOUND:
+        log.info('msg="File not found" fileref="%s" trace="%s"' % (fileref, statInfo.status.trace))
+        raise IOError(common.ENOENT_MSG)
+    if statInfo.status.code != cs3code.CODE_OK:
+        log.error('msg="Failed stat" fileref="%s" trace="%s" reason="%s"' %
+                  (fileref, statInfo.status.trace, statInfo.status.message.replace('"', "'")))
+        raise IOError(statInfo.status.message)
     if statInfo.info.type == cs3spr.RESOURCE_TYPE_CONTAINER:
         log.info('msg="Invoked stat" fileref="%s" trace="%s" result="ISDIR"' % (fileref, statInfo.status.trace))
         raise IOError('Is a directory')
-
     if statInfo.info.type not in (cs3spr.RESOURCE_TYPE_FILE, cs3spr.RESOURCE_TYPE_SYMLINK):
         log.warning('msg="Invoked stat" fileref="%s" unexpectedtype="%d"' % (fileref, statInfo.info.type))
         raise IOError('Unexpected type %d' % statInfo.info.type)
@@ -154,8 +156,8 @@ def getxattr(endpoint, filepath, userid, key):
         log.debug('msg="Invoked stat for getxattr on missing file" filepath="%s"' % filepath)
         return None
     if statInfo.status.code != cs3code.CODE_OK:
-        log.error('msg="Failed to stat" filepath="%s" trace="%s" key="%s" reason="%s"' %
-                  (filepath, statInfo.status.trace, key, statInfo.status.message.replace('"', "'")))
+        log.error('msg="Failed to stat" filepath="%s" userid="%s" trace="%s" key="%s" reason="%s"' %
+                  (filepath, userid[-20:], statInfo.status.trace, key, statInfo.status.message.replace('"', "'")))
         raise IOError(statInfo.status.message)
     try:
         xattrvalue = statInfo.info.arbitrary_metadata.metadata[key]
@@ -164,8 +166,8 @@ def getxattr(endpoint, filepath, userid, key):
         log.debug('msg="Invoked stat for getxattr" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend - tstart) * 1000))
         return xattrvalue
     except KeyError:
-        log.warning('msg="Empty value or key not found in getxattr" filepath="%s" key="%s" trace="%s" metadata="%s"' %
-                    (filepath, key, statInfo.status.trace, statInfo.info.arbitrary_metadata.metadata))
+        log.info('msg="Empty value or key not found in getxattr" filepath="%s" key="%s" trace="%s" metadata="%s"' %
+                 (filepath, key, statInfo.status.trace, statInfo.info.arbitrary_metadata.metadata))
         return None
 
 
