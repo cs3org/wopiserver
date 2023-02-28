@@ -254,8 +254,8 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
         srv.allusers.add(userid)
     log.info('msg="Access token generated" userid="%s" wopiuser="%s" friendlyname="%s" mode="%s" endpoint="%s" filename="%s" '
              'inode="%s" mtime="%s" folderurl="%s" appname="%s"%s expiration="%d" token="%s"' %
-             (userid[-20:], wopiuser, friendlyname, viewmode, endpoint, statinfo['filepath'], statinfo['inode'], statinfo['mtime'],
-              folderurl, appname, ' forcelock="True"' if forcelock else '', exptime, acctok[-20:]))
+             (userid[-20:], wopiuser, friendlyname, viewmode, endpoint, statinfo['filepath'], statinfo['inode'],
+              statinfo['mtime'], folderurl, appname, ' forcelock="True"' if forcelock else '', exptime, acctok[-20:]))
     return statinfo['inode'], acctok, viewmode
 
 
@@ -530,7 +530,7 @@ def storeAfterConflict(acctok, retrievedlock, lock, reason):
             # let's try the configured user's (or owner's) homepath instead of the current folder
             newname = srv.homepath.replace('user_initial', acctok['wopiuser'][0]). \
                                    replace('username', acctok['wopiuser'].split('!')[0]) \
-                      + os.path.sep + os.path.basename(newname)
+                      + os.path.sep + os.path.basename(newname)     # noqa: E131
             try:
                 storeWopiFile(acctok, retrievedlock, LASTSAVETIMEKEY, newname)
             except IOError as e:

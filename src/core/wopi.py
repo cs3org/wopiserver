@@ -88,8 +88,7 @@ def checkFileInfo(fileid, acctok):
         # SaveAs functionality is disabled for anonymous and federated users when in read-only mode, as they have
         # no personal space where to save as an alternate location.
         # Note that single-file r/w shares are optimistically offered a SaveAs option, which may only work for primary users.
-        fmd['UserCanNotWriteRelative'] = acctok['viewmode'] != utils.ViewMode.READ_WRITE \
-                                         and not utils.isPrimaryUser(acctok)
+        fmd['UserCanNotWriteRelative'] = acctok['viewmode'] != utils.ViewMode.READ_WRITE and not utils.isPrimaryUser(acctok)
         fmd['SupportsRename'] = fmd['UserCanRename'] = enablerename and (acctok['viewmode'] == utils.ViewMode.READ_WRITE)
         fmd['SupportsContainers'] = False    # TODO this is all to be implemented
         fmd['SupportsUserInfo'] = True
@@ -431,7 +430,7 @@ def putRelative(fileid, reqheaders, acctok):
         if utils.isPrimaryUser(acctok):
             targetName = srv.homepath.replace('user_initial', acctok['wopiuser'][0]). \
                                       replace('username', acctok['wopiuser'].split('!')[0]) \
-                         + os.path.sep + os.path.basename(targetName)
+                         + os.path.sep + os.path.basename(targetName)    # noqa: E131
             log.info('msg="PutRelative: set homepath as destination" user="%s" filename="%s" target="%s" token="%s"' %
                      (acctok['userid'][-20:], acctok['filename'], targetName, flask.request.args['access_token'][-20:]))
             try:
