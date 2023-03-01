@@ -109,7 +109,10 @@ def stat(endpoint, fileref, userid, versioninv=1):
     inode = common.encodeinode(statInfo.info.id.storage_id, statInfo.info.id.opaque_id)
     if statInfo.info.path[0] == '/':
         # we got an absolute path from Reva, use it
-        filepath = statInfo.info.path
+        if 'eos' in endpoint:
+            filepath = '/eos/user' + statInfo.info.path
+        else:
+            filepath = '/' + endpoint + statInfo.info.path
     else:
         # we got a relative path (actually, just the basename): build an hybrid path that can be used to reference
         # the file, using the parent_id that per specs MUST be available
