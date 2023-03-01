@@ -91,17 +91,19 @@ def stat(endpoint, fileref, userid, versioninv=1):
     tend = time.time()
 
     if statInfo.status.code == cs3code.CODE_NOT_FOUND:
-        log.info('msg="File not found" fileref="%s" trace="%s"' % (fileref, statInfo.status.trace))
+        log.info('msg="File not found" endpoint="%s" fileref="%s" trace="%s"' % (endpoint, fileref, statInfo.status.trace))
         raise IOError(common.ENOENT_MSG)
     if statInfo.status.code != cs3code.CODE_OK:
-        log.error('msg="Failed stat" fileref="%s" trace="%s" reason="%s"' %
-                  (fileref, statInfo.status.trace, statInfo.status.message.replace('"', "'")))
+        log.error('msg="Failed stat" endpoint="%s" fileref="%s" trace="%s" reason="%s"' %
+                  (endpoint, fileref, statInfo.status.trace, statInfo.status.message.replace('"', "'")))
         raise IOError(statInfo.status.message)
     if statInfo.info.type == cs3spr.RESOURCE_TYPE_CONTAINER:
-        log.info('msg="Invoked stat" fileref="%s" trace="%s" result="ISDIR"' % (fileref, statInfo.status.trace))
+        log.info('msg="Invoked stat" endpoint="%s" fileref="%s" trace="%s" result="ISDIR"' %
+                 (endpoint, fileref, statInfo.status.trace))
         raise IOError('Is a directory')
     if statInfo.info.type not in (cs3spr.RESOURCE_TYPE_FILE, cs3spr.RESOURCE_TYPE_SYMLINK):
-        log.warning('msg="Invoked stat" fileref="%s" unexpectedtype="%d"' % (fileref, statInfo.info.type))
+        log.warning('msg="Invoked stat" endpoint="%s" fileref="%s" unexpectedtype="%d"' %
+                    (endpoint, fileref, statInfo.info.type))
         raise IOError('Unexpected type %d' % statInfo.info.type)
 
     inode = common.encodeinode(statInfo.info.id.storage_id, statInfo.info.id.opaque_id)
