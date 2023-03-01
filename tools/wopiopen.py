@@ -13,20 +13,22 @@ import getopt
 import configparser
 import requests
 sys.path.append('src')         # for tests out of the git repo
-from core.wopiutils import ViewMode
+from core.wopiutils import ViewMode     # noqa: E402
 
 
 # usage function
 def usage(exitcode):
     '''Prints usage'''
-    print('Usage : ' + sys.argv[0] + ' -a|--appname <app_name> -u|--appurl <app_url> [-i|--appinturl <app_url>] -k|--apikey <api_key> '
-          '[-s|--storage <storage_endpoint>] [-v|--viewmode VIEW_ONLY|READ_ONLY|READ_WRITE|PREVIEW] [-x|--x-access-token <reva_token>] <filename>')
+    print('Usage : ' + sys.argv[0] + ' -a|--appname <app_name> -u|--appurl <app_url> [-i|--appinturl <app_url>] '
+          '-k|--apikey <api_key> [-s|--storage <storage_endpoint>] [-v|--viewmode VIEW_ONLY|READ_ONLY|READ_WRITE|PREVIEW] '
+          '[-x|--x-access-token <reva_token>] <filename>')
     sys.exit(exitcode)
 
 
 # first parse the options
 try:
-    options, args = getopt.getopt(sys.argv[1:], 'hv:s:a:i:u:x:k:', ['help', 'viewmode', 'storage', 'appname', 'appinturl', 'appurl', 'x-access-token', 'apikey'])
+    options, args = getopt.getopt(sys.argv[1:], 'hv:s:a:i:u:x:k:',
+        ['help', 'viewmode', 'storage', 'appname', 'appinturl', 'appurl', 'x-access-token', 'apikey'])
 except getopt.GetoptError as e:
     print(e)
     usage(1)
