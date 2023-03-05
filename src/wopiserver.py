@@ -283,6 +283,8 @@ def iopOpenInApp():
     - string appviewurl (optional): the URL of the end-user application in view mode when different (defaults to appurl)
     - string appinturl (optional): the internal URL of the end-user application (applicable with containerized deployments)
     - string forcelock (optional): if present, will force the lock when possible to work around MS Office issues
+    - string usertype (optional): one of "regular", "federated", "ocm", "anonymous". Defaults to "regular"
+
     Returns: a JSON response as follows:
     {
       "app-url" : "<URL of the target application with query parameters>",
@@ -324,14 +326,20 @@ def iopOpenInApp():
     appurl = url_unquote_plus(req.args.get('appurl', '')).strip('/')
     appviewurl = url_unquote_plus(req.args.get('appviewurl', appurl)).strip('/')
     forcelock = req.args.get('forcelock', False)
+    try:
+        usertype = utils.UserType(req.args.get('usertype', utils.UserType.REGULAR))
+    except (KeyError, ValueError) as e:
+        Wopi.log.warning('msg="iopOpenInApp: invalid usertype, falling back to regular" client="%s" usertype="%s" error="%s"' %
+                         (req.remote_addr, req.args.get('usertype'), e))
+        usertype = utils.UserType.REGULAR
     if not appname or not appurl:
         Wopi.log.warning('msg="iopOpenInApp: app-related arguments must be provided" client="%s"' % req.remote_addr)
         return 'Missing appname or appurl arguments', http.client.BAD_REQUEST
 
     try:
         userid, wopiuser = storage.getuseridfromcreds(usertoken, wopiuser)
-        inode, acctok, vm = utils.generateAccessToken(userid, fileid, viewmode, (username, wopiuser), folderurl, endpoint,
-                                                      (appname, appurl, appviewurl), forcelock=forcelock)
+        inode, acctok, vm = utils.generateAccessToken(userid, fileid, viewmode, (username, wopiuser, usertype), folderurl,
+                                                      endpoint, (appname, appurl, appviewurl), forcelock=forcelock)
     except IOError as e:
         Wopi.log.info('msg="iopOpenInApp: remote error on generating token" client="%s" user="%s" '
                       'friendlyname="%s" mode="%s" endpoint="%s" reason="%s"' %
