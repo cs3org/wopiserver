@@ -58,23 +58,21 @@ def checkFileInfo(fileid, acctok):
         furl = acctok['folderurl']
         if furl != '/':
             fmd['BreadcrumbFolderUrl'] = furl + '?scrollTo=' + fmd['BaseFileName']
-        if acctok['username'] == '':
+        if acctok['username'] == '' or acctok['usertype'] == utils.UserType.ANONYMOUS:
             fmd['IsAnonymousUser'] = True
             fmd['UserFriendlyName'] = 'Guest ' + utils.randomString(3)
-            if furl != '/':
-                fmd['BreadcrumbFolderName'] = 'Public share'
+            fmd['BreadcrumbFolderName'] = 'Public share'
         else:
             fmd['IsAnonymousUser'] = False
             fmd['UserFriendlyName'] = acctok['username']
-            if furl != '/':
-                fmd['BreadcrumbFolderName'] = 'Parent folder'
+            fmd['BreadcrumbFolderName'] = 'ScienceMesh share' if acctok['usertype'] == utils.UserType.OCM else 'Parent folder'
         if acctok['viewmode'] in (utils.ViewMode.READ_ONLY, utils.ViewMode.READ_WRITE) \
            and srv.config.get('general', 'downloadurl', fallback=None):
             fmd['DownloadUrl'] = fmd['FileUrl'] = '%s?access_token=%s' % \
                 (srv.config.get('general', 'downloadurl'), flask.request.args['access_token'])
         if srv.config.get('general', 'businessflow', fallback='False').upper() == 'TRUE':
-            # enable the check for real users, not for public links
-            fmd['LicenseCheckForEditIsEnabled'] = not fmd['IsAnonymousUser']
+            # enable the check for real users, not for public links / federated access
+            fmd['LicenseCheckForEditIsEnabled'] = acctok['usertype'] == utils.UserType.REGULAR
         fmd['BreadcrumbBrandName'] = srv.config.get('general', 'brandingname', fallback=None)
         fmd['BreadcrumbBrandUrl'] = srv.config.get('general', 'brandingurl', fallback=None)
         fmd['OwnerId'] = statInfo['ownerid']
@@ -87,8 +85,9 @@ def checkFileInfo(fileid, acctok):
             fmd['SupportsDeleteFile'] = acctok['viewmode'] == utils.ViewMode.READ_WRITE
         # SaveAs functionality is disabled for anonymous and federated users when in read-only mode, as they have
         # no personal space where to save as an alternate location.
-        # Note that single-file r/w shares are optimistically offered a SaveAs option, which may only work for primary users.
-        fmd['UserCanNotWriteRelative'] = acctok['viewmode'] != utils.ViewMode.READ_WRITE and not utils.isPrimaryUser(acctok)
+        # Note that single-file r/w shares are optimistically offered a SaveAs option, which may only work for regular users.
+        fmd['UserCanNotWriteRelative'] = acctok['viewmode'] != utils.ViewMode.READ_WRITE and \
+                                         acctok['usertype'] != utils.UserType.REGULAR
         fmd['SupportsRename'] = fmd['UserCanRename'] = enablerename and (acctok['viewmode'] == utils.ViewMode.READ_WRITE)
         fmd['SupportsContainers'] = False    # TODO this is all to be implemented
         fmd['SupportsUserInfo'] = True
@@ -427,7 +426,7 @@ def putRelative(fileid, reqheaders, acctok):
             return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
         raisenoaccess = True
         # make an attempt in the user's home if possible
-        if utils.isPrimaryUser(acctok):
+        if acctok['usertype'] == utils.UserType.REGULAR:
             targetName = srv.homepath.replace('user_initial', acctok['wopiuser'][0]). \
                                       replace('username', acctok['wopiuser'].split('!')[0]) \
                          + os.path.sep + os.path.basename(targetName)    # noqa: E131
