@@ -568,7 +568,6 @@ def cboxOpen_deprecated():
         return UNAUTHORIZED
     # now validate the user identity and deny root access
     try:
-        userid = 'N/A'
         ruid = int(req.args['ruid'])
         rgid = int(req.args['rgid'])
         userid = '%d:%d' % (ruid, rgid)
