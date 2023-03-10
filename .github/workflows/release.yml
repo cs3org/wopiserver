@@ -53,21 +53,26 @@ jobs:
             VERSION=${{ github.ref_name }}
             BASEIMAGE=${{ matrix.image }}
           platforms: ${{ matrix.platform }}
-  build-multi-architecture:
+  manifest:
     runs-on: ${{ fromJSON('["ubuntu-latest", "self-hosted"]')[github.repository == 'cs3org/wopiserver'] }}
     needs: release
     if: github.event_name != 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        manifest:
+          - ${{ vars.DOCKERHUB_ORGANIZATION }}/wopiserver:${{ github.ref_name }}
+          - ${{ vars.DOCKERHUB_ORGANIZATION }}/wopiserver:latest
     steps:
       - name: Login to Docker Hub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - uses: int128/docker-manifest-create-action@v1
-        with:
-          tags: |
-            ${{ vars.DOCKERHUB_ORGANIZATION }}/wopiserver:${{ github.ref_name }}
-            ${{ vars.DOCKERHUB_ORGANIZATION }}/wopiserver:latest
-          suffixes: |
-            -amd64
-            -arm64
+      - name: Create manifest
+        run: |
+          docker manifest create ${{ matrix.manifest }} \
+          --amend ${{ vars.DOCKERHUB_ORGANIZATION }}/wopiserver:${{ github.ref_name }}-amd64 \
+          --amend ${{ vars.DOCKERHUB_ORGANIZATION }}/wopiserver:${{ github.ref_name }}-arm64
+      - name: Push manifest
+        run: docker manifest push ${{ matrix.manifest }}
