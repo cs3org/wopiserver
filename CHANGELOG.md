@@ -1,5 +1,16 @@
 ## Changelog for the WOPI server
 
+### Fri 10 Mar 2023 - v9.5.0
+- Introduced concept of user type, given on `/wopi/iop/open`,
+  to better serve federated vs regular users with respect to
+  folder URLs and SaveAs operations
+- Redefined `conflictpath` option as `homepath` (the former is
+  still supported for backwards compatibility): when defined,
+  a SaveAs operation falls back to the user's home when it
+  can't work on the original folder
+- Fixed PutUserInfo to use the user's username as xattr key
+- Added arm64-based builds
+
 ### Tue Jan 31 2023 - v9.4.0
 - Introduced support to forcefully evict valid locks
   to compensate Microsoft Online mishandling of collaborative

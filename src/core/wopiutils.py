@@ -54,6 +54,7 @@ class ViewMode(Enum):
     # The file can be downloaded and updated, and the app should be shown in preview mode
     PREVIEW = "VIEW_MODE_PREVIEW"
 
+
 class UserType(Enum):
     '''App user types as given by
     https://github.com/cs3org/reva/blob/master/pkg/app/provider/wopi/wopi.go
