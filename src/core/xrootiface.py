@@ -261,9 +261,8 @@ def statx(endpoint, fileref, userid, versioninv=1):
         log.debug('msg="Invoked stat on version folder" endpoint="%s" filepath="%s" rc="%s" result="%s" elapsedTimems="%.1f"' %
                   (endpoint, _getfilepath(verFolder), str(rcv).strip('\n'), infov, (tend-tstart)*1000))
     except IOError as e:
-        # here we should really raise the error, but for now we just log it
-        log.error('msg="Failed to mkdir/stat version folder, returning file metadata instead" filepath="%s" error="%s"' %
-                  (_getfilepath(filepath), e))
+        log.error('msg="Failed to mkdir/stat version folder" filepath="%s" error="%s"' % (_getfilepath(filepath), e))
+        raise
     # return the metadata of the given file, with the inode taken from the version folder
     endpoint = _geturlfor(endpoint)
     inode = common.encodeinode(endpoint[7:] if endpoint.find('.') == -1 else endpoint[7:endpoint.find('.')], statxdata['ino'])
