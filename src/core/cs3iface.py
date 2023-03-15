@@ -267,7 +267,7 @@ def unlock(endpoint, filepath, userid, appname, value):
 
 
 def readfile(endpoint, filepath, userid, lockid):
-    '''Read a file using the given userid as access token. Note that the function is a generator, managed by Flask.'''
+    '''Read a file using the given userid as access token. Note that the function is a generator, managed by the app server.'''
     tstart = time.time()
     reference = _getcs3reference(endpoint, filepath)
 

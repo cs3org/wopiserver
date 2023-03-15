@@ -207,7 +207,7 @@ def unlock(endpoint, filepath, userid, appname, value):
 
 
 def readfile(_endpoint, filepath, _userid, _lockid):
-    '''Read a file on behalf of the given userid. Note that the function is a generator, managed by Flask.'''
+    '''Read a file on behalf of the given userid. Note that the function is a generator, managed by the app server.'''
     log.debug('msg="Invoking readFile" filepath="%s"' % filepath)
     try:
         tstart = time.time()
@@ -215,7 +215,7 @@ def readfile(_endpoint, filepath, _userid, _lockid):
         with open(_getfilepath(filepath), mode='rb', buffering=chunksize) as f:
             tend = time.time()
             log.info('msg="File open for read" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend - tstart) * 1000))
-            # the actual read is buffered and managed by the Flask server
+            # the actual read is buffered and managed by the app server
             for chunk in iter(lambda: f.read(chunksize), b''):
                 yield chunk
     except FileNotFoundError:
@@ -224,7 +224,6 @@ def readfile(_endpoint, filepath, _userid, _lockid):
         # as this is a generator, we yield the error string instead of the file's contents
         yield IOError('No such file or directory')
     except OSError as e:
-        # general case, issue a warning
         log.error('msg="Error opening the file for read" filepath="%s" error="%s"' % (filepath, e))
         yield IOError(e)
 

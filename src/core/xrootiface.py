@@ -408,7 +408,7 @@ def readfile(endpoint, filepath, userid, _lockid):
             chunksize = config.getint('io', 'chunksize')
             rc, statInfo = f.stat()
             chunksize = min(chunksize, statInfo.size)
-            # the actual read is buffered and managed by the Flask server
+            # the actual read is buffered and managed by the application server
             for chunk in f.readchunks(offset=0, chunksize=chunksize):
                 yield chunk
 
