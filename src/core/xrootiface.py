@@ -115,7 +115,12 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args, app='wopi'):
         if not f.is_open():
             log.error('msg="Error or timeout with xroot" cmd="%s" subcmd="%s" args="%s" rc="%s"' % (cmd, subcmd, args, rc))
             raise IOError('Timeout executing %s' % cmd)
-        res = b''.join(f.readlines()).decode().split('&')
+        res = b''.join(f.readlines())
+        try:
+            res = res.decode().split('&')
+        except UnicodeDecodeError as e:
+            log.error('msg="Failed to decode cmd output" cmd="%s" subcmd="%s" args="%s" res="%s" error="%s"' % (cmd, subcmd, args, res, e))
+            raise IOError('Failed to decode cmd output')
         if len(res) == 3:        # we may only just get stdout: in that case, assume it's all OK
             rc = res[2].strip('\n')
             rc = rc[rc.find('=') + 1:].strip('\00')
@@ -260,9 +265,9 @@ def statx(endpoint, fileref, userid, versioninv=1):
         statxdata['ino'] = infov.split()[2]
         log.debug('msg="Invoked stat on version folder" endpoint="%s" filepath="%s" rc="%s" result="%s" elapsedTimems="%.1f"' %
                   (endpoint, _getfilepath(verFolder), str(rcv).strip('\n'), infov, (tend-tstart)*1000))
-    except IOError as e:
+    except (IOError, UnicodeDecodeError) as e:
         log.error('msg="Failed to mkdir/stat version folder" filepath="%s" error="%s"' % (_getfilepath(filepath), e))
-        raise
+        raise IOError(e)
     # return the metadata of the given file, with the inode taken from the version folder
     endpoint = _geturlfor(endpoint)
     inode = common.encodeinode(endpoint[7:] if endpoint.find('.') == -1 else endpoint[7:endpoint.find('.')], statxdata['ino'])
