@@ -75,7 +75,7 @@ def authenticate_for_test(userid, userpwd):
     '''Use basic authentication against Reva for testing purposes'''
     authReq = cs3gw.AuthenticateRequest(type='basic', client_id=userid, client_secret=userpwd)
     authRes = ctx['cs3gw'].Authenticate(authReq)
-    log.debug('msg="Authenticated user" userid="%s"' % authRes.user.id)
+    log.debug(f'msg="Authenticated user" userid="{authRes.user.id}"')
     if authRes.status.code != cs3code.CODE_OK:
         raise IOError('Failed to authenticate as user ' + userid + ': ' + authRes.status.message)
     return authRes.token
@@ -91,7 +91,7 @@ def stat(endpoint, fileref, userid, versioninv=1):
     tend = time.time()
 
     if statInfo.status.code == cs3code.CODE_NOT_FOUND:
-        log.info('msg="File not found" endpoint="%s" fileref="%s" trace="%s"' % (endpoint, fileref, statInfo.status.trace))
+        log.info(f'msg="File not found" endpoint="{endpoint}" fileref="{fileref}" trace="{statInfo.status.trace}"')
         raise IOError(common.ENOENT_MSG)
     if statInfo.status.code != cs3code.CODE_OK:
         log.error('msg="Failed stat" endpoint="%s" fileref="%s" trace="%s" reason="%s"' %
@@ -145,7 +145,7 @@ def setxattr(endpoint, filepath, userid, key, value, lockmd):
         log.error('msg="Failed to setxattr" filepath="%s" key="%s" trace="%s" code="%s" reason="%s"' %
                   (filepath, key, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
-    log.debug('msg="Invoked setxattr" result="%s"' % res)
+    log.debug(f'msg="Invoked setxattr" result="{res}"')
 
 
 def getxattr(endpoint, filepath, userid, key):
@@ -155,7 +155,7 @@ def getxattr(endpoint, filepath, userid, key):
     statInfo = ctx['cs3gw'].Stat(request=cs3sp.StatRequest(ref=reference), metadata=[('x-access-token', userid)])
     tend = time.time()
     if statInfo.status.code == cs3code.CODE_NOT_FOUND:
-        log.debug('msg="Invoked stat for getxattr on missing file" filepath="%s"' % filepath)
+        log.debug(f'msg="Invoked stat for getxattr on missing file" filepath="{filepath}"')
         return None
     if statInfo.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to stat" filepath="%s" userid="%s" trace="%s" key="%s" reason="%s"' %
@@ -165,7 +165,7 @@ def getxattr(endpoint, filepath, userid, key):
         xattrvalue = statInfo.info.arbitrary_metadata.metadata[key]
         if xattrvalue == '':
             raise KeyError
-        log.debug('msg="Invoked stat for getxattr" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend - tstart) * 1000))
+        log.debug(f'msg="Invoked stat for getxattr" filepath="{filepath}" elapsedTimems="{(tend - tstart) * 1000:.1f}"')
         return xattrvalue
     except KeyError:
         log.info('msg="Empty value or key not found in getxattr" filepath="%s" key="%s" trace="%s" metadata="%s"' %
@@ -185,7 +185,7 @@ def rmxattr(endpoint, filepath, userid, key, lockmd):
         log.error('msg="Failed to rmxattr" filepath="%s" trace="%s" key="%s" reason="%s"' %
                   (filepath, key, res.status.trace, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
-    log.debug('msg="Invoked rmxattr" result="%s"' % res.status)
+    log.debug(f'msg="Invoked rmxattr" result="{res.status}"')
 
 
 def setlock(endpoint, filepath, userid, appname, value):
@@ -203,7 +203,7 @@ def setlock(endpoint, filepath, userid, appname, value):
         log.error('msg="Failed to setlock" filepath="%s" appname="%s" value="%s" trace="%s" code="%s" reason="%s"' %
                   (filepath, appname, value, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
-    log.debug('msg="Invoked setlock" filepath="%s" value="%s" result="%s"' % (filepath, value, res.status))
+    log.debug(f'msg="Invoked setlock" filepath="{filepath}" value="{value}" result="{res.status}"')
 
 
 def getlock(endpoint, filepath, userid):
@@ -212,13 +212,13 @@ def getlock(endpoint, filepath, userid):
     req = cs3sp.GetLockRequest(ref=reference)
     res = ctx['cs3gw'].GetLock(request=req, metadata=[('x-access-token', userid)])
     if res.status.code == cs3code.CODE_NOT_FOUND:
-        log.debug('msg="Invoked getlock on unlocked or missing file" filepath="%s"' % filepath)
+        log.debug(f'msg="Invoked getlock on unlocked or missing file" filepath="{filepath}"')
         return None
     if res.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to getlock" filepath="%s" trace="%s" code="%s" reason="%s"' %
                   (filepath, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
-    log.debug('msg="Invoked getlock" filepath="%s" result="%s"' % (filepath, res.lock))
+    log.debug(f'msg="Invoked getlock" filepath="{filepath}" result="{res.lock}"')
     # rebuild a dict corresponding to the internal JSON structure used by Reva, cf. commoniface.py
     return {
         'lock_id': res.lock.lock_id,
@@ -250,7 +250,7 @@ def refreshlock(endpoint, filepath, userid, appname, value, oldvalue=None):
         log.warning('msg="Failed to refreshlock" filepath="%s" appname="%s" value="%s" trace="%s" code="%s" reason="%s"' %
                     (filepath, appname, value, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
-    log.debug('msg="Invoked refreshlock" filepath="%s" value="%s" result="%s"' % (filepath, value, res.status))
+    log.debug(f'msg="Invoked refreshlock" filepath="{filepath}" value="{value}" result="{res.status}"')
 
 
 def unlock(endpoint, filepath, userid, appname, value):
@@ -263,7 +263,7 @@ def unlock(endpoint, filepath, userid, appname, value):
         log.error('msg="Failed to unlock" filepath="%s" trace="%s" code="%s" reason="%s"' %
                   (filepath, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
-    log.debug('msg="Invoked unlock" filepath="%s" value="%s" result="%s"' % (filepath, value, res.status))
+    log.debug(f'msg="Invoked unlock" filepath="{filepath}" value="{value}" result="{res.status}"')
 
 
 def readfile(endpoint, filepath, userid, lockid):
@@ -275,7 +275,7 @@ def readfile(endpoint, filepath, userid, lockid):
     req = cs3sp.InitiateFileDownloadRequest(ref=reference, lock_id=lockid)
     res = ctx['cs3gw'].InitiateFileDownload(request=req, metadata=[('x-access-token', userid)])
     if res.status.code == cs3code.CODE_NOT_FOUND:
-        log.info('msg="File not found on read" filepath="%s"' % filepath)
+        log.info(f'msg="File not found on read" filepath="{filepath}"')
         yield IOError(common.ENOENT_MSG)
     elif res.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to initiateFileDownload on read" filepath="%s" trace="%s" code="%s" reason="%s"' %
@@ -294,7 +294,7 @@ def readfile(endpoint, filepath, userid, lockid):
         }
         fileget = requests.get(url=protocol.download_endpoint, headers=headers, verify=ctx['ssl_verify'])
     except requests.exceptions.RequestException as e:
-        log.error('msg="Exception when downloading file from Reva" reason="%s"' % e)
+        log.error(f'msg="Exception when downloading file from Reva" reason="{e}"')
         yield IOError(e)
     data = fileget.content
     if fileget.status_code != http.client.OK:
@@ -302,7 +302,7 @@ def readfile(endpoint, filepath, userid, lockid):
                   (fileget.status_code, fileget.reason.replace('"', "'")))
         yield IOError(fileget.reason)
     else:
-        log.info('msg="File open for read" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend - tstart) * 1000))
+        log.info(f'msg="File open for read" filepath="{filepath}" elapsedTimems="{(tend - tstart) * 1000:.1f}"')
         for i in range(0, len(data), ctx['chunksize']):
             yield data[i:i + ctx['chunksize']]
 
@@ -348,10 +348,10 @@ def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
         }
         putres = requests.put(url=protocol.upload_endpoint, data=content, headers=headers, verify=ctx['ssl_verify'])
     except requests.exceptions.RequestException as e:
-        log.error('msg="Exception when uploading file to Reva" reason="%s"' % e)
+        log.error(f'msg="Exception when uploading file to Reva" reason="{e}"')
         raise IOError(e)
     if putres.status_code == http.client.UNAUTHORIZED:
-        log.warning('msg="Access denied uploading file to Reva" reason="%s"' % putres.reason)
+        log.warning(f'msg="Access denied uploading file to Reva" reason="{putres.reason}"')
         raise IOError(common.ACCESS_ERROR)
     if putres.status_code != http.client.OK:
         log.error('msg="Error uploading file to Reva" code="%d" reason="%s"' % (putres.status_code, putres.reason))
@@ -377,7 +377,7 @@ def renamefile(endpoint, filepath, newfilepath, userid, lockmd):
         log.error('msg="Failed to rename file" filepath="%s" trace="%s" code="%s" reason="%s"' %
                   (filepath, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
-    log.debug('msg="Invoked renamefile" result="%s"' % res)
+    log.debug(f'msg="Invoked renamefile" result="{res}"')
 
 
 def removefile(endpoint, filepath, userid, _force=False):
@@ -388,9 +388,9 @@ def removefile(endpoint, filepath, userid, _force=False):
     res = ctx['cs3gw'].Delete(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
         if 'path not found' in str(res):
-            log.info('msg="Invoked removefile on non-existing file" filepath="%s"' % filepath)
+            log.info(f'msg="Invoked removefile on non-existing file" filepath="{filepath}"')
             raise IOError(common.ENOENT_MSG)
         log.error('msg="Failed to remove file" filepath="%s" trace="%s" code="%s" reason="%s"' %
                   (filepath, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
-    log.debug('msg="Invoked removefile" result="%s"' % res)
+    log.debug(f'msg="Invoked removefile" result="{res}"')

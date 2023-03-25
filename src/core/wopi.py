@@ -45,12 +45,12 @@ def checkFileInfo(fileid, acctok):
             fmd['PostMessageOrigin'] = host.scheme + '://' + host.netloc
             fmd['EditModePostMessage'] = fmd['EditNotificationPostMessage'] = True
         else:
-            fmd['HostEditUrl'] = '%s%s%s' % (acctok['appediturl'], '&' if '?' in acctok['appediturl'] else '?', wopiSrc)
+            fmd['HostEditUrl'] = f"{acctok['appediturl']}{'&' if '?' in acctok['appediturl'] else '?'}{wopiSrc}"
         hostvurl = srv.config.get('general', 'hostviewurl', fallback=None)
         if hostvurl:
             fmd['HostViewUrl'] = utils.generateUrlFromTemplate(hostvurl, acctok)
         else:
-            fmd['HostViewUrl'] = '%s%s%s' % (acctok['appviewurl'], '&' if '?' in acctok['appviewurl'] else '?', wopiSrc)
+            fmd['HostViewUrl'] = f"{acctok['appviewurl']}{'&' if '?' in acctok['appviewurl'] else '?'}{wopiSrc}"
         fsurl = srv.config.get('general', 'filesharingurl', fallback=None)
         if fsurl:
             fmd['FileSharingUrl'] = utils.generateUrlFromTemplate(fsurl, acctok)
@@ -79,7 +79,7 @@ def checkFileInfo(fileid, acctok):
         fmd['UserId'] = acctok['wopiuser'].split('!')[-1]  # typically same as OwnerId; different when accessing shared documents
         fmd['Size'] = statInfo['size']
         # note that in ownCloud 10 the version is generated as: `'V' + etag + checksum`
-        fmd['Version'] = 'v%s' % statInfo['etag']
+        fmd['Version'] = f"v{statInfo['etag']}"
         fmd['SupportsExtendedLockLength'] = fmd['SupportsGetLock'] = True
         fmd['SupportsUpdate'] = fmd['UserCanWrite'] = fmd['SupportsLocks'] = \
             fmd['SupportsDeleteFile'] = acctok['viewmode'] == utils.ViewMode.READ_WRITE
@@ -113,7 +113,7 @@ def checkFileInfo(fileid, acctok):
         # redact sensitive metadata for the logs
         fmd['HostViewUrl'] = fmd['HostEditUrl'] = fmd['DownloadUrl'] = fmd['FileUrl'] = \
             fmd['BreadcrumbBrandUrl'] = fmd['FileSharingUrl'] = '_redacted_'
-        log.info('msg="File metadata response" token="%s" metadata="%s"' % (flask.request.args['access_token'][-20:], fmd))
+        log.info(f"msg=\"File metadata response\" token=\"{flask.request.args['access_token'][-20:]}\" metadata=\"{fmd}\"")
         return res
     except IOError as e:
         log.info('msg="Requested file not found" filename="%s" token="%s" details="%s"' %
@@ -138,10 +138,10 @@ def getFile(_fileid, acctok):
         # stream file from storage to client
         resp = flask.Response(f, mimetype='application/octet-stream')
         resp.status_code = http.client.OK
-        resp.headers['Content-Disposition'] = 'attachment; filename="%s"' % os.path.basename(acctok['filename'])
+        resp.headers['Content-Disposition'] = f"attachment; filename=\"{os.path.basename(acctok['filename'])}\""
         resp.headers['X-Frame-Options'] = 'sameorigin'
         resp.headers['X-XSS-Protection'] = '1; mode=block'
-        resp.headers['X-WOPI-ItemVersion'] = 'v%s' % statInfo['etag']
+        resp.headers['X-WOPI-ItemVersion'] = f"v{statInfo['etag']}"
         return resp
     except StopIteration:
         # File is empty, still return OK (strictly speaking, we should return 204 NO_CONTENT)
@@ -253,7 +253,7 @@ def setLock(fileid, reqheaders, acctok):
             log.warning('msg="Unable to set lastwritetime xattr" lockop="%s" user="%s" filename="%s" token="%s" reason="%s"' %
                         (op.title(), acctok['userid'][-20:], fn, flask.request.args['access_token'][-20:], e))
 
-        return utils.makeLockSuccessResponse(op, acctok, lock, oldLock, 'v%s' % statInfo['etag'])
+        return utils.makeLockSuccessResponse(op, acctok, lock, oldLock, f"v{statInfo['etag']}")
 
     except IOError as e:
         if common.EXCL_ERROR in str(e):
@@ -273,7 +273,7 @@ def setLock(fileid, reqheaders, acctok):
                     evicted = utils.checkAndEvictLock(acctok['userid'], acctok['appname'], retrievedLock, oldLock, lock,
                                                       acctok['endpoint'], fn, int(statInfo['mtime']))
                 if evicted:
-                    return utils.makeLockSuccessResponse(op, acctok, lock, oldLock, 'v%s' % statInfo['etag'])
+                    return utils.makeLockSuccessResponse(op, acctok, lock, oldLock, f"v{statInfo['etag']}")
                 else:
                     return utils.makeConflictResponse(op, acctok['userid'], retrievedLock, lock, oldLock, fn,
                                                       'The file is locked by %s' %
@@ -284,7 +284,7 @@ def setLock(fileid, reqheaders, acctok):
             try:
                 st.refreshlock(acctok['endpoint'], fn, acctok['userid'], acctok['appname'],
                                utils.encodeLock(lock), utils.encodeLock(oldLock))
-                return utils.makeLockSuccessResponse(op, acctok, lock, oldLock, 'v%s' % statInfo['etag'])
+                return utils.makeLockSuccessResponse(op, acctok, lock, oldLock, f"v{statInfo['etag']}")
             except IOError as rle:
                 # this is unexpected now
                 log.error('msg="Failed to refresh lock" lockop="%s" filename="%s" token="%s" lock="%s" error="%s"' %
@@ -347,7 +347,7 @@ def unlock(fileid, reqheaders, acctok):
         pass
     resp = flask.Response()
     resp.status_code = http.client.OK
-    resp.headers['X-WOPI-ItemVersion'] = 'v%s' % statInfo['etag']
+    resp.headers['X-WOPI-ItemVersion'] = f"v{statInfo['etag']}"
     return resp
 
 
@@ -458,7 +458,7 @@ def putRelative(fileid, reqheaders, acctok):
         'endpoint': acctok['endpoint'],
         'fileid': newfileid,
     }
-    newwopisrc = '%s&access_token=%s' % (utils.generateWopiSrc(inode, acctok['appname'] == srv.proxiedappname), newacctok)
+    newwopisrc = f"{utils.generateWopiSrc(inode, acctok['appname'] == srv.proxiedappname)}&access_token={newacctok}"
     putrelmd = {
         'Name': os.path.basename(targetName),
         'Url': url_unquote(newwopisrc).replace('&access_token', '?access_token'),
@@ -467,15 +467,15 @@ def putRelative(fileid, reqheaders, acctok):
     if hosteurl:
         putrelmd['HostEditUrl'] = utils.generateUrlFromTemplate(hosteurl, mdforhosturls)
     else:
-        putrelmd['HostEditUrl'] = '%s%s%s' % (acctok['appediturl'], '&' if '?' in acctok['appediturl'] else '?', newwopisrc)
+        putrelmd['HostEditUrl'] = f"{acctok['appediturl']}{'&' if '?' in acctok['appediturl'] else '?'}{newwopisrc}"
     hostvurl = srv.config.get('general', 'hostviewurl', fallback=None)
     if hostvurl:
         putrelmd['HostViewUrl'] = utils.generateUrlFromTemplate(hostvurl, mdforhosturls)
     else:
-        putrelmd['HostViewUrl'] = '%s%s%s' % (acctok['appviewurl'], '&' if '?' in acctok['appviewurl'] else '?', newwopisrc)
+        putrelmd['HostViewUrl'] = f"{acctok['appviewurl']}{'&' if '?' in acctok['appviewurl'] else '?'}{newwopisrc}"
     resp = flask.Response(json.dumps(putrelmd), mimetype='application/json')
     putrelmd['Url'] = putrelmd['HostEditUrl'] = putrelmd['HostViewUrl'] = '_redacted_'
-    log.info('msg="PutRelative response" token="%s" metadata="%s"' % (newacctok[-20:], putrelmd))
+    log.info(f'msg="PutRelative response" token="{newacctok[-20:]}" metadata="{putrelmd}"')
     return resp
 
 
@@ -492,7 +492,7 @@ def deleteFile(fileid, _reqheaders_unused, acctok):
     except IOError as e:
         if common.ENOENT_MSG in str(e):
             return 'File not found', http.client.NOT_FOUND
-        log.error('msg="DeleteFile" token="%s" error="%s"' % (flask.request.args['access_token'][-20:], e))
+        log.error(f"msg=\"DeleteFile\" token=\"{flask.request.args['access_token'][-20:]}\" error=\"{e}\"")
         return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
 
 
@@ -530,7 +530,7 @@ def renameFile(fileid, reqheaders, acctok):
         # send the response as JSON
         return flask.Response(json.dumps(renamemd), mimetype='application/json')
     except IOError as e:
-        log.warn('msg="RenameFile" token="%s" error="%s"' % (flask.request.args['access_token'][-20:], e))
+        log.warn(f"msg=\"RenameFile\" token=\"{flask.request.args['access_token'][-20:]}\" error=\"{e}\"")
         resp = flask.Response()
         if common.ENOENT_MSG in str(e):
             resp.headers['X-WOPI-InvalidFileNameError'] = 'File not found'
@@ -539,7 +539,7 @@ def renameFile(fileid, reqheaders, acctok):
             resp.headers['X-WOPI-InvalidFileNameError'] = 'Cannot rename/move unlocked file'
             resp.status_code = http.client.NOT_IMPLEMENTED
         else:
-            resp.headers['X-WOPI-InvalidFileNameError'] = 'Failed to rename: %s' % e
+            resp.headers['X-WOPI-InvalidFileNameError'] = f'Failed to rename: {e}'
             resp.status_code = http.client.INTERNAL_SERVER_ERROR
         return resp
 
@@ -604,7 +604,7 @@ def putFile(fileid, acctok):
                      (acctok['userid'][-20:], acctok['filename'], statInfo['etag'], flask.request.args['access_token'][-20:]))
             resp = flask.Response()
             resp.status_code = http.client.OK
-            resp.headers['X-WOPI-ItemVersion'] = 'v%s' % statInfo['etag']
+            resp.headers['X-WOPI-ItemVersion'] = f"v{statInfo['etag']}"
             return resp
 
     except IOError as e:

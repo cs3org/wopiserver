@@ -92,7 +92,7 @@ class JsonLogger:
                     m = f[f.rfind('/') + 1:]
                 try:
                     # as we use a `key="value" ...` format in all logs, we only have args[0]
-                    payload = 'module="%s" %s ' % (m, args[0])
+                    payload = f'module="{m}" {args[0]} '
                     # now convert the payload to a dictionary assuming no `="` nor `" ` is present inside any key or value!
                     # the added trailing space matches the `" ` split, so we remove the last element of that list
                     payload = dict([tuple(kv.split('="')) for kv in payload.split('" ')[:-1]])
@@ -100,7 +100,7 @@ class JsonLogger:
                     payload = str(json.dumps(payload))[1:-1]
                 except Exception:    # pylint: disable=broad-except
                     # if the above assumptions do not hold, just json-escape the original log
-                    payload = '"module": "%s", "payload": "%s"' % (m, json.dumps(args[0]))
+                    payload = f'"module": "{m}", "payload": "{json.dumps(args[0])}"'
                 args = (payload,)
             # pass-through facade
             return getattr(self.logger, name)(*args, **kwargs)
@@ -167,14 +167,14 @@ def validateAndLogHeaders(op):
 def generateWopiSrc(fileid, proxy=False):
     '''Returns a URL-encoded WOPISrc for the given fileid, proxied if required.'''
     if not proxy or not srv.wopiproxy:
-        return url_quote_plus('%s/wopi/files/%s' % (srv.wopiurl, fileid)).replace('-', '%2D')
+        return url_quote_plus(f'{srv.wopiurl}/wopi/files/{fileid}').replace('-', '%2D')
     # proxy the WOPI request through an external WOPI proxy service, but only if it was not already proxied
     if len(fileid) < 90:   # heuristically, proxied fileids are (much) longer than that
-        log.debug('msg="Generating proxied fileid" fileid="%s" proxy="%s"' % (fileid, srv.wopiproxy))
+        log.debug(f'msg="Generating proxied fileid" fileid="{fileid}" proxy="{srv.wopiproxy}"')
         fileid = jwt.encode({'u': srv.wopiurl + '/wopi/files/', 'f': fileid}, srv.wopiproxykey, algorithm='HS256')
     else:
-        log.debug('msg="Proxied fileid already created" fileid="%s" proxy="%s"' % (fileid, srv.wopiproxy))
-    return url_quote_plus('%s/wopi/files/%s' % (srv.wopiproxy, fileid)).replace('-', '%2D')
+        log.debug(f'msg="Proxied fileid already created" fileid="{fileid}" proxy="{srv.wopiproxy}"')
+    return url_quote_plus(f'{srv.wopiproxy}/wopi/files/{fileid}').replace('-', '%2D')
 
 
 def generateUrlFromTemplate(url, acctok):
@@ -219,7 +219,7 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
         # the inode serves as fileid (and must not change across save operations)
         statinfo = st.statx(endpoint, fileid, userid)
     except IOError as e:
-        log.info('msg="Requested file not found or not a file" fileid="%s" error="%s"' % (fileid, e))
+        log.info(f'msg="Requested file not found or not a file" fileid="{fileid}" error="{e}"')
         raise
     exptime = int(time.time()) + srv.tokenvalidity
     fext = os.path.splitext(statinfo['filepath'])[1].lower()
@@ -239,13 +239,13 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
        fext[1:3] in ('od', 'ot') and appname not in ('Collabora', '') and viewmode == ViewMode.READ_WRITE:
         # we're opening an ODF (`.o[d|t]?`) file and the app is not Collabora (the appname may be empty because the legacy
         # endpoint does not set appname when the app is not proxied, so we optimistically assume it's Collabora and let it go)
-        log.info('msg="Forcing read-only access to ODF file" filename="%s"' % statinfo['filepath'])
+        log.info(f"msg=\"Forcing read-only access to ODF file\" filename=\"{statinfo['filepath']}\"")
         viewmode = ViewMode.READ_ONLY
     tokmd = {
         'userid': userid, 'wopiuser': wopiuser, 'usertype': usertype.value, 'filename': statinfo['filepath'], 'fileid': fileid,
         'username': friendlyname, 'viewmode': viewmode.value, 'folderurl': folderurl, 'endpoint': endpoint,
         'appname': appname, 'appediturl': appediturl, 'appviewurl': appviewurl,
-        'exp': exptime, 'iss': 'cs3org:wopiserver:%s' % WOPIVER    # standard claims
+        'exp': exptime, 'iss': f'cs3org:wopiserver:{WOPIVER}'    # standard claims
     }
     if forcelock:
         tokmd['forcelock'] = '1'
@@ -349,10 +349,10 @@ def compareWopiLocks(lock1, lock2):
     a bug in Word Online, currently the internal format of the WOPI locks is looked at, based
     on heuristics. Note that this format is subject to change and is not documented!'''
     if lock1 == lock2:
-        log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="True"' % (lock1, lock2))
+        log.debug(f'msg="compareLocks" lock1="{lock1}" lock2="{lock2}" result="True"')
         return True
     if srv.config.get('general', 'wopilockstrictcheck', fallback='False').upper() == 'TRUE':
-        log.debug('msg="compareLocks" lock1="%s" lock2="%s" strict="True" result="False"' % (lock1, lock2))
+        log.debug(f'msg="compareLocks" lock1="{lock1}" lock2="{lock2}" strict="True" result="False"')
         return False
 
     # before giving up, attempt to parse the lock as a JSON dictionary if allowed by the config
@@ -373,7 +373,7 @@ def compareWopiLocks(lock1, lock2):
     except (TypeError, ValueError):
         # lock1 is not a JSON dictionary: log the lock values and fail the comparison
         pass
-    log.debug('msg="compareLocks" lock1="%s" lock2="%s" strict="False" result="False"' % (lock1, lock2))
+    log.debug(f'msg="compareLocks" lock1="{lock1}" lock2="{lock2}" strict="False" result="False"')
     return False
 
 
@@ -442,7 +442,7 @@ def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, filename
             'type': os.path.splitext(filename)[1],
         }
     if savetime:
-        fileage = '%1.1f' % (time.time() - int(savetime))
+        fileage = f'{time.time() - int(savetime):1.1f}'
     else:
         fileage = 'NA'
     log.warning('msg="Returning conflict" lockop="%s" user="%s" filename="%s" token="%s" sessionId="%s" lock="%s" '
@@ -519,7 +519,7 @@ def storeAfterConflict(acctok, retrievedlock, lock, reason):
     next to the original one, or to the user's home, or to the recovery path.'''
     newname, ext = os.path.splitext(acctok['filename'])
     # typical EFSS formats are like '<filename>_conflict-<date>-<time>', but they're not synchronized: use a similar format
-    newname = '%s-webconflict-%s%s' % (newname, time.strftime('%Y%m%d-%H'), ext.strip())
+    newname = f"{newname}-webconflict-{time.strftime('%Y%m%d-%H')}{ext.strip()}"
     try:
         dorecovery = None
         storeWopiFile(acctok, retrievedlock, LASTSAVETIMEKEY, newname)

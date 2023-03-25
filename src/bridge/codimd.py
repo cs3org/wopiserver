@@ -45,11 +45,11 @@ def init(_appurl, _appinturl, _apikey):
         # CodiMD integrates Prometheus metrics, let's probe if they exist
         res = requests.head(appurl + '/metrics/codimd', verify=sslverify)
         if res.status_code != http.client.OK:
-            log.error('msg="The provided URL does not seem to be a CodiMD instance" appurl="%s"' % appurl)
+            log.error(f'msg="The provided URL does not seem to be a CodiMD instance" appurl="{appurl}"')
             raise AppFailure
-        log.info('msg="Successfully connected to CodiMD" appurl="%s"' % appurl)
+        log.info(f'msg="Successfully connected to CodiMD" appurl="{appurl}"')
     except requests.exceptions.ConnectionError as e:
-        log.error('msg="Exception raised attempting to connect to CodiMD" exception="%s"' % e)
+        log.error(f'msg="Exception raised attempting to connect to CodiMD" exception="{e}"')
         raise AppFailure
 
 
@@ -81,7 +81,7 @@ def _unzipattachments(inputbuf):
     mddoc = None
     for zipinfo in inputzip.infolist():
         fname = zipinfo.filename
-        log.debug('msg="Extracting attachment" name="%s"' % fname)
+        log.debug(f'msg="Extracting attachment" name="{fname}"')
         if os.path.splitext(fname)[1] == '.md':
             mddoc = inputzip.read(zipinfo)
         else:
@@ -89,18 +89,18 @@ def _unzipattachments(inputbuf):
             res = requests.head(appurl + '/uploads/' + fname, verify=sslverify)
             if res.status_code == http.client.OK and int(res.headers['Content-Length']) == zipinfo.file_size:
                 # yes (assume that hashed filename AND size matching is a good enough content match!)
-                log.debug('msg="Skipped existing attachment" filename="%s"' % fname)
+                log.debug(f'msg="Skipped existing attachment" filename="{fname}"')
                 continue
             # check for collision
             if res.status_code == http.client.OK:
-                log.warning('msg="Attachment collision detected" filename="%s"' % fname)
+                log.warning(f'msg="Attachment collision detected" filename="{fname}"')
                 # append a random letter to the filename
                 name, ext = os.path.splitext(fname)
                 fname = name + '_' + chr(randint(65, 65+26)) + ext
                 # and replace its reference in the document (this creates a copy of the doc, not very efficient)
                 mddoc = mddoc.replace(bytes(zipinfo.filename), bytes(fname))
             # OK, let's upload
-            log.debug('msg="Pushing attachment" filename="%s"' % fname)
+            log.debug(f'msg="Pushing attachment" filename="{fname}"')
             res = requests.post(appurl + '/uploadimage', params={'generateFilename': 'false'},
                                 files={'image': (fname, inputzip.read(zipinfo))}, verify=sslverify)
             if res.status_code != http.client.OK:
@@ -121,7 +121,7 @@ def _fetchfromcodimd(wopilock, acctok):
             raise AppFailure
         return res.content
     except requests.exceptions.ConnectionError as e:
-        log.error('msg="Exception raised attempting to connect to CodiMD" exception="%s"' % e)
+        log.error(f'msg="Exception raised attempting to connect to CodiMD" exception="{e}"')
         raise AppFailure
 
 
@@ -148,14 +148,14 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
                                 headers={'Content-Type': 'text/markdown'},
                                 verify=sslverify)
             if res.status_code == http.client.REQUEST_ENTITY_TOO_LARGE:
-                log.error('msg="File is too large to be edited in CodiMD" token="%s"' % acctok[-20:])
+                log.error(f'msg="File is too large to be edited in CodiMD" token="{acctok[-20:]}"')
                 raise AppFailure(TOOLARGE)
             if res.status_code != http.client.FOUND:
                 log.error('msg="Unable to push read-only document to CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
                 raise AppFailure
             docid = urlparse.urlsplit(res.headers['location']).path.split('/')[-1]
-            log.info('msg="Pushed read-only document to CodiMD" docid="%s" token="%s"' % (docid, acctok[-20:]))
+            log.info(f'msg="Pushed read-only document to CodiMD" docid="{docid}" token="{acctok[-20:]}"')
 
         else:
             # reserve the given docid in CodiMD via a HEAD request
@@ -180,21 +180,21 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
                                verify=sslverify)
             if res.status_code == http.client.FORBIDDEN:
                 # the file got unlocked because of no activity, yet some user is there: let it go
-                log.warning('msg="Document was being edited in CodiMD, redirecting user" token="%s"' % acctok[-20:])
+                log.warning(f'msg="Document was being edited in CodiMD, redirecting user" token="{acctok[-20:]}"')
             elif res.status_code == http.client.REQUEST_ENTITY_TOO_LARGE:
-                log.error('msg="File is too large to be edited in CodiMD" docid="%s" token="%s"' % (docid, acctok[-20:]))
+                log.error(f'msg="File is too large to be edited in CodiMD" docid="{docid}" token="{acctok[-20:]}"')
                 raise AppFailure(TOOLARGE)
             elif res.status_code != http.client.OK:
                 log.error('msg="Unable to push document to CodiMD" docid="%s" token="%s" response="%d"' %
                           (docid, acctok[-20:], res.status_code))
                 raise AppFailure
 
-            log.info('msg="Pushed document to CodiMD" docid="%s" token="%s"' % (docid, acctok[-20:]))
+            log.info(f'msg="Pushed document to CodiMD" docid="{docid}" token="{acctok[-20:]}"')
     except requests.exceptions.ConnectionError as e:
-        log.error('msg="Exception raised attempting to connect to CodiMD" exception="%s"' % e)
+        log.error(f'msg="Exception raised attempting to connect to CodiMD" exception="{e}"')
         raise AppFailure
     except UnicodeDecodeError as e:
-        log.warning('msg="Invalid UTF-8 content found in file" exception="%s"' % e)
+        log.warning(f'msg="Invalid UTF-8 content found in file" exception="{e}"')
         raise AppFailure('File contains an invalid UTF-8 character, was it corrupted? ' +
                          'Please fix it in a regular editor before opening it in CodiMD.')
     # generate and return a WOPI lock structure for this document
@@ -209,7 +209,7 @@ def _getattachments(mddoc, docfilename, forcezip=False):
     zip_buffer = io.BytesIO()
     response = None
     for attachment in upload_re.findall(mddoc):
-        log.debug('msg="Fetching attachment" url="%s"' % attachment)
+        log.debug(f'msg="Fetching attachment" url="{attachment}"')
         res = requests.get(appurl + attachment, verify=sslverify)
         if res.status_code != http.client.OK:
             log.error('msg="Failed to fetch included file, skipping" path="%s" response="%d"' % (

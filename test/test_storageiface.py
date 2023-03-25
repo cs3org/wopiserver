@@ -55,7 +55,7 @@ class TestStorage(unittest.TestCase):
         if storagetype in ['local', 'xroot', 'cs3']:
             storagetype += 'iface'
         else:
-            raise ImportError('Unsupported/Unknown storage type %s' % storagetype)
+            raise ImportError(f'Unsupported/Unknown storage type {storagetype}')
         try:
             cls.storage = __import__('core.' + storagetype, globals(), locals(), [storagetype])
             cls.storage.init(config, log)
@@ -64,13 +64,13 @@ class TestStorage(unittest.TestCase):
             if 'cs3' in storagetype:
                 # we need to login for this case
                 cls.username = cls.userid
-                pwd = getpass("Please type %s's password to access the storage: " % cls.username)
+                pwd = getpass(f"Please type {cls.username}'s password to access the storage: ")
                 cls.userid = cls.storage.authenticate_for_test(cls.username, pwd)
                 cls.homepath = config.get('cs3', 'storagehomepath')
         except ImportError:
-            print("Missing module when attempting to import %s. Please make sure dependencies are met." % storagetype)
+            print(f"Missing module when attempting to import {storagetype}. Please make sure dependencies are met.")
             raise
-        print('Global initialization succeded for storage interface %s, starting unit tests' % storagetype)
+        print(f'Global initialization succeded for storage interface {storagetype}, starting unit tests')
         cls.initialized = True
 
     def __init__(self, *args, **kwargs):
@@ -136,7 +136,7 @@ class TestStorage(unittest.TestCase):
         for chunk in self.storage.readfile(self.endpoint, self.homepath + '/test.txt', self.userid, None):
             self.assertNotIsInstance(chunk, IOError, 'raised by storage.readfile')
             content += chunk.decode('utf-8')
-        self.assertEqual(content, databuf.decode(), 'File test.txt should contain the string "%s"' % databuf.decode())
+        self.assertEqual(content, databuf.decode(), f'File test.txt should contain the string "{databuf.decode()}"')
         self.storage.removefile(self.endpoint, self.homepath + '/test.txt', self.userid)
 
     def test_readfile_text(self):
@@ -163,8 +163,8 @@ class TestStorage(unittest.TestCase):
     def test_read_nofile(self):
         '''Test reading of a non-existing file'''
         readex = next(self.storage.readfile(self.endpoint, self.homepath + '/hopefullynotexisting', self.userid, None))
-        self.assertIsInstance(readex, IOError, 'readfile returned %s' % readex)
-        self.assertEqual(str(readex), ENOENT_MSG, 'readfile returned %s' % readex)
+        self.assertIsInstance(readex, IOError, f'readfile returned {readex}')
+        self.assertEqual(str(readex), ENOENT_MSG, f'readfile returned {readex}')
 
     def test_write_remove_specialchars(self):
         '''Test write and removal of a file with special chars'''

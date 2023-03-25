@@ -100,7 +100,7 @@ def _eosargs(userid, app='wopi', bookingsize=0):
         return '?eos.ruid=%d&eos.rgid=%d' % (ruid, rgid) + '&eos.app=' + app + \
                (('&eos.bookingsize=' + str(bookingsize)) if bookingsize else '')
     except (ValueError, IndexError):
-        raise ValueError('Only Unix-based userid is supported with xrootd storage: %s' % userid)
+        raise ValueError(f'Only Unix-based userid is supported with xrootd storage: {userid}')
 
 
 def _xrootcmd(endpoint, cmd, subcmd, userid, args, app='wopi'):
@@ -113,13 +113,13 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args, app='wopi'):
         rc, _ = f.open(url, OpenFlags.READ, timeout=timeout)
         tend = time.time()
         if not f.is_open():
-            log.error('msg="Error or timeout with xroot" cmd="%s" subcmd="%s" args="%s" rc="%s"' % (cmd, subcmd, args, rc))
-            raise IOError('Timeout executing %s' % cmd)
+            log.error(f'msg="Error or timeout with xroot" cmd="{cmd}" subcmd="{subcmd}" args="{args}" rc="{rc}"')
+            raise IOError(f'Timeout executing {cmd}')
         res = b''.join(f.readlines())
         try:
             res = res.decode().split('&')
         except UnicodeDecodeError as e:
-            log.error('msg="Failed to decode cmd output" cmd="%s" subcmd="%s" args="%s" res="%s" error="%s"' % (cmd, subcmd, args, res, e))
+            log.error(f'msg="Failed to decode cmd output" cmd="{cmd}" subcmd="{subcmd}" args="{args}" res="{res}" error="{e}"')
             raise IOError('Failed to decode cmd output')
         if len(res) == 3:        # we may only just get stdout: in that case, assume it's all OK
             rc = res[2].strip('\n')
@@ -174,7 +174,7 @@ def stat(endpoint, filepath, userid):
     tstart = time.time()
     rc, statInfo = _getxrdfor(endpoint).stat(filepath + _eosargs(userid), timeout=timeout)
     tend = time.time()
-    log.info('msg="Invoked stat" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend - tstart) * 1000))
+    log.info(f'msg="Invoked stat" filepath="{filepath}" elapsedTimems="{(tend - tstart) * 1000:.1f}"')
     if not statInfo:
         if common.ENOENT_MSG in rc.message:
             raise IOError(common.ENOENT_MSG)
@@ -192,7 +192,7 @@ def statx(endpoint, fileref, userid, versioninv=1):
     if fileref[0] != '/':
         # we got the fileid of a version folder (typically from Reva), get the path of the corresponding file
         rc = _xrootcmd(endpoint, 'fileinfo', '', userid, 'mgm.path=pid:' + fileref)
-        log.info('msg="Invoked stat" fileid="%s"' % fileref)
+        log.info(f'msg="Invoked stat" fileid="{fileref}"')
         # output looks like:
         # Directory: '/eos/.../.sys.v#.filename/'  Treesize: 562\\n  Container: 0  Files: 9  Flags: 40700  Clock: 16b4ea335b36bb06
         # Modify: Sat Nov  6 10:14:27 2021 Timestamp: 1636190067.768903475
@@ -218,7 +218,7 @@ def statx(endpoint, fileref, userid, versioninv=1):
         kvlist = [kv.split('=') for kv in statInfo.split()]
         statxdata = {k: v.strip('"') for k, v in [kv for kv in kvlist if len(kv) == 2]}
     except ValueError as e:
-        log.error('msg="Invoked fileinfo but failed to parse output" result="%s" exception="%s"' % (statInfo, e))
+        log.error(f'msg="Invoked fileinfo but failed to parse output" result="{statInfo}" exception="{e}"')
         raise IOError('Failed to parse fileinfo response')
     if 'treesize' in statxdata:
         raise IOError('Is a directory')      # EISDIR
@@ -227,7 +227,7 @@ def statx(endpoint, fileref, userid, versioninv=1):
         # we extract the eosinstance from endpoint, which looks like e.g. root://eosinstance[.cern.ch]
         endpoint = _geturlfor(endpoint)
         inode = common.encodeinode(endpoint[7:] if endpoint.find('.') == -1 else endpoint[7:endpoint.find('.')], statxdata['ino'])
-        log.debug('msg="Invoked stat return" inode="%s" filepath="%s"' % (inode, _getfilepath(filepath)))
+        log.debug(f'msg="Invoked stat return" inode="{inode}" filepath="{_getfilepath(filepath)}"')
         return {
             'inode': inode,
             'filepath': filepath,
@@ -245,14 +245,14 @@ def statx(endpoint, fileref, userid, versioninv=1):
     tend = time.time()
     try:
         if not infov:
-            raise IOError('xrdquery returned nothing, rcv=%s' % rcv)
+            raise IOError(f'xrdquery returned nothing, rcv={rcv}')
         infov = infov.decode()
         if OK_MSG not in str(rcv) or 'retc=2' in infov:
             # the version folder does not exist: create it (on behalf of the owner) as it is done in Reva
             rcmkdir = _getxrdfor(endpoint).mkdir(_getfilepath(verFolder) + ownerarg, MkDirFlags.MAKEPATH, timeout=timeout)
             if OK_MSG not in str(rcmkdir):
                 raise IOError(rcmkdir)
-            log.debug('msg="Invoked mkdir on version folder" filepath="%s"' % _getfilepath(verFolder))
+            log.debug(f'msg="Invoked mkdir on version folder" filepath="{_getfilepath(verFolder)}"')
             rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder) + ownerarg + '&mgm.pcmd=stat',
                                                     timeout=timeout)
             tend = time.time()
@@ -266,12 +266,12 @@ def statx(endpoint, fileref, userid, versioninv=1):
         log.debug('msg="Invoked stat on version folder" endpoint="%s" filepath="%s" rc="%s" result="%s" elapsedTimems="%.1f"' %
                   (endpoint, _getfilepath(verFolder), str(rcv).strip('\n'), infov, (tend-tstart)*1000))
     except (IOError, UnicodeDecodeError) as e:
-        log.error('msg="Failed to mkdir/stat version folder" filepath="%s" error="%s"' % (_getfilepath(filepath), e))
+        log.error(f'msg="Failed to mkdir/stat version folder" filepath="{_getfilepath(filepath)}" error="{e}"')
         raise IOError(e)
     # return the metadata of the given file, with the inode taken from the version folder
     endpoint = _geturlfor(endpoint)
     inode = common.encodeinode(endpoint[7:] if endpoint.find('.') == -1 else endpoint[7:endpoint.find('.')], statxdata['ino'])
-    log.debug('msg="Invoked stat return" inode="%s" filepath="%s"' % (inode, _getfilepath(verFolder)))
+    log.debug(f'msg="Invoked stat return" inode="{inode}" filepath="{_getfilepath(verFolder)}"')
     return {
         'inode': inode,
         'filepath': filepath,
@@ -332,7 +332,7 @@ def setlock(endpoint, filepath, userid, appname, value, recurse=False):
     '''Set a lock as an xattr with the given value metadata and appname as holder.
     The special option "c" (create-if-not-exists) is used to be atomic'''
     try:
-        log.debug('msg="Invoked setlock" filepath="%s" value="%s"' % (filepath, value))
+        log.debug(f'msg="Invoked setlock" filepath="{filepath}" value="{value}"')
         setxattr(endpoint, filepath, userid, EOSLOCKKEY, _geneoslock(appname) + '&mgm.option=c', None)
         setxattr(endpoint, filepath, userid, common.LOCKKEY, common.genrevalock(appname, value), (appname, None))
     except IOError as e:
@@ -352,10 +352,10 @@ def getlock(endpoint, filepath, userid):
     if rawl:
         lock = common.retrieverevalock(rawl)
         if lock['expiration']['seconds'] > time.time():
-            log.debug('msg="Invoked getlock" filepath="%s"' % filepath)
+            log.debug(f'msg="Invoked getlock" filepath="{filepath}"')
             return lock
         # otherwise, the lock had expired: drop it and return None
-        log.debug('msg="getlock: removing stale lock" filepath="%s"' % filepath)
+        log.debug(f'msg="getlock: removing stale lock" filepath="{filepath}"')
         rmxattr(endpoint, filepath, userid, EOSLOCKKEY, None)
         rmxattr(endpoint, filepath, userid, common.LOCKKEY, None)
     return None
@@ -373,7 +373,7 @@ def refreshlock(endpoint, filepath, userid, appname, value, oldvalue=None):
             raise
     if not currlock or (oldvalue and currlock['lock_id'] != oldvalue):
         raise IOError(common.EXCL_ERROR)
-    log.debug('msg="Invoked refreshlock" filepath="%s" value="%s"' % (filepath, value))
+    log.debug(f'msg="Invoked refreshlock" filepath="{filepath}" value="{value}"')
     # this is non-atomic, but the lock was already held
     setxattr(endpoint, filepath, userid, EOSLOCKKEY, _geneoslock(appname), (appname, None))
     setxattr(endpoint, filepath, userid, common.LOCKKEY, common.genrevalock(appname, value), (appname, None))
@@ -383,7 +383,7 @@ def unlock(endpoint, filepath, userid, appname, value):
     '''Remove a lock as an xattr'''
     if not getlock(endpoint, filepath, userid):
         raise IOError(common.EXCL_ERROR)
-    log.debug('msg="Invoked unlock" filepath="%s" value="%s"' % (filepath, value))
+    log.debug(f'msg="Invoked unlock" filepath="{filepath}" value="{value}"')
     try:
         rmxattr(endpoint, filepath, userid, common.LOCKKEY, (appname, None))
     finally:
@@ -393,7 +393,7 @@ def unlock(endpoint, filepath, userid, appname, value):
 
 def readfile(endpoint, filepath, userid, _lockid):
     '''Read a file via xroot on behalf of the given userid. Note that the function is a generator, managed by Flask.'''
-    log.debug('msg="Invoking readFile" filepath="%s"' % filepath)
+    log.debug(f'msg="Invoking readFile" filepath="{filepath}"')
     with XrdClient.File() as f:
         tstart = time.time()
         rc, _ = f.open(_geturlfor(endpoint) + '/' + homepath + filepath + _eosargs(userid),
@@ -402,14 +402,14 @@ def readfile(endpoint, filepath, userid, _lockid):
         if not rc.ok:
             # the file could not be opened: check the case of ENOENT and log it as info to keep the logs cleaner
             if common.ENOENT_MSG in rc.message:
-                log.info('msg="File not found on read" filepath="%s"' % filepath)
+                log.info(f'msg="File not found on read" filepath="{filepath}"')
                 yield IOError(common.ENOENT_MSG)
             else:
                 log.error('msg="Error opening the file for read" filepath="%s" code="%d" error="%s"' %
                           (filepath, rc.shellcode, rc.message.strip('\n')))
                 yield IOError(rc.message)
         else:
-            log.info('msg="File open for read" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend - tstart) * 1000))
+            log.info(f'msg="File open for read" filepath="{filepath}" elapsedTimems="{(tend - tstart) * 1000:.1f}"')
             chunksize = config.getint('io', 'chunksize')
             rc, statInfo = f.stat()
             chunksize = min(chunksize, statInfo.size)
@@ -441,13 +441,13 @@ def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
     if not rc.ok:
         if islock and 'File exists' in rc.message:
             # racing against an existing file
-            log.info('msg="File exists on write but islock flag requested" filepath="%s"' % filepath)
+            log.info(f'msg="File exists on write but islock flag requested" filepath="{filepath}"')
             raise IOError(common.EXCL_ERROR)
         if LOCK_MISMATCH_MSG in rc.message:
-            log.warning('msg="Lock mismatch when writing file" app="%s" filepath="%s"' % (appname, filepath))
+            log.warning(f'msg="Lock mismatch when writing file" app="{appname}" filepath="{filepath}"')
             raise IOError(common.EXCL_ERROR)
         if common.ACCESS_ERROR in rc.message:
-            log.warning('msg="Access denied when writing file" filepath="%s"' % filepath)
+            log.warning(f'msg="Access denied when writing file" filepath="{filepath}"')
             raise IOError(common.ACCESS_ERROR)
         # any other failure is reported as is
         log.error('msg="Error opening the file for write" filepath="%s" elapsedTimems="%.1f" error="%s"' %
@@ -458,7 +458,7 @@ def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
         log.error('msg="Error writing the file" filepath="%s" elapsedTimems="%.1f" error="%s"' %
                   (filepath, (tend-tstart)*1000, rc.message.strip('\n')))
         raise IOError(rc.message.strip('\n'))
-    log.debug('msg="Write completed" filepath="%s"' % filepath)
+    log.debug(f'msg="Write completed" filepath="{filepath}"')
     rc, _ = f.truncate(size)
     if not rc.ok:
         log.error('msg="Error truncating the file" filepath="%s" elapsedTimems="%.1f" error="%s"' %

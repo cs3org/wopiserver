@@ -40,7 +40,7 @@ def init(_appurl, _appinturl, _apikey):
     # create a general group to attach all pads; can raise AppFailure
     groupid = _apicall('createGroupIfNotExistsFor', {'groupMapper': 1})
     groupid = groupid['data']['groupID']
-    log.info('msg="Got Etherpad global groupid" groupid="%s"' % groupid)
+    log.info(f'msg="Got Etherpad global groupid" groupid="{groupid}"')
 
 
 def _apicall(method, params, data=None, acctok=None, raiseonnonzerocode=True):
@@ -53,7 +53,7 @@ def _apicall(method, params, data=None, acctok=None, raiseonnonzerocode=True):
                       (method, acctok[-20:] if acctok else 'N/A', res.status_code, res.content.decode()))
             raise AppFailure
     except requests.exceptions.ConnectionError as e:
-        log.error('msg="Exception raised attempting to connect to Etherpad" method="%s" exception="%s"' % (method, e))
+        log.error(f'msg="Exception raised attempting to connect to Etherpad" method="{method}" exception="{e}"')
         raise AppFailure
     res = res.json()
     if res['code'] != 0 and raiseonnonzerocode:
@@ -70,7 +70,7 @@ def getredirecturl(viewmode, wopisrc, acctok, docid, _filename, displayname, _re
     if viewmode in (utils.ViewMode.READ_ONLY, utils.ViewMode.VIEW_ONLY):
         # for read-only mode generate a read-only link
         res = _apicall('getReadOnlyID', {'padID': docid}, acctok=acctok)
-        return appexturl + '/p/%s?userName=%s' % (res['data']['readOnlyID'], urlparse.quote_plus(displayname))
+        return appexturl + f"/p/{res['data']['readOnlyID']}?userName={urlparse.quote_plus(displayname)}"
 
     # pass to Etherpad the required metadata for the save webhook
     try:
@@ -82,13 +82,13 @@ def getredirecturl(viewmode, wopisrc, acctok, docid, _filename, displayname, _re
             log.error('msg="Failed to call Etherpad" method="setEFSSMetadata" token="%s" response="%d: %s"' %
                       (acctok[-20:], res.status_code, res.content.decode().replace('"', "'")))
             raise AppFailure
-        log.debug('msg="Called Etherpad" method="setEFSSMetadata" token="%s"' % acctok[-20:])
+        log.debug(f'msg="Called Etherpad" method="setEFSSMetadata" token="{acctok[-20:]}"')
     except requests.exceptions.ConnectionError as e:
-        log.error('msg="Exception raised attempting to connect to Etherpad" method="setEFSSMetadata" exception="%s"' % e)
+        log.error(f'msg="Exception raised attempting to connect to Etherpad" method="setEFSSMetadata" exception="{e}"')
         raise AppFailure
 
     # return the URL to the pad for editing (a PREVIEW viewmode is not supported)
-    return appexturl + '/p/%s?userName=%s' % (docid, urlparse.quote_plus(displayname))
+    return appexturl + f'/p/{docid}?userName={urlparse.quote_plus(displayname)}'
 
 
 # Cloud storage to Etherpad
@@ -106,7 +106,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
     try:
         if not docid:
             docid = ''.join([choice(ascii_lowercase) for _ in range(20)])
-            log.debug('msg="Generated random padID for read-only document" padid="%s" token="%s"' % (docid, acctok[-20:]))
+            log.debug(f'msg="Generated random padID for read-only document" padid="{docid}" token="{acctok[-20:]}"')
         # first drop previous pad if it exists
         _apicall('deletePad', {'padID': docid}, acctok=acctok, raiseonnonzerocode=False)
         # create pad with the given docid as name
@@ -121,9 +121,9 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
             log.error('msg="Unable to push document to Etherpad" token="%s" padid="%s" response="%d: %s"' %
                       (acctok[-20:], docid, res.status_code, res.content.decode()))
             raise AppFailure
-        log.info('msg="Pushed document to Etherpad" padid="%s" token="%s"' % (docid, acctok[-20:]))
+        log.info(f'msg="Pushed document to Etherpad" padid="{docid}" token="{acctok[-20:]}"')
     except requests.exceptions.ConnectionError as e:
-        log.error('msg="Exception raised attempting to connect to Etherpad" method="import" exception="%s"' % e)
+        log.error(f'msg="Exception raised attempting to connect to Etherpad" method="import" exception="{e}"')
         raise AppFailure
     # generate and return a WOPI lock structure for this document
     return wopic.generatelock(docid, filemd, epfile, acctok, False)
@@ -144,7 +144,7 @@ def _fetchfrometherpad(wopilock, acctok):
             raise AppFailure
         return res.content
     except requests.exceptions.ConnectionError as e:
-        log.error('msg="Exception raised attempting to connect to Etherpad" exception="%s"' % e)
+        log.error(f'msg="Exception raised attempting to connect to Etherpad" exception="{e}"')
         raise AppFailure
 
 

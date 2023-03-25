@@ -104,7 +104,7 @@ class WB:
             cls.plugins[p].disablezip = cls.disablezip
             cls.plugins[p].appname = appname
             cls.plugins[p].init(appurl, appinturl, apikey)
-            cls.log.info('msg="Imported plugin for application" app="%s" plugin="%s"' % (p, cls.plugins[p]))
+            cls.log.info(f'msg="Imported plugin for application" app="{p}" plugin="{cls.plugins[p]}"')
         except Exception as e:
             cls.log.warning('msg="Failed to initialize plugin" app="%s" URL="%s" exception="%s"' %
                             (p, appinturl, e))
@@ -133,7 +133,7 @@ def _validateappname(appname):
     for p in WB.plugins.values():
         if appname.lower() in p.appname.lower():
             return p.appname
-    WB.log.debug('msg="BridgeSave: unknown application" appname="%s" plugins="%s"' % (appname, WB.plugins.values()))
+    WB.log.debug(f'msg="BridgeSave: unknown application" appname="{appname}" plugins="{WB.plugins.values()}"')
     raise ValueError
 
 
@@ -160,13 +160,13 @@ def appopen(wopisrc, acctok, appmd, viewmode, revatok=None):
         WB.loadplugin(appname, appurl, appinturl, apikey)
         appname = _validateappname(appname)
         app = WB.plugins[appname]
-        WB.log.debug('msg="BridgeOpen: processing supported app" appname="%s" plugin="%s"' % (appname, app))
+        WB.log.debug(f'msg="BridgeOpen: processing supported app" appname="{appname}" plugin="{app}"')
     except ValueError:
         WB.log.warning('msg="BridgeOpen: appname not supported or missing plugin" appname="%s" token="%s"' %
                        (appname, acctok[-20:]))
-        raise FailedOpen('Failed to load WOPI bridge plugin for %s' % appname, http.client.INTERNAL_SERVER_ERROR)
+        raise FailedOpen(f'Failed to load WOPI bridge plugin for {appname}', http.client.INTERNAL_SERVER_ERROR)
     except KeyError:
-        raise FailedOpen('Bridged app %s already configured with a different appurl' % appname, http.client.NOT_IMPLEMENTED)
+        raise FailedOpen(f'Bridged app {appname} already configured with a different appurl', http.client.NOT_IMPLEMENTED)
 
     # WOPI GetFileInfo
     res = wopic.request(wopisrc, acctok, 'GET')
@@ -181,14 +181,14 @@ def appopen(wopisrc, acctok, appmd, viewmode, revatok=None):
             try:
                 # was it already being worked on?
                 wopilock = wopic.getlock(wopisrc, acctok)
-                WB.log.info('msg="Lock already held" lock="%s" token="%s"' % (wopilock, acctok[-20:]))
+                WB.log.info(f'msg="Lock already held" lock="{wopilock}" token="{acctok[-20:]}"')
                 # add this token to the list, if not already in
                 if acctok[-20:] not in wopilock['tocl']:
                     wopilock = wopic.refreshlock(wopisrc, acctok, wopilock)
             except wopic.InvalidLock as e:
                 if str(e) != str(int(http.client.NOT_FOUND)):
                     # lock is invalid/corrupted: force read-only mode
-                    WB.log.info('msg="Invalid lock, forcing read-only mode" error="%s" token="%s"' % (e, acctok[-20:]))
+                    WB.log.info(f'msg="Invalid lock, forcing read-only mode" error="{e}" token="{acctok[-20:]}"')
                     filemd['UserCanWrite'] = False
 
                 # otherwise, this is the first user opening the file; in both cases, fetch it
@@ -270,11 +270,11 @@ def appsave(docid):
     except KeyError as e:
         WB.log.error('msg="BridgeSave: missing metadata" address="%s" headers="%s" args="%s" error="%s"' %
                      (flask.request.remote_addr, flask.request.headers, flask.request.args, e))
-        return wopic.jsonify('Missing metadata, could not save. %s' % RECOVER_MSG), http.client.BAD_REQUEST
+        return wopic.jsonify(f'Missing metadata, could not save. {RECOVER_MSG}'), http.client.BAD_REQUEST
     except ValueError:
         WB.log.error('msg="BridgeSave: unknown application" address="%s" appheader="%s" args="%s"' %
                      (flask.request.remote_addr, flask.request.headers.get(BRIDGED_APPNAME_HEADER), flask.request.args))
-        return wopic.jsonify('Unknown application, could not save. %s' % RECOVER_MSG), http.client.BAD_REQUEST
+        return wopic.jsonify(f'Unknown application, could not save. {RECOVER_MSG}'), http.client.BAD_REQUEST
 
     # decide whether to notify the save thread
     donotify = isclose or wopisrc not in WB.openfiles or WB.openfiles[wopisrc]['lastsave'] < time.time() - WB.saveinterval
@@ -284,7 +284,7 @@ def appsave(docid):
             WB.openfiles[wopisrc]['tosave'] = True
             WB.openfiles[wopisrc]['toclose'][acctok[-20:]] = isclose
         else:
-            WB.log.info('msg="Save: repopulating missing metadata" wopisrc="%s" token="%s"' % (wopisrc, acctok[-20:]))
+            WB.log.info(f'msg="Save: repopulating missing metadata" wopisrc="{wopisrc}" token="{acctok[-20:]}"')
             WB.openfiles[wopisrc] = {
                 'acctok': acctok, 'tosave': True,
                 'lastsave': int(time.time() - WB.saveinterval),
@@ -308,10 +308,10 @@ def appsave(docid):
                 logf = WB.log.error
             else:
                 logf = WB.log.info
-            logf('msg="BridgeSave: returned response" response="%s" token="%s"' % (resp, acctok[-20:]))
+            logf(f'msg="BridgeSave: returned response" response="{resp}" token="{acctok[-20:]}"')
             del WB.saveresponses[wopisrc]
             return resp
-        WB.log.info('msg="BridgeSave: enqueued action" immediate="%s" token="%s"' % (donotify, acctok[-20:]))
+        WB.log.info(f'msg="BridgeSave: enqueued action" immediate="{donotify}" token="{acctok[-20:]}"')
         return '{}', http.client.ACCEPTED
 
 
@@ -322,7 +322,7 @@ def applist():
         WB.log.warning('msg="BridgeList: unauthorized access attempt, missing authorization token" '
                        'client="%s"' % flask.request.remote_addr)
         return 'Client not authorized', http.client.UNAUTHORIZED
-    WB.log.info('msg="BridgeList: returning list of open files" client="%s"' % flask.request.remote_addr)
+    WB.log.info(f'msg="BridgeList: returning list of open files" client="{flask.request.remote_addr}"')
     return flask.Response(json.dumps(WB.openfiles), mimetype='application/json')
 
 
@@ -440,7 +440,7 @@ class SaveThread(threading.Thread):
                             (openfile['lastsave'], openfile['toclose']))
             except wopic.InvalidLock:
                 # lock is gone, just cleanup our metadata
-                WB.log.warning('msg="SaveThread: cleaning up metadata, detected missed close event" url="%s"' % wopisrc)
+                WB.log.warning(f'msg="SaveThread: cleaning up metadata, detected missed close event" url="{wopisrc}"')
                 del WB.openfiles[wopisrc]
         return wopilock
 
@@ -454,7 +454,7 @@ class SaveThread(threading.Thread):
                 # nothing to do here, this document may have been closed by another wopibridge
                 if openfile['lastsave'] < time.time() - WB.unlockinterval:
                     # yet clean up only after the unlockinterval time, cf. the InvalidLock handling in savedirty()
-                    WB.log.info('msg="SaveThread: cleaning up metadata, file already unlocked" url="%s"' % wopisrc)
+                    WB.log.info(f'msg="SaveThread: cleaning up metadata, file already unlocked" url="{wopisrc}"')
                     try:
                         del WB.openfiles[wopisrc]
                     except KeyError:
@@ -482,7 +482,7 @@ class SaveThread(threading.Thread):
                 try:
                     wopic.refreshlock(wopisrc, openfile['acctok'], wopilock, toclose=openfile['toclose'])
                 except wopic.InvalidLock:
-                    WB.log.warning('msg="SaveThread: failed to refresh lock, will retry" url="%s"' % wopisrc)
+                    WB.log.warning(f'msg="SaveThread: failed to refresh lock, will retry" url="{wopisrc}"')
 
 
 @atexit.register

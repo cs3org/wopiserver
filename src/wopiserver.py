@@ -52,11 +52,11 @@ def storage_layer_import(storagetype):
     if storagetype in ['local', 'xroot', 'cs3']:
         storagetype += 'iface'
     else:
-        raise ImportError('Unsupported/Unknown storage type %s' % storagetype)
+        raise ImportError(f'Unsupported/Unknown storage type {storagetype}')
     try:
         storage = __import__('core.' + storagetype, globals(), locals(), [storagetype])
     except ImportError:
-        print("Missing module when attempting to import %s.py. Please make sure dependencies are met." % storagetype)
+        print(f'Missing module when attempting to import {storagetype}.py. Please make sure dependencies are met.')
         raise
 
 
@@ -172,7 +172,8 @@ class Wopi:
             utils.endpoints = core.discovery.endpoints
         except (configparser.NoOptionError, OSError, ValueError) as e:
             # any error we get here with the configuration is fatal
-            cls.log.fatal('msg="Failed to initialize the service, aborting" error="%s"' % e)
+            cls.log.fatal(f'msg="Failed to initialize the service, aborting" error="{e}"')
+            print(f'Failed to initialize the service: {e}\n', file=sys.stderr)
             raise
 
     @classmethod
@@ -213,7 +214,7 @@ class Wopi:
             else:
                 cls.app.run(host='0.0.0.0', port=cls.port, ssl_context=cls.app.ssl_context)
         except OSError as e:
-            cls.log.fatal('msg="Failed to run the service, aborting" error="%s"' % e)
+            cls.log.fatal(f'msg="Failed to run the service, aborting" error="{e}"')
             raise
 
 
@@ -234,7 +235,7 @@ def redir():
 @Wopi.app.route("/wopi", methods=['GET'])
 def index():
     '''Return a default index page with some user-friendly information about this service'''
-    Wopi.log.debug('msg="Accessed index page" client="%s"' % flask.request.remote_addr)
+    Wopi.log.debug(f'msg="Accessed index page" client="{flask.request.remote_addr}"')
     resp = flask.Response("""
       <html><head><title>ScienceMesh WOPI Server</title></head>
       <body>
@@ -303,13 +304,13 @@ def iopOpenInApp():
     try:
         usertoken = req.headers['TokenHeader']
     except KeyError:
-        Wopi.log.warning('msg="iopOpenInApp: missing TokenHeader in request" client="%s"' % req.remote_addr)
+        Wopi.log.warning(f'msg="iopOpenInApp: missing TokenHeader in request" client="{req.remote_addr}"')
         return UNAUTHORIZED
 
     # validate all parameters
     fileid = req.args.get('fileid', '')
     if not fileid:
-        Wopi.log.warning('msg="iopOpenInApp: fileid must be provided" client="%s"' % req.remote_addr)
+        Wopi.log.warning(f'msg="iopOpenInApp: fileid must be provided" client="{req.remote_addr}"')
         return 'Missing fileid argument', http.client.BAD_REQUEST
     try:
         viewmode = utils.ViewMode(req.args['viewmode'])
@@ -333,7 +334,7 @@ def iopOpenInApp():
                          (req.remote_addr, req.args.get('usertype'), e))
         usertype = utils.UserType.REGULAR
     if not appname or not appurl:
-        Wopi.log.warning('msg="iopOpenInApp: app-related arguments must be provided" client="%s"' % req.remote_addr)
+        Wopi.log.warning(f'msg="iopOpenInApp: app-related arguments must be provided" client="{req.remote_addr}"')
         return 'Missing appname or appurl arguments', http.client.BAD_REQUEST
 
     try:
@@ -365,7 +366,7 @@ def iopOpenInApp():
             res['app-url'] += '&IsLicensedUser=1'
         res['form-parameters'] = {'access_token': acctok}
 
-    Wopi.log.info('msg="iopOpenInApp: redirecting client" appurl="%s"' % res['app-url'])
+    Wopi.log.info(f"msg=\"iopOpenInApp: redirecting client\" appurl=\"{res['app-url']}\"")
     return flask.Response(json.dumps(res), mimetype='application/json')
 
 
@@ -401,7 +402,7 @@ def iopGetOpenFiles():
     for f in list(Wopi.openfiles.keys()):
         jlist[f] = (Wopi.openfiles[f][0], tuple(Wopi.openfiles[f][1]))
     # dump the current list of opened files in JSON format
-    Wopi.log.info('msg="iopGetOpenFiles: returning list of open files" client="%s"' % req.remote_addr)
+    Wopi.log.info(f'msg="iopGetOpenFiles: returning list of open files" client="{req.remote_addr}"')
     return flask.Response(json.dumps(jlist), mimetype='application/json')
 
 
@@ -415,7 +416,7 @@ def iopGetConflicts():
                          'client="%s"' % req.remote_addr)
         return UNAUTHORIZED
     # dump the current sets in JSON format
-    Wopi.log.info('msg="iopGetConflicts: returning outstanding/resolved conflicted sessions" client="%s"' % req.remote_addr)
+    Wopi.log.info(f'msg="iopGetConflicts: returning outstanding/resolved conflicted sessions" client="{req.remote_addr}"')
     Wopi.conflictsessions['users'] = len(Wopi.allusers)
     return flask.Response(json.dumps(Wopi.conflictsessions), mimetype='application/json')
 
@@ -445,7 +446,7 @@ def iopWopiTest():
     inode, acctok, _ = utils.generateAccessToken(usertoken, filepath, utils.ViewMode.READ_WRITE, ('test', 'test!' + usertoken),
                                                  'http://folderurlfortestonly/', endpoint,
                                                  ('WOPI validator', 'http://fortestonly/', 'http://fortestonly/'))
-    Wopi.log.info('msg="iopWopiTest: preparing test via WOPI validator" client="%s"' % req.remote_addr)
+    Wopi.log.info(f'msg="iopWopiTest: preparing test via WOPI validator" client="{req.remote_addr}"')
     return '-e WOPI_URL=http://localhost:%d/wopi/files/%s -e WOPI_TOKEN=%s' % (Wopi.port, inode, acctok)
 
 
@@ -502,7 +503,7 @@ def wopiFilesPost(fileid):
     if op == 'RENAME_FILE':
         return core.wopi.renameFile(fileid, headers, acctokOrMsg)
     # Any other op is unsupported
-    Wopi.log.warning('msg="Unknown/unsupported operation" operation="%s"' % op)
+    Wopi.log.warning(f'msg="Unknown/unsupported operation" operation="{op}"')
     return 'Not supported operation found in header', http.client.NOT_IMPLEMENTED
 
 
@@ -574,11 +575,11 @@ def cboxOpen_deprecated():
         if ruid == 0 or rgid == 0:
             raise ValueError
     except ValueError:
-        Wopi.log.warning('msg="cboxOpen: invalid or missing user/token in request" client="%s"' % req.remote_addr)
+        Wopi.log.warning(f'msg="cboxOpen: invalid or missing user/token in request" client="{req.remote_addr}"')
         return UNAUTHORIZED
     filename = url_unquote_plus(req.args.get('filename', ''))
     if filename == '':
-        Wopi.log.warning('msg="cboxOpen: the filename must be provided" client="%s"' % req.remote_addr)
+        Wopi.log.warning(f'msg="cboxOpen: the filename must be provided" client="{req.remote_addr}"')
         return 'Invalid argument', http.client.BAD_REQUEST
     if 'viewmode' in req.args:
         try:
@@ -609,13 +610,13 @@ def cboxOpen_deprecated():
         try:
             appurl, _ = bridge.appopen(utils.generateWopiSrc(inode), acctok,
                                        bridge.BRIDGE_EXT_PLUGINS[os.path.splitext(filename)[1][1:]], viewmode)
-            Wopi.log.debug('msg="cboxOpen: returning bridged app" URL="%s"' % appurl[appurl.rfind('/'):])
+            Wopi.log.debug(f"msg=\"cboxOpen: returning bridged app\" URL=\"{appurl[appurl.rfind('/'):]}\"")
             return appurl[appurl.rfind('/'):]    # return the payload as the appurl is already known via discovery
         except bridge.FailedOpen as foe:
-            Wopi.log.warning('msg="cboxOpen: open via bridge failed" reason="%s"' % foe.msg)
+            Wopi.log.warning(f'msg="cboxOpen: open via bridge failed" reason="{foe.msg}"')
             return foe.msg, foe.statuscode
     # generate the target for the app engine
-    wopisrc = '%s&access_token=%s' % (utils.generateWopiSrc(inode, toproxy), acctok)
+    wopisrc = f'{utils.generateWopiSrc(inode, toproxy)}&access_token={acctok}'
     return wopisrc
 
 
@@ -640,7 +641,7 @@ def cboxDownload_deprecated():
 
 
 #
-# Start the Flask endless listening loop
+# Start the app endless listening loop
 #
 if __name__ == '__main__':
     Wopi.init()
