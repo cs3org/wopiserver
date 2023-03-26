@@ -244,7 +244,7 @@ def setLock(fileid, reqheaders, acctok):
         # and return conflict response if the file was already locked
         st.setlock(acctok['endpoint'], fn, acctok['userid'], acctok['appname'], utils.encodeLock(lock))
 
-        # on first lock, set in addition an xattr with the current time for later conflicts checking
+        # on first lock, set in addition an xattr with the current time for later conflicts checking if required
         try:
             st.setxattr(acctok['endpoint'], fn, acctok['userid'], utils.LASTSAVETIMEKEY, int(time.time()),
                         (acctok['appname'], utils.encodeLock(lock)))
@@ -585,38 +585,42 @@ def putFile(fileid, acctok):
                     (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:]))
         return utils.storeAfterConflict(acctok, retrievedLock, lock, 'Cannot overwrite file locked by %s' %
                                         (lockHolder if lockHolder != 'wopi' else 'another application'))
-    # OK, we can save the file now
+
+    # OK, we can save the file: check the destination file against conflicts if required
     log.info('msg="PutFile" user="%s" filename="%s" fileid="%s" action="edit" token="%s"' %
              (acctok['userid'][-20:], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
     try:
-        # check now the destination file against conflicts
-        savetime = st.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY)
-        mtime = None
-        mtime = st.stat(acctok['endpoint'], acctok['filename'], acctok['userid'])['mtime']
-        if savetime and savetime.isdigit() and int(savetime) >= int(mtime):
-            # Go for overwriting the file. Note that the entire check+write operation should be atomic,
-            # but the previous checks still give the opportunity of a race condition. We just live with it.
-            # Also, note we can't get a time resolution better than one second!
-            # Anyhow, the EFSS should support versioning for such cases.
-            utils.storeWopiFile(acctok, retrievedLock, utils.LASTSAVETIMEKEY)
-            statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'], versioninv=1)
-            log.info('msg="File stored successfully" action="edit" user="%s" filename="%s" version="%s" token="%s"' %
-                     (acctok['userid'][-20:], acctok['filename'], statInfo['etag'], flask.request.args['access_token'][-20:]))
-            resp = flask.Response()
-            resp.status_code = http.client.OK
-            resp.headers['X-WOPI-ItemVersion'] = f"v{statInfo['etag']}"
-            return resp
+        if srv.config.get('general', 'detectexternalmodifications', fallback='True').upper() == 'TRUE':
+            # check now the destination file against conflicts if required
+            savetime = st.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY)
+            mtime = None
+            mtime = st.stat(acctok['endpoint'], acctok['filename'], acctok['userid'])['mtime']
+            if not savetime or not savetime.isdigit() or int(savetime) < int(mtime):
+                # no xattr was there or we got our xattr but mtime is more recent: someone may have updated the file from
+                # a different source (e.g. FUSE or SMB mount), therefore force conflict and return failure to the application
+                log.warning('msg="Detected external modification, forcing conflict" user="%s" filename="%s" '
+                            'savetime="%s" mtime="%s" token="%s"' %
+                            (acctok['userid'][-20:], acctok['filename'], savetime, mtime,
+                             flask.request.args['access_token'][-20:]))
+                return utils.storeAfterConflict(acctok, 'External', lock, 'The file being edited got moved or overwritten')
+
+        # Go for overwriting the file. Note that the entire check+write operation should be atomic,
+        # but the previous checks still give the opportunity of a race condition. We just live with it.
+        # Also, note we can't get a time resolution better than one second!
+        # Anyhow, the EFSS should support versioning for such cases.
+        utils.storeWopiFile(acctok, retrievedLock, utils.LASTSAVETIMEKEY)
+        statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'], versioninv=1)
+        log.info('msg="File stored successfully" action="edit" user="%s" filename="%s" version="%s" token="%s"' %
+                 (acctok['userid'][-20:], acctok['filename'], statInfo['etag'], flask.request.args['access_token'][-20:]))
+        resp = flask.Response()
+        resp.status_code = http.client.OK
+        resp.headers['X-WOPI-ItemVersion'] = f"v{statInfo['etag']}"
+        return resp
 
     except IOError as e:
         utils.storeForRecovery(flask.request.get_data(), acctok['wopiuser'], acctok['filename'],
                                flask.request.args['access_token'][-20:], e)
         return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
-
-    # no xattr was there or we got our xattr but mtime is more recent: someone may have updated the file
-    # from a different source (e.g. FUSE or SMB mount), therefore force conflict and return failure to the application
-    log.warning('msg="Forcing conflict based on save time" user="%s" filename="%s" savetime="%s" mtime="%s" token="%s"' %
-                (acctok['userid'][-20:], acctok['filename'], savetime, mtime, flask.request.args['access_token'][-20:]))
-    return utils.storeAfterConflict(acctok, 'External', lock, 'The file being edited got moved or overwritten')
 
 
 def putUserInfo(fileid, reqbody, acctok):
