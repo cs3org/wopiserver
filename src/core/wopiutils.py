@@ -232,9 +232,6 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
             log.critical('msg="No app URLs registered for the given file type" fileext="%s" mimetypescount="%d"' %
                          (fext, len(endpoints) if endpoints else 0))
             raise IOError
-    if viewmode == ViewMode.PREVIEW:
-        # preview mode assumes read/write privileges for the acctok
-        viewmode = ViewMode.READ_WRITE
     if srv.config.get('general', 'disablemswriteodf', fallback='False').upper() == 'TRUE' and \
        fext[1:3] in ('od', 'ot') and appname not in ('Collabora', '') and viewmode == ViewMode.READ_WRITE:
         # we're opening an ODF (`.o[d|t]?`) file and the app is not Collabora (the appname may be empty because the legacy
@@ -247,6 +244,9 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
         'appname': appname, 'appediturl': appediturl, 'appviewurl': appviewurl,
         'exp': exptime, 'iss': f'cs3org:wopiserver:{WOPIVER}'    # standard claims
     }
+    if viewmode == ViewMode.PREVIEW:
+        # preview mode assumes read/write privileges for the acctok
+        tokmd['viewmode'] = ViewMode.READ_WRITE.value
     if forcelock:
         tokmd['forcelock'] = '1'
     acctok = jwt.encode(tokmd, srv.wopisecret, algorithm='HS256')
