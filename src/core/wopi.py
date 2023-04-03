@@ -55,6 +55,10 @@ def checkFileInfo(fileid, acctok):
         if fsurl:
             fmd['FileSharingUrl'] = utils.generateUrlFromTemplate(fsurl, acctok)
             fmd['FileSharingPostMessage'] = True
+        try:
+            fmd['PrivacyUrl'] = srv.config.get('general', 'privacyurl')
+        except configparser.NoOptionError:
+            pass
         furl = acctok['folderurl']
         if furl != '/':
             fmd['BreadcrumbFolderUrl'] = furl + '?scrollTo=' + fmd['BaseFileName']
@@ -70,9 +74,9 @@ def checkFileInfo(fileid, acctok):
            and srv.config.get('general', 'downloadurl', fallback=None):
             fmd['DownloadUrl'] = fmd['FileUrl'] = '%s?access_token=%s' % \
                 (srv.config.get('general', 'downloadurl'), flask.request.args['access_token'])
-        if srv.config.get('general', 'businessflow', fallback='False').upper() == 'TRUE':
-            # enable the check for real users, not for public links / federated access
-            fmd['LicenseCheckForEditIsEnabled'] = acctok['usertype'] == utils.UserType.REGULAR
+        if srv.config.get('general', 'businessflow', fallback='True').upper() == 'TRUE':
+            # according to Microsoft, this must be enabled for all users
+            fmd['LicenseCheckForEditIsEnabled'] = True
         fmd['BreadcrumbBrandName'] = srv.config.get('general', 'brandingname', fallback=None)
         fmd['BreadcrumbBrandUrl'] = srv.config.get('general', 'brandingurl', fallback=None)
         fmd['OwnerId'] = statInfo['ownerid']
@@ -80,21 +84,25 @@ def checkFileInfo(fileid, acctok):
         fmd['Size'] = statInfo['size']
         # note that in ownCloud 10 the version is generated as: `'V' + etag + checksum`
         fmd['Version'] = f"v{statInfo['etag']}"
-        fmd['SupportsExtendedLockLength'] = fmd['SupportsGetLock'] = True
+        fmd['SupportsExtendedLockLength'] = fmd['SupportsGetLock'] = fmd['SupportsCoauth'] = True
         fmd['SupportsUpdate'] = fmd['UserCanWrite'] = fmd['SupportsLocks'] = \
-            fmd['SupportsDeleteFile'] = acctok['viewmode'] == utils.ViewMode.READ_WRITE
+            fmd['SupportsDeleteFile'] = fmd['SupportsFileCreation'] = acctok['viewmode'] == utils.ViewMode.READ_WRITE
+        fmd['ReadOnly'] = not fmd['SupportsUpdate']
+        fmd['RestrictedWebViewOnly'] = acctok['viewmode'] == utils.ViewMode.VIEW_ONLY
         # SaveAs functionality is disabled for anonymous and federated users when in read-only mode, as they have
         # no personal space where to save as an alternate location.
         # Note that single-file r/w shares are optimistically offered a SaveAs option, which may only work for regular users.
         fmd['UserCanNotWriteRelative'] = acctok['viewmode'] != utils.ViewMode.READ_WRITE and \
                                          acctok['usertype'] != utils.UserType.REGULAR
         fmd['SupportsRename'] = fmd['UserCanRename'] = enablerename and (acctok['viewmode'] == utils.ViewMode.READ_WRITE)
-        fmd['SupportsContainers'] = False    # TODO this is all to be implemented
         fmd['SupportsUserInfo'] = True
         uinfo = st.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'],
                             utils.USERINFOKEY + '.' + acctok['wopiuser'].split('!')[0])
         if uinfo:
             fmd['UserInfo'] = uinfo
+        fmd['AllowErrorReportPrompt'] = True
+        if srv.config.get('general', 'earlyfeatures', fallback='False').upper() == 'TRUE':
+            fmd['AllowEarlyFeatures'] = True
 
         # populate app-specific metadata
         # the following is to enable the 'Edit in Word/Excel/PowerPoint' (desktop) action (probably broken)
