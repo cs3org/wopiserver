@@ -36,6 +36,7 @@ def checkFileInfo(fileid, acctok):
         # populate metadata for this file
         fmd = {}
         fmd['BaseFileName'] = fmd['BreadcrumbDocName'] = os.path.basename(acctok['filename'])
+        fmd['FileExtension'] = os.path.splitext(acctok['filename'])[1]
         wopiSrc = 'WOPISrc=%s&access_token=%s' % (utils.generateWopiSrc(fileid, acctok['appname'] == srv.proxiedappname),
                                                   flask.request.args['access_token'])
         hosteurl = srv.config.get('general', 'hostediturl', fallback=None)
@@ -82,6 +83,7 @@ def checkFileInfo(fileid, acctok):
         fmd['OwnerId'] = statInfo['ownerid']
         fmd['UserId'] = acctok['wopiuser'].split('!')[-1]  # typically same as OwnerId; different when accessing shared documents
         fmd['Size'] = statInfo['size']
+        fmd['LastModifiedTime'] = str(datetime.fromtimestamp(int(statInfo['mtime']))) + '.000'
         # note that in ownCloud 10 the version is generated as: `'V' + etag + checksum`
         fmd['Version'] = f"v{statInfo['etag']}"
         fmd['SupportsExtendedLockLength'] = fmd['SupportsGetLock'] = fmd['SupportsCoauth'] = True
@@ -115,7 +117,6 @@ def checkFileInfo(fileid, acctok):
         if acctok['appname'].find('Collabora') >= 0 or acctok['appname'] == '':
             fmd['EnableOwnerTermination'] = True
             fmd['DisableExport'] = fmd['DisableCopy'] = fmd['DisablePrint'] = acctok['viewmode'] == utils.ViewMode.VIEW_ONLY
-            # fmd['LastModifiedTime'] = datetime.fromtimestamp(int(statInfo['mtime'])).isoformat()   # this currently breaks
 
         res = flask.Response(json.dumps(fmd), mimetype='application/json')
         # redact sensitive metadata for the logs
