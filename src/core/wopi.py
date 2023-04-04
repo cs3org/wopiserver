@@ -62,7 +62,7 @@ def checkFileInfo(fileid, acctok):
             pass
         furl = acctok['folderurl']
         if furl != '/':
-            fmd['BreadcrumbFolderUrl'] = furl + '?scrollTo=' + fmd['BaseFileName']
+            fmd['CloseUrl'] = fmd['BreadcrumbFolderUrl'] = furl + '?scrollTo=' + fmd['BaseFileName']
         if acctok['username'] == '' or acctok['usertype'] == utils.UserType.ANONYMOUS:
             fmd['IsAnonymousUser'] = True
             fmd['UserFriendlyName'] = 'Guest ' + utils.randomString(3)
