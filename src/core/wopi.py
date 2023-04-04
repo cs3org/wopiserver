@@ -86,9 +86,9 @@ def checkFileInfo(fileid, acctok):
         fmd['LastModifiedTime'] = str(datetime.fromtimestamp(int(statInfo['mtime']))) + '.000'
         # note that in ownCloud 10 the version is generated as: `'V' + etag + checksum`
         fmd['Version'] = f"v{statInfo['etag']}"
-        fmd['SupportsExtendedLockLength'] = fmd['SupportsGetLock'] = fmd['SupportsCoauth'] = True
+        fmd['SupportsExtendedLockLength'] = fmd['SupportsGetLock'] = True
         fmd['SupportsUpdate'] = fmd['UserCanWrite'] = fmd['SupportsLocks'] = \
-            fmd['SupportsDeleteFile'] = fmd['SupportsFileCreation'] = acctok['viewmode'] == utils.ViewMode.READ_WRITE
+            fmd['SupportsDeleteFile'] = acctok['viewmode'] == utils.ViewMode.READ_WRITE
         fmd['ReadOnly'] = not fmd['SupportsUpdate']
         fmd['RestrictedWebViewOnly'] = acctok['viewmode'] == utils.ViewMode.VIEW_ONLY
         # SaveAs functionality is disabled for anonymous and federated users when in read-only mode, as they have
@@ -102,7 +102,6 @@ def checkFileInfo(fileid, acctok):
                             utils.USERINFOKEY + '.' + acctok['wopiuser'].split('!')[0])
         if uinfo:
             fmd['UserInfo'] = uinfo
-        fmd['AllowErrorReportPrompt'] = True
         if srv.config.get('general', 'earlyfeatures', fallback='False').upper() == 'TRUE':
             fmd['AllowEarlyFeatures'] = True
 
