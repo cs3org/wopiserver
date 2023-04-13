@@ -247,6 +247,9 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
     if viewmode == ViewMode.PREVIEW:
         # preview mode assumes read/write privileges for the acctok
         tokmd['viewmode'] = ViewMode.READ_WRITE.value
+        if statinfo['size'] == 0:
+            # override preview mode when a new file is being created
+            viewmode = ViewMode.READ_WRITE
     if forcelock:
         tokmd['forcelock'] = '1'
     acctok = jwt.encode(tokmd, srv.wopisecret, algorithm='HS256')
