@@ -111,8 +111,7 @@ def _validatelock(filepath, currlock, lockmd, op, log):
     try:
         if not currlock:
             raise IOError(common.EXCL_ERROR)
-        if appname and currlock['app_name'] != appname \
-           and currlock['app_name'] != 'wopi' and appname != 'wopi':    # TODO deprecated, to be removed after CERNBox rollout
+        if appname and currlock['app_name'] != appname:
             raise IOError(common.EXCL_ERROR + f", file is locked by {currlock['app_name']}")
         if value != currlock['lock_id']:
             raise IOError(common.EXCL_ERROR)
