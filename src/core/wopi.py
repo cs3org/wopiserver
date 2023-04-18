@@ -370,7 +370,6 @@ def putRelative(fileid, reqheaders, acctok):
     # either one xor the other MUST be present; note we can't use `^` as we have a mix of str and NoneType
     if (suggTarget and relTarget) or (not suggTarget and not relTarget):
         return flask.Response(response=json.dumps({'message': 'Conflicting headers given'}), status=http.client.BAD_REQUEST, headers={'Content-Type': 'application/json'})
-        return flask
     if utils.ViewMode(acctok['viewmode']) != utils.ViewMode.READ_WRITE:
         # here we must have an authenticated user with no write rights on the current folder: go to the user's homepath
         targetName = srv.homepath.replace('user_initial', acctok['wopiuser'][0]). \
