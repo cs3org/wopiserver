@@ -578,4 +578,4 @@ def createJsonResponse(response_body, status_code, headers=None):
     headers = headers or {}
     headers['Content-Type'] = 'application/json'
     # Create the response object with the JSON-encoded body and the specified status code and headers
-    return flask.response(response=json.dumps(response_body), status=status_code, headers=headers)
+    return flask.Response(response=json.dumps(response_body), status=status_code, headers=headers)
