@@ -126,7 +126,7 @@ def checkFileInfo(fileid, acctok):
     except IOError as e:
         log.info('msg="Requested file not found" filename="%s" token="%s" details="%s"' %
                  (acctok['filename'], flask.request.args['access_token'][-20:], e))
-        return 'File not found', http.client.NOT_FOUND
+        return utils.createJsonResponse({'message': 'File not found'}, http.client.NOT_FOUND)
 
 
 def getFile(_fileid, acctok):
@@ -140,7 +140,7 @@ def getFile(_fileid, acctok):
         if isinstance(firstchunk, IOError):
             log.error('msg="GetFile: download failed" endpoint="%s" filename="%s" token="%s" error="%s"' %
                       (acctok['endpoint'], acctok['filename'], flask.request.args['access_token'][-20:], firstchunk))
-            return 'Failed to fetch file from storage', http.client.INTERNAL_SERVER_ERROR
+            return utils.createJsonResponse({'message': 'Failed to fetch file from storage'}, http.client.INTERNAL_SERVER_ERROR)
         # stat the file to get the current version
         statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
         # stream file from storage to client
@@ -158,8 +158,7 @@ def getFile(_fileid, acctok):
         # File is readable but statx failed?
         log.error('msg="GetFile: failed to stat after read, possible race" filename="%s" token="%s" error="%s"' %
                   (acctok['filename'], flask.request.args['access_token'][-20:], e))
-        return 'Failed to access file', http.client.INTERNAL_SERVER_ERROR
-
+        return utils.createJsonResponse({'message': 'Failed to access file'}, http.client.INTERNAL_SERVER_ERROR)
 
 #
 # The following operations are all called on POST /wopi/files/<fileid>
@@ -181,8 +180,8 @@ def setLock(fileid, reqheaders, acctok):
         log.warning('msg="Error with target file" lockop="%s" filename="%s" token="%s" error="%s"' %
                     (op.title(), fn, flask.request.args['access_token'][-20:], e))
         if common.ENOENT_MSG in str(e):
-            return 'File not found', http.client.NOT_FOUND
-        return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
+            return utils.createJsonResponse({'message': 'File not found'}, http.client.NOT_FOUND)
+        return utils.createJsonResponse({'message': IO_ERROR}, http.client.INTERNAL_SERVER_ERROR)
 
     if retrievedLock or op == 'REFRESH_LOCK':
         # useful for later checks
@@ -301,7 +300,7 @@ def setLock(fileid, reqheaders, acctok):
         # any other error is raised
         log.error('msg="Unable to store WOPI lock" lockop="%s" filename="%s" token="%s" lock="%s" error="%s"' %
                   (op.title(), fn, flask.request.args['access_token'][-20:], lock, e))
-        return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
+        return utils.createJsonResponse({'message': IO_ERROR}, http.client.INTERNAL_SERVER_ERROR)
 
 
 def getLock(fileid, _reqheaders_unused, acctok):
@@ -327,8 +326,8 @@ def unlock(fileid, reqheaders, acctok):
         st.unlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'], utils.encodeLock(lock))
     except IOError as e:
         if common.ENOENT_MSG in str(e):
-            return 'File not found', http.client.NOT_FOUND
-        return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
+            return utils.createJsonResponse({'message': 'File not found'}, http.client.NOT_FOUND)
+        return utils.createJsonResponse({'message': IO_ERROR}, http.client.INTERNAL_SERVER_ERROR)
 
     if srv.config.get('general', 'detectexternallocks', fallback='True').upper() == 'TRUE':
         # and os.path.splitext(acctok['filename'])[1] in srv.codetypes:
@@ -370,7 +369,7 @@ def putRelative(fileid, reqheaders, acctok):
               overwriteTarget, reqheaders.get('X-WOPI-TimeStamp'), flask.request.args['access_token'][-20:]))
     # either one xor the other MUST be present; note we can't use `^` as we have a mix of str and NoneType
     if (suggTarget and relTarget) or (not suggTarget and not relTarget):
-        return 'Conflicting headers given', http.client.BAD_REQUEST
+        return utils.createJsonResponse({'message': 'Conflicting headers given'}, http.client.BAD_REQUEST)
     if utils.ViewMode(acctok['viewmode']) != utils.ViewMode.READ_WRITE:
         # here we must have an authenticated user with no write rights on the current folder: go to the user's homepath
         targetName = srv.homepath.replace('user_initial', acctok['wopiuser'][0]). \
@@ -402,7 +401,7 @@ def putRelative(fileid, reqheaders, acctok):
                 log.error('msg="Error in PutRelative" user="%s" filename="%s" token="%s" suggTarget="%s" error="%s"' %
                           (acctok['userid'][-20:], targetName, flask.request.args['access_token'][-20:],
                            suggTarget, str(e)))
-                return 'Error with the given target', http.client.INTERNAL_SERVER_ERROR
+                return utils.createJsonResponse({'message': 'Error with the given target'}, http.client.INTERNAL_SERVER_ERROR)
     else:
         # the relative target is a UTF7-encoded filename to be respected, and that may overwrite an existing file
         relTarget = targetName + os.path.sep + relTarget.encode().decode('utf-7')  # make full path
@@ -431,7 +430,7 @@ def putRelative(fileid, reqheaders, acctok):
         utils.storeWopiFile(acctok, None, utils.LASTSAVETIMEKEY, targetName)
     except IOError as e:
         if str(e) != common.ACCESS_ERROR:
-            return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
+            return utils.createJsonResponse({'message': IO_ERROR}, http.client.INTERNAL_SERVER_ERROR)
         raisenoaccess = True
         # make an attempt in the user's home if possible
         if acctok['usertype'] == utils.UserType.REGULAR:
@@ -448,7 +447,7 @@ def putRelative(fileid, reqheaders, acctok):
                 pass
         if raisenoaccess:
             # UNAUTHORIZED may seem better but the WOPI validator tests explicitly expect NOT_IMPLEMENTED
-            return 'Unauthorized to perform PutRelative', http.client.NOT_IMPLEMENTED
+            return utils.createJsonResponse({'message': 'Unauthorized to perform PutRelative'}, http.client.NOT_IMPLEMENTED)
 
     # generate an access token for the new file
     log.info('msg="PutRelative: generating new access token" user="%s" filename="%s" '
@@ -496,13 +495,12 @@ def deleteFile(fileid, _reqheaders_unused, acctok):
                                           acctok['filename'], 'Cannot delete a locked file')
     try:
         st.removefile(acctok['endpoint'], acctok['filename'], acctok['userid'])
-        return 'OK', http.client.OK
+        return utils.createJsonResponse({'message': 'OK'}, http.client.OK)
     except IOError as e:
         if common.ENOENT_MSG in str(e):
-            return 'File not found', http.client.NOT_FOUND
+            return utils.createJsonResponse({'message': 'File not found'}, http.client.NOT_FOUND)
         log.error(f"msg=\"DeleteFile\" token=\"{flask.request.args['access_token'][-20:]}\" error=\"{e}\"")
-        return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
-
+        return utils.createJsonResponse({'message': IO_ERROR}, http.client.INTERNAL_SERVER_ERROR)
 
 def renameFile(fileid, reqheaders, acctok):
     '''Implements the RenameFile WOPI call.'''
@@ -513,7 +511,7 @@ def renameFile(fileid, reqheaders, acctok):
     except KeyError as e:
         log.warning('msg="Missing argument" client="%s" requestedUrl="%s" error="%s" token="%s"' %
                     (flask.request.remote_addr, flask.request.base_url, e, flask.request.args.get('access_token')[-20:]))
-        return 'Missing argument', http.client.BAD_REQUEST
+        return utils.createJsonResponse({'message': 'Missing argument'}, http.client.BAD_REQUEST)
     lock = reqheaders.get('X-WOPI-Lock')    # may not be specified
     retrievedLock, _ = utils.retrieveWopiLock(fileid, 'RENAMEFILE', lock, acctok)
     if retrievedLock is not None and not utils.compareWopiLocks(retrievedLock, lock):
@@ -563,18 +561,18 @@ def _createNewFile(fileid, acctok):
             raise IOError
         log.warning('msg="PutFile" error="File exists but no WOPI lock provided" filename="%s" token="%s"' %
                     (acctok['filename'], flask.request.args['access_token'][-20:]))
-        return 'File exists', http.client.CONFLICT
+        return utils.createJsonResponse({'message': 'File exists'}, http.client.CONFLICT)
     except IOError:
         # indeed the file did not exist, so we write it for the first time
         try:
             utils.storeWopiFile(acctok, None, utils.LASTSAVETIMEKEY)
             log.info('msg="File stored successfully" action="editnew" user="%s" filename="%s" token="%s"' %
                      (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:]))
-            return 'OK', http.client.OK
+            return utils.createJsonResponse({'message': 'OK'}, http.client.OK)
         except IOError as e:
             utils.storeForRecovery(flask.request.get_data(), acctok['wopiuser'], acctok['filename'],
                                    flask.request.args['access_token'][-20:], e)
-            return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
+            return utils.createJsonResponse({'message': IO_ERROR}, http.client.INTERNAL_SERVER_ERROR)
 
 
 def putFile(fileid, acctok):
@@ -628,7 +626,7 @@ def putFile(fileid, acctok):
     except IOError as e:
         utils.storeForRecovery(flask.request.get_data(), acctok['wopiuser'], acctok['filename'],
                                flask.request.args['access_token'][-20:], e)
-        return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
+        return utils.createJsonResponse({'message': IO_ERROR}, http.client.INTERNAL_SERVER_ERROR)
 
 
 def putUserInfo(fileid, reqbody, acctok):
@@ -640,8 +638,8 @@ def putUserInfo(fileid, reqbody, acctok):
                     utils.USERINFOKEY + '.' + acctok['wopiuser'].split('!')[0], reqbody.decode(), lockmd)
         log.info('msg="PutUserInfo" user="%s" filename="%s" fileid="%s" token="%s"' %
                  (acctok['userid'][-20:], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
-        return 'OK', http.client.OK
+        return utils.createJsonResponse({'message': 'OK'}, http.client.OK)
     except IOError as e:
         log.error('msg="PutUserInfo failed" filename="%s" error="%s" token="%s"' %
                   (acctok['filename'], e, flask.request.args['access_token'][-20:]))
-        return IO_ERROR, http.client.INTERNAL_SERVER_ERROR
+        return utils.createJsonResponse({'message': IO_ERROR}, http.client.INTERNAL_SERVER_ERROR)
