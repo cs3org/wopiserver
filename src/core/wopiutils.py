@@ -437,7 +437,8 @@ def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, filename
     resp.data = json.dumps(reason)
 
     session = flask.request.headers.get('X-WOPI-SessionId')
-    if session and retrievedlock != 'External' and session not in srv.conflictsessions['pending']:
+    if session and retrievedlock != 'External' and \
+       session not in srv.conflictsessions['pending'] and session not in srv.conflictsessions['resolved']:
         srv.conflictsessions['pending'][session] = {
             'user': user,
             'time': int(time.time()),
