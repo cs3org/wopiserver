@@ -348,13 +348,13 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefn=None):
 
 def compareWopiLocks(lock1, lock2):
     '''Compares two locks and returns True if they represent the same WOPI lock.
-    Officially, the comparison must be based on the locks' string representations, but because of
-    a bug in Word Online, currently the internal format of the WOPI locks is looked at, based
-    on heuristics. Note that this format is subject to change and is not documented!'''
+    Officially, the comparison must be based on the locks' string representations. But because of
+    a bug in early versions of Word Online, the internal format of the WOPI locks may be looked at,
+    based on heuristics. Note that this format is subject to change and is not documented!'''
     if lock1 == lock2:
         log.debug(f'msg="compareLocks" lock1="{lock1}" lock2="{lock2}" result="True"')
         return True
-    if srv.config.get('general', 'wopilockstrictcheck', fallback='False').upper() == 'TRUE':
+    if srv.config.get('general', 'wopilockstrictcheck', fallback='True').upper() == 'TRUE':
         log.debug(f'msg="compareLocks" lock1="{lock1}" lock2="{lock2}" strict="True" result="False"')
         return False
 
