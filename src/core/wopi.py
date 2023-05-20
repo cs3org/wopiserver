@@ -273,19 +273,10 @@ def setLock(fileid, reqheaders, acctok):
             if not retrievedLock or not utils.compareWopiLocks(retrievedLock, (oldLock if oldLock else lock)):
                 # lock mismatch, the WOPI client is supposed to acknowledge the existing lock to start a collab session,
                 # or deny access to the file in edit mode otherwise
-                evicted = False
-                if 'forcelock' in acctok and retrievedLock != 'External':
-                    # here we try to evict the existing lock, and if possible we let the user go:
-                    # this is to work around an issue with the Microsoft cloud!
-                    evicted = utils.checkAndEvictLock(acctok['userid'], acctok['appname'], retrievedLock, oldLock, lock,
-                                                      acctok['endpoint'], fn, int(statInfo['mtime']))
-                if evicted:
-                    return utils.makeLockSuccessResponse(op, acctok, lock, oldLock, f"v{statInfo['etag']}")
-                else:
-                    return utils.makeConflictResponse(op, acctok['userid'], retrievedLock, lock, oldLock, fn,
-                                                      'The file is locked by %s' %
-                                                      (lockHolder if lockHolder else 'another editor'),
-                                                      savetime=savetime)
+                return utils.makeConflictResponse(op, acctok['userid'], retrievedLock, lock, oldLock, fn,
+                                                  'The file is locked by %s' %
+                                                  (lockHolder if lockHolder else 'another editor'),
+                                                  savetime=savetime)
 
             # else it's our own lock, refresh it (rechecking the oldLock if necessary, for atomicity) and return
             try:

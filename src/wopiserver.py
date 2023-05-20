@@ -283,7 +283,6 @@ def iopOpenInApp():
     - string appurl: the URL of the end-user application
     - string appviewurl (optional): the URL of the end-user application in view mode when different (defaults to appurl)
     - string appinturl (optional): the internal URL of the end-user application (applicable with containerized deployments)
-    - string forcelock (optional): if present, will force the lock when possible to work around MS Office issues
     - string usertype (optional): one of "regular", "federated", "ocm", "anonymous". Defaults to "regular"
 
     Returns: a JSON response as follows:
@@ -326,7 +325,6 @@ def iopOpenInApp():
     appname = url_unquote_plus(req.args.get('appname', ''))
     appurl = url_unquote_plus(req.args.get('appurl', '')).strip('/')
     appviewurl = url_unquote_plus(req.args.get('appviewurl', appurl)).strip('/')
-    forcelock = req.args.get('forcelock', False)
     try:
         usertype = utils.UserType(req.args.get('usertype', utils.UserType.REGULAR))
     except (KeyError, ValueError) as e:
@@ -340,7 +338,7 @@ def iopOpenInApp():
     try:
         userid, wopiuser = storage.getuseridfromcreds(usertoken, wopiuser)
         inode, acctok, vm = utils.generateAccessToken(userid, fileid, viewmode, (username, wopiuser, usertype), folderurl,
-                                                      endpoint, (appname, appurl, appviewurl), forcelock=forcelock)
+                                                      endpoint, (appname, appurl, appviewurl))
     except IOError as e:
         Wopi.log.info('msg="iopOpenInApp: remote error on generating token" client="%s" user="%s" '
                       'friendlyname="%s" mode="%s" endpoint="%s" reason="%s"' %

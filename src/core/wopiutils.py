@@ -207,7 +207,7 @@ def randomString(size):
     return ''.join([choice(ascii_lowercase) for _ in range(size)])
 
 
-def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app, forcelock=False):
+def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app):
     '''Generates an access token for a given file and a given user, and returns a tuple with
     the file's inode and the URL-encoded access token.'''
     appname, appediturl, appviewurl = app
@@ -250,15 +250,13 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
         if statinfo['size'] == 0:
             # override preview mode when a new file is being created
             viewmode = ViewMode.READ_WRITE
-    if forcelock:
-        tokmd['forcelock'] = '1'
     acctok = jwt.encode(tokmd, srv.wopisecret, algorithm='HS256')
     if 'MS 365' in appname:
         srv.allusers.add(userid)
     log.info('msg="Access token generated" userid="%s" wopiuser="%s" friendlyname="%s" usertype="%s" mode="%s" '
-             'endpoint="%s" filename="%s" inode="%s" mtime="%s" folderurl="%s" appname="%s"%s expiration="%d" token="%s"' %
+             'endpoint="%s" filename="%s" inode="%s" mtime="%s" folderurl="%s" appname="%s" expiration="%d" token="%s"' %
              (userid[-20:], wopiuser, friendlyname, usertype, viewmode, endpoint, statinfo['filepath'], statinfo['inode'],
-              statinfo['mtime'], folderurl, appname, ' forcelock="True"' if forcelock else '', exptime, acctok[-20:]))
+              statinfo['mtime'], folderurl, appname, exptime, acctok[-20:]))
     return statinfo['inode'], acctok, viewmode
 
 
@@ -378,51 +376,6 @@ def compareWopiLocks(lock1, lock2):
         pass
     log.debug(f'msg="compareLocks" lock1="{lock1}" lock2="{lock2}" strict="False" result="False"')
     return False
-
-
-def checkAndEvictLock(user, appname, retrievedlock, oldlock, lock, endpoint, filename, savetime):
-    '''Checks if the current lock can be evicted to overcome issue with Microsoft 365 cloud'''
-    evictlocktime = srv.config.get('general', 'evictlocktime', fallback='')
-    try:
-        evictlocktime = int(evictlocktime)
-    except ValueError:
-        return False
-    session = flask.request.headers.get('X-WOPI-SessionId')
-    if savetime > time.time() - evictlocktime:
-        # file is being edited, don't evict existing lock
-        log.warning('msg="File is actively edited, force-unlock prevented" lockop="%s" user="%s" '
-                    'filename="%s" fileage="%1.1f" token="%s" sessionId="%s"' %
-                    (('UnlockAndRelock' if oldlock else 'Lock'), user, filename, (time.time() - int(savetime)),
-                     flask.request.args['access_token'][-20:], session))
-        if session:
-            srv.conflictsessions['failedtotakeover'][session] = {
-                'time': int(time.time()),
-                'user': user
-            }
-        return False
-    # ok, remove current lock and set new one
-    try:
-        st.refreshlock(endpoint, filename, user, appname, encodeLock(lock), encodeLock(retrievedlock))
-    except IOError as e:
-        log.error('msg="Failed to force a refreshlock" user="%s" filename="%s" error="%s" token="%s" sessionId="%s"' %
-                  (user, filename, e, flask.request.args['access_token'][-20:], session))
-        return False
-    # and note the stealer and the evicted sessions
-    if session not in srv.conflictsessions['tookover']:
-        try:
-            formersession = json.loads(retrievedlock)['S']
-        except (TypeError, ValueError, KeyError):
-            formersession = retrievedlock
-        srv.conflictsessions['tookover'][session] = {
-            'time': int(time.time()),
-            'user': user,
-            'former': formersession
-        }
-    log.warning('msg="Former session was evicted" lockop="%s" user="%s" filename="%s" fileage="%1.1f" '
-                'formerlock="%s" token="%s" newsession="%s"' %
-                (('UnlockAndRelock' if oldlock else 'Lock'), user, filename, (time.time() - int(savetime)),
-                 retrievedlock, flask.request.args['access_token'][-20:], session))
-    return True
 
 
 def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, filename, reason, savetime=None):
