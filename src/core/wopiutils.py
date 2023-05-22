@@ -38,7 +38,6 @@ st = None
 srv = None
 log = None
 WOPIVER = None
-endpoints = {}
 
 
 class ViewMode(Enum):
@@ -223,15 +222,6 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
         raise
     exptime = int(time.time()) + srv.tokenvalidity
     fext = os.path.splitext(statinfo['filepath'])[1].lower()
-    if not appediturl:
-        # deprecated: for backwards compatibility, work out the URLs from the discovered app endpoints
-        try:
-            appediturl = endpoints[fext]['edit']
-            appviewurl = endpoints[fext]['view']
-        except KeyError:
-            log.critical('msg="No app URLs registered for the given file type" fileext="%s" mimetypescount="%d"' %
-                         (fext, len(endpoints) if endpoints else 0))
-            raise IOError
     if srv.config.get('general', 'disablemswriteodf', fallback='False').upper() == 'TRUE' and \
        fext[1:3] in ('od', 'ot') and appname not in ('Collabora', '') and viewmode == ViewMode.READ_WRITE:
         # we're opening an ODF (`.o[d|t]?`) file and the app is not Collabora (the appname may be empty because the legacy

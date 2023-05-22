@@ -1,9 +1,6 @@
 ## WOPI server - core module
 
-This module includes the core WOPI protocol implementation, along with the discovery logic
-in the `discovery.py` module. The latter has already been implemented in Reva's WOPI appprovider driver,
-therefore this implementation will eventually be removed.
-
+This module includes the core WOPI protocol implementation.
 To access the storage, three interfaces are provided:
 
 * `xrootiface.py` to interface to an EOS storage via the xrootd protocol. Though the code is generic enough to enable support for any xrootd-based storage, it does include EOS-specific calls.

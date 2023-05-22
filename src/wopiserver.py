@@ -31,7 +31,6 @@ except ImportError:
     raise
 
 import core.wopi
-import core.discovery
 import core.wopiutils as utils
 import bridge
 
@@ -165,11 +164,8 @@ class Wopi:
             # TODO improve handling of globals across the whole code base
             utils.WOPIVER = WOPISERVERVERSION
             utils.srv = core.wopi.srv = cls
-            utils.log = core.wopi.log = core.discovery.log = cls.log
+            utils.log = core.wopi.log = cls.log
             utils.st = core.wopi.st = storage
-            core.discovery.codetypes = cls.codetypes
-            core.discovery.config = cls.config
-            utils.endpoints = core.discovery.endpoints
         except (configparser.NoOptionError, OSError, ValueError) as e:
             # any error we get here with the configuration is fatal
             cls.log.fatal(f'msg="Failed to initialize the service, aborting" error="{e}"')
@@ -533,117 +529,8 @@ def bridgeList():
 
 
 #
-# Deprecated cbox endpoints
-#
-@Wopi.app.route("/wopi/cbox/open", methods=['GET'])
-@Wopi.metrics.do_not_track()
-@Wopi.metrics.counter('open_by_ext', 'Number of /open calls by file extension',
-                      labels={'open_type': lambda:
-                              flask.request.args['filename'].split('.')[-1]
-                              if 'filename' in flask.request.args and '.' in flask.request.args['filename']
-                              else ('noext' if 'filename' in flask.request.args else 'fileid')
-                              })
-def cboxOpen_deprecated():
-    '''Generates a WOPISrc target and an access token to be passed to a WOPI-compatible Office-like app
-    for accessing a given file for a given user.
-    Required headers:
-    - Authorization: a bearer shared secret to protect this call as it provides direct access to any user's file
-    Request arguments:
-    - int ruid, rgid: a real Unix user identity (id:group) representing the user accessing the file
-    - enum viewmode: how the user should access the file, according to utils.ViewMode/the CS3 app provider API
-      - OR bool canedit: True if full access should be given to the user, otherwise read-only access is granted
-    - string username (optional): user's full display name, typically shown by the Office app
-    - string filename: the full path of the filename to be opened
-    - string endpoint (optional): the storage endpoint to be used to look up the file or the storage id, in case of
-      multi-instance underlying storage; defaults to 'default'
-    - string folderurl (optional): the URL to come back to the containing folder for this file, typically shown by the Office app
-    - boolean proxy (optional): whether the returned WOPISrc must be proxied or not, defaults to false
-    Returns: a single string with the application URL, or a message and a 4xx/5xx HTTP code in case of errors
-    '''
-    Wopi.refreshconfig()
-    req = flask.request
-    # if running in https mode, first check if the shared secret matches ours
-    if req.headers.get('Authorization') != 'Bearer ' + Wopi.iopsecret:
-        Wopi.log.warning('msg="cboxOpen: unauthorized access attempt, missing authorization token" '
-                         'client="%s" clientAuth="%s"' % (req.remote_addr, req.headers.get('Authorization')))
-        return UNAUTHORIZED
-    # now validate the user identity and deny root access
-    try:
-        ruid = int(req.args['ruid'])
-        rgid = int(req.args['rgid'])
-        userid = '%d:%d' % (ruid, rgid)
-        if ruid == 0 or rgid == 0:
-            raise ValueError
-    except ValueError:
-        Wopi.log.warning(f'msg="cboxOpen: invalid or missing user/token in request" client="{req.remote_addr}"')
-        return UNAUTHORIZED
-    filename = url_unquote_plus(req.args.get('filename', ''))
-    if filename == '':
-        Wopi.log.warning(f'msg="cboxOpen: the filename must be provided" client="{req.remote_addr}"')
-        return 'Invalid argument', http.client.BAD_REQUEST
-    if 'viewmode' in req.args:
-        try:
-            viewmode = utils.ViewMode(req.args['viewmode'])
-        except ValueError:
-            Wopi.log.warning('msg="cboxOpen: invalid viewmode parameter" client="%s" viewmode="%s"' %
-                             (req.remote_addr, req.args['viewmode']))
-            return 'Invalid argument', http.client.BAD_REQUEST
-    else:
-        # backwards compatibility
-        viewmode = utils.ViewMode.READ_WRITE if 'canedit' in req.args and req.args['canedit'].lower() == 'true' \
-            else utils.ViewMode.READ_ONLY
-    username = url_unquote_plus(req.args.get('username', ''))
-    folderurl = url_unquote_plus(req.args.get('folderurl', '%2F'))   # defaults to `/`
-    endpoint = req.args.get('endpoint', 'default')
-    toproxy = req.args.get('proxy', 'false') == 'true' and filename[-1] == 'x'    # if requested, only proxy OOXML files
-    try:
-        # here we set wopiuser = userid (i.e. uid:gid) as that's well known to be consistent over time
-        inode, acctok, _ = utils.generateAccessToken(userid, filename, viewmode, (username, userid),
-                                                     folderurl, endpoint, (Wopi.proxiedappname if toproxy else '', '', ''))
-    except IOError as e:
-        Wopi.log.warning('msg="cboxOpen: remote error on generating token" client="%s" user="%s" '
-                         'friendlyname="%s" mode="%s" endpoint="%s" reason="%s"' %
-                         (req.remote_addr, userid, username, viewmode, endpoint, e))
-        return 'Remote error, file or app not found or file is a directory', http.client.NOT_FOUND
-    if bridge.isextsupported(os.path.splitext(filename)[1][1:]):
-        # call the bridgeOpen right away, to not expose the WOPI URL to the user (it might be behind firewall)
-        try:
-            appurl, _ = bridge.appopen(utils.generateWopiSrc(inode), acctok,
-                                       bridge.BRIDGE_EXT_PLUGINS[os.path.splitext(filename)[1][1:]], viewmode)
-            Wopi.log.debug(f"msg=\"cboxOpen: returning bridged app\" URL=\"{appurl[appurl.rfind('/'):]}\"")
-            return appurl[appurl.rfind('/'):]    # return the payload as the appurl is already known via discovery
-        except bridge.FailedOpen as foe:
-            Wopi.log.warning(f'msg="cboxOpen: open via bridge failed" reason="{foe.msg}"')
-            return foe.msg, foe.statuscode
-    # generate the target for the app engine
-    wopisrc = f'{utils.generateWopiSrc(inode, toproxy)}&access_token={acctok}'
-    return wopisrc
-
-
-@Wopi.app.route("/wopi/cbox/endpoints", methods=['GET'])
-@Wopi.metrics.do_not_track()
-def cboxAppEndPoints_deprecated():
-    '''Returns the office apps end-points registered with this WOPI server. This is used by the old Reva
-    to discover which Apps frontends can be used with this WOPI server. The new Reva/IOP
-    includes this logic in the AppProvider and AppRegistry, and once it's fully adopted this logic
-    will be removed from the WOPI server.
-    Note that if the end-points are relocated and the corresponding configuration entry updated,
-    the WOPI server must be restarted.'''
-    Wopi.log.info('msg="cboxEndPoints: returning all registered office apps end-points" client="%s" mimetypescount="%d"' %
-                  (flask.request.remote_addr, len(core.discovery.endpoints)))
-    return flask.Response(json.dumps(core.discovery.endpoints), mimetype='application/json')
-
-
-@Wopi.app.route("/wopi/cbox/download", methods=['GET'])
-def cboxDownload_deprecated():
-    '''The deprecated endpoint for download'''
-    return iopDownload()
-
-
-#
 # Start the app endless listening loop
 #
 if __name__ == '__main__':
     Wopi.init()
-    core.discovery.initappsregistry()    # deprecated
     Wopi.run()
