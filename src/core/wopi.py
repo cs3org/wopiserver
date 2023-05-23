@@ -59,6 +59,7 @@ def checkFileInfo(fileid, acctok):
         try:
             fmd['PrivacyUrl'] = srv.config.get('general', 'privacyurl')
         except configparser.NoOptionError:
+            # ignore, this property is optional
             pass
         furl = acctok['folderurl']
         if furl != '/':
