@@ -241,10 +241,13 @@ def index():
       The service includes support for non-WOPI-native apps through a bridge extension.<br>
       To use this service, please log in to your EFSS Storage and click on a supported document.</div>
       <div style="position: absolute; bottom: 10px; left: 10px; width: 99%%;"><hr>
-      <i>ScienceMesh WOPI Server %s at %s. Powered by Flask %s for Python %s</i>.
+      <i>ScienceMesh WOPI Server %s at %s. Powered by Flask %s for Python %s.
+         Storage type: <span style="font-family:monospace">%s</span>.
+         Health check: <span style="font-family:monospace">%s</span>.</i>
       </body>
       </html>
-      """ % (WOPISERVERVERSION, socket.getfqdn(), flask.__version__, python_version()))
+      """ % (WOPISERVERVERSION, socket.getfqdn(), flask.__version__, python_version(),
+             Wopi.config.get('general', 'storagetype'), storage.healthcheck()))
     resp.headers['X-Frame-Options'] = 'sameorigin'
     resp.headers['X-XSS-Protection'] = '1; mode=block'
     return resp

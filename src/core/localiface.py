@@ -65,6 +65,21 @@ def init(inconfig, inlog):
             raise IOError('Not a directory')
     except IOError as e:
         raise IOError(f'Could not stat storagehomepath folder {homepath}: {e}')
+    # all right but inform the user
+    log.warning('msg="Use this local storage interface for test/development purposes only, not for production"')
+
+def healthcheck():
+    '''Probes the storage and returns a status message. For local storage, we just stat the root'''
+    try:
+        stat(None, '/', None)
+    except IOError as e:
+        if str(e) == 'Is a directory':
+            # that's expected
+            log.info('msg="Executed health check against storage root"')
+            return 'OK'
+        # any other error is a failure
+        log.error('msg="Health check failed against storage root" error="%s"' % e)
+        return str(e)
 
 
 def getuseridfromcreds(_token, _wopiuser):
