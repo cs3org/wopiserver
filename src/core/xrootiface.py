@@ -159,6 +159,20 @@ def _getfilepath(filepath, encodeamp=False):
     return homepath + (filepath if not encodeamp else filepath.replace('&', '#AND#'))
 
 
+def healthcheck():
+    '''Probes the storage and returns a status message. For xrootd storage, we stat the default endpoint'''
+    try:
+        stat('default', '/', '0:0')
+    except IOError as e:
+        if str(e) == 'Is a directory':
+            # that's expected
+            log.info('msg="Executed health check against default endpoint"')
+            return 'OK'
+        # any other error is a failure
+        log.error('msg="Health check failed against default endpoint" error="%s"' % e)
+        return str(e)
+
+
 def getuseridfromcreds(_token, wopiuser):
     '''Maps a Reva token and wopiuser to the credentials to be used to access the storage.
     For the xrootd case, we have to resolve the username to uid:gid and return

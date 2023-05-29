@@ -11,6 +11,7 @@ import time
 import http
 import requests
 import grpc
+from grpc_health.v1 import health_pb2, health_pb2_grpc
 
 import cs3.storage.provider.v1beta1.resources_pb2 as cs3spr
 import cs3.storage.provider.v1beta1.provider_api_pb2 as cs3sp
@@ -35,9 +36,26 @@ def init(inconfig, inlog):
     ctx['authtokenvalidity'] = inconfig.getint('cs3', 'authtokenvalidity')
     ctx['lockexpiration'] = inconfig.getint('general', 'wopilockexpiration')
     revagateway = inconfig.get('cs3', 'revagateway')
-    # prepare the gRPC connection
-    ch = grpc.insecure_channel(revagateway)
+    # prepare the gRPC channel and validate that the revagateway gRPC server is ready
+    try:
+        ch = grpc.insecure_channel(revagateway)
+        grpc.channel_ready_future(ch).result(timeout=10)
+    except grpc.FutureTimeoutError as e:
+        log.error('msg="Failed to connect to Reva via GRPC" error="%s"' % e)
+        raise IOError(e)
     ctx['cs3gw'] = cs3gw_grpc.GatewayAPIStub(ch)
+    ctx['health'] = health_pb2_grpc.HealthStub(ch)
+
+
+def healthcheck():
+    '''Probes the storage and returns a status message. For cs3 storage, we execute a gRPC health check'''
+    try:
+        res = ctx['health'].Check(health_pb2.HealthCheckRequest(service=''))
+        log.info('msg="Executed health check to Reva gateway" result="%s"' % res.status)
+        return 'OK'
+    except grpc.RpcError as e:
+        log.error('msg="Health check to Reva gateway failed" error="%s"' % e)
+        return str(e)
 
 
 def getuseridfromcreds(token, wopiuser):
