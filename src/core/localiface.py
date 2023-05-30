@@ -72,11 +72,12 @@ def healthcheck():
     '''Probes the storage and returns a status message. For local storage, we just stat the root'''
     try:
         stat(None, '/', None)
+        return 'Warning'   # to please CodeQL but never reached
     except IOError as e:
         if str(e) == 'Is a directory':
-            # that's expected
+            # that's expected, yet we return warning as this is a test/dev storage interface
             log.info('msg="Executed health check against storage root"')
-            return 'OK'
+            return 'Warning'
         # any other error is a failure
         log.error('msg="Health check failed against storage root" error="%s"' % e)
         return str(e)
