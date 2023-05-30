@@ -161,6 +161,7 @@ def getFile(_fileid, acctok):
                   (acctok['filename'], flask.request.args['access_token'][-20:], e))
         return utils.createJsonResponse({'message': 'Failed to access file'}, http.client.INTERNAL_SERVER_ERROR)
 
+
 #
 # The following operations are all called on POST /wopi/files/<fileid>
 #
@@ -493,6 +494,7 @@ def deleteFile(fileid, _reqheaders_unused, acctok):
             return utils.createJsonResponse({'message': 'File not found'}, http.client.NOT_FOUND)
         log.error(f"msg=\"DeleteFile\" token=\"{flask.request.args['access_token'][-20:]}\" error=\"{e}\"")
         return utils.createJsonResponse({'message': IO_ERROR}, http.client.INTERNAL_SERVER_ERROR)
+
 
 def renameFile(fileid, reqheaders, acctok):
     '''Implements the RenameFile WOPI call.'''
