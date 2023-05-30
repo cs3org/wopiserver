@@ -21,7 +21,7 @@ RUN pip3 install --upgrade pip setuptools && \
 
 # install software
 RUN mkdir -p /app/core /app/bridge /test /etc/wopi /var/log/wopi /var/wopi_local_storage
-COPY ./src/* ./tools/* /app/
+COPY ./src/*py ./tools/* /app/
 COPY ./src/core/* /app/core/
 COPY ./src/bridge/* /app/bridge/
 RUN sed -i "s/WOPISERVERVERSION = 'git'/WOPISERVERVERSION = '$VERSION'/" /app/wopiserver.py && \
