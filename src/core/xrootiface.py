@@ -163,6 +163,7 @@ def healthcheck():
     '''Probes the storage and returns a status message. For xrootd storage, we stat the default endpoint'''
     try:
         stat('default', '/', '0:0')
+        return 'OK'   # to please CodeQL but never reached
     except IOError as e:
         if str(e) == 'Is a directory':
             # that's expected

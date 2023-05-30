@@ -11,12 +11,12 @@ import time
 import http
 import requests
 import grpc
-from grpc_health.v1 import health_pb2, health_pb2_grpc
 
 import cs3.storage.provider.v1beta1.resources_pb2 as cs3spr
 import cs3.storage.provider.v1beta1.provider_api_pb2 as cs3sp
-import cs3.gateway.v1beta1.gateway_api_pb2_grpc as cs3gw_grpc
+import cs3.auth.registry.v1beta1.registry_api_pb2 as cs3auth
 import cs3.gateway.v1beta1.gateway_api_pb2 as cs3gw
+import cs3.gateway.v1beta1.gateway_api_pb2_grpc as cs3gw_grpc
 import cs3.rpc.v1beta1.code_pb2 as cs3code
 import cs3.types.v1beta1.types_pb2 as types
 
@@ -44,17 +44,16 @@ def init(inconfig, inlog):
         log.error('msg="Failed to connect to Reva via GRPC" error="%s"' % e)
         raise IOError(e)
     ctx['cs3gw'] = cs3gw_grpc.GatewayAPIStub(ch)
-    ctx['health'] = health_pb2_grpc.HealthStub(ch)
 
 
 def healthcheck():
-    '''Probes the storage and returns a status message. For cs3 storage, we execute a gRPC health check'''
+    '''Probes the storage and returns a status message. For cs3 storage, we execute a call to ListAuthProviders'''
     try:
-        res = ctx['health'].Check(health_pb2.HealthCheckRequest(service=''))
-        log.info('msg="Executed health check to Reva gateway" result="%s"' % res.status)
+        res = ctx['cs3gw'].ListAuthProviders(request=cs3auth.ListAuthProvidersRequest())
+        log.info('msg="Executed ListAuthProviders as health check to Reva gateway" result="%s"' % res.status)
         return 'OK'
     except grpc.RpcError as e:
-        log.error('msg="Health check to Reva gateway failed" error="%s"' % e)
+        log.error('msg="Health check: calling ListAuthProviders on the Reva gateway failed" error="%s"' % e)
         return str(e)
 
 
