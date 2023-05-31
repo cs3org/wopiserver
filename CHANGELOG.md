@@ -1,5 +1,19 @@
 ## Changelog for the WOPI server
 
+### Wed 31 May 2023 - v10.0.0
+- Added CloseUrl and other properties to CheckFileInfo
+- Introduced health check of the configured storage interface
+  to ease deployment validation (#122)
+- Inverted default for wopilockstrictcheck
+- Fixed Preview mode
+- Removed legacy logic for discovery of app endpoints (#119):
+  this is now only implemented by Reva's app providers, and
+  legacy ownCloud/CERNBox UIs are not supported any longer
+- Removed support to forcefully evict valid locks, introduced
+  to compensate a Microsoft Word issue
+- Converted all responses to JSON-formatted (#120)
+- Cleaned up obsoleted scripts
+
 ### Fri 10 Mar 2023 - v9.5.0
 - Introduced concept of user type, given on `/wopi/iop/open`,
   to better serve federated vs regular users with respect to
