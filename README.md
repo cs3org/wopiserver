@@ -57,17 +57,20 @@ To run the tests, either run `pytest` if available in your system, or execute th
 1. Run all tests: `python3 test/test_storageiface.py [-v]`
 2. Run only one test: `python3 test/test_storageiface.py [-v] TestStorage.<the test you would like to run>`
 
-### Test against a Reva endpoint:
+### Test against a Reva CS3 endpoint:
 
 1. Clone reva (https://github.com/cs3org/reva)
-2. Run Reva according to <https://reva.link/docs/tutorials/share-tutorial/> (ie up until step 4 in the instructions).
-3. Run the tests: `WOPI_STORAGE=cs3 python3 test/test_storageiface.py`
+2. Run Reva according to <https://reva.link/docs/tutorials/share-tutorial/> (ie up until step 4 in the instructions)
+4. Configure `test/wopiserver-test.conf` such that the wopiserver can talk to your Reva instance: use [this example](docker/etc/wopiserver.cs3.conf) for a skeleton configuration
+5. Run the tests: `WOPI_STORAGE=cs3 python3 test/test_storageiface.py`
+3. For a production deployment, configure your `wopiserver.conf` following the example above, and make sure the `iopsecret` file contains the same secret as configured in the [Reva appprovider](https://developer.sciencemesh.io/docs/technical-documentation/iop/iop-optional-configs/collabora-wopi-server/wopiserver)
 
 ### Test against an Eos endpoint:
 
 1. Make sure your Eos instance is configured to accept connections from WOPI as a privileged gateway
-2. Configure `wopiserver-test.conf` according to your Eos setup. The provided defaults are valid at CERN.
+2. Configure `test/wopiserver-test.conf` according to your Eos setup (the provided defaults are valid at CERN)
 3. Run the tests: `WOPI_STORAGE=xroot python3 test/test_storageiface.py`
+4. For a production deployment (CERN only), configure your `wopiserver.conf` according to the Puppet infrastructure
 
 ### Test using the Microsoft WOPI validator test suite
 
@@ -82,7 +85,7 @@ as part of their Office 365 offer, which is also supported via the Reva open-in-
 3. Create the folder for the wopi config: `sudo mkdir /etc/wopi/ && sudo chmod a+rwx /etc/wopi`
 4. Create recoveryfolder: `sudo mkdir /var/spool/wopirecovery && sudo chmod a+rwx /var/spool/wopirecovery`
 5. Create the files `iopsecret` and `wopiscret` in the folder `/etc/wopi/`, create random strings for the secrets
-6. Copy the provided `wopiserver.conf` to `/etc/wopi/wopiserver.defaults.conf`
+6. Copy the provided [wopiserver.conf](./wopiserver.conf) to `/etc/wopi/wopiserver.defaults.conf`
 7. Create a config file `/etc/wopi/wopiserver.conf`: start from `docker/etc/wopiserver.conf` for a minimal configuration and add from the defaults file as needed
 8. From the WOPI server folder run: `python3 src/wopiserver.py`
 
@@ -90,9 +93,8 @@ as part of their Office 365 offer, which is also supported via the Reva open-in-
 
 Once the WOPI server runs on top of local storage, the `tools/wopiopen.py` script can be used
 to test the open-in-app workflow.
-For that, assuming you have e.g. CodiMD deployed in your (docker-compose) cluster:
+For that, assuming you have e.g. CodiMD deployed in your cluster:
 
 1. Create a `test.md` file in your local storage folder, e.g. `/var/wopi_local_storage`
 2. From the WOPI server folder, execute `tools/wopiopen.py -a CodiMD -i "internal_CodiMD_URL" -u "user_visible_CodiMD_URL" -k CodiMD_API_Key test.md`
 3. If everything was setup correctly, you'll get a JSON response including an `app-url`. Open it in a browser to access the file. Otherwise, the tool prints the response from the WOPI server and the logs should help troubleshooting the problem.
-
