@@ -243,7 +243,7 @@ def index():
       <div style="position: absolute; bottom: 10px; left: 10px; width: 99%%;"><hr>
       <i>ScienceMesh WOPI Server %s at %s. Powered by Flask %s for Python %s.
          Storage type: <span style="font-family:monospace">%s</span>.
-         Health check: <span style="font-family:monospace">%s</span>.</i>
+         Health status: <span style="font-family:monospace">%s</span>.</i>
       </body>
       </html>
       """ % (WOPISERVERVERSION, socket.getfqdn(), flask.__version__, python_version(),
