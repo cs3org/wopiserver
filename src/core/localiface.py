@@ -68,6 +68,7 @@ def init(inconfig, inlog):
     # all right but inform the user
     log.warning('msg="Use this local storage interface for test/development purposes only, not for production"')
 
+
 def healthcheck():
     '''Probes the storage and returns a status message. For local storage, we just stat the root'''
     try:
@@ -76,7 +77,7 @@ def healthcheck():
     except IOError as e:
         if str(e) == 'Is a directory':
             # that's expected, yet we return warning as this is a test/dev storage interface
-            log.info('msg="Executed health check against storage root"')
+            log.debug('msg="Executed health check against storage root"')
             return 'Warning'
         # any other error is a failure
         log.error('msg="Health check failed against storage root" error="%s"' % e)
