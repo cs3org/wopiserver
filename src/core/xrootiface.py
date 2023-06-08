@@ -167,7 +167,7 @@ def healthcheck():
     except IOError as e:
         if str(e) == 'Is a directory':
             # that's expected
-            log.info('msg="Executed health check against default endpoint"')
+            log.debug('msg="Executed health check against default endpoint"')
             return 'OK'
         # any other error is a failure
         log.error('msg="Health check failed against default endpoint" error="%s"' % e)
@@ -189,7 +189,8 @@ def stat(endpoint, filepath, userid):
     tstart = time.time()
     rc, statInfo = _getxrdfor(endpoint).stat(filepath + _eosargs(userid), timeout=timeout)
     tend = time.time()
-    log.info(f'msg="Invoked stat" filepath="{filepath}" elapsedTimems="{(tend - tstart) * 1000:.1f}"')
+    logfun = log.debug if filepath == '/' else log.info
+    logfun(f'msg="Invoked stat" filepath="{filepath}" elapsedTimems="{(tend - tstart) * 1000:.1f}"')
     if not statInfo:
         if common.ENOENT_MSG in rc.message:
             raise IOError(common.ENOENT_MSG)
