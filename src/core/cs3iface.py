@@ -35,10 +35,10 @@ def init(inconfig, inlog):
     ctx['ssl_verify'] = inconfig.getboolean('cs3', 'sslverify', fallback=True)
     ctx['authtokenvalidity'] = inconfig.getint('cs3', 'authtokenvalidity')
     ctx['lockexpiration'] = inconfig.getint('general', 'wopilockexpiration')
-    revagateway = inconfig.get('cs3', 'revagateway')
+    ctx['revagateway'] = inconfig.get('cs3', 'revagateway')
     # prepare the gRPC channel and validate that the revagateway gRPC server is ready
     try:
-        ch = grpc.insecure_channel(revagateway)
+        ch = grpc.insecure_channel(ctx['revagateway'])
         grpc.channel_ready_future(ch).result(timeout=10)
     except grpc.FutureTimeoutError as e:
         log.error('msg="Failed to connect to Reva via GRPC" error="%s"' % e)
@@ -50,10 +50,12 @@ def healthcheck():
     '''Probes the storage and returns a status message. For cs3 storage, we execute a call to ListAuthProviders'''
     try:
         res = ctx['cs3gw'].ListAuthProviders(request=cs3auth.ListAuthProvidersRequest())
-        log.debug('msg="Executed ListAuthProviders as health check to Reva gateway" result="%s"' % res.status)
+        log.debug('msg="Executed ListAuthProviders as health check" endpoint="%s" result="%s"' %
+                  (ctx['revagateway'], res.status))
         return 'OK'
     except grpc.RpcError as e:
-        log.error('msg="Health check: calling ListAuthProviders on the Reva gateway failed" error="%s"' % e)
+        log.error('msg="Health check: failed to call ListAuthProviders" endpoint="%s" error="%s"' %
+                  (ctx['revagateway'], e))
         return str(e)
 
 

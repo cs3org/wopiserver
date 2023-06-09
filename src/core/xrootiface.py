@@ -167,10 +167,10 @@ def healthcheck():
     except IOError as e:
         if str(e) == 'Is a directory':
             # that's expected
-            log.debug('msg="Executed health check against default endpoint"')
+            log.debug('msg="Executed health check" endpoint="%s"' % _geturlfor('default'))
             return 'OK'
         # any other error is a failure
-        log.error('msg="Health check failed against default endpoint" error="%s"' % e)
+        log.error('msg="Health check failed" endpoint="%s" error="%s"' % (_geturlfor('default'), e))
         return str(e)
 
 
