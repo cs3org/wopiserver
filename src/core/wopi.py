@@ -575,13 +575,14 @@ def putFile(fileid, acctok):
     if 'X-WOPI-Lock' not in flask.request.headers:
         # no lock given: assume we are in creation mode (cf. editnew WOPI action)
         return _createNewFile(fileid, acctok)
-    # otherwise, check that the caller holds the current lock on the file
+    # otherwise, check that the caller holds the current lock on the file: the check is in non-strict mode
+    # as we have observed cases of lock mismatch (but matching sessionId) that lead to incorrect save failures
     lock = flask.request.headers['X-WOPI-Lock']
     retrievedLock, lockHolder = utils.retrieveWopiLock(fileid, 'PUTFILE', lock, acctok)
     if retrievedLock is None:
         return utils.makeConflictResponse('PUTFILE', acctok['userid'], retrievedLock, lock, 'NA',
                                           acctok['filename'], 'Cannot overwrite unlocked file')
-    if not utils.compareWopiLocks(retrievedLock, lock):
+    if not utils.compareWopiLocks(retrievedLock, lock, strict=False):
         log.warning('msg="Forcing conflict based on mismatched lock" holder="%s" user="%s" filename="%s" token="%s"' %
                     (lockHolder, acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:]))
         return utils.storeAfterConflict(acctok, retrievedLock, lock, 'Cannot overwrite file locked by %s' %
