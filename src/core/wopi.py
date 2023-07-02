@@ -148,7 +148,7 @@ def getFile(_fileid, acctok):
         # stream file from storage to client
         resp = flask.Response(f, mimetype='application/octet-stream')
         resp.status_code = http.client.OK
-        resp.headers['Content-Disposition'] = f"attachment; filename=\"{url_quote(os.path.basename(acctok['filename']))}\""
+        resp.headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{url_quote(os.path.basename(acctok['filename']))}"
         resp.headers['X-Frame-Options'] = 'sameorigin'
         resp.headers['X-XSS-Protection'] = '1; mode=block'
         resp.headers['X-WOPI-ItemVersion'] = f"v{statInfo['etag']}"
