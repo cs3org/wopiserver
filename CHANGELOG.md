@@ -1,6 +1,10 @@
 ## Changelog for the WOPI server
 
-### Wed 31 May 2023 - v10.0.0
+### Wed Jul  5 2023 - v10.1.0
+- Fixed handling of filenames with non latin-1 characters (#127)
+- Improved logging and adjusted log levels (#123)
+
+### Wed May 31 2023 - v10.0.0
 - Added CloseUrl and other properties to CheckFileInfo
 - Introduced health check of the configured storage interface
   to ease deployment validation (#122)
@@ -14,7 +18,7 @@
 - Converted all responses to JSON-formatted (#120)
 - Cleaned up obsoleted scripts
 
-### Fri 10 Mar 2023 - v9.5.0
+### Fri Mar 10 2023 - v9.5.0
 - Introduced concept of user type, given on `/wopi/iop/open`,
   to better serve federated vs regular users with respect to
   folder URLs and SaveAs operations
