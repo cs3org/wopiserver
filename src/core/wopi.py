@@ -582,8 +582,9 @@ def putFile(fileid, acctok):
         return utils.makeConflictResponse('PUTFILE', acctok['userid'], retrievedLock, lock, 'NA',
                                           acctok['filename'], 'Cannot overwrite unlocked file')
     if not utils.compareWopiLocks(retrievedLock, lock):
-        log.warning('msg="Forcing conflict based on mismatched lock" holder="%s" user="%s" filename="%s" token="%s"' %
-                    (lockHolder, acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:]))
+        log.warning('msg="Mismatched lock, forcing conflict" holder="%s" user="%s" filename="%s" session="%s" token="%s"' %
+                    (lockHolder, acctok['userid'][-20:], acctok['filename'], flask.request.headers.get('X-WOPI-SessionId'),
+                     flask.request.args['access_token'][-20:]))
         return utils.storeAfterConflict(acctok, retrievedLock, lock, 'Cannot overwrite file locked by %s' %
                                         (lockHolder if lockHolder != 'wopi' else 'another application'))
 
