@@ -3,6 +3,8 @@
 ### Wed Jul  5 2023 - v10.1.0
 - Fixed handling of filenames with non latin-1 characters (#127)
 - Improved logging and adjusted log levels (#123)
+- Switched from CentOS Stream 8 to AlmaLinux 8 for the
+  xroot-flavoured docker image
 
 ### Wed May 31 2023 - v10.0.0
 - Added CloseUrl and other properties to CheckFileInfo
