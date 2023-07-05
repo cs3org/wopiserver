@@ -3,7 +3,7 @@
 # Build: WOPI_DOCKER_TYPE=-xrootd docker-compose -f wopiserver.yaml build --build-arg VERSION=`git describe | sed 's/^v//'` wopiserver
 # Run: docker-compose -f wopiserver.yaml up -d
 
-FROM cern/cs8-base:latest
+FROM cern/alma8-base:latest
 
 ARG VERSION=latest
 
