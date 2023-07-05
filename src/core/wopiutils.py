@@ -352,13 +352,13 @@ def compareWopiLocks(lock1, lock2, strict=True):
         try:
             l2 = json.loads(lock2)
             if 'S' in l1 and 'S' in l2:
-                log.debug('msg="compareLocks" lock1="%s" lock2="%s" strict="False" result="%r"' %
+                log.warn('msg="compareLocks" lock1="%s" lock2="%s" strict="False" result="%r"' %
                           (lock1, lock2, l1['S'] == l2['S']))
                 return l1['S'] == l2['S']         # used by Word
         except (TypeError, ValueError):
             # lock2 is not a JSON dictionary
             if 'S' in l1:
-                log.debug('msg="compareLocks" lock1="%s" lock2="%s" strict="False" result="%r"' %
+                log.warn('msg="compareLocks" lock1="%s" lock2="%s" strict="False" result="%r"' %
                           (lock1, lock2, l1['S'] == lock2))
                 return l1['S'] == lock2                    # also used by Word
     except (TypeError, ValueError):
