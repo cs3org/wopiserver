@@ -22,8 +22,8 @@ RUN yum clean all && yum -y install \
         python3-pip \
         python3-devel \
         openssl-devel \
-        xrootd-client \
-        xrootd-devel \
+        xrootd-client-5.5.5-1.el8 \
+        xrootd-devel-5.5.5-1.el8 \
         libuuid-devel \
         cmake \
         make \
@@ -32,7 +32,7 @@ RUN yum clean all && yum -y install \
 
 RUN pip3 install --upgrade pip setuptools && \
     pip3 install --upgrade flask pyOpenSSL PyJWT requests more_itertools prometheus-flask-exporter wheel
-RUN pip3 --default-timeout=900 install xrootd
+RUN pip3 --default-timeout=900 install "xrootd==5.5.5"
 
 # install software
 RUN mkdir -p /app/core /app/bridge /test /etc/wopi /var/log/wopi
