@@ -582,11 +582,16 @@ def putFile(fileid, acctok):
         return utils.makeConflictResponse('PUTFILE', acctok['userid'], retrievedLock, lock, 'NA',
                                           acctok['filename'], 'Cannot overwrite unlocked file')
     if not utils.compareWopiLocks(retrievedLock, lock):
-        log.warning('msg="Mismatched lock, forcing conflict" holder="%s" user="%s" filename="%s" session="%s" token="%s"' %
+        # the save operation is to be refused, but as we have seen cases of PutFile calls with incorrect locks followed by
+        # correct ones, we do not store the conflict file in the user's home but only in the recovery area, as it may turn
+        # out to be a false positive
+        log.warning('msg="Mismatched lock, storing for recovery" holder="%s" user="%s" filename="%s" session="%s" token="%s"' %
                     (lockHolder, acctok['userid'][-20:], acctok['filename'], flask.request.headers.get('X-WOPI-SessionId'),
                      flask.request.args['access_token'][-20:]))
-        return utils.storeAfterConflict(acctok, retrievedLock, lock, 'Cannot overwrite file locked by %s' %
-                                        (lockHolder if lockHolder != 'wopi' else 'another application'))
+        utils.storeForRecovery(flask.request.get_data(), acctok['wopiuser'], acctok['filename'],
+                               flask.request.args['access_token'][-20:], "Mismatched lock on PutFile")
+        return utils.makeConflictResponse('PUTFILE', acctok['userid'], retrievedLock, lock, 'NA',
+                                          acctok['filename'], 'Cannot overwrite file locked by %s' % lockHolder)
 
     # OK, we can save the file: check the destination file against conflicts if required
     log.info('msg="PutFile" user="%s" filename="%s" fileid="%s" action="edit" token="%s"' %
