@@ -580,17 +580,18 @@ def putFile(fileid, acctok):
     if retrievedLock is None:
         return utils.makeConflictResponse('PUTFILE', acctok['userid'], retrievedLock, lock, 'NA',
                                           acctok['filename'], 'Cannot overwrite unlocked file')
+    if retrievedLock == utils.EXTERNALLOCK:
+        # this should not happen and we must fail, yet we save the file as conflict for the user to recover it
+        log.error('msg="Detected external lock, forcing conflict" user="%s" filename="%s" tocken="%s"' %
+                  (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:]))
+        return utils.storeAfterConflict(acctok, retrievedLock, lock, f'Cannot overwrite file edited by {lockHolder}')
     if not utils.compareWopiLocks(retrievedLock, lock):
-        # the save operation is to be refused, but as we have seen cases of PutFile calls with incorrect locks followed by
-        # correct ones, we do not store the conflict file in the user's home but only in the recovery area, as it may turn
-        # out to be a false positive
-        log.warning('msg="Mismatched lock, storing for recovery" holder="%s" user="%s" filename="%s" session="%s" token="%s"' %
-                    (lockHolder, acctok['userid'][-20:], acctok['filename'], flask.request.headers.get('X-WOPI-SessionId'),
-                     flask.request.args['access_token'][-20:]))
+        # the save operation is to be refused, but we should get a subsequent PutFile call with the correct lock, given that
+        # the current lock is from WOPI; yet we keep the file in the recovery area in case the error turned out to be real
         utils.storeForRecovery(acctok['wopiuser'], acctok['filename'], flask.request.args['access_token'][-20:],
                                'Mismatched lock on PutFile')
         return utils.makeConflictResponse('PUTFILE', acctok['userid'], retrievedLock, lock, 'NA',
-                                          acctok['filename'], 'Cannot overwrite file locked by %s' % lockHolder)
+                                          acctok['filename'], f'Cannot overwrite file locked by {lockHolder}')
 
     # OK, we can save the file: check the destination file against conflicts if required
     log.info('msg="PutFile" user="%s" filename="%s" fileid="%s" action="edit" token="%s"' %
