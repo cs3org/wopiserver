@@ -33,6 +33,9 @@ USERINFOKEY = 'iop.wopi.userinfo'
 # header used by reverse proxies such as traefik to pass the real remote IP address
 REALIPHEADER = 'X-Real-IP'
 
+# conventional string representing an external, non-WOPI lock
+EXTERNALLOCK = 'External'
+
 # convenience references to global entities
 st = None
 srv = None
@@ -280,7 +283,7 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefn=None):
             mslockstat = st.stat(acctok['endpoint'], getMicrosoftOfficeLockName(acctok['filename']), acctok['userid'])
             log.info('msg="Found existing MS Office lock" lockop="%s" user="%s" filename="%s" token="%s" lockmtime="%ld"' %
                      (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, mslockstat['mtime']))
-            return 'External', 'Microsoft Office for Desktop'
+            return EXTERNALLOCK, 'Microsoft Office for Desktop'
         except IOError:
             pass
         try:
@@ -297,7 +300,7 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefn=None):
                          'lockmtime="%ld" holder="%s"' %
                          (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok,
                           lolockstat['mtime'], lolockholder))
-                return 'External', 'LibreOffice for Desktop'
+                return EXTERNALLOCK, 'LibreOffice for Desktop'
         except (IOError, StopIteration):
             pass
 
@@ -325,7 +328,7 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefn=None):
     except IOError as e:
         log.info('msg="Found non-compatible or unreadable lock" lockop="%s" user="%s" filename="%s" token="%s" error="%s"' %
                  (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, e))
-        return 'External', 'Another app or user'
+        return EXTERNALLOCK, 'Another app or user'
 
     log.info('msg="Retrieved lock" lockop="%s" user="%s" filename="%s" fileid="%s" lock="%s" '
              'retrievedlock="%s" expTime="%s" token="%s"' %
@@ -380,7 +383,7 @@ def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, filename
     resp.data = json.dumps(reason)
 
     session = flask.request.headers.get('X-WOPI-SessionId')
-    if session and retrievedlock != 'External' and \
+    if session and retrievedlock != EXTERNALLOCK and \
        session not in srv.conflictsessions['pending'] and session not in srv.conflictsessions['resolved']:
         srv.conflictsessions['pending'][session] = {
             'user': user,
@@ -485,8 +488,7 @@ def storeAfterConflict(acctok, retrievedlock, lock, reason):
                 dorecovery = e
 
     if dorecovery:
-        storeForRecovery(flask.request.get_data(), acctok['wopiuser'], newname,
-                         flask.request.args['access_token'][-20:], dorecovery)
+        storeForRecovery(acctok['wopiuser'], newname, flask.request.args['access_token'][-20:], dorecovery)
         # conflict file was stored on recovery space, tell user (but reason is advisory...)
         reason += ', please contact support to recover it'
     else:
@@ -498,13 +500,13 @@ def storeAfterConflict(acctok, retrievedlock, lock, reason):
                                 acctok['filename'], reason)
 
 
-def storeForRecovery(content, wopiuser, filename, acctokforlog, exception):
+def storeForRecovery(wopiuser, filename, acctokforlog, exception):
     try:
         filepath = srv.recoverypath + os.sep + time.strftime('%Y%m%dT%H%M%S') + '_editedby_' \
                    + secure_filename(wopiuser.split('!')[0]) + '_origat_' + secure_filename(filename)
         with open(filepath, mode='wb') as f:
-            written = f.write(content)
-        if written != len(content):
+            written = f.write(flask.request.get_data())
+        if written != len(flask.request.get_data()):
             raise IOError('Size mismatch')
         log.error('msg="Error writing file, a copy was stored locally for later recovery" '
                   + 'filename="%s" recoveredpath="%s" token="%s" error="%s"' %

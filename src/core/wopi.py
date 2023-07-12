@@ -208,7 +208,7 @@ def setLock(fileid, reqheaders, acctok):
     if srv.config.get('general', 'detectexternallocks', fallback='True').upper() == 'TRUE' and \
        os.path.splitext(fn)[1] in srv.codetypes:
         try:
-            if retrievedLock == 'External':
+            if retrievedLock == utils.EXTERNALLOCK:
                 return utils.makeConflictResponse(op, acctok['userid'], retrievedLock, lock, oldLock,
                                                   fn, 'The file is locked by ' + lockHolder, savetime=savetime)
 
@@ -565,8 +565,7 @@ def _createNewFile(fileid, acctok):
                      (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:]))
             return utils.createJsonResponse({'message': 'OK'}, http.client.OK)
         except IOError as e:
-            utils.storeForRecovery(flask.request.get_data(), acctok['wopiuser'], acctok['filename'],
-                                   flask.request.args['access_token'][-20:], e)
+            utils.storeForRecovery(acctok['wopiuser'], acctok['filename'], flask.request.args['access_token'][-20:], e)
             return utils.createJsonResponse({'message': IO_ERROR}, http.client.INTERNAL_SERVER_ERROR)
 
 
@@ -588,8 +587,8 @@ def putFile(fileid, acctok):
         log.warning('msg="Mismatched lock, storing for recovery" holder="%s" user="%s" filename="%s" session="%s" token="%s"' %
                     (lockHolder, acctok['userid'][-20:], acctok['filename'], flask.request.headers.get('X-WOPI-SessionId'),
                      flask.request.args['access_token'][-20:]))
-        utils.storeForRecovery(flask.request.get_data(), acctok['wopiuser'], acctok['filename'],
-                               flask.request.args['access_token'][-20:], "Mismatched lock on PutFile")
+        utils.storeForRecovery(acctok['wopiuser'], acctok['filename'], flask.request.args['access_token'][-20:],
+                               'Mismatched lock on PutFile')
         return utils.makeConflictResponse('PUTFILE', acctok['userid'], retrievedLock, lock, 'NA',
                                           acctok['filename'], 'Cannot overwrite file locked by %s' % lockHolder)
 
@@ -609,7 +608,8 @@ def putFile(fileid, acctok):
                             'savetime="%s" mtime="%s" token="%s"' %
                             (acctok['userid'][-20:], acctok['filename'], savetime, mtime,
                              flask.request.args['access_token'][-20:]))
-                return utils.storeAfterConflict(acctok, 'External', lock, 'The file being edited got moved or overwritten')
+                return utils.storeAfterConflict(acctok, utils.EXTERNALLOCK, lock,
+                                                'The file being edited got moved or overwritten')
 
         # Go for overwriting the file. Note that the entire check+write operation should be atomic,
         # but the previous checks still give the opportunity of a race condition. We just live with it.
@@ -625,8 +625,7 @@ def putFile(fileid, acctok):
         return resp
 
     except IOError as e:
-        utils.storeForRecovery(flask.request.get_data(), acctok['wopiuser'], acctok['filename'],
-                               flask.request.args['access_token'][-20:], e)
+        utils.storeForRecovery(acctok['wopiuser'], acctok['filename'], flask.request.args['access_token'][-20:], e)
         return utils.createJsonResponse({'message': IO_ERROR}, http.client.INTERNAL_SERVER_ERROR)
 
 
