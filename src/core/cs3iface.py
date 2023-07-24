@@ -36,6 +36,7 @@ def init(inconfig, inlog):
     ctx['authtokenvalidity'] = inconfig.getint('cs3', 'authtokenvalidity')
     ctx['lockexpiration'] = inconfig.getint('general', 'wopilockexpiration')
     ctx['revagateway'] = inconfig.get('cs3', 'revagateway')
+    ctx['xattrcache'] = {}    # this is a map cs3ref -> arbitrary_metadata as returned by Stat()
     # prepare the gRPC channel and validate that the revagateway gRPC server is ready
     try:
         ch = grpc.insecure_channel(ctx['revagateway'])
@@ -135,6 +136,8 @@ def stat(endpoint, fileref, userid, versioninv=1):
         filepath = statInfo.info.parent_id.opaque_id + '/' + os.path.basename(statInfo.info.path)
     log.info('msg="Invoked stat" fileref="%s" trace="%s" inode="%s" filepath="%s" elapsedTimems="%.1f"' %
              (fileref, statInfo.status.trace, inode, filepath, (tend-tstart)*1000))
+    # cache the xattrs map prior to returning; note we're never cleaning this cache and let it grow indefinitely
+    ctx['xattrcache'][ref] = statInfo.info.arbitrary_metadata
     return {
         'inode': inode,
         'filepath': filepath,
@@ -152,13 +155,15 @@ def statx(endpoint, fileref, userid, versioninv=1):
 
 def setxattr(endpoint, filepath, userid, key, value, lockmd):
     '''Set the extended attribute <key> to <value> using the given userid as access token'''
-    reference = _getcs3reference(endpoint, filepath)
+    ref = _getcs3reference(endpoint, filepath)
     md = cs3spr.ArbitraryMetadata()
     md.metadata.update({key: str(value)})        # pylint: disable=no-member
+    if ref in ctx['xattrcache']:
+        ctx['xattrcache'][ref].metadata[key] = str(value)
     lockid = None
     if lockmd:
         _, lockid = lockmd
-    req = cs3sp.SetArbitraryMetadataRequest(ref=reference, arbitrary_metadata=md, lock_id=lockid)
+    req = cs3sp.SetArbitraryMetadataRequest(ref=ref, arbitrary_metadata=md, lock_id=lockid)
     res = ctx['cs3gw'].SetArbitraryMetadata(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to setxattr" filepath="%s" key="%s" trace="%s" code="%s" reason="%s"' %
@@ -169,41 +174,49 @@ def setxattr(endpoint, filepath, userid, key, value, lockmd):
 
 def getxattr(endpoint, filepath, userid, key):
     '''Get the extended attribute <key> using the given userid as access token'''
-    tstart = time.time()
-    reference = _getcs3reference(endpoint, filepath)
-    statInfo = ctx['cs3gw'].Stat(request=cs3sp.StatRequest(ref=reference), metadata=[('x-access-token', userid)])
-    tend = time.time()
-    if statInfo.status.code == cs3code.CODE_NOT_FOUND:
-        log.debug(f'msg="Invoked stat for getxattr on missing file" filepath="{filepath}"')
-        return None
-    if statInfo.status.code != cs3code.CODE_OK:
-        log.error('msg="Failed to stat" filepath="%s" userid="%s" trace="%s" key="%s" reason="%s"' %
-                  (filepath, userid[-20:], statInfo.status.trace, key, statInfo.status.message.replace('"', "'")))
-        raise IOError(statInfo.status.message)
+    ref = _getcs3reference(endpoint, filepath)
+    statInfo = None
+    if ref not in ctx['xattrcache']:
+        # cache miss, go for Stat and refresh cache
+        tstart = time.time()
+        statInfo = ctx['cs3gw'].Stat(request=cs3sp.StatRequest(ref=ref), metadata=[('x-access-token', userid)])
+        tend = time.time()
+        if statInfo.status.code == cs3code.CODE_NOT_FOUND:
+            log.debug(f'msg="Invoked stat for getxattr on missing file" filepath="{filepath}"')
+            return None
+        if statInfo.status.code != cs3code.CODE_OK:
+            log.error('msg="Failed to stat" filepath="%s" userid="%s" trace="%s" key="%s" reason="%s"' %
+                      (filepath, userid[-20:], statInfo.status.trace, key, statInfo.status.message.replace('"', "'")))
+            raise IOError(statInfo.status.message)
+        log.debug(f'msg="Invoked stat for getxattr" filepath="{filepath}" elapsedTimems="{(tend - tstart) * 1000:.1f}"')
+        ctx['xattrcache'][ref] = statInfo.info.arbitrary_metadata
     try:
-        xattrvalue = statInfo.info.arbitrary_metadata.metadata[key]
+        xattrvalue = ctx['xattrcache'][ref].metadata[key]
         if xattrvalue == '':
             raise KeyError
-        log.debug(f'msg="Invoked stat for getxattr" filepath="{filepath}" elapsedTimems="{(tend - tstart) * 1000:.1f}"')
+        if not statInfo:
+            log.debug(f'msg="Returning cached attr on getxattr" filepath="{filepath}" key="{key}"')
         return xattrvalue
     except KeyError:
         log.info('msg="Empty value or key not found in getxattr" filepath="%s" key="%s" trace="%s" metadata="%s"' %
-                 (filepath, key, statInfo.status.trace, statInfo.info.arbitrary_metadata.metadata))
+                 (filepath, key, statInfo.status.trace if statInfo else 'N/A', ctx['xattrcache'][ref].metadata))
         return None
 
 
 def rmxattr(endpoint, filepath, userid, key, lockmd):
     '''Remove the extended attribute <key> using the given userid as access token'''
-    reference = _getcs3reference(endpoint, filepath)
+    ref = _getcs3reference(endpoint, filepath)
     lockid = None
     if lockmd:
         _, lockid = lockmd
-    req = cs3sp.UnsetArbitraryMetadataRequest(ref=reference, arbitrary_metadata_keys=[key], lock_id=lockid)
+    req = cs3sp.UnsetArbitraryMetadataRequest(ref=ref, arbitrary_metadata_keys=[key], lock_id=lockid)
     res = ctx['cs3gw'].UnsetArbitraryMetadata(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to rmxattr" filepath="%s" trace="%s" key="%s" reason="%s"' %
                   (filepath, key, res.status.trace, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
+    if ref in ctx['xattrcache']:
+        del ctx['xattrcache'][ref].metadata[key]
     log.debug(f'msg="Invoked rmxattr" result="{res.status}"')
 
 
