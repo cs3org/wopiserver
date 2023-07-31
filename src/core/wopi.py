@@ -43,8 +43,9 @@ def checkFileInfo(fileid, acctok):
         hosteurl = srv.config.get('general', 'hostediturl', fallback=None)
         if hosteurl:
             fmd['HostEditUrl'] = utils.generateUrlFromTemplate(hosteurl, acctok)
-            host = urlparse(fmd['HostEditUrl'])
-            fmd['PostMessageOrigin'] = host.scheme + '://' + host.netloc
+            # for the PostMessage origin, use the folderurl if given and not empty, else the editurl
+            pmhost = urlparse(acctok['folderurl'] if len(acctok['folderurl']) > 1 else fmd['HostEditUrl'])
+            fmd['PostMessageOrigin'] = pmhost.scheme + '://' + pmhost.netloc
             fmd['EditModePostMessage'] = fmd['EditNotificationPostMessage'] = True
         else:
             fmd['HostEditUrl'] = f"{acctok['appediturl']}{'&' if '?' in acctok['appediturl'] else '?'}{wopiSrc}"
