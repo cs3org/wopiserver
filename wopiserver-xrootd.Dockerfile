@@ -11,7 +11,7 @@ LABEL maintainer="cernbox-admins@cern.ch" \
   org.opencontainers.image.title="The CERNBox/IOP WOPI server" \
   org.opencontainers.image.version="$VERSION"
 
-COPY ./docker/etc/epel8.repo /etc/yum.repos.d/
+COPY ./docker/etc/*.repo /etc/yum.repos.d/
 
 # prerequisites: until we need to support xrootd (even on C8), we have some EPEL dependencies, easier to install via yum/dnf;
 # the rest is actually installed via pip, including the xrootd python bindings
