@@ -19,10 +19,9 @@ The module implements a stateless server, as all context information is stored i
 
 ### CodiMD specifics
 * Support for readonly (publish or slide) mode vs. read/write mode
-* Transparent handling of uploads (i.e. pictures):
-  * If a note has no pictures, it is handled as a `.md` text file
-  * Once a picture is included, on close the save to WOPI is executed as a zipped bundle, with a `.zmd` extension, and the previous `.md` file is removed; similarly if all pictures are removed and the file is saved back as `.md`
-  * Files ending as `.zmd` are equally treated as zipped bundles and expanded to CodiMD
+* Inclusion of pictures supported according to file extension:
+  * For plain `.md` files, directly incorporating pictures is disabled, but a cloud file-picker is enabled to allow incorporating links to external pictures
+  * If a file is created as `.zmd` (for _zipped markdown_), it is possible to include pictures and the save to WOPI is executed as a zipped bundle, including all pictures (if any) in the bundle. On load, `.zmd` files are transparently expanded to CodiMD
 
 #### Required CodiMD APIs
 * `/new`                    push a new file to a random `<noteid>`
@@ -36,5 +35,7 @@ The module implements a stateless server, as all context information is stored i
 
 
 ### Etherpad specifics
+
+This is still work in progress as the etherpad plugin is incomplete.
 * Support for readonly and read/write files
 * Automatic save via dedicated `ep_sciencemesh` plugin
