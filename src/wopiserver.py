@@ -147,7 +147,7 @@ class Wopi:
                 os.makedirs(cls.recoverypath)
             except FileExistsError:
                 pass
-            _ = cls.config.getint('general', 'wopilockexpiration')   # make sure this is defined as an int
+            _ = cls.config.getint('general', 'wopilockexpiration', fallback=1800)   # make sure this is defined as an int
             # WOPI proxy configuration (optional)
             cls.wopiproxy = cls.config.get('general', 'wopiproxy', fallback='')
             cls.wopiproxykey = None
@@ -179,7 +179,7 @@ class Wopi:
             cls.lastConfigReadTime = time.time()
             cls.config.read('/etc/wopi/wopiserver.conf')
             # refresh some general parameters
-            cls.tokenvalidity = cls.config.getint('general', 'tokenvalidity')
+            cls.tokenvalidity = cls.config.getint('general', 'tokenvalidity', fallback=86400)
             cls.log.setLevel(cls.loglevels[cls.config.get('general', 'loglevel')])
 
     @classmethod
