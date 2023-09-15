@@ -278,6 +278,10 @@ def unlock(endpoint, filepath, userid, appname, value):
     lock = cs3spr.Lock(type=cs3spr.LOCK_TYPE_WRITE, app_name=appname, lock_id=value)
     req = cs3sp.UnlockRequest(ref=reference, lock=lock)
     res = ctx['cs3gw'].Unlock(request=req, metadata=[('x-access-token', userid)])
+    if res.status.code in [cs3code.CODE_FAILED_PRECONDITION, cs3code.CODE_ABORTED]:
+        log.info('msg="Failed precondition on unlock" filepath="%s" appname="%s" trace="%s" reason="%s"' %
+                 (filepath, appname, res.status.trace, res.status.message.replace('"', "'")))
+        raise IOError(common.EXCL_ERROR)
     if res.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to unlock" filepath="%s" trace="%s" code="%s" reason="%s"' %
                   (filepath, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
