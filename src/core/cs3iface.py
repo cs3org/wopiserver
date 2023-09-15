@@ -22,6 +22,9 @@ import cs3.types.v1beta1.types_pb2 as types
 
 import core.commoniface as common
 
+# key used if the `lockasattr` option is true, in order to store the lock payload without ensuring any lock semantic
+LOCK_ATTR_KEY = 'wopi.advlock'
+
 # module-wide state
 ctx = {}            # "map" to store some module context: cf. init()
 log = None
@@ -33,8 +36,9 @@ def init(inconfig, inlog):
     log = inlog
     ctx['chunksize'] = inconfig.getint('io', 'chunksize')
     ctx['ssl_verify'] = inconfig.getboolean('cs3', 'sslverify', fallback=True)
-    ctx['authtokenvalidity'] = inconfig.getint('cs3', 'authtokenvalidity')
     ctx['lockexpiration'] = inconfig.getint('general', 'wopilockexpiration')
+    ctx['lockasattr'] = inconfig.getboolean('cs3', 'lockasattr', fallback=False)
+    ctx['locknotimpl'] = False
     ctx['revagateway'] = inconfig.get('cs3', 'revagateway')
     ctx['xattrcache'] = {}    # this is a map cs3ref -> arbitrary_metadata as returned by Stat()
     # prepare the gRPC channel and validate that the revagateway gRPC server is ready
@@ -234,6 +238,18 @@ def rmxattr(endpoint, filepath, userid, key, lockmd):
 
 def setlock(endpoint, filepath, userid, appname, value):
     '''Set a lock to filepath with the given value metadata and appname as holder'''
+    if ctx['lockasattr'] and ctx['locknotimpl']:
+        log.debug(f'msg="Using xattrs to execute setlock" filepath="{filepath}" value="{value}"')
+        try:
+            currvalue = getxattr(endpoint, filepath, userid, LOCK_ATTR_KEY)
+            log.info('msg="Invoked setlock on an already locked entity" filepath="%s" appname="%s" previouslock="%s"' %
+                     (filepath, appname, currvalue))
+            raise IOError(common.EXCL_ERROR)
+        except KeyError:
+            expiration = int(time.time() + ctx['lockexpiration'])
+            setxattr(endpoint, filepath, userid, LOCK_ATTR_KEY, f'{appname}!{value}!{expiration}', None)
+            return
+
     reference = _getcs3reference(endpoint, filepath)
     lock = cs3spr.Lock(type=cs3spr.LOCK_TYPE_WRITE, app_name=appname, lock_id=value,
                        expiration={'seconds': int(time.time() + ctx['lockexpiration'])})
@@ -243,6 +259,10 @@ def setlock(endpoint, filepath, userid, appname, value):
         log.info('msg="Invoked setlock on an already locked entity" filepath="%s" appname="%s" trace="%s" reason="%s"' %
                  (filepath, appname, res.status.trace, res.status.message.replace('"', "'")))
         raise IOError(common.EXCL_ERROR)
+    if res.status.code == cs3code.CODE_UNIMPLEMENTED and ctx['lockasattr']:
+        ctx['locknotimpl'] = True
+        setlock(endpoint, filepath, userid, appname, value)
+        return
     if res.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to setlock" filepath="%s" appname="%s" value="%s" trace="%s" code="%s" reason="%s"' %
                   (filepath, appname, value, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
@@ -252,12 +272,29 @@ def setlock(endpoint, filepath, userid, appname, value):
 
 def getlock(endpoint, filepath, userid):
     '''Get the lock metadata for the given filepath'''
+    if ctx['lockasattr'] and ctx['locknotimpl']:
+        log.debug(f'msg="Using xattrs to execute getlock" filepath="{filepath}"')
+        try:
+            currvalue = getxattr(endpoint, filepath, userid, LOCK_ATTR_KEY)
+            return {
+                'lock_id': currvalue.split('!')[1],
+                'type': 2,  # LOCK_TYPE_WRITE, though this is advisory!
+                'app_name': currvalue.split('!')[0],
+                'user': {},
+                'expiration': int(currvalue.split('!')[2])
+            }
+        except KeyError:
+            return None
+
     reference = _getcs3reference(endpoint, filepath)
     req = cs3sp.GetLockRequest(ref=reference)
     res = ctx['cs3gw'].GetLock(request=req, metadata=[('x-access-token', userid)])
     if res.status.code == cs3code.CODE_NOT_FOUND:
         log.debug(f'msg="Invoked getlock on unlocked or missing file" filepath="{filepath}"')
         return None
+    if res.status.code == cs3code.CODE_UNIMPLEMENTED and ctx['lockasattr']:
+        ctx['locknotimpl'] = True
+        return getlock(endpoint, filepath, userid)
     if res.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to getlock" filepath="%s" trace="%s" code="%s" reason="%s"' %
                   (filepath, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
@@ -281,6 +318,20 @@ def getlock(endpoint, filepath, userid):
 
 def refreshlock(endpoint, filepath, userid, appname, value, oldvalue=None):
     '''Refresh the lock metadata for the given filepath'''
+    if ctx['lockasattr'] and ctx['locknotimpl']:
+        log.debug(f'msg="Using xattrs to execute setlock" filepath="{filepath}" value="{value}"')
+        try:
+            currvalue = getxattr(endpoint, filepath, userid, LOCK_ATTR_KEY)
+            if currvalue.split('!')[0] == appname and (not oldvalue or currvalue.split('!')[1] == oldvalue):
+                raise KeyError
+            log.info('msg="Failed precondition on refreshlock" filepath="%s" appname="%s" previouslock="%s"' %
+                     (filepath, appname, currvalue))
+            raise IOError(common.EXCL_ERROR)
+        except KeyError:
+            expiration = int(time.time() + ctx['lockexpiration'])
+            setxattr(endpoint, filepath, userid, LOCK_ATTR_KEY, f'{appname}!{value}!{expiration}', None)
+            return
+
     reference = _getcs3reference(endpoint, filepath)
     lock = cs3spr.Lock(type=cs3spr.LOCK_TYPE_WRITE, app_name=appname, lock_id=value,
                        expiration={'seconds': int(time.time() + ctx['lockexpiration'])})
@@ -290,6 +341,10 @@ def refreshlock(endpoint, filepath, userid, appname, value, oldvalue=None):
         log.info('msg="Failed precondition on refreshlock" filepath="%s" appname="%s" trace="%s" reason="%s"' %
                  (filepath, appname, res.status.trace, res.status.message.replace('"', "'")))
         raise IOError(common.EXCL_ERROR)
+    if res.status.code == cs3code.CODE_UNIMPLEMENTED and ctx['lockasattr']:
+        ctx['locknotimpl'] = True
+        refreshlock(endpoint, filepath, userid, appname, value, oldvalue)
+        return
     if res.status.code != cs3code.CODE_OK:
         log.warning('msg="Failed to refreshlock" filepath="%s" appname="%s" value="%s" trace="%s" code="%s" reason="%s"' %
                     (filepath, appname, value, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
@@ -299,6 +354,19 @@ def refreshlock(endpoint, filepath, userid, appname, value, oldvalue=None):
 
 def unlock(endpoint, filepath, userid, appname, value):
     '''Remove the lock for the given filepath'''
+    if ctx['lockasattr'] and ctx['locknotimpl']:
+        log.debug(f'msg="Using xattrs to execute unlock" filepath="{filepath}" value="{value}"')
+        try:
+            currvalue = getxattr(endpoint, filepath, userid, LOCK_ATTR_KEY)
+            if currvalue.split('!')[0] == appname and currvalue.split('!')[1] == value:
+                raise KeyError
+            log.info('msg="Failed precondition on unlock" filepath="%s" appname="%s" previouslock="%s"' %
+                     (filepath, appname, currvalue))
+            raise IOError(common.EXCL_ERROR)
+        except KeyError:
+            rmxattr(endpoint, filepath, userid, LOCK_ATTR_KEY, None)
+            return
+
     reference = _getcs3reference(endpoint, filepath)
     lock = cs3spr.Lock(type=cs3spr.LOCK_TYPE_WRITE, app_name=appname, lock_id=value)
     req = cs3sp.UnlockRequest(ref=reference, lock=lock)
@@ -307,6 +375,10 @@ def unlock(endpoint, filepath, userid, appname, value):
         log.info('msg="Failed precondition on unlock" filepath="%s" appname="%s" trace="%s" reason="%s"' %
                  (filepath, appname, res.status.trace, res.status.message.replace('"', "'")))
         raise IOError(common.EXCL_ERROR)
+    if res.status.code == cs3code.CODE_UNIMPLEMENTED and ctx['lockasattr']:
+        ctx['locknotimpl'] = True
+        unlock(endpoint, filepath, userid, appname, value)
+        return
     if res.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to unlock" filepath="%s" trace="%s" code="%s" reason="%s"' %
                   (filepath, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
@@ -340,7 +412,7 @@ def readfile(endpoint, filepath, userid, lockid):
             'x-access-token': userid,
             'x-reva-transfer': protocol.token        # needed if the downloads pass through the data gateway in reva
         }
-        fileget = requests.get(url=protocol.download_endpoint, headers=headers, verify=ctx['ssl_verify'])
+        fileget = requests.get(url=protocol.download_endpoint, headers=headers, verify=ctx['ssl_verify'], timeout=30)
     except requests.exceptions.RequestException as e:
         log.error(f'msg="Exception when downloading file from Reva" reason="{e}"')
         yield IOError(e)
@@ -394,7 +466,7 @@ def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
             'Upload-Length': size,
             'x-reva-transfer': protocol.token        # needed if the uploads pass through the data gateway in reva
         }
-        putres = requests.put(url=protocol.upload_endpoint, data=content, headers=headers, verify=ctx['ssl_verify'])
+        putres = requests.put(url=protocol.upload_endpoint, data=content, headers=headers, verify=ctx['ssl_verify'], timeout=30)
     except requests.exceptions.RequestException as e:
         log.error(f'msg="Exception when uploading file to Reva" reason="{e}"')
         raise IOError(e)
