@@ -226,7 +226,7 @@ def setLock(fileid, reqheaders, acctok):
                     retrievedlolock = next(st.readfile(acctok['endpoint'], utils.getLibreOfficeLockName(fn),
                                                        acctok['userid'], None))
                     if isinstance(retrievedlolock, IOError):
-                        raise retrievedlolock
+                        raise retrievedlolock from e
                     retrievedlolock = retrievedlolock.decode()
                     # check that the lock is not stale
                     if datetime.strptime(retrievedlolock.split(',')[3], '%d.%m.%Y %H:%M').timestamp() + \
