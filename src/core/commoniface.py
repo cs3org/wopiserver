@@ -62,7 +62,7 @@ def genrevalock(appname, value):
                 "user": {},
                 "expiration": {
                     "seconds": int(time.time())
-                    + config.getint("general", "wopilockexpiration")
+                    + config.getint('general', 'wopilockexpiration')
                 },
             }
         ).encode()

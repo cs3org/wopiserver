@@ -223,7 +223,7 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
     except IOError as e:
         log.info(f'msg="Requested file not found or not a file" fileid="{fileid}" error="{e}"')
         raise
-    exptime = int(time.time()) + srv.tokenvalidity
+    exptime = int(time.time()) + srv.config.getint('general', 'tokenvalidity')
     fext = os.path.splitext(statinfo['filepath'])[1].lower()
     if srv.config.get('general', 'disablemswriteodf', fallback='False').upper() == 'TRUE' and \
        fext[1:3] in ('od', 'ot') and appname not in ('Collabora', '') and viewmode == ViewMode.READ_WRITE:

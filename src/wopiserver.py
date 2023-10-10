@@ -64,7 +64,7 @@ class Wopi:
     app = flask.Flask("wopiserver")
     metrics = PrometheusMetrics(app, group_by='endpoint')
     port = 0
-    lastConfigReadTime = time.time()
+    lastConfigReadTime = 0
     loglevels = {"Critical": logging.CRITICAL,  # 50
                  "Error":    logging.ERROR,     # 40
                  "Warning":  logging.WARNING,   # 30
@@ -115,7 +115,6 @@ class Wopi:
             storage_layer_import(cls.config.get('general', 'storagetype'))
             # prepare the Flask web app
             cls.port = int(cls.config.get('general', 'port'))
-            cls.log.setLevel(cls.loglevels[cls.config.get('general', 'loglevel')])
             try:
                 cls.nonofficetypes = cls.config.get('general', 'nonofficetypes').split()
             except (TypeError, configparser.NoOptionError):
@@ -125,7 +124,6 @@ class Wopi:
                 cls.wopisecret = s.read().strip('\n')
             with open(cls.config.get('security', 'iopsecretfile')) as s:
                 cls.iopsecret = s.read().strip('\n')
-            cls.tokenvalidity = cls.config.getint('general', 'tokenvalidity')
             core.wopi.enablerename = cls.config.get('general', 'enablerename', fallback='False').upper() in ('TRUE', 'YES')
             storage.init(cls.config, cls.log)                          # initialize the storage layer
             cls.useHttps = cls.config.get('security', 'usehttps').lower() == 'yes'
@@ -147,7 +145,8 @@ class Wopi:
                 os.makedirs(cls.recoverypath)
             except FileExistsError:
                 pass
-            _ = cls.config.getint('general', 'wopilockexpiration', fallback=1800)   # make sure this is defined as an int
+            # read the remaining refreshable parameters
+            cls.refreshconfig()
             # WOPI proxy configuration (optional)
             cls.wopiproxy = cls.config.get('general', 'wopiproxy', fallback='')
             cls.wopiproxykey = None
@@ -178,8 +177,9 @@ class Wopi:
         if time.time() > cls.lastConfigReadTime + 300:
             cls.lastConfigReadTime = time.time()
             cls.config.read('/etc/wopi/wopiserver.conf')
-            # refresh some general parameters
-            cls.tokenvalidity = cls.config.getint('general', 'tokenvalidity', fallback=86400)
+            # set some defaults for missing values
+            cls.config.set('general', 'tokenvalidity', cls.config.getint('general', 'tokenvalidity', fallback=86400))
+            cls.config.set('general', 'wopilockexpiration', cls.config.getint('general', 'wopilockexpiration', fallback=1800))
             cls.log.setLevel(cls.loglevels[cls.config.get('general', 'loglevel')])
 
     @classmethod
