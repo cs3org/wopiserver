@@ -19,7 +19,6 @@ import logging.handlers
 from urllib.parse import unquote_plus as url_unquote_plus
 import http.client
 import json
-from importlib.metadata import version
 try:
     import flask                   # Flask app server
     from werkzeug.exceptions import NotFound as Flask_NotFound
@@ -30,6 +29,12 @@ try:
 except ImportError:
     print("Missing modules, please install dependencies with `pip3 install -f requirements.txt`")
     raise
+try:
+    from importlib.metadata import version
+except ImportError:
+    # workaround for Python < 3.8: we use this only to expose the Flask version
+    def version(_):
+        return flask.__version__
 
 import core.wopi
 import core.wopiutils as utils
