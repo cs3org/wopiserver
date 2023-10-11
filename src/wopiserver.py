@@ -19,6 +19,7 @@ import logging.handlers
 from urllib.parse import unquote_plus as url_unquote_plus
 import http.client
 import json
+from importlib.metadata import version
 try:
     import flask                   # Flask app server
     from werkzeug.exceptions import NotFound as Flask_NotFound
@@ -245,7 +246,7 @@ def index():
          Health status: <span style="font-family:monospace">%s</span>.</i>
       </body>
       </html>
-      """ % (WOPISERVERVERSION, socket.getfqdn(), flask.__version__, python_version(),
+      """ % (WOPISERVERVERSION, socket.getfqdn(), version('flask'), python_version(),
              Wopi.config.get('general', 'storagetype'), storage.healthcheck()))
     resp.headers['X-Frame-Options'] = 'sameorigin'
     resp.headers['X-XSS-Protection'] = '1; mode=block'
