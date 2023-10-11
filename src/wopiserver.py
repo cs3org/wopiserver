@@ -125,7 +125,8 @@ class Wopi:
             with open(cls.config.get('security', 'iopsecretfile')) as s:
                 cls.iopsecret = s.read().strip('\n')
             core.wopi.enablerename = cls.config.get('general', 'enablerename', fallback='False').upper() in ('TRUE', 'YES')
-            storage.init(cls.config, cls.log)                          # initialize the storage layer
+            cls.refreshconfig()                 # read the remaining refreshable parameters
+            storage.init(cls.config, cls.log)   # initialize the storage layer
             cls.useHttps = cls.config.get('security', 'usehttps').lower() == 'yes'
             # validate the certificates exist if running in https mode
             if cls.useHttps:
@@ -145,8 +146,6 @@ class Wopi:
                 os.makedirs(cls.recoverypath)
             except FileExistsError:
                 pass
-            # read the remaining refreshable parameters
-            cls.refreshconfig()
             # WOPI proxy configuration (optional)
             cls.wopiproxy = cls.config.get('general', 'wopiproxy', fallback='')
             cls.wopiproxykey = None
@@ -178,8 +177,8 @@ class Wopi:
             cls.lastConfigReadTime = time.time()
             cls.config.read('/etc/wopi/wopiserver.conf')
             # set some defaults for missing values
-            cls.config.set('general', 'tokenvalidity', cls.config.getint('general', 'tokenvalidity', fallback=86400))
-            cls.config.set('general', 'wopilockexpiration', cls.config.getint('general', 'wopilockexpiration', fallback=1800))
+            cls.config.set('general', 'tokenvalidity', cls.config.get('general', 'tokenvalidity', fallback='86400'))
+            cls.config.set('general', 'wopilockexpiration', cls.config.get('general', 'wopilockexpiration', fallback='1800'))
             cls.log.setLevel(cls.loglevels[cls.config.get('general', 'loglevel')])
 
     @classmethod
