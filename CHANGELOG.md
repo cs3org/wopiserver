@@ -1,5 +1,16 @@
 ## Changelog for the WOPI server
 
+### ... Oct .. 2023 - v10.2.0
+- Implemented cache for xattrs in the cs3 storage (#128)
+- Implemented advisory locking via xattrs for cs3 storages that
+  do not support native locking (#129)
+- Improved handling of default values, in order to clean up
+  the default config file
+- Fixed the PostMessageOrigin property in CheckFileInfo when
+  using the same wopiserver with multiple cloud storages
+- Fixed xroot build
+- Fixed failed precondition error handling in unlock
+
 ### Wed Jul  5 2023 - v10.1.0
 - Fixed handling of filenames with non latin-1 characters (#127)
 - Improved logging and adjusted log levels (#123)
