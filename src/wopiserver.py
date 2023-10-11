@@ -33,8 +33,10 @@ try:
     from importlib.metadata import version
 except ImportError:
     # workaround for Python < 3.8: we use this only to expose the Flask version
-    def version(_):
-        return flask.__version__
+    def version(pkg):
+        if pkg == 'flask':
+            return flask.__version__
+        return 'N/A'
 
 import core.wopi
 import core.wopiutils as utils
