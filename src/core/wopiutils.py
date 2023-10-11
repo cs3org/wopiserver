@@ -500,13 +500,15 @@ def storeAfterConflict(acctok, retrievedlock, lock, reason):
                                 acctok['filename'], reason)
 
 
-def storeForRecovery(wopiuser, filename, acctokforlog, exception):
+def storeForRecovery(wopiuser, filename, acctokforlog, exception, content=None):
+    if not content:
+        content = flask.request.get_data()
     try:
         filepath = srv.recoverypath + os.sep + time.strftime('%Y%m%dT%H%M%S') + '_editedby_' \
                    + secure_filename(wopiuser.split('!')[0]) + '_origat_' + secure_filename(filename)
         with open(filepath, mode='wb') as f:
-            written = f.write(flask.request.get_data())
-        if written != len(flask.request.get_data()):
+            written = f.write(content)
+        if written != len(content):
             raise IOError('Size mismatch')
         log.error('msg="Error writing file, a copy was stored locally for later recovery" '
                   + 'filename="%s" recoveredpath="%s" token="%s" error="%s"' %
