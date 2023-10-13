@@ -163,8 +163,11 @@ def setxattr(endpoint, filepath, userid, key, value, lockmd):
     ref = _getcs3reference(endpoint, filepath)
     md = cs3spr.ArbitraryMetadata()
     md.metadata.update({key: str(value)})        # pylint: disable=no-member
-    if _hashedref(endpoint, filepath) in ctx['xattrcache']:
+    try:
         ctx['xattrcache'][_hashedref(endpoint, filepath)][key] = str(value)
+    except KeyError:
+        # we did not have this file in the cache, ignore
+        pass
     lockid = None
     if lockmd:
         _, lockid = lockmd
@@ -181,7 +184,8 @@ def getxattr(endpoint, filepath, userid, key):
     '''Get the extended attribute <key> using the given userid as access token'''
     ref = _getcs3reference(endpoint, filepath)
     statInfo = None
-    if _hashedref(endpoint, filepath) not in ctx['xattrcache']:
+    href = _hashedref(endpoint, filepath)
+    if href not in ctx['xattrcache']:
         # cache miss, go for Stat and refresh cache
         tstart = time.time()
         statInfo = ctx['cs3gw'].Stat(request=cs3sp.StatRequest(ref=ref), metadata=[('x-access-token', userid)])
@@ -194,9 +198,9 @@ def getxattr(endpoint, filepath, userid, key):
                       (filepath, userid[-20:], statInfo.status.trace, key, statInfo.status.message.replace('"', "'")))
             raise IOError(statInfo.status.message)
         log.debug(f'msg="Invoked stat for getxattr" filepath="{filepath}" elapsedTimems="{(tend - tstart) * 1000:.1f}"')
-        ctx['xattrcache'][_hashedref(endpoint, filepath)] = statInfo.info.arbitrary_metadata.metadata
+        ctx['xattrcache'][href] = statInfo.info.arbitrary_metadata.metadata
     try:
-        xattrvalue = ctx['xattrcache'][_hashedref(endpoint, filepath)][key]
+        xattrvalue = ctx['xattrcache'][href][key]
         if xattrvalue == '':
             raise KeyError
         if not statInfo:
@@ -204,7 +208,7 @@ def getxattr(endpoint, filepath, userid, key):
         return xattrvalue
     except KeyError:
         log.info('msg="Empty value or key not found in getxattr" filepath="%s" key="%s" trace="%s" metadata="%s"' %
-                 (filepath, key, statInfo.status.trace if statInfo else 'N/A', ctx['xattrcache'][_hashedref(endpoint, filepath)]))
+                 (filepath, key, statInfo.status.trace if statInfo else 'N/A', ctx['xattrcache'][href]))
         return None
 
 
@@ -220,8 +224,11 @@ def rmxattr(endpoint, filepath, userid, key, lockmd):
         log.error('msg="Failed to rmxattr" filepath="%s" trace="%s" key="%s" reason="%s"' %
                   (filepath, key, res.status.trace, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
-    if _hashedref(endpoint, filepath) in ctx['xattrcache']:
+    try:
         del ctx['xattrcache'][_hashedref(endpoint, filepath)][key]
+    except KeyError:
+        # we did not have this file in the cache, ignore
+        pass
     log.debug(f'msg="Invoked rmxattr" result="{res.status}"')
 
 
