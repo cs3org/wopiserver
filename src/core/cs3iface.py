@@ -91,6 +91,11 @@ def _getcs3reference(endpoint, fileref):
     return ref
 
 
+def _hashedref(endpoint, fileref):
+    '''Returns an hashable key for the given endpoint and file reference'''
+    return str(endpoint) + str(fileref)
+
+
 def authenticate_for_test(userid, userpwd):
     '''Use basic authentication against Reva for testing purposes'''
     authReq = cs3gw.AuthenticateRequest(type='basic', client_id=userid, client_secret=userpwd)
@@ -137,7 +142,7 @@ def stat(endpoint, fileref, userid, versioninv=1):
     log.info('msg="Invoked stat" fileref="%s" trace="%s" inode="%s" filepath="%s" elapsedTimems="%.1f"' %
              (fileref, statInfo.status.trace, inode, filepath, (tend-tstart)*1000))
     # cache the xattrs map prior to returning; note we're never cleaning this cache and let it grow indefinitely
-    ctx['xattrcache'][ref] = statInfo.info.arbitrary_metadata
+    ctx['xattrcache'][_hashedref(endpoint, fileref)] = statInfo.info.arbitrary_metadata.metadata
     return {
         'inode': inode,
         'filepath': filepath,
@@ -158,8 +163,8 @@ def setxattr(endpoint, filepath, userid, key, value, lockmd):
     ref = _getcs3reference(endpoint, filepath)
     md = cs3spr.ArbitraryMetadata()
     md.metadata.update({key: str(value)})        # pylint: disable=no-member
-    if ref in ctx['xattrcache']:
-        ctx['xattrcache'][ref].metadata[key] = str(value)
+    if _hashedref(endpoint, filepath) in ctx['xattrcache']:
+        ctx['xattrcache'][_hashedref(endpoint, filepath)][key] = str(value)
     lockid = None
     if lockmd:
         _, lockid = lockmd
@@ -176,7 +181,7 @@ def getxattr(endpoint, filepath, userid, key):
     '''Get the extended attribute <key> using the given userid as access token'''
     ref = _getcs3reference(endpoint, filepath)
     statInfo = None
-    if ref not in ctx['xattrcache']:
+    if _hashedref(endpoint, filepath) not in ctx['xattrcache']:
         # cache miss, go for Stat and refresh cache
         tstart = time.time()
         statInfo = ctx['cs3gw'].Stat(request=cs3sp.StatRequest(ref=ref), metadata=[('x-access-token', userid)])
@@ -189,9 +194,9 @@ def getxattr(endpoint, filepath, userid, key):
                       (filepath, userid[-20:], statInfo.status.trace, key, statInfo.status.message.replace('"', "'")))
             raise IOError(statInfo.status.message)
         log.debug(f'msg="Invoked stat for getxattr" filepath="{filepath}" elapsedTimems="{(tend - tstart) * 1000:.1f}"')
-        ctx['xattrcache'][ref] = statInfo.info.arbitrary_metadata
+        ctx['xattrcache'][_hashedref(endpoint, filepath)] = statInfo.info.arbitrary_metadata.metadata
     try:
-        xattrvalue = ctx['xattrcache'][ref].metadata[key]
+        xattrvalue = ctx['xattrcache'][_hashedref(endpoint, filepath)][key]
         if xattrvalue == '':
             raise KeyError
         if not statInfo:
@@ -199,7 +204,7 @@ def getxattr(endpoint, filepath, userid, key):
         return xattrvalue
     except KeyError:
         log.info('msg="Empty value or key not found in getxattr" filepath="%s" key="%s" trace="%s" metadata="%s"' %
-                 (filepath, key, statInfo.status.trace if statInfo else 'N/A', ctx['xattrcache'][ref].metadata))
+                 (filepath, key, statInfo.status.trace if statInfo else 'N/A', ctx['xattrcache'][_hashedref(endpoint, filepath)]))
         return None
 
 
@@ -215,8 +220,8 @@ def rmxattr(endpoint, filepath, userid, key, lockmd):
         log.error('msg="Failed to rmxattr" filepath="%s" trace="%s" key="%s" reason="%s"' %
                   (filepath, key, res.status.trace, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
-    if ref in ctx['xattrcache']:
-        del ctx['xattrcache'][ref].metadata[key]
+    if _hashedref(endpoint, filepath) in ctx['xattrcache']:
+        del ctx['xattrcache'][_hashedref(endpoint, filepath)][key]
     log.debug(f'msg="Invoked rmxattr" result="{res.status}"')
 
 
@@ -361,8 +366,8 @@ def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
         content = bytes(content, 'UTF-8')
     size = str(len(content))
     reference = _getcs3reference(endpoint, filepath)
-    metadata = types.Opaque(map={"Upload-Length": types.OpaqueEntry(decoder="plain", value=str.encode(size))})
-    req = cs3sp.InitiateFileUploadRequest(ref=reference, lock_id=lockid, opaque=metadata)
+    req = cs3sp.InitiateFileUploadRequest(ref=reference, lock_id=lockid, opaque=types.Opaque(
+        map={"Upload-Length": types.OpaqueEntry(decoder="plain", value=str.encode(size))}))
     res = ctx['cs3gw'].InitiateFileUpload(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to initiateFileUpload on write" filepath="%s" trace="%s" code="%s" reason="%s"' %
