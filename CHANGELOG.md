@@ -1,6 +1,6 @@
 ## Changelog for the WOPI server
 
-### ... Oct .. 2023 - v10.2.0
+### Mon Oct 23 2023 - v10.2.0
 - Implemented cache for xattrs in the cs3 storage (#128)
 - Implemented advisory locking via xattrs for cs3 storages that
   do not support native locking (#129)
