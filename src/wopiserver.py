@@ -275,6 +275,7 @@ def iopOpenInApp():
       This can be omitted if the storage is based on CS3, as Reva would authenticate calls via the TokenHeader below.
     - TokenHeader: an x-access-token to serve as user identity towards Reva
     - ApiKey (optional): a shared secret to be used with the end-user application if required
+    - X-Trace-Id (optional): a trace id to cross-reference logs
     Request arguments:
     - enum viewmode: how the user should access the file, according to utils.ViewMode/the CS3 app provider API
     - string fileid: the Reva fileid of the file to be opened
@@ -344,11 +345,12 @@ def iopOpenInApp():
     try:
         userid, wopiuser = storage.getuseridfromcreds(usertoken, wopiuser)
         inode, acctok, vm = utils.generateAccessToken(userid, fileid, viewmode, (username, wopiuser, usertype), folderurl,
-                                                      endpoint, (appname, appurl, appviewurl))
+                                                      endpoint, (appname, appurl, appviewurl),
+                                                      req.headers.get('X-Trace-Id', 'N/A'))
     except IOError as e:
-        Wopi.log.info('msg="iopOpenInApp: remote error on generating token" client="%s" user="%s" '
+        Wopi.log.info('msg="iopOpenInApp: remote error on generating token" client="%s" trace="%s" user="%s" '
                       'friendlyname="%s" mode="%s" endpoint="%s" reason="%s"' %
-                      (req.remote_addr, usertoken[-20:], username, viewmode, endpoint, e))
+                      (req.remote_addr, req.headers.get('X-Trace-Id', 'N/A'), usertoken[-20:], username, viewmode, endpoint, e))
         return 'Remote error, file not found or file is a directory', http.client.NOT_FOUND
 
     res = {}
@@ -449,7 +451,7 @@ def iopWopiTest():
         return 'WOPI validator not supported in https mode', http.client.BAD_REQUEST
     inode, acctok, _ = utils.generateAccessToken(usertoken, filepath, utils.ViewMode.READ_WRITE, ('test', 'test!' + usertoken),
                                                  'http://folderurlfortestonly/', endpoint,
-                                                 ('WOPI validator', 'http://fortestonly/', 'http://fortestonly/'))
+                                                 ('WOPI validator', 'http://fortestonly/', 'http://fortestonly/'), 'TestTrace')
     Wopi.log.info(f'msg="iopWopiTest: preparing test via WOPI validator" client="{req.remote_addr}"')
     return '-e WOPI_URL=http://localhost:%d/wopi/files/%s -e WOPI_TOKEN=%s' % (Wopi.port, inode, acctok)
 

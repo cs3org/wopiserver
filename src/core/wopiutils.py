@@ -150,9 +150,9 @@ def validateAndLogHeaders(op):
 
     # log all relevant headers to help debugging
     session = flask.request.headers.get('X-WOPI-SessionId')
-    log.debug('msg="%s: client context" user="%s" filename="%s" token="%s" client="%s" deviceId="%s" reqId="%s" sessionId="%s" '
-              'app="%s" appEndpoint="%s" correlationId="%s" wopits="%s"' %
-              (op.title(), acctok['userid'][-20:], acctok['filename'],
+    log.debug('msg="%s: client context" trace="%s" user="%s" filename="%s" token="%s" client="%s" deviceId="%s" reqId="%s" '
+              'sessionId="%s" app="%s" appEndpoint="%s" correlationId="%s" wopits="%s"' %
+              (op.title(), acctok.get('trace', 'N/A'), acctok['userid'][-20:], acctok['filename'],
                flask.request.args['access_token'][-20:], flask.request.headers.get(REALIPHEADER, flask.request.remote_addr),
                flask.request.headers.get('X-WOPI-DeviceId'), flask.request.headers.get('X-Request-Id'),
                session, flask.request.headers.get('X-WOPI-RequestingApplication'),
@@ -209,7 +209,7 @@ def randomString(size):
     return ''.join([choice(ascii_lowercase) for _ in range(size)])
 
 
-def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app):
+def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app, trace):
     '''Generates an access token for a given file and a given user, and returns a tuple with
     the file's inode and the URL-encoded access token.'''
     appname, appediturl, appviewurl = app
@@ -233,7 +233,7 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
     tokmd = {
         'userid': userid, 'wopiuser': wopiuser, 'usertype': usertype.value, 'filename': statinfo['filepath'], 'fileid': fileid,
         'username': friendlyname, 'viewmode': viewmode.value, 'folderurl': folderurl, 'endpoint': endpoint,
-        'appname': appname, 'appediturl': appediturl, 'appviewurl': appviewurl,
+        'appname': appname, 'appediturl': appediturl, 'appviewurl': appviewurl, 'trace': trace,
         'exp': exptime, 'iss': f'cs3org:wopiserver:{WOPIVER}'    # standard claims
     }
     if viewmode == ViewMode.PREVIEW:
@@ -245,10 +245,10 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
     acctok = jwt.encode(tokmd, srv.wopisecret, algorithm='HS256')
     if 'MS 365' in appname:
         srv.allusers.add(userid)
-    log.info('msg="Access token generated" userid="%s" wopiuser="%s" friendlyname="%s" usertype="%s" mode="%s" '
+    log.info('msg="Access token generated" trace="%s" userid="%s" wopiuser="%s" friendlyname="%s" usertype="%s" mode="%s" '
              'endpoint="%s" filename="%s" inode="%s" mtime="%s" folderurl="%s" appname="%s" expiration="%d" token="%s"' %
-             (userid[-20:], wopiuser, friendlyname, usertype, viewmode, endpoint, statinfo['filepath'], statinfo['inode'],
-              statinfo['mtime'], folderurl, appname, exptime, acctok[-20:]))
+             (trace, userid[-20:], wopiuser, friendlyname, usertype, viewmode, endpoint, statinfo['filepath'],
+              statinfo['inode'], statinfo['mtime'], folderurl, appname, exptime, acctok[-20:]))
     return statinfo['inode'], acctok, viewmode
 
 
