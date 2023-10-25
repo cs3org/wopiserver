@@ -116,7 +116,7 @@ def checkFileInfo(fileid, acctok):
             # if no WebDAV URL is provided, ignore this setting
             pass
         # extensions for Collabora Online
-        if acctok['appname'].find('Collabora') >= 0 or acctok['appname'] == '':
+        if acctok['appname'] == 'Collabora':
             fmd['EnableOwnerTermination'] = True
             fmd['DisableExport'] = fmd['DisableCopy'] = fmd['DisablePrint'] = acctok['viewmode'] == utils.ViewMode.VIEW_ONLY
 

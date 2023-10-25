@@ -58,7 +58,7 @@ def genrevalock(appname, value):
             {
                 "lock_id": value,
                 "type": 2,  # LOCK_TYPE_WRITE
-                "app_name": appname if appname else "wopi",
+                "app_name": appname,
                 "user": {},
                 "expiration": {
                     "seconds": int(time.time())

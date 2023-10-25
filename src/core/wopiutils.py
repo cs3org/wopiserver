@@ -226,9 +226,8 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
     exptime = int(time.time()) + srv.config.getint('general', 'tokenvalidity')
     fext = os.path.splitext(statinfo['filepath'])[1].lower()
     if srv.config.get('general', 'disablemswriteodf', fallback='False').upper() == 'TRUE' and \
-       fext[1:3] in ('od', 'ot') and appname not in ('Collabora', '') and viewmode == ViewMode.READ_WRITE:
-        # we're opening an ODF (`.o[d|t]?`) file and the app is not Collabora (the appname may be empty because the legacy
-        # endpoint does not set appname when the app is not proxied, so we optimistically assume it's Collabora and let it go)
+       fext[1:3] in ('od', 'ot') and appname != 'Collabora' and viewmode == ViewMode.READ_WRITE:
+        # we're opening an ODF (`.o[d|t]?`) file and the app is not Collabora
         log.info(f"msg=\"Forcing read-only access to ODF file\" filename=\"{statinfo['filepath']}\"")
         viewmode = ViewMode.READ_ONLY
     tokmd = {
