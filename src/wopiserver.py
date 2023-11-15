@@ -497,7 +497,7 @@ def wopiFilesPost(fileid):
         return core.wopi.putUserInfo(fileid,  flask.request.get_data(), acctokOrMsg)
     if op == 'PUT_RELATIVE':
         return core.wopi.putRelative(fileid, headers, acctokOrMsg)
-    if utils.ViewMode(acctokOrMsg['viewmode']) != utils.ViewMode.READ_WRITE:
+    if utils.ViewMode(acctokOrMsg['viewmode']) not in (utils.ViewMode.READ_WRITE, utils.ViewMode.PREVIEW):
         # the remaining operations require write privileges
         return 'Attempting to perform a write operation using a read-only token', http.client.UNAUTHORIZED
     if op in ('LOCK', 'REFRESH_LOCK'):

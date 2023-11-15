@@ -230,18 +230,15 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
         # we're opening an ODF (`.o[d|t]?`) file and the app is not Collabora
         log.info(f"msg=\"Forcing read-only access to ODF file\" filename=\"{statinfo['filepath']}\"")
         viewmode = ViewMode.READ_ONLY
+    if viewmode == ViewMode.PREVIEW and statinfo['size'] == 0:
+        # override preview mode when a new file is being created
+        viewmode = ViewMode.READ_WRITE
     tokmd = {
         'userid': userid, 'wopiuser': wopiuser, 'usertype': usertype.value, 'filename': statinfo['filepath'], 'fileid': fileid,
         'username': friendlyname, 'viewmode': viewmode.value, 'folderurl': folderurl, 'endpoint': endpoint,
         'appname': appname, 'appediturl': appediturl, 'appviewurl': appviewurl, 'trace': trace,
         'exp': exptime, 'iss': f'cs3org:wopiserver:{WOPIVER}'    # standard claims
     }
-    if viewmode == ViewMode.PREVIEW:
-        # preview mode assumes read/write privileges for the acctok
-        tokmd['viewmode'] = ViewMode.READ_WRITE.value
-        if statinfo['size'] == 0:
-            # override preview mode when a new file is being created
-            viewmode = ViewMode.READ_WRITE
     acctok = jwt.encode(tokmd, srv.wopisecret, algorithm='HS256')
     if 'MS 365' in appname:
         srv.allusers.add(userid)

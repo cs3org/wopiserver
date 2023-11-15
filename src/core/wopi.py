@@ -76,10 +76,9 @@ def checkFileInfo(fileid, acctok):
             fmd['IsAnonymousUser'] = False
             fmd['UserFriendlyName'] = acctok['username']
             fmd['BreadcrumbFolderName'] = 'ScienceMesh share' if acctok['usertype'] == utils.UserType.OCM else 'Parent folder'
-        if acctok['viewmode'] in (utils.ViewMode.READ_ONLY, utils.ViewMode.READ_WRITE) \
-           and srv.config.get('general', 'downloadurl', fallback=None):
+        if acctok['viewmode'] != utils.ViewMode.VIEW_ONLY and srv.config.get('general', 'downloadurl', fallback=None):
             fmd['DownloadUrl'] = fmd['FileUrl'] = '%s?access_token=%s' % \
-                (srv.config.get('general', 'downloadurl'), flask.request.args['access_token'])
+                                                  (srv.config.get('general', 'downloadurl'), flask.request.args['access_token'])
         if srv.config.get('general', 'businessflow', fallback='True').upper() == 'TRUE':
             # according to Microsoft, this must be enabled for all users
             fmd['LicenseCheckForEditIsEnabled'] = True
@@ -93,7 +92,7 @@ def checkFileInfo(fileid, acctok):
         fmd['Version'] = f"v{statInfo['etag']}"
         fmd['SupportsExtendedLockLength'] = fmd['SupportsGetLock'] = True
         fmd['SupportsUpdate'] = fmd['UserCanWrite'] = fmd['SupportsLocks'] = \
-            fmd['SupportsDeleteFile'] = acctok['viewmode'] == utils.ViewMode.READ_WRITE
+            fmd['SupportsDeleteFile'] = acctok['viewmode'] in (utils.ViewMode.READ_WRITE, utils.ViewMode.PREVIEW)
         fmd['ReadOnly'] = not fmd['SupportsUpdate']
         fmd['RestrictedWebViewOnly'] = acctok['viewmode'] == utils.ViewMode.VIEW_ONLY
         # SaveAs functionality is disabled for anonymous and federated users when in read-only mode, as they have
@@ -101,7 +100,8 @@ def checkFileInfo(fileid, acctok):
         # Note that single-file r/w shares are optimistically offered a SaveAs option, which may only work for regular users.
         fmd['UserCanNotWriteRelative'] = acctok['viewmode'] != utils.ViewMode.READ_WRITE and \
                                          acctok['usertype'] != utils.UserType.REGULAR
-        fmd['SupportsRename'] = fmd['UserCanRename'] = enablerename and (acctok['viewmode'] == utils.ViewMode.READ_WRITE)
+        fmd['SupportsRename'] = fmd['UserCanRename'] = enablerename and \
+                                                       acctok['viewmode'] in (utils.ViewMode.READ_WRITE, utils.ViewMode.PREVIEW)
         fmd['SupportsUserInfo'] = True
         uinfo = st.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'],
                             utils.USERINFOKEY + '.' + acctok['wopiuser'].split('!')[0])
