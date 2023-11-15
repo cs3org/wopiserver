@@ -95,10 +95,11 @@ def checkFileInfo(fileid, acctok):
             fmd['SupportsDeleteFile'] = acctok['viewmode'] in (utils.ViewMode.READ_WRITE, utils.ViewMode.PREVIEW)
         fmd['ReadOnly'] = not fmd['SupportsUpdate']
         fmd['RestrictedWebViewOnly'] = acctok['viewmode'] == utils.ViewMode.VIEW_ONLY
-        # SaveAs functionality is disabled for anonymous and federated users when in read-only mode, as they have
-        # no personal space where to save as an alternate location.
-        # Note that single-file r/w shares are optimistically offered a SaveAs option, which may only work for regular users.
-        fmd['UserCanNotWriteRelative'] = acctok['viewmode'] != utils.ViewMode.READ_WRITE and \
+        # SaveAs functionality is disabled for anonymous and federated users, as they have no personal space where to save
+        # as an alternate location and we cannot assume that saving to the same folder is allowed (e.g. single-file shares).
+        # Instead, regular (authenticated) users are offered a SaveAs (unless in view-only mode), where the operation
+        # is executed to the user's home if no access is given to the same folder where the file is.
+        fmd['UserCanNotWriteRelative'] = acctok['viewmode'] == utils.ViewMode.VIEW_ONLY or \
                                          acctok['usertype'] != utils.UserType.REGULAR
         fmd['SupportsRename'] = fmd['UserCanRename'] = enablerename and \
                                                        acctok['viewmode'] in (utils.ViewMode.READ_WRITE, utils.ViewMode.PREVIEW)
@@ -367,13 +368,6 @@ def putRelative(fileid, reqheaders, acctok):
     # either one xor the other MUST be present; note we can't use `^` as we have a mix of str and NoneType
     if (suggTarget and relTarget) or (not suggTarget and not relTarget):
         return utils.createJsonResponse({'message': 'Conflicting headers given'}, http.client.BAD_REQUEST)
-    if utils.ViewMode(acctok['viewmode']) != utils.ViewMode.READ_WRITE:
-        # here we must have an authenticated user with no write rights on the current folder: go to the user's homepath
-        targetName = srv.homepath.replace('user_initial', acctok['wopiuser'][0]). \
-                                  replace('username', acctok['wopiuser'].split('!')[0]) + os.path.sep
-        log.info('msg="PutRelative: set homepath as destination" user="%s" viewmode="%s" filename="%s" target="%s" token="%s"' %
-                 (acctok['userid'][-20:], acctok['viewmode'], acctok['filename'], targetName,
-                  flask.request.args['access_token'][-20:]))
     else:
         targetName = os.path.dirname(acctok['filename'])
     if suggTarget:
@@ -429,7 +423,8 @@ def putRelative(fileid, reqheaders, acctok):
         if str(e) != common.ACCESS_ERROR:
             return utils.createJsonResponse({'message': IO_ERROR}, http.client.INTERNAL_SERVER_ERROR)
         raisenoaccess = True
-        # make an attempt in the user's home if possible
+        # make an attempt in the user's home if possible: that would be allowed for regular (authenticated) users
+        # when the target is a single file r/w share
         if acctok['usertype'] == utils.UserType.REGULAR:
             targetName = srv.homepath.replace('user_initial', acctok['wopiuser'][0]). \
                                       replace('username', acctok['wopiuser'].split('!')[0]) \

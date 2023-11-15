@@ -147,8 +147,7 @@ class Wopi:
                     cls.log.error('msg="Failed to open the provided certificate or key to start in https mode"')
                     raise
             cls.wopiurl = cls.config.get('general', 'wopiurl')
-            cls.homepath = cls.config.get('general', 'homepath',
-                                          fallback=cls.config.get('general', 'conflictpath', fallback='/home/username'))
+            cls.homepath = cls.config.get('general', 'homepath', fallback='/home/username')
             cls.recoverypath = cls.config.get('io', 'recoverypath', fallback='/var/spool/wopirecovery')
             try:
                 os.makedirs(cls.recoverypath)
