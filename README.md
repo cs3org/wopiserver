@@ -84,7 +84,7 @@ as part of their Office 365 offer, which is also supported via the Reva open-in-
 2. Add log file directory: `sudo mkdir /var/log/wopi/ && sudo chmod a+rwx /var/log/wopi`
 3. Create the folder for the wopi config: `sudo mkdir /etc/wopi/ && sudo chmod a+rwx /etc/wopi`
 4. Create recoveryfolder: `sudo mkdir /var/spool/wopirecovery && sudo chmod a+rwx /var/spool/wopirecovery`
-5. Create the files `iopsecret` and `wopiscret` in the folder `/etc/wopi/`, create random strings for the secrets
+5. Create the files `iopsecret` and `wopisecret` in the folder `/etc/wopi/`, create random strings for the secrets
 6. Copy the provided [wopiserver.conf](./wopiserver.conf) to `/etc/wopi/wopiserver.defaults.conf`
 7. Create a config file `/etc/wopi/wopiserver.conf`: start from `docker/etc/wopiserver.conf` for a minimal configuration and add from the defaults file as needed
 8. From the WOPI server folder run: `python3 src/wopiserver.py`
