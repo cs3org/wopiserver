@@ -33,6 +33,7 @@ def checkFileInfo(fileid, acctok):
     '''Implements the CheckFileInfo WOPI call'''
     try:
         acctok['viewmode'] = utils.ViewMode(acctok['viewmode'])
+        acctok['usertype'] = utils.UserType(acctok['usertype'])
         statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
         # populate metadata for this file
         fmd = {}
@@ -425,7 +426,7 @@ def putRelative(fileid, reqheaders, acctok):
         raisenoaccess = True
         # make an attempt in the user's home if possible: that would be allowed for regular (authenticated) users
         # when the target is a single file r/w share
-        if acctok['usertype'] == utils.UserType.REGULAR:
+        if utils.UserType(acctok['usertype']) == utils.UserType.REGULAR:
             targetName = srv.homepath.replace('user_initial', acctok['wopiuser'][0]). \
                                       replace('username', acctok['wopiuser'].split('!')[0]) \
                          + os.path.sep + os.path.basename(targetName)    # noqa: E131
