@@ -77,7 +77,10 @@ def getredirecturl(viewmode, wopisrc, acctok, docid, filename, displayname, reva
 
 def _unzipattachments(inputbuf):
     '''Unzip the given input buffer uploading the content to CodiMD and return the contained .md file'''
-    inputzip = zipfile.ZipFile(io.BytesIO(inputbuf), compression=zipfile.ZIP_STORED)
+    try:
+        inputzip = zipfile.ZipFile(io.BytesIO(inputbuf), compression=zipfile.ZIP_STORED)
+    except zipfile.BadZipFile as e:
+        raise AppFailure('The file is not in the expected zipped format')
     mddoc = None
     for zipinfo in inputzip.infolist():
         fname = zipinfo.filename
