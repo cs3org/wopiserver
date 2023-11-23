@@ -393,8 +393,8 @@ def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, filename
         fileage = 'NA'
     log.warning('msg="Returning conflict" lockop="%s" user="%s" filename="%s" token="%s" sessionId="%s" lock="%s" '
                 'oldlock="%s" retrievedlock="%s" fileage="%s" reason="%s"' %
-                (('UnlockAndRelock' if oldlock and operation != 'PUTFILE' else operation.title()), user, filename,
-                 flask.request.args['access_token'][-20:], session, lock, oldlock, retrievedlock, fileage,
+                (('UnlockAndRelock' if oldlock and oldlock != 'NA' and operation != 'PUTFILE' else operation.title()),
+                 user, filename, flask.request.args['access_token'][-20:], session, lock, oldlock, retrievedlock, fileage,
                  (reason['message'] if reason else 'NA')))
     return resp
 
