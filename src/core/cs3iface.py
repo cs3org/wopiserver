@@ -47,7 +47,7 @@ def init(inconfig, inlog):
         grpc.channel_ready_future(ch).result(timeout=10)
     except grpc.FutureTimeoutError as e:
         log.error('msg="Failed to connect to Reva via GRPC" error="%s"' % e)
-        raise IOError(e)
+        raise IOError(e) from e
     ctx['cs3gw'] = cs3gw_grpc.GatewayAPIStub(ch)
 
 
@@ -412,7 +412,7 @@ def readfile(endpoint, filepath, userid, lockid):
             'x-access-token': userid,
             'x-reva-transfer': protocol.token        # needed if the downloads pass through the data gateway in reva
         }
-        fileget = requests.get(url=protocol.download_endpoint, headers=headers, verify=ctx['ssl_verify'], timeout=30, stream=True)
+        fileget = requests.get(url=protocol.download_endpoint, headers=headers, verify=ctx['ssl_verify'], timeout=10, stream=True)
     except requests.exceptions.RequestException as e:
         log.error(f'msg="Exception when downloading file from Reva" reason="{e}"')
         yield IOError(e)
@@ -466,10 +466,10 @@ def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
             'Upload-Length': size,
             'x-reva-transfer': protocol.token        # needed if the uploads pass through the data gateway in reva
         }
-        putres = requests.put(url=protocol.upload_endpoint, data=content, headers=headers, verify=ctx['ssl_verify'], timeout=30)
+        putres = requests.put(url=protocol.upload_endpoint, data=content, headers=headers, verify=ctx['ssl_verify'], timeout=10)
     except requests.exceptions.RequestException as e:
         log.error(f'msg="Exception when uploading file to Reva" reason="{e}"')
-        raise IOError(e)
+        raise IOError(e) from e
     if putres.status_code == http.client.UNAUTHORIZED:
         log.warning(f'msg="Access denied uploading file to Reva" reason="{putres.reason}"')
         raise IOError(common.ACCESS_ERROR)

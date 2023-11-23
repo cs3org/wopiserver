@@ -47,19 +47,19 @@ def _apicall(method, params, data=None, acctok=None, raiseonnonzerocode=True):
     '''Generic method to call the Etherpad REST API'''
     params['apikey'] = apikey
     try:
-        res = requests.post(appurl + '/api/1/' + method, params=params, data=data, verify=sslverify)
+        res = requests.post(appurl + '/api/1/' + method, params=params, data=data, verify=sslverify, timeout=10)
         if res.status_code != http.client.OK:
             log.error('msg="Failed to call Etherpad" method="%s" token="%s" response="%d: %s"' %
                       (method, acctok[-20:] if acctok else 'N/A', res.status_code, res.content.decode()))
-            raise AppFailure
-    except requests.exceptions.ConnectionError as e:
+            raise AppFailure('Failed to connect to Etherpad')
+    except requests.exceptions.RequestException as e:
         log.error(f'msg="Exception raised attempting to connect to Etherpad" method="{method}" exception="{e}"')
-        raise AppFailure
+        raise AppFailure('Failed to connect to Etherpad') from e
     res = res.json()
     if res['code'] != 0 and raiseonnonzerocode:
         log.error('msg="Error response from Etherpad" method="%s" token="%s" response="%s"' %
                   (method, acctok[-20:] if acctok else 'N/A', res['message']))
-        raise AppFailure
+        raise AppFailure('Error response from Etherpad')
     log.debug('msg="Called Etherpad API" method="%s" token="%s" result="%s"' %
               (method, acctok[-20:] if acctok else 'N/A', res))
     return res
@@ -77,15 +77,16 @@ def getredirecturl(viewmode, wopisrc, acctok, docid, _filename, displayname, _re
         res = requests.post(appurl + '/setEFSSMetadata',
                             params={'padID': docid, 'wopiSrc': urlparse.quote_plus(wopisrc),
                                     'accessToken': acctok, 'apikey': apikey},
-                            verify=sslverify)
+                            verify=sslverify,
+                            timeout=10)
         if res.status_code != http.client.OK or res.json()['code'] != 0:
             log.error('msg="Failed to call Etherpad" method="setEFSSMetadata" token="%s" response="%d: %s"' %
                       (acctok[-20:], res.status_code, res.content.decode().replace('"', "'")))
-            raise AppFailure
+            raise AppFailure('Error response from Etherpad')
         log.debug(f'msg="Called Etherpad" method="setEFSSMetadata" token="{acctok[-20:]}"')
-    except requests.exceptions.ConnectionError as e:
+    except requests.exceptions.RequestException as e:
         log.error(f'msg="Exception raised attempting to connect to Etherpad" method="setEFSSMetadata" exception="{e}"')
-        raise AppFailure
+        raise AppFailure('Failed to connect to Etherpad') from e
 
     # return the URL to the pad for editing (a PREVIEW viewmode is not supported)
     return appexturl + f'/p/{docid}?userName={urlparse.quote_plus(displayname)}'
@@ -116,15 +117,16 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
         res = requests.post(appurl + '/p/' + docid + '/import',
                             files={'file': (docid + '.etherpad', epfile, 'application/json')},
                             params={'apikey': apikey},
-                            verify=sslverify)
+                            verify=sslverify,
+                            timeout=10)
         if res.status_code != http.client.OK:
             log.error('msg="Unable to push document to Etherpad" token="%s" padid="%s" response="%d: %s"' %
                       (acctok[-20:], docid, res.status_code, res.content.decode()))
-            raise AppFailure
+            raise AppFailure('Error response from Etherpad')
         log.info(f'msg="Pushed document to Etherpad" padid="{docid}" token="{acctok[-20:]}"')
-    except requests.exceptions.ConnectionError as e:
+    except requests.exceptions.RequestException as e:
         log.error(f'msg="Exception raised attempting to connect to Etherpad" method="import" exception="{e}"')
-        raise AppFailure
+        raise AppFailure('Failed to connect to Etherpad') from e
     # generate and return a WOPI lock structure for this document
     return wopic.generatelock(docid, filemd, epfile, acctok, False)
 
@@ -137,13 +139,14 @@ def _fetchfrometherpad(wopilock, acctok):
     try:
         # this operation does not use the API (and it is NOT protected by the API key!), so we use a plain GET
         res = requests.get(appurl + '/p' + wopilock['doc'] + '/export/etherpad',
-                           verify=sslverify)
+                           verify=sslverify,
+                           timeout=10)
         if res.status_code != http.client.OK:
             log.error('msg="Unable to fetch document from Etherpad" token="%s" response="%d: %s"' %
                       (acctok[-20:], res.status_code, res.content.decode()[:50]))
             raise AppFailure
         return res.content
-    except requests.exceptions.ConnectionError as e:
+    except requests.exceptions.RequestException as e:
         log.error(f'msg="Exception raised attempting to connect to Etherpad" exception="{e}"')
         raise AppFailure
 

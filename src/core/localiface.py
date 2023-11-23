@@ -64,7 +64,7 @@ def init(inconfig, inlog):
         if not S_ISDIR(mode):
             raise IOError('Not a directory')
     except IOError as e:
-        raise IOError(f'Could not stat storagehomepath folder {homepath}: {e}')
+        raise IOError(f'Could not stat storagehomepath folder {homepath}: {e}') from e
     # all right but inform the user
     log.warning('msg="Use this local storage interface for test/development purposes only, not for production"')
 
@@ -110,7 +110,7 @@ def stat(_endpoint, filepath, _userid):
             'etag': str(statInfo.st_mtime),
         }
     except (FileNotFoundError, PermissionError) as e:
-        raise IOError(e)
+        raise IOError(e) from e
 
 
 def statx(endpoint, filepath, userid, versioninv=1):
@@ -149,7 +149,7 @@ def setxattr(endpoint, filepath, userid, key, value, lockmd):
         os.setxattr(_getfilepath(filepath), 'user.' + key, str(value).encode())
     except OSError as e:
         log.error(f'msg="Failed to setxattr" filepath="{filepath}" key="{key}" exception="{e}"')
-        raise IOError(e)
+        raise IOError(e) from e
 
 
 def getxattr(_endpoint, filepath, _userid, key):
@@ -169,7 +169,7 @@ def rmxattr(endpoint, filepath, userid, key, lockmd):
         os.removexattr(_getfilepath(filepath), 'user.' + key)
     except OSError as e:
         log.error(f'msg="Failed to rmxattr" filepath="{filepath}" key="{key}" exception="{e}"')
-        raise IOError(e)
+        raise IOError(e) from e
 
 
 def setlock(endpoint, filepath, userid, appname, value):
@@ -186,7 +186,7 @@ def setlock(endpoint, filepath, userid, appname, value):
                     raise IOError(common.EXCL_ERROR)
         except BlockingIOError as e:
             log.error(f'msg="File already flocked" filepath="{filepath}" exception="{e}"')
-            raise IOError(common.EXCL_ERROR)
+            raise IOError(common.EXCL_ERROR) from e
 
 
 def getlock(endpoint, filepath, _userid):
@@ -269,12 +269,12 @@ def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
             written = f.write(content)        # os.write(fd, ...) raises EBADF?
             os.close(fd)     # f.close() raises EBADF! while this works
             # as f goes out of scope here, we'd get a false ResourceWarning, which is ignored by the above filter
-        except FileExistsError:
+        except FileExistsError as e:
             log.info(f'msg="File exists on write but islock flag requested" filepath="{filepath}"')
-            raise IOError(common.EXCL_ERROR)
+            raise IOError(common.EXCL_ERROR) from e
         except OSError as e:
             log.warning(f'msg="Error writing file in O_EXCL mode" filepath="{filepath}" error="{e}"')
-            raise IOError(e)
+            raise IOError(e) from e
     else:
         try:
             with open(_getfilepath(filepath), mode='wb') as f:
@@ -282,7 +282,7 @@ def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
                 written = f.write(content)
         except OSError as e:
             log.error(f'msg="Error writing file" filepath="{filepath}" error="{e}"')
-            raise IOError(e)
+            raise IOError(e) from e
     if written != size:
         raise IOError('Written %d bytes but content is %d bytes' % (written, size))
     log.info('msg="File written successfully" filepath="%s" elapsedTimems="%.1f" islock="%s"' %
@@ -298,7 +298,7 @@ def renamefile(endpoint, origfilepath, newfilepath, userid, lockmd):
     try:
         os.rename(_getfilepath(origfilepath), _getfilepath(newfilepath))
     except OSError as e:
-        raise IOError(e)
+        raise IOError(e) from e
 
 
 def removefile(_endpoint, filepath, _userid, force=False):
@@ -307,4 +307,4 @@ def removefile(_endpoint, filepath, _userid, force=False):
     try:
         os.remove(_getfilepath(filepath))
     except OSError as e:
-        raise IOError(e)
+        raise IOError(e) from e

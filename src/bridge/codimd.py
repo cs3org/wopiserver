@@ -43,12 +43,12 @@ def init(_appurl, _appinturl, _apikey):
     appurl = _appinturl
     try:
         # CodiMD integrates Prometheus metrics, let's probe if they exist
-        res = requests.head(appurl + '/metrics/codimd', verify=sslverify)
+        res = requests.head(appurl + '/metrics/codimd', verify=sslverify, timeout=10)
         if res.status_code != http.client.OK:
             log.error(f'msg="The provided URL does not seem to be a CodiMD instance" appurl="{appurl}"')
             raise AppFailure
         log.info(f'msg="Successfully connected to CodiMD" appurl="{appurl}"')
-    except requests.exceptions.ConnectionError as e:
+    except requests.exceptions.RequestException as e:
         log.error(f'msg="Exception raised attempting to connect to CodiMD" exception="{e}"')
         raise AppFailure
 
@@ -77,55 +77,60 @@ def getredirecturl(viewmode, wopisrc, acctok, docid, filename, displayname, reva
 
 def _unzipattachments(inputbuf):
     '''Unzip the given input buffer uploading the content to CodiMD and return the contained .md file'''
+    mddoc = None
     try:
         inputzip = zipfile.ZipFile(io.BytesIO(inputbuf), compression=zipfile.ZIP_STORED)
+        for zipinfo in inputzip.infolist():
+            fname = zipinfo.filename
+            log.debug(f'msg="Extracting attachment" name="{fname}"')
+            if os.path.splitext(fname)[1] == '.md':
+                mddoc = inputzip.read(zipinfo)
+            else:
+                # first check if the file already exists in CodiMD:
+                res = requests.head(appurl + '/uploads/' + fname, verify=sslverify, timeout=10)
+                if res.status_code == http.client.OK and int(res.headers['Content-Length']) == zipinfo.file_size:
+                    # yes (assume that hashed filename AND size matching is a good enough content match!)
+                    log.debug(f'msg="Skipped existing attachment" filename="{fname}"')
+                    continue
+                # check for collision
+                if res.status_code == http.client.OK:
+                    log.warning(f'msg="Attachment collision detected" filename="{fname}"')
+                    # append a random letter to the filename
+                    name, ext = os.path.splitext(fname)
+                    fname = name + '_' + chr(randint(65, 65+26)) + ext
+                    # and replace its reference in the document (this creates a copy of the doc, not very efficient)
+                    mddoc = mddoc.replace(bytes(zipinfo.filename), bytes(fname))
+                # OK, let's upload
+                log.debug(f'msg="Pushing attachment" filename="{fname}"')
+                res = requests.post(appurl + '/uploadimage', params={'generateFilename': 'false'},
+                                    files={'image': (fname, inputzip.read(zipinfo))}, verify=sslverify, timeout=10)
+                if res.status_code != http.client.OK:
+                    log.error('msg="Failed to push included file" filename="%s" httpcode="%d"' % (fname, res.status_code))
+        if mddoc:
+            # for backwards compatibility, drop the hardcoded reverse proxy paths if found in the document
+            mddoc = mddoc.replace(b'/byoa/codimd/', b'/')
+        return mddoc
     except zipfile.BadZipFile as e:
-        raise AppFailure('The file is not in the expected zipped format')
-    mddoc = None
-    for zipinfo in inputzip.infolist():
-        fname = zipinfo.filename
-        log.debug(f'msg="Extracting attachment" name="{fname}"')
-        if os.path.splitext(fname)[1] == '.md':
-            mddoc = inputzip.read(zipinfo)
-        else:
-            # first check if the file already exists in CodiMD:
-            res = requests.head(appurl + '/uploads/' + fname, verify=sslverify)
-            if res.status_code == http.client.OK and int(res.headers['Content-Length']) == zipinfo.file_size:
-                # yes (assume that hashed filename AND size matching is a good enough content match!)
-                log.debug(f'msg="Skipped existing attachment" filename="{fname}"')
-                continue
-            # check for collision
-            if res.status_code == http.client.OK:
-                log.warning(f'msg="Attachment collision detected" filename="{fname}"')
-                # append a random letter to the filename
-                name, ext = os.path.splitext(fname)
-                fname = name + '_' + chr(randint(65, 65+26)) + ext
-                # and replace its reference in the document (this creates a copy of the doc, not very efficient)
-                mddoc = mddoc.replace(bytes(zipinfo.filename), bytes(fname))
-            # OK, let's upload
-            log.debug(f'msg="Pushing attachment" filename="{fname}"')
-            res = requests.post(appurl + '/uploadimage', params={'generateFilename': 'false'},
-                                files={'image': (fname, inputzip.read(zipinfo))}, verify=sslverify)
-            if res.status_code != http.client.OK:
-                log.error('msg="Failed to push included file" filename="%s" httpcode="%d"' % (fname, res.status_code))
-    if mddoc:
-        # for backwards compatibility, drop the hardcoded reverse proxy paths if found in the document
-        mddoc = mddoc.replace(b'/byoa/codimd/', b'/')
-    return mddoc
+        log.warn(f'msg="File is not in a valid zip format" exception="{e}"')
+        raise AppFailure('The file is not in the expected zipped format') from e
+    except requests.exceptions.RequestException as e:
+        log.error(f'msg="Exception raised attempting to connect to CodiMD" exception="{e}"')
+        raise AppFailure('Failed to connect to CodiMD') from e
 
 
 def _fetchfromcodimd(wopilock, acctok):
     '''Fetch a given document from from CodiMD, raise AppFailure in case of errors'''
     try:
-        res = requests.get(appurl + ('/' if wopilock['doc'][0] != '/' else '') + wopilock['doc'] + '/download', verify=sslverify)
+        res = requests.get(appurl + ('/' if wopilock['doc'][0] != '/' else '') + wopilock['doc'] + '/download',
+                           verify=sslverify, timeout=10)
         if res.status_code != http.client.OK:
             log.error('msg="Unable to fetch document from CodiMD" token="%s" response="%d: %s"' %
                       (acctok[-20:], res.status_code, res.content.decode()[:50]))
             raise AppFailure
         return res.content
-    except requests.exceptions.ConnectionError as e:
+    except requests.exceptions.RequestException as e:
         log.error(f'msg="Exception raised attempting to connect to CodiMD" exception="{e}"')
-        raise AppFailure
+        raise AppFailure('Failed to connect to CodiMD') from e
 
 
 def loadfromstorage(filemd, wopisrc, acctok, docid):
@@ -149,7 +154,8 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
                                 allow_redirects=False,
                                 params={'mode': 'locked'},
                                 headers={'Content-Type': 'text/markdown'},
-                                verify=sslverify)
+                                verify=sslverify,
+                                timeout=10)
             if res.status_code == http.client.REQUEST_ENTITY_TOO_LARGE:
                 log.error(f'msg="File is too large to be edited in CodiMD" token="{acctok[-20:]}"')
                 raise AppFailure(TOOLARGE)
@@ -164,7 +170,8 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
             # reserve the given docid in CodiMD via a HEAD request
             res = requests.head(appurl + '/' + docid,
                                 allow_redirects=False,
-                                verify=sslverify)
+                                verify=sslverify,
+                                timeout=10)
             if res.status_code not in (http.client.OK, http.client.FOUND):
                 log.error('msg="Unable to reserve note hash in CodiMD" token="%s" response="%d"' %
                           (acctok[-20:], res.status_code))
@@ -180,7 +187,8 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
             # push the document to CodiMD with the update API
             res = requests.put(appurl + '/api/notes/' + docid,
                                json={'content': mddoc.decode()},
-                               verify=sslverify)
+                               verify=sslverify,
+                               timeout=10)
             if res.status_code == http.client.FORBIDDEN:
                 # the file got unlocked because of no activity, yet some user is there: let it go
                 log.warning(f'msg="Document was being edited in CodiMD, redirecting user" token="{acctok[-20:]}"')
@@ -193,13 +201,13 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
                 raise AppFailure
 
             log.info(f'msg="Pushed document to CodiMD" docid="{docid}" token="{acctok[-20:]}"')
-    except requests.exceptions.ConnectionError as e:
+    except requests.exceptions.RequestException as e:
         log.error(f'msg="Exception raised attempting to connect to CodiMD" exception="{e}"')
-        raise AppFailure
+        raise AppFailure from e
     except UnicodeDecodeError as e:
         log.warning(f'msg="Invalid UTF-8 content found in file" exception="{e}"')
         raise AppFailure('File contains an invalid UTF-8 character, was it corrupted? ' +
-                         'Please fix it in a regular editor before opening it in CodiMD.')
+                         'Please fix it in a regular editor before opening it in CodiMD.') from e
     # generate and return a WOPI lock structure for this document
     return wopic.generatelock(docid, filemd, mddoc, acctok, False)
 
@@ -213,10 +221,12 @@ def _getattachments(mddoc, docfilename, forcezip=False):
     response = None
     for attachment in upload_re.findall(mddoc):
         log.debug(f'msg="Fetching attachment" url="{attachment}"')
-        res = requests.get(appurl + attachment, verify=sslverify)
-        if res.status_code != http.client.OK:
-            log.error('msg="Failed to fetch included file, skipping" path="%s" response="%d"' % (
-                attachment, res.status_code))
+        try:
+            res = requests.get(appurl + attachment, verify=sslverify, timeout=10)
+            if res.status_code != http.client.OK:
+                raise ValueError(res.status_code)
+        except (requests.exceptions.RequestException, ValueError) as e:
+            log.error(f'msg="Failed to fetch included file, skipping" path="{attachment}" type="{type(e)}" error="{e}"')
             # also notify the user
             response = wopic.jsonify('Failed to include a referenced picture in the saved file'), http.client.NOT_FOUND
             continue

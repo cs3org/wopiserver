@@ -38,11 +38,11 @@ def request(wopisrc, acctok, method, contents=None, headers=None):
         log.debug('msg="Calling WOPI" url="%s" headers="%s" acctok="%s" ssl="%s"' %
                   (wopiurl, headers, acctok[-20:], sslverify))
         if method == 'GET':
-            return requests.get(f'{wopiurl}?access_token={acctok}', verify=sslverify)
+            return requests.get(f'{wopiurl}?access_token={acctok}', verify=sslverify, timeout=10)
         if method == 'POST':
             return requests.post(f'{wopiurl}?access_token={acctok}', verify=sslverify,
-                                 headers=headers, data=contents)
-    except (requests.exceptions.ConnectionError, IOError) as e:
+                                 headers=headers, data=contents, timeout=10)
+    except (requests.exceptions.RequestException, IOError) as e:
         log.error(f'msg="Unable to contact WOPI" wopiurl="{wopiurl}" acctok="{acctok}" response="{e}"')
         res = Response()
         res.status_code = http.client.INTERNAL_SERVER_ERROR
@@ -90,7 +90,7 @@ def getlock(wopisrc, acctok):
         return json.loads(res.headers['X-WOPI-Lock'])
     except (ValueError, KeyError, json.decoder.JSONDecodeError) as e:
         log.warning(f'msg="Missing or malformed WOPI lock" exception="{type(e)}: {e}"')
-        raise InvalidLock(e)
+        raise InvalidLock(e) from e
 
 
 def _getheadersforrelock(acctok, wopilock, digest, toclose):
@@ -125,7 +125,7 @@ def refreshlock(wopisrc, acctok, wopilock, digest=None, toclose=None):
         except json.decoder.JSONDecodeError as e:
             log.error('msg="Got unresolvable conflict in RefreshLock" url="%s" previouslock="%s" error="%s"' %
                       (wopisrc, res.headers.get('X-WOPI-Lock'), e))
-            raise InvalidLock('Found existing malformed lock on refreshlock')
+            raise InvalidLock('Found existing malformed lock on refreshlock') from e
         if toclose:
             # merge toclose token lists
             for t in currlock['tocl']:

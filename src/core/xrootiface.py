@@ -99,8 +99,8 @@ def _eosargs(userid, app='wopi', bookingsize=0):
             app = _appforlock(app)
         return '?eos.ruid=%d&eos.rgid=%d' % (ruid, rgid) + '&eos.app=' + app + \
                (('&eos.bookingsize=' + str(bookingsize)) if bookingsize else '')
-    except (ValueError, IndexError):
-        raise ValueError(f'Only Unix-based userid is supported with xrootd storage: {userid}')
+    except (ValueError, IndexError) as e:
+        raise ValueError(f'Only Unix-based userid is supported with xrootd storage: {userid}') from e
 
 
 def _xrootcmd(endpoint, cmd, subcmd, userid, args, app='wopi'):
@@ -120,7 +120,7 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args, app='wopi'):
             res = res.decode().split('&')
         except UnicodeDecodeError as e:
             log.error(f'msg="Failed to decode cmd output" cmd="{cmd}" subcmd="{subcmd}" args="{args}" res="{res}" error="{e}"')
-            raise IOError('Failed to decode cmd output')
+            raise IOError('Failed to decode cmd output') from e
         if len(res) == 3:        # we may only just get stdout: in that case, assume it's all OK
             rc = res[2].strip('\n')
             rc = rc[rc.find('=') + 1:].strip('\00')
@@ -235,7 +235,7 @@ def statx(endpoint, fileref, userid, versioninv=1):
         statxdata = {k: v.strip('"') for k, v in [kv for kv in kvlist if len(kv) == 2]}
     except ValueError as e:
         log.error(f'msg="Invoked fileinfo but failed to parse output" result="{statInfo}" exception="{e}"')
-        raise IOError('Failed to parse fileinfo response')
+        raise IOError('Failed to parse fileinfo response') from e
     if 'treesize' in statxdata:
         raise IOError('Is a directory')      # EISDIR
     if versioninv == 0:
@@ -283,7 +283,7 @@ def statx(endpoint, fileref, userid, versioninv=1):
                   (endpoint, _getfilepath(verFolder), str(rcv).strip('\n'), infov, (tend-tstart)*1000))
     except (IOError, UnicodeDecodeError) as e:
         log.error(f'msg="Failed to mkdir/stat version folder" filepath="{_getfilepath(filepath)}" error="{e}"')
-        raise IOError(e)
+        raise IOError(e) from e
     # return the metadata of the given file, with the inode taken from the version folder
     endpoint = _geturlfor(endpoint)
     inode = common.encodeinode(endpoint[7:] if endpoint.find('.') == -1 else endpoint[7:endpoint.find('.')], statxdata['ino'])
