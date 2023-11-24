@@ -412,19 +412,19 @@ def readfile(endpoint, filepath, userid, lockid):
             'x-access-token': userid,
             'x-reva-transfer': protocol.token        # needed if the downloads pass through the data gateway in reva
         }
-        fileget = requests.get(url=protocol.download_endpoint, headers=headers, verify=ctx['ssl_verify'], timeout=30)
+        fileget = requests.get(url=protocol.download_endpoint, headers=headers, verify=ctx['ssl_verify'], timeout=30, stream=True)
     except requests.exceptions.RequestException as e:
         log.error(f'msg="Exception when downloading file from Reva" reason="{e}"')
         yield IOError(e)
-    data = fileget.content
+    data = fileget.iter_content(ctx['chunksize'])
     if fileget.status_code != http.client.OK:
         log.error('msg="Error downloading file from Reva" code="%d" reason="%s"' %
                   (fileget.status_code, fileget.reason.replace('"', "'")))
         yield IOError(fileget.reason)
     else:
         log.info(f'msg="File open for read" filepath="{filepath}" elapsedTimems="{(tend - tstart) * 1000:.1f}"')
-        for i in range(0, len(data), ctx['chunksize']):
-            yield data[i:i + ctx['chunksize']]
+        for chunk in data:
+            yield chunk
 
 
 def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
