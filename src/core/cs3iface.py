@@ -11,6 +11,7 @@ import time
 import http
 import requests
 import grpc
+import flask
 
 import cs3.storage.provider.v1beta1.resources_pb2 as cs3spr
 import cs3.storage.provider.v1beta1.provider_api_pb2 as cs3sp
@@ -441,9 +442,13 @@ def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
         _, lockid = lockmd    # TODO we are not validating the holder on write, only the lock_id
     else:
         lockid = None
-    if isinstance(content, str):
-        content = bytes(content, 'UTF-8')
-    size = str(len(content))
+    if isinstance(content, flask.Request):
+        size = content.content_length
+        content = content.stream
+    else:
+        if isinstance(content, str):
+            content = bytes(content, 'UTF-8')
+        size = str(len(content))
     reference = _getcs3reference(endpoint, filepath)
     req = cs3sp.InitiateFileUploadRequest(ref=reference, lock_id=lockid, opaque=types.Opaque(
         map={"Upload-Length": types.OpaqueEntry(decoder="plain", value=str.encode(size))}))
