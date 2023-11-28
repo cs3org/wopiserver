@@ -475,8 +475,11 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
     except requests.exceptions.RequestException as e:
         log.error(f'msg="Exception when uploading file to Reva" reason="{e}"')
         raise IOError(e) from e
+    if putres.status_code == http.client.CONFLICT:
+        log.info(f'msg="File is locked, upload is forbidden" reason="{putres.reason}" filepath="{filepath}"')
+        raise IOError(common.EXCL_ERROR)
     if putres.status_code == http.client.UNAUTHORIZED:
-        log.warning(f'msg="Access denied uploading file to Reva" reason="{putres.reason}"')
+        log.warning(f'msg="Access denied uploading file to Reva" reason="{putres.reason}" filepath="{filepath}"')
         raise IOError(common.ACCESS_ERROR)
     if putres.status_code != http.client.OK:
         if size == 0:  # 0-byte file uploads may have been finalized after InitiateFileUploadRequest, let's assume it's OK
