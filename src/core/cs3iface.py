@@ -409,8 +409,8 @@ def readfile(endpoint, filepath, userid, lockid):
     try:
         protocol = [p for p in res.protocols if p.protocol in ["simple", "spaces"]][0]
         headers = {
-            'x-access-token': userid,
-            'x-reva-transfer': protocol.token        # needed if the downloads pass through the data gateway in reva
+            'X-Access-Token': userid,
+            'X-Reva-Transfer': protocol.token
         }
         fileget = requests.get(url=protocol.download_endpoint, headers=headers, verify=ctx['ssl_verify'], timeout=10, stream=True)
     except requests.exceptions.RequestException as e:
@@ -438,22 +438,26 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
 
     # prepare endpoint
     if lockmd:
-        _, lockid = lockmd    # TODO we are not validating the holder on write, only the lock_id
+        appname, lockid = lockmd
     else:
-        lockid = None
+        appname = lockid = ''
     if size == -1:
         if isinstance(content, str):
             content = bytes(content, 'UTF-8')
         size = len(content)
     reference = _getcs3reference(endpoint, filepath)
     req = cs3sp.InitiateFileUploadRequest(ref=reference, lock_id=lockid, opaque=types.Opaque(
-        map={"Upload-Length": types.OpaqueEntry(decoder="plain", value=str.encode(str(size)))}))
+        map={'Upload-Length': types.OpaqueEntry(decoder='plain', value=str.encode(str(size))),
+             'Lock-Holder': types.OpaqueEntry(decoder='plain', value=str.encode(appname))
+             }))
     res = ctx['cs3gw'].InitiateFileUpload(request=req, metadata=[('x-access-token', userid)])
+    if res.status.code == cs3code.CODE_FAILED_PRECONDITION:
+        log.info('msg="Failed precondition on initiateFileUpload" filepath="%s" appname="%s" trace="%s" reason="%s"' %
+                 (filepath, appname, res.status.trace, res.status.message.replace('"', "'")))
+        raise IOError(common.EXCL_ERROR)
     if res.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to initiateFileUpload on write" filepath="%s" trace="%s" code="%s" reason="%s"' %
                   (filepath, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
-        if '_lock_' in res.status.message:    # TODO find the error code returned by Reva once this is implemented
-            raise IOError(common.EXCL_ERROR)
         raise IOError(res.status.message)
     tend = time.time()
     log.debug('msg="writefile: InitiateFileUploadRes returned" trace="%s" protocols="%s"' %
@@ -463,9 +467,9 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
     try:
         protocol = [p for p in res.protocols if p.protocol in ["simple", "spaces"]][0]
         headers = {
-            'x-access-token': userid,
+            'X-Access-Token': userid,
             'Upload-Length': str(size),
-            'x-reva-transfer': protocol.token        # needed if the uploads pass through the data gateway in reva
+            'X-Reva-Transfer': protocol.token
         }
         putres = requests.put(url=protocol.upload_endpoint, data=content, headers=headers, verify=ctx['ssl_verify'], timeout=10)
     except requests.exceptions.RequestException as e:
