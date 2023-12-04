@@ -407,7 +407,7 @@ def readfile(endpoint, filepath, userid, lockid):
 
     # Download
     try:
-        protocol = [p for p in res.protocols if p.protocol == "simple" or p.protocol == "spaces"][0]
+        protocol = [p for p in res.protocols if p.protocol in ["simple", "spaces"]][0]
         headers = {
             'x-access-token': userid,
             'x-reva-transfer': protocol.token        # needed if the downloads pass through the data gateway in reva
@@ -460,7 +460,7 @@ def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
 
     # Upload
     try:
-        protocol = [p for p in res.protocols if p.protocol == "simple" or p.protocol == "spaces"][0]
+        protocol = [p for p in res.protocols if p.protocol in ["simple", "spaces"]][0]
         headers = {
             'x-access-token': userid,
             'Upload-Length': size,
