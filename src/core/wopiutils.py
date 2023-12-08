@@ -101,8 +101,10 @@ class JsonLogger:
                     # then convert dict -> json -> str + strip `{` and `}`
                     payload = str(json.dumps(payload))[1:-1]
                 except Exception:    # pylint: disable=broad-except
-                    # if the above assumptions do not hold, just json-escape the original log
-                    payload = f'"module": "{m}", "payload": "{json.dumps(args[0])}"'
+                    # if the above assumptions do not hold, just json-escape the original log and add debug info
+                    exc_type, exc_obj, tb = sys.exc_info()
+                    payload = f'"module": "{m}", "payload": "{json.dumps(args[0])}", "' + \
+                              f'"loggerex": "{exc_type}: {exc_obj} at L{tb.tb_lineno}"'
                 args = (payload,)
             # pass-through facade
             return getattr(self.logger, name)(*args, **kwargs)
