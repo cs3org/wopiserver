@@ -427,7 +427,7 @@ def readfile(endpoint, filepath, userid, lockid):
             yield chunk
 
 
-def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
+def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
     '''Write a file using the given userid as access token. The entire content is written
     and any pre-existing file is deleted (or moved to the previous version if supported).
     The islock flag is currently not supported. The backend should at least support
@@ -441,9 +441,10 @@ def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
         _, lockid = lockmd    # TODO we are not validating the holder on write, only the lock_id
     else:
         lockid = None
-    if isinstance(content, str):
+    if size == 0:
         content = bytes(content, 'UTF-8')
-    size = str(len(content))
+        size = len(content)
+    size = str(size)
     reference = _getcs3reference(endpoint, filepath)
     req = cs3sp.InitiateFileUploadRequest(ref=reference, lock_id=lockid, opaque=types.Opaque(
         map={"Upload-Length": types.OpaqueEntry(decoder="plain", value=str.encode(size))}))
