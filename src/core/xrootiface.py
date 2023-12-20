@@ -434,12 +434,13 @@ def readfile(endpoint, filepath, userid, _lockid):
                 yield chunk
 
 
-def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
+def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
     '''Write a file via xroot on behalf of the given userid. The entire content is written
          and any pre-existing file is deleted (or moved to the previous version if supported).
          With islock=True, the write explicitly disables versioning, and the file is opened with
          O_CREAT|O_EXCL, preventing race conditions.'''
-    size = len(content)
+    if size == 0:
+        size = len(content)
     log.debug('msg="Invoking writeFile" filepath="%s" userid="%s" size="%d" islock="%s"' % (filepath, userid, size, islock))
     if islock:
         # this is required to trigger the O_EXCL behavior on EOS when creating lock files

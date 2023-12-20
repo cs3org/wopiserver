@@ -447,7 +447,8 @@ def storeWopiFile(acctok, retrievedlock, xakey, targetname=''):
 
     writeerror = None
     try:
-        st.writefile(acctok['endpoint'], targetname, acctok['userid'], flask.request.get_data(),
+        st.writefile(acctok['endpoint'], targetname, acctok['userid'],
+                     flask.request.stream, flask.request.content_length,
                      (acctok['appname'], encodeLock(retrievedlock)))
     except IOError as e:
         if str(e) == common.ACCESS_ERROR:

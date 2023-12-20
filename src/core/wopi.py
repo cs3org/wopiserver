@@ -222,7 +222,7 @@ def setLock(fileid, reqheaders, acctok):
             lockcontent = ',Collaborative Online Editor,%s,%s,WOPIServer;' % \
                           (srv.wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())))
             st.writefile(acctok['endpoint'], utils.getLibreOfficeLockName(fn), acctok['userid'],
-                         lockcontent, None, islock=True)
+                         lockcontent, 0, None, islock=True)
         except IOError as e:
             if common.EXCL_ERROR in str(e):
                 # retrieve the LibreOffice-compatible lock just found

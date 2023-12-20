@@ -244,13 +244,13 @@ def readfile(_endpoint, filepath, _userid, _lockid):
         yield IOError(e)
 
 
-def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
+def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
     '''Write a file via xroot on behalf of the given userid. The entire content is written
     and any pre-existing file is deleted (or moved to the previous version if supported).
     With islock=True, the file is opened with O_CREAT|O_EXCL.'''
-    if isinstance(content, str):
+    if size == 0:
         content = bytes(content, 'UTF-8')
-    size = len(content)
+        size = len(content)
     if lockmd:
         _validatelock(filepath, getlock(endpoint, filepath, userid), lockmd, 'writefile', log)
     elif getlock(endpoint, filepath, userid):
