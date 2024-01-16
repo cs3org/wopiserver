@@ -474,6 +474,11 @@ def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
         log.warning(f'msg="Access denied uploading file to Reva" reason="{putres.reason}"')
         raise IOError(common.ACCESS_ERROR)
     if putres.status_code != http.client.OK:
+        if len(content) == 0: # 0-byte file uploads are finalized after the InitiateFileUploadRequest request already
+            log.info('msg="0-byte file written successfully" filepath="%s" elapsedTimems="%.1f" islock="%s"' %
+                (filepath, (tend - tstart) * 1000, islock))
+            return
+
         log.error('msg="Error uploading file to Reva" code="%d" reason="%s"' % (putres.status_code, putres.reason))
         raise IOError(putres.reason)
     log.info('msg="File written successfully" filepath="%s" elapsedTimems="%.1f" islock="%s"' %
