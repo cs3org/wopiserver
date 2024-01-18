@@ -442,7 +442,8 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
     else:
         lockid = None
     if size == 0:
-        content = bytes(content, 'UTF-8')
+        if isinstance(content, str):
+            content = bytes(content, 'UTF-8')
         size = len(content)
     reference = _getcs3reference(endpoint, filepath)
     req = cs3sp.InitiateFileUploadRequest(ref=reference, lock_id=lockid, opaque=types.Opaque(
