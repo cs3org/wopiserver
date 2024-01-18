@@ -249,7 +249,8 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
     and any pre-existing file is deleted (or moved to the previous version if supported).
     With islock=True, the file is opened with O_CREAT|O_EXCL.'''
     if size == 0:
-        content = bytes(content, 'UTF-8')
+        if isinstance(content, str):
+            content = bytes(content, 'UTF-8')
         size = len(content)
     if lockmd:
         _validatelock(filepath, getlock(endpoint, filepath, userid), lockmd, 'writefile', log)
