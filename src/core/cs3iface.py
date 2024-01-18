@@ -444,10 +444,9 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
     if size == 0:
         content = bytes(content, 'UTF-8')
         size = len(content)
-    size = str(size)
     reference = _getcs3reference(endpoint, filepath)
     req = cs3sp.InitiateFileUploadRequest(ref=reference, lock_id=lockid, opaque=types.Opaque(
-        map={"Upload-Length": types.OpaqueEntry(decoder="plain", value=str.encode(size))}))
+        map={"Upload-Length": types.OpaqueEntry(decoder="plain", value=str.encode(str(size)))}))
     res = ctx['cs3gw'].InitiateFileUpload(request=req, metadata=[('x-access-token', userid)])
     if res.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to initiateFileUpload on write" filepath="%s" trace="%s" code="%s" reason="%s"' %
@@ -475,8 +474,8 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
         log.warning(f'msg="Access denied uploading file to Reva" reason="{putres.reason}"')
         raise IOError(common.ACCESS_ERROR)
     if putres.status_code != http.client.OK:
-        if len(content) == 0: # 0-byte file uploads may have been finalized after the InitiateFileUploadRequest request already, let's assume it's OK
-        # TODO this use-case is to be reimplemented with a call to `TouchFile`.
+        if size == 0: # 0-byte file uploads may have been finalized after InitiateFileUploadRequest, let's assume it's OK
+            # TODO this use-case is to be reimplemented with a call to `TouchFile`.
             log.info('msg="0-byte file written successfully" filepath="%s" elapsedTimems="%.1f" islock="%s"' %
                 (filepath, (tend - tstart) * 1000, islock))
             return
