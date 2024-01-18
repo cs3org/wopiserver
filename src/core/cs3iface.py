@@ -474,7 +474,8 @@ def writefile(endpoint, filepath, userid, content, lockmd, islock=False):
         log.warning(f'msg="Access denied uploading file to Reva" reason="{putres.reason}"')
         raise IOError(common.ACCESS_ERROR)
     if putres.status_code != http.client.OK:
-        if len(content) == 0: # 0-byte file uploads are finalized after the InitiateFileUploadRequest request already
+        if len(content) == 0: # 0-byte file uploads may have been finalized after the InitiateFileUploadRequest request already, let's assume it's OK
+        # TODO this use-case is to be reimplemented with a call to `TouchFile`.
             log.info('msg="0-byte file written successfully" filepath="%s" elapsedTimems="%.1f" islock="%s"' %
                 (filepath, (tend - tstart) * 1000, islock))
             return
