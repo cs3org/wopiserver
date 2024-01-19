@@ -436,11 +436,13 @@ def readfile(endpoint, filepath, userid, _lockid):
 
 def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
     '''Write a file via xroot on behalf of the given userid. The entire content is written
-         and any pre-existing file is deleted (or moved to the previous version if supported).
-         With islock=True, the write explicitly disables versioning, and the file is opened with
-         O_CREAT|O_EXCL, preventing race conditions.'''
+       and any pre-existing file is deleted (or moved to the previous version if supported).
+       With islock=True, the write explicitly disables versioning, and the file is opened with
+       O_CREAT|O_EXCL, preventing race conditions.'''
+    stream = True
     if size == -1:
         size = len(content)
+        stream = False
     log.debug('msg="Invoking writeFile" filepath="%s" userid="%s" size="%d" islock="%s"' % (filepath, userid, size, islock))
     if islock:
         # this is required to trigger the O_EXCL behavior on EOS when creating lock files
@@ -470,7 +472,19 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
         log.error('msg="Error opening the file for write" filepath="%s" elapsedTimems="%.1f" error="%s"' %
                   (filepath, (tend-tstart)*1000, rc.message.strip('\n')))
         raise IOError(rc.message.strip('\n'))
-    rc, _ = f.write(content, offset=0, size=size)
+
+    if not stream:
+        rc, _ = f.write(content, offset=0, size=size)
+    else:
+        chunksize = config.getint('io', 'chunksize')
+        o = 0
+        while True:
+            chunk = content.read(chunksize)
+            if len(chunk) == 0:
+                break
+            rc, _ = f.write(chunk, offset=o, size=len(chunk))
+            o += len(chunk)
+
     if not rc.ok:
         log.error('msg="Error writing the file" filepath="%s" elapsedTimems="%.1f" error="%s"' %
                   (filepath, (tend-tstart)*1000, rc.message.strip('\n')))
@@ -486,6 +500,7 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
         log.error('msg="Error closing the file" filepath="%s" elapsedTimems="%.1f" error="%s"' %
                   (filepath, (tend-tstart)*1000, rc.message.strip('\n')))
         raise IOError(rc.message.strip('\n'))
+
     log.info('msg="File written successfully" filepath="%s" elapsedTimems="%.1f" islock="%s"' %
              (filepath, (tend-tstart)*1000, islock))
 
