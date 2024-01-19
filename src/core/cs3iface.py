@@ -441,7 +441,7 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
         _, lockid = lockmd    # TODO we are not validating the holder on write, only the lock_id
     else:
         lockid = None
-    if size == 0:
+    if size == -1:
         if isinstance(content, str):
             content = bytes(content, 'UTF-8')
         size = len(content)
