@@ -196,7 +196,8 @@ class TestStorage(unittest.TestCase):
         except IOError:
             pass
         t = Thread(target=self.storage.writefile,
-                   args=[self.endpoint, self.homepath + '/testwriterace', self.userid, databuf, -1, None], kwargs={'islock': True})
+                   args=[self.endpoint, self.homepath + '/testwriterace', self.userid, databuf, -1, None],
+                   kwargs={'islock': True})
         t.start()
         with self.assertRaises(IOError) as context:
             time.sleep(0.001)

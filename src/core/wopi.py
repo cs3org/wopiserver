@@ -101,9 +101,9 @@ def checkFileInfo(fileid, acctok):
         # Instead, regular (authenticated) users are offered a SaveAs (unless in view-only mode), where the operation
         # is executed to the user's home if no access is given to the same folder where the file is.
         fmd['UserCanNotWriteRelative'] = acctok['viewmode'] == utils.ViewMode.VIEW_ONLY or \
-                                         acctok['usertype'] != utils.UserType.REGULAR
+            acctok['usertype'] != utils.UserType.REGULAR
         fmd['SupportsRename'] = fmd['UserCanRename'] = enablerename and \
-                                                       acctok['viewmode'] in (utils.ViewMode.READ_WRITE, utils.ViewMode.PREVIEW)
+            acctok['viewmode'] in (utils.ViewMode.READ_WRITE, utils.ViewMode.PREVIEW)
         fmd['SupportsUserInfo'] = True
         uinfo = st.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'],
                             utils.USERINFOKEY + '.' + acctok['wopiuser'].split('!')[0])
