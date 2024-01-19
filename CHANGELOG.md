@@ -1,5 +1,12 @@
 ## Changelog for the WOPI server
 
+### Fri Jan 19 2024 - v10.3.0
+- Implemented support for X-Trace-Id header (#64)
+- Fixed SaveAs logic for non-authenticated (anonymous) users
+- Improved handling of HTTP requests
+- Improved memory efficiency by streaming files' content (#136, #141)
+- Fixed 0-byte uploads (#142)
+
 ### Mon Oct 23 2023 - v10.2.0
 - Implemented cache for xattrs in the cs3 storage (#128)
 - Implemented advisory locking via xattrs for cs3 storages that
