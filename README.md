@@ -26,6 +26,8 @@ Contributors (oldest contributions first):
 - Robert Kaussow (@xoxys)
 - Javier Ferrer (@javfg)
 - Vasco Guita (@vascoguita)
+- Thomas Mueller (@deepdiver1975)
+- Andre Duffeck (@aduffeck)
 
 Initial revision: December 2016 <br/>
 First production version for CERNBox: September 2017 (presented at [oCCon17](https://occon17.owncloud.org) - [slides](https://www.slideshare.net/giuseppelopresti/collaborative-editing-and-more-in-cernbox))<br/>
