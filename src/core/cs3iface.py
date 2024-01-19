@@ -464,7 +464,7 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
         protocol = [p for p in res.protocols if p.protocol in ["simple", "spaces"]][0]
         headers = {
             'x-access-token': userid,
-            'Upload-Length': size,
+            'Upload-Length': str(size),
             'x-reva-transfer': protocol.token        # needed if the uploads pass through the data gateway in reva
         }
         putres = requests.put(url=protocol.upload_endpoint, data=content, headers=headers, verify=ctx['ssl_verify'], timeout=10)
