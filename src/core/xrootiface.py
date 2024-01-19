@@ -439,7 +439,7 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
          and any pre-existing file is deleted (or moved to the previous version if supported).
          With islock=True, the write explicitly disables versioning, and the file is opened with
          O_CREAT|O_EXCL, preventing race conditions.'''
-    if size == 0:
+    if size == -1:
         size = len(content)
     log.debug('msg="Invoking writeFile" filepath="%s" userid="%s" size="%d" islock="%s"' % (filepath, userid, size, islock))
     if islock:

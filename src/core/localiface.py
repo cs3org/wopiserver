@@ -248,7 +248,7 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
     '''Write a file via xroot on behalf of the given userid. The entire content is written
     and any pre-existing file is deleted (or moved to the previous version if supported).
     With islock=True, the file is opened with O_CREAT|O_EXCL.'''
-    if size == 0:
+    if size == -1:
         if isinstance(content, str):
             content = bytes(content, 'UTF-8')
         size = len(content)
