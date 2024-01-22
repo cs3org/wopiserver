@@ -258,6 +258,7 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
         raise IOError(common.EXCL_ERROR)
     log.debug('msg="Invoking writeFile" filepath="%s" size="%d"' % (filepath, size))
     tstart = time.time()
+    written = 0
     if islock:
         warnings.simplefilter("ignore", ResourceWarning)
         try:
@@ -280,7 +281,14 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
         try:
             with open(_getfilepath(filepath), mode='wb') as f:
                 tend = time.time()
-                written = f.write(content)
+                chunksize = config.getint('io', 'chunksize')
+                o = 0
+                while True:
+                    chunk = content.read(chunksize)
+                    if len(chunk) == 0:
+                        break
+                    written += f.write(chunk, offset=o, size=len(chunk))
+                    o += len(chunk)
         except OSError as e:
             log.error(f'msg="Error writing file" filepath="{filepath}" error="{e}"')
             raise IOError(e) from e
