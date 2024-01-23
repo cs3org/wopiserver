@@ -115,18 +115,13 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args, app='wopi'):
         if not f.is_open():
             log.error(f'msg="Error or timeout with xroot" cmd="{cmd}" subcmd="{subcmd}" args="{args}" rc="{rc}"')
             raise IOError(f'Timeout executing {cmd}')
-        res = b''.join(f.readlines())
-        try:
-            res = res.decode().split('&')
-        except UnicodeDecodeError as e:
-            log.error(f'msg="Failed to decode cmd output" cmd="{cmd}" subcmd="{subcmd}" args="{args}" res="{res}" error="{e}"')
-            raise IOError('Failed to decode cmd output') from e
+        res = b''.join(f.readlines()).split(b'&')
         if len(res) == 3:        # we may only just get stdout: in that case, assume it's all OK
-            rc = res[2].strip('\n')
+            rc = res[2].strip(b'\n').decode()
             rc = rc[rc.find('=') + 1:].strip('\00')
             if rc != '0':
                 # failure: get info from stderr, log and raise
-                msg = res[1][res[1].find('=') + 1:].strip('\n')
+                msg = res[1][res[1].find(b'=') + 1:].decode().strip('\n')
                 if common.ENOENT_MSG.lower() in msg or 'unable to get attribute' in msg or rc == '2':
                     if 'attribute' in msg:
                         log.debug('msg="Missing attribute on file" cmd="%s" subcmd="%s" args="%s" result="%s" rc="%s"' %
@@ -147,10 +142,10 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args, app='wopi'):
                 log.error('msg="Error with xroot" cmd="%s" subcmd="%s" args="%s" error="%s" rc="%s"' %
                           (cmd, subcmd, args, msg, rc.strip('\00')))
                 raise IOError(msg)
-    # all right, return everything that came in stdout
+    # all right, return everything that came in stdout, in binary format
     log.debug('msg="Invoked xroot" cmd="%s%s" url="%s" res="%s" elapsedTimems="%.1f"' %
               (cmd, ('/' + subcmd if subcmd else ''), url, (res if cmd != 'fileinfo' else '_redacted_'), (tend - tstart) * 1000))
-    return res[0][res[0].find('stdout=') + 7:].strip('\n')
+    return res[0][res[0].find(b'stdout=') + 7:].strip(b'\n')
 
 
 def _getfilepath(filepath, encodeamp=False):
@@ -207,7 +202,7 @@ def statx(endpoint, fileref, userid, versioninv=1):
     tstart = time.time()
     if fileref[0] != '/':
         # we got the fileid of a version folder (typically from Reva), get the path of the corresponding file
-        rc = _xrootcmd(endpoint, 'fileinfo', '', userid, 'mgm.path=pid:' + fileref)
+        statInfo = _xrootcmd(endpoint, 'fileinfo', '', userid, 'mgm.path=pid:' + fileref)
         log.info(f'msg="Invoked stat" fileid="{fileref}"')
         # output looks like:
         # Directory: '/eos/.../.sys.v#.filename/'  Treesize: 562\\n  Container: 0  Files: 9  Flags: 40700  Clock: 16b4ea335b36bb06
@@ -217,10 +212,11 @@ def statx(endpoint, fileref, userid, versioninv=1):
         # Birth : Tue Oct 12 17:11:58 2021 Timestamp: 1634051518.588282898
         # CUid: 4179 CGid: 2763 Fxid: 000b80fe Fid: 753918 Pid: 2571 Pxid: 00000a0b
         # ETAG: b80fe:1636190067.768
-        filepath = rc[rc.find('Directory:')+12:rc.find('Treesize')-4].replace(EOSVERSIONPREFIX, '').replace('#and#', '&')  # noqa:
+        filepath = statInfo[statInfo.find(b'Directory:')+12:statInfo.find(b'Treesize')-4]
+        filepath = filepath.decode().replace(EOSVERSIONPREFIX, '').replace('#and#', '&')
     else:
         filepath = fileref
-    # now stat with the -m flag, so to obtain a k=v list
+    # stat with the -m flag, so to obtain a k=v list
     statInfo = _xrootcmd(endpoint, 'fileinfo', '', userid, 'mgm.path=' + _getfilepath(filepath, encodeamp=True)
                          + '&mgm.pcmd=fileinfo&mgm.file.info.option=-m')
     try:
@@ -231,9 +227,13 @@ def statx(endpoint, fileref, userid, versioninv=1):
         # nstripes=2 lid=00100112 nrep=2 xattrn=sys.eos.btime xattrv=1599649866.280468540 uid:xxxx[username] gid:xxxx[group]
         # tident:xxx name:username dn: prot:https host:xxxx.cern.ch domain:cern.ch geo: sudo:0 fsid=305 fsid=486
         # cf. https://gitlab.cern.ch/dss/eos/-/blob/master/archive/eosarch/utils.py
-        kvlist = [kv.split('=') for kv in statInfo.split()]
-        statxdata = {k: v.strip('"') for k, v in [kv for kv in kvlist if len(kv) == 2]}
+        kvlist = [kv.split(b'=') for kv in statInfo.split()]
+        # extract the key-value pairs, but drop the xattrn/xattrv ones as not needed and potentially containing
+        # non-unicode-decodable content (cf. CERNBOX-3514)
+        statxdata = {k.decode(): v.decode().strip('"') for k, v in
+                     [kv for kv in kvlist if len(kv) == 2 and kv[0].find(b'xattr') == -1]}
     except ValueError as e:
+        # UnicodeDecodeError exceptions would fall here
         log.error(f'msg="Invoked fileinfo but failed to parse output" result="{statInfo}" exception="{e}"')
         raise IOError('Failed to parse fileinfo response') from e
     if 'treesize' in statxdata:
@@ -326,9 +326,12 @@ def getxattr(endpoint, filepath, _userid, key):
         res = _xrootcmd(endpoint, 'attr', 'get', '0:0',
                         'mgm.attr.key=' + key + '&mgm.path=' + _getfilepath(filepath, encodeamp=True))
         # if no error, the response comes in the format <key>="<value>"
-        return res.split('"')[1]
+        return res.split(b'"')[1].decode()
     except (IndexError, IOError):
         return None
+    except UnicodeDecodeError as e:
+        log.error(f'msg="Failed to decode xattr value" cmd="attr/get" res="{res}"')
+        raise IOError('Failed to decode xattr') from e
 
 
 def rmxattr(endpoint, filepath, _userid, key, lockmd):
