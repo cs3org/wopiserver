@@ -248,10 +248,12 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
     '''Write a file via xroot on behalf of the given userid. The entire content is written
     and any pre-existing file is deleted (or moved to the previous version if supported).
     With islock=True, the file is opened with O_CREAT|O_EXCL.'''
+    stream = True
     if size == -1:
         if isinstance(content, str):
             content = bytes(content, 'UTF-8')
         size = len(content)
+        stream = False
     if lockmd:
         _validatelock(filepath, getlock(endpoint, filepath, userid), lockmd, 'writefile', log)
     elif getlock(endpoint, filepath, userid):
@@ -281,14 +283,17 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
         try:
             with open(_getfilepath(filepath), mode='wb') as f:
                 tend = time.time()
-                chunksize = config.getint('io', 'chunksize')
-                o = 0
-                while True:
-                    chunk = content.read(chunksize)
-                    if len(chunk) == 0:
-                        break
-                    written += f.write(chunk, offset=o, size=len(chunk))
-                    o += len(chunk)
+                if stream:
+                    chunksize = config.getint('io', 'chunksize')
+                    o = 0
+                    while True:
+                        chunk = content.read(chunksize)
+                        if len(chunk) == 0:
+                            break
+                        written += f.write(chunk, offset=o, size=len(chunk))
+                        o += len(chunk)
+                else:
+                    written = f.write(content)
         except OSError as e:
             log.error(f'msg="Error writing file" filepath="{filepath}" error="{e}"')
             raise IOError(e) from e
