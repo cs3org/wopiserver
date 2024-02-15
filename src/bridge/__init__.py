@@ -166,6 +166,8 @@ def appopen(wopisrc, acctok, appmd, viewmode, revatok=None):
                        (appname, acctok[-20:]))
         raise FailedOpen(f'Failed to load WOPI bridge plugin for {appname}', http.client.INTERNAL_SERVER_ERROR)
     except KeyError:
+        WB.log.error('msg="BridgeOpen: app already configured" appname="%s" appurl="%s" token="%s"' %
+                     (appname, appurl, acctok[-20:]))
         raise FailedOpen(f'Bridged app {appname} already configured with a different appurl', http.client.NOT_IMPLEMENTED)
 
     # WOPI GetFileInfo
