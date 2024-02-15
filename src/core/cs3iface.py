@@ -432,9 +432,13 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
     and any pre-existing file is deleted (or moved to the previous version if supported).
     The islock flag is currently not supported. The backend should at least support
     writing the file with O_CREAT|O_EXCL flags to prevent races.'''
+    tstart = time.time()
     if islock:
         log.warning('msg="Lock (no-overwrite) flag not supported, going for standard upload"')
-    tstart = time.time()
+    if lockmd:
+        appname, lockid = lockmd
+    else:
+        appname = lockid = ''
 
     # prepare endpoint
     if size == -1:
@@ -442,9 +446,13 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
             content = bytes(content, 'UTF-8')
         size = len(content)
     reference = _getcs3reference(endpoint, filepath)
-    req = cs3sp.InitiateFileUploadRequest(ref=reference, opaque=types.Opaque(
+    req = cs3sp.InitiateFileUploadRequest(ref=reference, lock_id=lockid, opaque=types.Opaque(
         map={'Upload-Length': types.OpaqueEntry(decoder='plain', value=str.encode(str(size)))}))
     res = ctx['cs3gw'].InitiateFileUpload(request=req, metadata=[('x-access-token', userid)])
+    if res.status.code == cs3code.CODE_FAILED_PRECONDITION:
+        log.info('msg="Lock mismatch uploading file" filepath="%s" reason="%s"' %
+                 (filepath, res.status.message.replace('"', "'")))
+        raise IOError(common.EXCL_ERROR)
     if res.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to initiateFileUpload on write" filepath="%s" trace="%s" code="%s" reason="%s"' %
                   (filepath, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
@@ -456,10 +464,6 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
     # Upload
     try:
         protocol = [p for p in res.protocols if p.protocol in ["simple", "spaces"]][0]
-        if lockmd:
-            appname, lockid = lockmd
-        else:
-            appname = lockid = ''
         headers = {
             'X-Access-Token': userid,
             'Upload-Length': str(size),
@@ -472,7 +476,7 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
         log.error(f'msg="Exception when uploading file to Reva" reason="{e}"')
         raise IOError(e) from e
     if putres.status_code == http.client.CONFLICT:
-        log.info(f'msg="File is locked, upload is forbidden" reason="{putres.reason}" filepath="{filepath}"')
+        log.info(f'msg="Got conflict on PUT, file is locked" reason="{putres.reason}" filepath="{filepath}"')
         raise IOError(common.EXCL_ERROR)
     if putres.status_code == http.client.UNAUTHORIZED:
         log.warning(f'msg="Access denied uploading file to Reva" reason="{putres.reason}" filepath="{filepath}"')
