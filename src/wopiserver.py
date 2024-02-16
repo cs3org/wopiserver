@@ -371,7 +371,10 @@ def iopOpenInApp():
             res['app-url'] += '&IsLicensedUser=1'
         res['form-parameters'] = {'access_token': acctok}
 
-    Wopi.log.info(f"msg=\"iopOpenInApp: redirecting client\" appurl=\"{res['app-url']}\"")
+    appforlog = res['app-url']
+    if appforlog.find('access') > 0:
+        appforlog = appforlog[:appforlog.find('access')] + 'access_token=redacted'
+    Wopi.log.info(f"msg=\"iopOpenInApp: redirecting client\" appurl=\"{appforlog}\"")
     return flask.Response(json.dumps(res), mimetype='application/json')
 
 
