@@ -298,17 +298,12 @@ def statx(endpoint, fileref, userid, versioninv=1):
     }
 
 
-def setxattr(endpoint, filepath, userid, key, value, lockmd):
+def setxattr(endpoint, filepath, _userid, key, value, lockmd):
     '''Set the extended attribute <key> to <value> via a special open.
     The userid is overridden to make sure it also works on shared files.'''
     appname = 'wopi'
-    lockid = None
     if lockmd:
-        appname, lockid = lockmd
-    if key not in (EOSLOCKKEY, common.LOCKKEY):
-        currlock = getlock(endpoint, filepath, userid)
-        if currlock and currlock['lock_id'] != lockid:
-            raise IOError(common.EXCL_ERROR)
+        appname, _ = lockmd
     if 'user' not in key and 'sys' not in key:
         # if nothing is given, assume it's a user attr
         key = 'user.' + key
