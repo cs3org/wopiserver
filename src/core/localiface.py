@@ -140,11 +140,6 @@ def _validatelock(filepath, currlock, lockmd, op, log):
 
 def setxattr(endpoint, filepath, userid, key, value, lockmd):
     '''Set the extended attribute <key> to <value> on behalf of the given userid'''
-    if key != common.LOCKKEY:
-        currlock = getlock(endpoint, filepath, userid)
-        if currlock:
-            # enforce lock only if previously set
-            _validatelock(filepath, currlock, lockmd, 'setxattr', log)
     try:
         os.setxattr(_getfilepath(filepath), 'user.' + key, str(value).encode())
     except OSError as e:
@@ -163,8 +158,6 @@ def getxattr(_endpoint, filepath, _userid, key):
 
 def rmxattr(endpoint, filepath, userid, key, lockmd):
     '''Remove the extended attribute <key> on behalf of the given userid'''
-    if key != common.LOCKKEY:
-        _validatelock(filepath, getlock(endpoint, filepath, userid), lockmd, 'rmxattr', log)
     try:
         os.removexattr(_getfilepath(filepath), 'user.' + key)
     except OSError as e:

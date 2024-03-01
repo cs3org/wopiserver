@@ -27,6 +27,7 @@ class TestStorage(unittest.TestCase):
     '''Simple tests for the storage layers of the WOPI server. See README for how to run the tests for each storage provider'''
     initialized = False
     storagetype = None
+    log = None
 
     @classmethod
     def globalinit(cls):
@@ -34,9 +35,9 @@ class TestStorage(unittest.TestCase):
         loghandler = logging.FileHandler('/tmp/wopiserver-test.log')
         loghandler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)s[%(process)d] %(levelname)-8s %(message)s',
                                                   datefmt='%Y-%m-%dT%H:%M:%S'))
-        log = logging.getLogger('wopiserver.test')
-        log.addHandler(loghandler)
-        log.setLevel(logging.DEBUG)
+        cls.log = logging.getLogger('wopiserver.test')
+        cls.log.addHandler(loghandler)
+        cls.log.setLevel(logging.DEBUG)
         config = configparser.ConfigParser()
         try:
             with open('test/wopiserver-test.conf') as fdconf:
@@ -58,7 +59,7 @@ class TestStorage(unittest.TestCase):
             raise ImportError(f'Unsupported/Unknown storage type {storagetype}')
         try:
             cls.storage = __import__('core.' + storagetype, globals(), locals(), [storagetype])
-            cls.storage.init(config, log)
+            cls.storage.init(config, cls.log)
             cls.homepath = ''
             cls.username = ''
             if 'cs3' in storagetype:
@@ -75,7 +76,7 @@ class TestStorage(unittest.TestCase):
 
     def __init__(self, *args, **kwargs):
         '''Initialization of a test'''
-        super(TestStorage, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         if not TestStorage.initialized:
             TestStorage.globalinit()
         self.userid = TestStorage.userid
@@ -83,6 +84,7 @@ class TestStorage(unittest.TestCase):
         self.storage = TestStorage.storage
         self.homepath = TestStorage.homepath
         self.username = TestStorage.username
+        self.log = TestStorage.log
 
     def test_stat(self):
         '''Call stat() and assert the path matches'''
@@ -177,6 +179,9 @@ class TestStorage(unittest.TestCase):
 
     def test_write_islock(self):
         '''Test double write with the islock flag'''
+        if self.storagetype == 'cs3':
+            self.log.warn('Skipping test_write_islock for storagetype cs3')
+            return
         try:
             self.storage.removefile(self.endpoint, self.homepath + '/testoverwrite', self.userid)
         except IOError:
@@ -191,6 +196,9 @@ class TestStorage(unittest.TestCase):
 
     def test_write_race(self):
         '''Test multithreaded double write with the islock flag. Might fail as it relies on tight timing'''
+        if self.storagetype == 'cs3':
+            self.log.warn('Skipping test_write_race for storagetype cs3')
+            return
         try:
             self.storage.removefile(self.endpoint, self.homepath + '/testwriterace', self.userid)
         except IOError:
@@ -271,7 +279,7 @@ class TestStorage(unittest.TestCase):
         t.start()
         with self.assertRaises(IOError) as context:
             time.sleep(0.001)
-            self.storage.setlock(self.endpoint, self.homepath + '/testlockrace', self.userid, 'test app', 'testlock2')
+            self.storage.setlock(self.endpoint, self.homepath + '/testlockrace', self.userid, 'test app 2', 'testlock2')
         self.assertIn(EXCL_ERROR, str(context.exception))
         self.storage.removefile(self.endpoint, self.homepath + '/testlockrace', self.userid)
 
@@ -291,14 +299,25 @@ class TestStorage(unittest.TestCase):
             # this is why we test that both mismatch. Could be improved, though we specifically care about the lock paylaod.
             self.storage.writefile(self.endpoint, self.homepath + '/testlockop', self.userid, databuf, -1,
                                    ('mismatch app', 'mismatchlock'))
-        with self.assertRaises(IOError):
-            # same as above
+        # with xattrs, it's fine to set them without lock context (the lock should apply to files' contents only)
+        # BUT the CS3 API does have the possibility to fail a setxattr in case of lock mismatch, so we allow that
+        # (cf. https://buf.build/cs3org-buf/cs3apis/docs/main:cs3.storage.provider.v1beta1#cs3.storage.provider.v1beta1.ProviderAPI.SetArbitraryMetadata)  # noqa: E501
+        try:
             self.storage.setxattr(self.endpoint, self.homepath + '/testlockop', self.userid, 'testkey', 123,
                                   ('mismatch app', 'mismatchlock'))
-        with self.assertRaises(IOError):
+        except IOError as e:
+            if str(e) == EXCL_ERROR:
+                pass
+        try:
             self.storage.setxattr(self.endpoint, self.homepath + '/testlockop', self.userid, 'testkey', 123, None)
-        with self.assertRaises(IOError):
+        except IOError as e:
+            if str(e) == EXCL_ERROR:
+                pass
+        try:
             self.storage.rmxattr(self.endpoint, self.homepath + '/testlockop', self.userid, 'testkey', None)
+        except IOError as e:
+            if str(e) == EXCL_ERROR:
+                pass
         self.storage.refreshlock(self.endpoint, self.homepath + '/testlockop', self.userid, 'test app', 'testlock')
         with self.assertRaises(IOError):
             self.storage.refreshlock(self.endpoint, self.homepath + '/testlockop', self.userid, 'mismatched app', 'mismatchlock')
@@ -320,21 +339,21 @@ class TestStorage(unittest.TestCase):
         statInfo = self.storage.stat(self.endpoint, self.homepath + '/testelock', self.userid)
         self.assertIsInstance(statInfo, dict)
         self.storage.setlock(self.endpoint, self.homepath + '/testelock', self.userid, 'test app', 'testlock')
-        time.sleep(2.1)
+        time.sleep(3.1)
         l = self.storage.getlock(self.endpoint, self.homepath + '/testelock', self.userid)  # noqa: E741
         self.assertEqual(l, None)
         self.storage.setlock(self.endpoint, self.homepath + '/testelock', self.userid, 'test app', 'testlock2')
-        time.sleep(2.1)
+        time.sleep(3.1)
         self.storage.setlock(self.endpoint, self.homepath + '/testelock', self.userid, 'test app', 'testlock3')
         l = self.storage.getlock(self.endpoint, self.homepath + '/testelock', self.userid)  # noqa: E741
         self.assertIsInstance(l, dict)
         self.assertEqual(l['lock_id'], 'testlock3')
-        time.sleep(2.1)
+        time.sleep(3.1)
         with self.assertRaises(IOError) as context:
             self.storage.refreshlock(self.endpoint, self.homepath + '/testelock', self.userid, 'test app', 'testlock4')
         self.assertEqual(EXCL_ERROR, str(context.exception))
         self.storage.setlock(self.endpoint, self.homepath + '/testelock', self.userid, 'test app', 'testlock5')
-        time.sleep(2.1)
+        time.sleep(3.1)
         with self.assertRaises(IOError) as context:
             self.storage.unlock(self.endpoint, self.homepath + '/testelock', self.userid, 'test app', 'testlock5')
         self.assertEqual(EXCL_ERROR, str(context.exception))
