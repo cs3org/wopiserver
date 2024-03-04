@@ -177,6 +177,12 @@ def setxattr(endpoint, filepath, userid, key, value, lockmd):
         _, lockid = lockmd
     req = cs3sp.SetArbitraryMetadataRequest(ref=ref, arbitrary_metadata=md, lock_id=lockid)
     res = ctx['cs3gw'].SetArbitraryMetadata(request=req, metadata=[('x-access-token', userid)])
+    if res.status.code in [cs3code.CODE_FAILED_PRECONDITION, cs3code.CODE_ABORTED]:
+        # CS3 storages may refuse to set an xattr in case of lock mismatch: this is an overprotection,
+        # as the lock should concern the file's content, not its metadata, however we need to handle that
+        log.info('msg="Failed precondition on setxattr" filepath="%s" key="%s" trace="%s" reason="%s"' %
+                 (filepath, key, res.status.trace, res.status.message.replace('"', "'")))
+        raise IOError(common.EXCL_ERROR)
     if res.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to setxattr" filepath="%s" key="%s" trace="%s" code="%s" reason="%s"' %
                   (filepath, key, res.status.trace, res.status.code, res.status.message.replace('"', "'")))
@@ -224,6 +230,10 @@ def rmxattr(endpoint, filepath, userid, key, lockmd):
         _, lockid = lockmd
     req = cs3sp.UnsetArbitraryMetadataRequest(ref=ref, arbitrary_metadata_keys=[key], lock_id=lockid)
     res = ctx['cs3gw'].UnsetArbitraryMetadata(request=req, metadata=[('x-access-token', userid)])
+    if res.status.code in [cs3code.CODE_FAILED_PRECONDITION, cs3code.CODE_ABORTED]:
+        log.info('msg="Failed precondition on rmxattr" filepath="%s" key="%s" trace="%s" reason="%s"' %
+                 (filepath, key, res.status.trace, res.status.message.replace('"', "'")))
+        raise IOError(common.EXCL_ERROR)
     if res.status.code != cs3code.CODE_OK:
         log.error('msg="Failed to rmxattr" filepath="%s" trace="%s" key="%s" reason="%s"' %
                   (filepath, key, res.status.trace, res.status.message.replace('"', "'")))
