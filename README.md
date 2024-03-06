@@ -45,7 +45,7 @@ Integration in the CS3 Organisation: April 2020
 
 ## Compatibility
 
-This WOPI server implements the required APIs to ensure full compatibility with Collabora Online and Microsoft Office. For the latter, however, the OneNote application uses newer WOPI APIs and is currently not supported.
+This WOPI server implements the required APIs to ensure full compatibility with Microsoft Office (as provided via the CSPP Terms), Collabora Online, and ONLYOFFICE.
 
 ## Unit testing
 
