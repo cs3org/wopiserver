@@ -111,6 +111,7 @@ def checkFileInfo(fileid, acctok):
             fmd['UserInfo'] = uinfo
         if srv.config.get('general', 'earlyfeatures', fallback='False').upper() == 'TRUE':
             fmd['AllowEarlyFeatures'] = True
+        fmd['ComplianceDomainPrefix'] = srv.config.get('general', 'compliancedomain', fallback='euc')
 
         # populate app-specific metadata
         # the following is to enable the 'Edit in Word/Excel/PowerPoint' (desktop) action (probably broken)
