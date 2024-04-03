@@ -147,6 +147,10 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
         mddoc = _unzipattachments(mdfile)
     else:
         mddoc = mdfile
+    # if the file was created on Windows, convert \r\n to \n for CodiMD to correctly edit it
+    if mddoc.find(b'\r\n') >= 0:
+        mddoc = mddoc.replace(b'\r\n', b'\n')
+
     try:
         if not docid:
             # read-only case: push the doc to a newly generated note with a random docid
