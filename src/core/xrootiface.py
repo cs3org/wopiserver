@@ -144,7 +144,8 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args, app='wopi'):
                 raise IOError(msg)
     # all right, return everything that came in stdout, in binary format
     log.debug('msg="Invoked xroot" cmd="%s%s" url="%s" res="%s" elapsedTimems="%.1f"' %
-              (cmd, ('/' + subcmd if subcmd else ''), url, (res[0].strip(b'\n') if cmd != 'fileinfo' else '_redacted_'),
+              (cmd, ('/' + subcmd if subcmd else ''), url,
+               (res[0].strip(b'\n').replace(b'"', b'') if cmd != 'fileinfo' else '_redacted_'),
                (tend - tstart) * 1000))
     return res[0][res[0].find(b'stdout=') + 7:].strip(b'\n')
 
