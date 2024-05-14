@@ -1,5 +1,11 @@
 ## Changelog for the WOPI server
 
+### Tue May 14 2024 - v10.4.0
+- Added support for Microsoft compliance domains
+- Fixed opening of markdown files created on Windows platforms
+- Improved lock handling on write and xattr operations (#137)
+- Improved logs
+
 ### Fri Jan 19 2024 - v10.3.0
 - Implemented support for X-Trace-Id header (#64)
 - Fixed SaveAs logic for non-authenticated (anonymous) users
