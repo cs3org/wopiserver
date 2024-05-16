@@ -41,10 +41,12 @@ def init(inconfig, inlog):
     ctx['locknotimpl'] = False
     ctx['revagateway'] = inconfig.get('cs3', 'revagateway')
     ctx['xattrcache'] = {}    # this is a map cs3ref -> arbitrary_metadata as returned by Stat()
+    ctx['grpc_timeout'] = inconfig.get('cs3', "grpctimeout", fallback=10)
+    ctx['http_timeout'] = inconfig.get('cs3', "httptimeout", fallback=10)
     # prepare the gRPC channel and validate that the revagateway gRPC server is ready
     try:
         ch = grpc.insecure_channel(ctx['revagateway'])
-        grpc.channel_ready_future(ch).result(timeout=10)
+        grpc.channel_ready_future(ch).result(timeout=ctx['grpc_timeout'])
     except grpc.FutureTimeoutError as e:
         log.error('msg="Failed to connect to Reva via GRPC" error="%s"' % e)
         raise IOError(e) from e
@@ -422,7 +424,7 @@ def readfile(endpoint, filepath, userid, lockid):
             'X-Access-Token': userid,
             'X-Reva-Transfer': protocol.token
         }
-        fileget = requests.get(url=protocol.download_endpoint, headers=headers, verify=ctx['ssl_verify'], timeout=10, stream=True)
+        fileget = requests.get(url=protocol.download_endpoint, headers=headers, verify=ctx['ssl_verify'], timeout=ctx['http_timeout'], stream=True)
     except requests.exceptions.RequestException as e:
         log.error(f'msg="Exception when downloading file from Reva" reason="{e}"')
         yield IOError(e)
@@ -481,7 +483,7 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
             'X-Lock-Id': lockid,
             'X-Lock-Holder': appname,
         }
-        putres = requests.put(url=protocol.upload_endpoint, data=content, headers=headers, verify=ctx['ssl_verify'], timeout=10)
+        putres = requests.put(url=protocol.upload_endpoint, data=content, headers=headers, verify=ctx['ssl_verify'], timeout=ctx['http_timeout'])
     except requests.exceptions.RequestException as e:
         log.error(f'msg="Exception when uploading file to Reva" reason="{e}"')
         raise IOError(e) from e
