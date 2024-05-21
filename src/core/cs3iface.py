@@ -41,8 +41,8 @@ def init(inconfig, inlog):
     ctx['locknotimpl'] = False
     ctx['revagateway'] = inconfig.get('cs3', 'revagateway')
     ctx['xattrcache'] = {}    # this is a map cs3ref -> arbitrary_metadata as returned by Stat()
-    ctx['grpc_timeout'] = inconfig.get('cs3', "grpctimeout", fallback=10)
-    ctx['http_timeout'] = inconfig.get('cs3', "httptimeout", fallback=10)
+    ctx['grpc_timeout'] = inconfig.getint('cs3', "grpctimeout", fallback=10)
+    ctx['http_timeout'] = inconfig.getint('cs3', "httptimeout", fallback=10)
     # prepare the gRPC channel and validate that the revagateway gRPC server is ready
     try:
         ch = grpc.insecure_channel(ctx['revagateway'])
