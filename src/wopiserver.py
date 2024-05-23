@@ -146,15 +146,15 @@ class Wopi:
                 except OSError:
                     cls.log.error('msg="Failed to open the provided certificate or key to start in https mode"')
                     raise
-            cls.wopiurl = cls.config.get('general', 'wopiurl')
-            cls.homepath = cls.config.get('general', 'homepath', fallback='/home/username')
-            cls.recoverypath = cls.config.get('io', 'recoverypath', fallback='/var/spool/wopirecovery')
+            cls.wopiurl = cls.config.get('general', 'wopiurl').strip('/')
+            cls.homepath = cls.config.get('general', 'homepath', fallback='/home/username').strip('/')
+            cls.recoverypath = cls.config.get('io', 'recoverypath', fallback='/var/spool/wopirecovery').strip('/')
             try:
                 os.makedirs(cls.recoverypath)
             except FileExistsError:
                 pass
             # WOPI proxy configuration (optional)
-            cls.wopiproxy = cls.config.get('general', 'wopiproxy', fallback='')
+            cls.wopiproxy = cls.config.get('general', 'wopiproxy', fallback='').strip('/')
             cls.wopiproxykey = None
             proxykeyfile = cls.config.get('general', 'wopiproxysecretfile', fallback='')
             if proxykeyfile:
