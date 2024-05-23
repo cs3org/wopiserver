@@ -1,5 +1,10 @@
 ## Changelog for the WOPI server
 
+### Thu May 23 2024 - v10.5.0
+- Added timeout settings for GRPC and HTTP connections (#149)
+- Fixed handing of trailing slashes (#151)
+- Moved docker image to 3.12.3-alpine (#147)
+
 ### Tue May 14 2024 - v10.4.0
 - Added support for Microsoft compliance domains
 - Fixed opening of markdown files created on Windows platforms
