@@ -424,7 +424,9 @@ def readfile(endpoint, filepath, userid, lockid):
             'X-Access-Token': userid,
             'X-Reva-Transfer': protocol.token
         }
-        fileget = requests.get(url=protocol.download_endpoint, headers=headers, verify=ctx['ssl_verify'], timeout=ctx['http_timeout'], stream=True)
+        fileget = requests.get(url=protocol.download_endpoint, headers=headers,
+                               verify=ctx['ssl_verify'], timeout=ctx['http_timeout'],
+                               stream=True)
     except requests.exceptions.RequestException as e:
         log.error(f'msg="Exception when downloading file from Reva" reason="{e}"')
         yield IOError(e)
@@ -483,7 +485,8 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
             'X-Lock-Id': lockid,
             'X-Lock-Holder': appname,
         }
-        putres = requests.put(url=protocol.upload_endpoint, data=content, headers=headers, verify=ctx['ssl_verify'], timeout=ctx['http_timeout'])
+        putres = requests.put(url=protocol.upload_endpoint, data=content, headers=headers,
+                              verify=ctx['ssl_verify'], timeout=ctx['http_timeout'])
     except requests.exceptions.RequestException as e:
         log.error(f'msg="Exception when uploading file to Reva" reason="{e}"')
         raise IOError(e) from e
