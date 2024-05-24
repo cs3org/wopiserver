@@ -1,6 +1,6 @@
 ## Changelog for the WOPI server
 
-### Thu May 23 2024 - v10.5.0
+### Fri May 24 2024 - v10.5.0
 - Added timeout settings for GRPC and HTTP connections (#149)
 - Fixed handing of trailing slashes (#151)
 - Moved docker image to 3.12.3-alpine (#147)
