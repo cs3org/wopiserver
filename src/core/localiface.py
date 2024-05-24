@@ -283,7 +283,8 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
                         chunk = content.read(chunksize)
                         if len(chunk) == 0:
                             break
-                        written += f.write(chunk, offset=o, size=len(chunk))
+                        f.seek(o)
+                        written += f.write(chunk)
                         o += len(chunk)
                 else:
                     written = f.write(content)
