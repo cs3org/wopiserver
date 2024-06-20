@@ -392,7 +392,8 @@ def iopDownload():
         return core.wopi.getFile(0, acctok)   # note that here we exploit the non-dependency from fileid
     except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError, KeyError) as e:
         Wopi.log.info('msg="Expired or malformed token" client="%s" requestedUrl="%s" error="%s" token="%s"' %
-                      (flask.request.remote_addr, flask.request.base_url, e, flask.request.args['access_token']))
+                      (flask.request.remote_addr, flask.request.base_url, e,
+                       (flask.request.args['access_token'] if 'access_token' in flask.request.args else 'N/A')))
         return 'Invalid access token', http.client.UNAUTHORIZED
 
 
