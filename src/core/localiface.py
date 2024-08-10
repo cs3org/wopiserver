@@ -101,6 +101,15 @@ def stat(_endpoint, filepath, _userid):
                  (statInfo.st_ino, _getfilepath(filepath), (tend - tstart) * 1000))
         if S_ISDIR(statInfo.st_mode):
             raise IOError('Is a directory')
+        try:
+            xattrs = {
+                k.strip('user.'): os.getxattr(_getfilepath(filepath), k).decode()
+                    for k in os.listxattr(_getfilepath(filepath))
+            }
+        except OSError as e:
+            log.info('msg="Failed to invoke listxattr/getxattr" inode="%d" filepath="%s" exception="%s"' %
+                     statInfo.st_ino, _getfilepath(filepath), e)
+            xattrs = {}
         return {
             'inode': common.encodeinode('local', str(statInfo.st_ino)),
             'filepath': filepath,
@@ -108,6 +117,7 @@ def stat(_endpoint, filepath, _userid):
             'size': statInfo.st_size,
             'mtime': statInfo.st_mtime,
             'etag': str(statInfo.st_mtime),
+            'xattrs': xattrs,
         }
     except (FileNotFoundError, PermissionError) as e:
         raise IOError(e) from e
@@ -147,8 +157,8 @@ def setxattr(endpoint, filepath, userid, key, value, lockmd):
         raise IOError(e) from e
 
 
-def getxattr(_endpoint, filepath, _userid, key):
-    '''Get the extended attribute <key> on behalf of the given userid. Do not raise exceptions'''
+def _getxattr(filepath, key):
+    '''Internal only: get the extended attribute <key>, do not raise exceptions'''
     try:
         return os.getxattr(_getfilepath(filepath), 'user.' + key).decode('UTF-8')
     except OSError as e:
@@ -184,7 +194,7 @@ def setlock(endpoint, filepath, userid, appname, value):
 
 def getlock(endpoint, filepath, _userid):
     '''Get the lock metadata as an xattr on behalf of the given userid'''
-    rawl = getxattr(endpoint, filepath, '0:0', common.LOCKKEY)
+    rawl = _getxattr(filepath, common.LOCKKEY)
     if rawl:
         lock = common.retrieverevalock(rawl)
         if lock['expiration']['seconds'] > time.time():

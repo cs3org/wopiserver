@@ -105,8 +105,7 @@ def checkFileInfo(fileid, acctok):
         fmd['SupportsRename'] = fmd['UserCanRename'] = enablerename and \
             acctok['viewmode'] in (utils.ViewMode.READ_WRITE, utils.ViewMode.PREVIEW)
         fmd['SupportsUserInfo'] = True
-        uinfo = st.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'],
-                            utils.USERINFOKEY + '.' + acctok['wopiuser'].split('!')[0])
+        uinfo = statInfo['xattrs'].get(utils.USERINFOKEY + '.' + acctok['wopiuser'].split('!')[0])
         if uinfo:
             fmd['UserInfo'] = uinfo
         if srv.config.get('general', 'earlyfeatures', fallback='False').upper() == 'TRUE':
@@ -194,7 +193,7 @@ def setLock(fileid, reqheaders, acctok):
 
     if retrievedLock or op == 'REFRESH_LOCK':
         # useful for later checks
-        savetime = st.getxattr(acctok['endpoint'], fn, acctok['userid'], utils.LASTSAVETIMEKEY)
+        savetime = statInfo['xattrs'].get(utils.LASTSAVETIMEKEY)
         if savetime and (not savetime.isdigit() or int(savetime) < int(statInfo['mtime'])):
             # we had stale information, discard
             log.warning('msg="Detected external modification" filename="%s" savetime="%s" mtime="%s" token="%s"' %
@@ -600,9 +599,9 @@ def putFile(fileid, acctok):
     try:
         if srv.config.get('general', 'detectexternalmodifications', fallback='True').upper() == 'TRUE':
             # check now the destination file against conflicts if required
-            savetime = st.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY)
-            mtime = None
-            mtime = st.stat(acctok['endpoint'], acctok['filename'], acctok['userid'])['mtime']
+            statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'], versioninv=1)
+            savetime = statInfo['xattrs'].get(utils.LASTSAVETIMEKEY)
+            mtime = statInfo['mtime']
             if not savetime or not savetime.isdigit() or int(savetime) < int(mtime):
                 # no xattr was there or we got our xattr but mtime is more recent: someone may have updated the file from
                 # a different source (e.g. FUSE or SMB mount), therefore force conflict and return failure to the application

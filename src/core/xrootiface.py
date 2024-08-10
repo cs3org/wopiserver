@@ -219,28 +219,42 @@ def statx(endpoint, fileref, userid, versioninv=1):
         filepath = filepath.decode().replace(EOSVERSIONPREFIX, '').replace('#and#', '&')
     else:
         filepath = fileref
+
     # stat with the -m flag, so to obtain a k=v list
     statInfo = _xrootcmd(endpoint, 'fileinfo', '', userid, 'mgm.path=' + _getfilepath(filepath, encodeamp=True)
                          + '&mgm.pcmd=fileinfo&mgm.file.info.option=-m')
+    xattrs = {}
     try:
         # output looks like:
-        # keylength.file=35 file=/eos/.../filename size=2915 mtime=1599649863.0 ctime=1599649866.280468540
-        # btime=1599649866.280468540 clock=0 mode=0644 uid=xxxx gid=xxxx fxid=19ab8b68 fid=430672744 ino=115607834422411264
-        # pid=1713958 pxid=001a2726 xstype=adler xs=a2dfcdf9 etag="115607834422411264:a2dfcdf9" detached=0 layout=replica
-        # nstripes=2 lid=00100112 nrep=2 xattrn=sys.eos.btime xattrv=1599649866.280468540 uid:xxxx[username] gid:xxxx[group]
-        # tident:xxx name:username dn: prot:https host:xxxx.cern.ch domain:cern.ch geo: sudo:0 fsid=305 fsid=486
+        # keylength.file=60 file=/eos/.../file name with spaces size=49322 status=healthy mtime=1722868599.312924544
+        # ctime=1722868599.371644799 btime=1722868599.312743733 atime=1722868599.312744021 clock=0 mode=0644 uid=55375 gid=2763
+        # fxid=1fef0b88 fid=535759752 ino=143816913334566912 pid=21195331 pxid=01436a43 xstype=adler xs=7fd2729c
+        # etag="143816913334566912:7fd2729c" detached=0 layout=replica nstripes=2 lid=00100112 nrep=2
+        # xattrn=sys.eos.btime xattrv=1722868599.312743733
+        # xattrn=sys.fs.tracking xattrv=+648+260
+        # xattrn=sys.fusex.state xattrv=<non-decodable>
+        # xattrn=sys.utrace xattrv=2012194c-5338-11ef-b295-a4bf0179682d
+        # xattrn=sys.vtrace xattrv=[Mon Aug  5 16:36:39 2024] uid:55375[xxxx] gid:2763[xx] tident:root.11:2881@...
+        # xattrn=user.iop.wopi.lastwritetime xattrv=1722868599
+        # fsid=648 fsid=260
         # cf. https://gitlab.cern.ch/dss/eos/-/blob/master/archive/eosarch/utils.py
         kvlist = [kv.split(b'=') for kv in statInfo.split()]
-        # extract the key-value pairs, but drop the xattrn/xattrv ones as not needed and potentially containing
-        # non-unicode-decodable content (cf. CERNBOX-3514)
+        # extract the key-value pairs for the core metadata and the user xattrs; drop the rest, don't decode as
+        # some sys xattrs may contain non-unicode-decodable content (cf. CERNBOX-3514)
         statxdata = {k.decode(): v.decode().strip('"') for k, v in
                      [kv for kv in kvlist if len(kv) == 2 and kv[0].find(b'xattr') == -1]}
+        for ikv, kv in enumerate(kvlist):
+            if len(kv) == 2 and kv[0].find(b'xattrn') and kv[1].find(b'user.'):
+                # we found an user xattr: use it as key, where the value is on the next element (with kv[0] = 'xattrv')
+                xattrs[kv[1].decode().strip('user.')] = kvlist[ikv+1][1].decode()
+
     except ValueError as e:
         # UnicodeDecodeError exceptions would fall here
         log.error(f'msg="Invoked fileinfo but failed to parse output" result="{statInfo}" exception="{e}"')
         raise IOError('Failed to parse fileinfo response') from e
     if 'treesize' in statxdata:
         raise IOError('Is a directory')      # EISDIR
+
     if versioninv == 0:
         # statx info of the given file:
         # we extract the eosinstance from endpoint, which looks like e.g. root://eosinstance[.cern.ch]
@@ -254,6 +268,7 @@ def statx(endpoint, fileref, userid, versioninv=1):
             'size': int(statxdata['size']),
             'mtime': int(float(statxdata['mtime'])),
             'etag': statxdata['etag'],
+            'xattrs': xattrs,
         }
     # now stat the corresponding version folder to get an inode invariant to save operations, see CERNBOX-1216
     # also, use the owner's as opposed to the user's credentials to bypass any restriction (e.g. with single-share files)
@@ -262,6 +277,7 @@ def statx(endpoint, fileref, userid, versioninv=1):
     rcv, infov = _getxrdfor(endpoint).query(QueryCode.OPAQUEFILE, _getfilepath(verFolder) + ownerarg + '&mgm.pcmd=stat',
                                             timeout=timeout)
     tend = time.time()
+
     try:
         if not infov:
             raise IOError(f'xrdquery returned nothing, rcv={rcv}')
@@ -287,6 +303,7 @@ def statx(endpoint, fileref, userid, versioninv=1):
     except (IOError, UnicodeDecodeError) as e:
         log.error(f'msg="Failed to mkdir/stat version folder" filepath="{_getfilepath(filepath)}" error="{e}"')
         raise IOError(e) from e
+
     # return the metadata of the given file, with the inode taken from the version folder
     endpoint = _geturlfor(endpoint)
     inode = common.encodeinode(endpoint[7:] if endpoint.find('.') == -1 else endpoint[7:endpoint.find('.')], statxdata['ino'])
@@ -298,6 +315,7 @@ def statx(endpoint, fileref, userid, versioninv=1):
         'size': int(statxdata['size']),
         'mtime': int(float(statxdata['mtime'])),
         'etag': statxdata['etag'],
+        'xattrs': xattrs,
     }
 
 
@@ -314,9 +332,8 @@ def setxattr(endpoint, filepath, _userid, key, value, lockmd):
               + '&mgm.path=' + _getfilepath(filepath, encodeamp=True), appname)
 
 
-def getxattr(endpoint, filepath, _userid, key):
-    '''Get the extended attribute <key> via a special open.
-    The userid is overridden to make sure it also works on shared files.'''
+def _getxattr(endpoint, filepath, key):
+    '''Internal only: get the extended attribute <key> via a special open.'''
     if 'user' not in key and 'sys' not in key:
         # if nothing is given, assume it's a user attr
         key = 'user.' + key
@@ -365,7 +382,7 @@ def setlock(endpoint, filepath, userid, appname, value, recurse=False):
 
 def getlock(endpoint, filepath, userid):
     '''Get the lock metadata as an xattr'''
-    rawl = getxattr(endpoint, filepath, userid, common.LOCKKEY)
+    rawl = _getxattr(endpoint, filepath, common.LOCKKEY)
     if rawl:
         lock = common.retrieverevalock(rawl)
         if lock['expiration']['seconds'] > time.time():
