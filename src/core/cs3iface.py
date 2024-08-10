@@ -40,7 +40,6 @@ def init(inconfig, inlog):
     ctx['lockasattr'] = inconfig.getboolean('cs3', 'lockasattr', fallback=False)
     ctx['locknotimpl'] = False
     ctx['revagateway'] = inconfig.get('cs3', 'revagateway')
-    ctx['xattrcache'] = {}    # this is a map cs3ref -> arbitrary_metadata as returned by Stat()
     ctx['grpc_timeout'] = inconfig.getint('cs3', "grpctimeout", fallback=10)
     ctx['http_timeout'] = inconfig.getint('cs3', "httptimeout", fallback=10)
     # prepare the gRPC channel and validate that the revagateway gRPC server is ready
@@ -97,11 +96,6 @@ def _getcs3reference(endpoint, fileref):
     return ref
 
 
-def _hashedref(endpoint, fileref):
-    '''Returns an hashable key for the given endpoint and file reference'''
-    return str(endpoint) + str(fileref)
-
-
 def authenticate_for_test(userid, userpwd):
     '''Use basic authentication against Reva for testing purposes'''
     authReq = cs3gw.AuthenticateRequest(type='basic', client_id=userid, client_secret=userpwd)
@@ -148,7 +142,6 @@ def stat(endpoint, fileref, userid, versioninv=1):
     log.info('msg="Invoked stat" fileref="%s" trace="%s" inode="%s" filepath="%s" elapsedTimems="%.1f"' %
              (fileref, statInfo.status.trace, inode, filepath, (tend-tstart)*1000))
     # cache the xattrs map prior to returning; note we're never cleaning this cache and let it grow indefinitely
-    ctx['xattrcache'][_hashedref(endpoint, fileref)] = statInfo.info.arbitrary_metadata.metadata
     return {
         'inode': inode,
         'filepath': filepath,
@@ -156,6 +149,7 @@ def stat(endpoint, fileref, userid, versioninv=1):
         'size': statInfo.info.size,
         'mtime': statInfo.info.mtime.seconds,
         'etag': statInfo.info.etag,
+        'xattrs': statInfo.info.arbitrary_metadata.metadata
     }
 
 
@@ -169,11 +163,6 @@ def setxattr(endpoint, filepath, userid, key, value, lockmd):
     ref = _getcs3reference(endpoint, filepath)
     md = cs3spr.ArbitraryMetadata()
     md.metadata.update({key: str(value)})        # pylint: disable=no-member
-    try:
-        ctx['xattrcache'][_hashedref(endpoint, filepath)][key] = str(value)
-    except KeyError:
-        # we did not have this file in the cache, ignore
-        pass
     lockid = None
     if lockmd:
         _, lockid = lockmd
@@ -192,38 +181,6 @@ def setxattr(endpoint, filepath, userid, key, value, lockmd):
     log.debug(f'msg="Invoked setxattr" result="{res}"')
 
 
-def getxattr(endpoint, filepath, userid, key):
-    '''Get the extended attribute <key> using the given userid as access token'''
-    ref = _getcs3reference(endpoint, filepath)
-    statInfo = None
-    href = _hashedref(endpoint, filepath)
-    if href not in ctx['xattrcache']:
-        # cache miss, go for Stat and refresh cache
-        tstart = time.time()
-        statInfo = ctx['cs3gw'].Stat(request=cs3sp.StatRequest(ref=ref), metadata=[('x-access-token', userid)])
-        tend = time.time()
-        if statInfo.status.code == cs3code.CODE_NOT_FOUND:
-            log.debug(f'msg="Invoked stat for getxattr on missing file" filepath="{filepath}"')
-            return None
-        if statInfo.status.code != cs3code.CODE_OK:
-            log.error('msg="Failed to stat" filepath="%s" userid="%s" trace="%s" key="%s" reason="%s"' %
-                      (filepath, userid[-20:], statInfo.status.trace, key, statInfo.status.message.replace('"', "'")))
-            raise IOError(statInfo.status.message)
-        log.debug(f'msg="Invoked stat for getxattr" filepath="{filepath}" elapsedTimems="{(tend - tstart) * 1000:.1f}"')
-        ctx['xattrcache'][href] = statInfo.info.arbitrary_metadata.metadata
-    try:
-        xattrvalue = ctx['xattrcache'][href][key]
-        if xattrvalue == '':
-            raise KeyError
-        if not statInfo:
-            log.debug(f'msg="Returning cached attr on getxattr" filepath="{filepath}" key="{key}"')
-        return xattrvalue
-    except KeyError:
-        log.info('msg="Empty value or key not found in getxattr" filepath="%s" key="%s" trace="%s" metadata="%s"' %
-                 (filepath, key, statInfo.status.trace if statInfo else 'N/A', ctx['xattrcache'][href]))
-        return None
-
-
 def rmxattr(endpoint, filepath, userid, key, lockmd):
     '''Remove the extended attribute <key> using the given userid as access token'''
     ref = _getcs3reference(endpoint, filepath)
@@ -240,11 +197,6 @@ def rmxattr(endpoint, filepath, userid, key, lockmd):
         log.error('msg="Failed to rmxattr" filepath="%s" trace="%s" key="%s" reason="%s"' %
                   (filepath, key, res.status.trace, res.status.message.replace('"', "'")))
         raise IOError(res.status.message)
-    try:
-        del ctx['xattrcache'][_hashedref(endpoint, filepath)][key]
-    except KeyError:
-        # we did not have this file in the cache, ignore
-        pass
     log.debug(f'msg="Invoked rmxattr" result="{res.status}"')
 
 
@@ -253,7 +205,8 @@ def setlock(endpoint, filepath, userid, appname, value):
     if ctx['lockasattr'] and ctx['locknotimpl']:
         log.debug(f'msg="Using xattrs to execute setlock" filepath="{filepath}" value="{value}"')
         try:
-            currvalue = getxattr(endpoint, filepath, userid, LOCK_ATTR_KEY)
+            filemd = stat(endpoint, filepath, userid)
+            currvalue = filemd['xattrs'][LOCK_ATTR_KEY]
             log.info('msg="Invoked setlock on an already locked entity" filepath="%s" appname="%s" previouslock="%s"' %
                      (filepath, appname, currvalue))
             raise IOError(common.EXCL_ERROR)
@@ -287,7 +240,8 @@ def getlock(endpoint, filepath, userid):
     if ctx['lockasattr'] and ctx['locknotimpl']:
         log.debug(f'msg="Using xattrs to execute getlock" filepath="{filepath}"')
         try:
-            currvalue = getxattr(endpoint, filepath, userid, LOCK_ATTR_KEY)
+            filemd = stat(endpoint, filepath, userid)
+            currvalue = filemd['xattrs'][LOCK_ATTR_KEY]
             return {
                 'lock_id': currvalue.split('!')[1],
                 'type': 2,  # LOCK_TYPE_WRITE, though this is advisory!
@@ -333,7 +287,8 @@ def refreshlock(endpoint, filepath, userid, appname, value, oldvalue=None):
     if ctx['lockasattr'] and ctx['locknotimpl']:
         log.debug(f'msg="Using xattrs to execute setlock" filepath="{filepath}" value="{value}"')
         try:
-            currvalue = getxattr(endpoint, filepath, userid, LOCK_ATTR_KEY)
+            filemd = stat(endpoint, filepath, userid)
+            currvalue = filemd['xattrs'][LOCK_ATTR_KEY]
             if currvalue.split('!')[0] == appname and (not oldvalue or currvalue.split('!')[1] == oldvalue):
                 raise KeyError
             log.info('msg="Failed precondition on refreshlock" filepath="%s" appname="%s" previouslock="%s"' %
@@ -369,7 +324,8 @@ def unlock(endpoint, filepath, userid, appname, value):
     if ctx['lockasattr'] and ctx['locknotimpl']:
         log.debug(f'msg="Using xattrs to execute unlock" filepath="{filepath}" value="{value}"')
         try:
-            currvalue = getxattr(endpoint, filepath, userid, LOCK_ATTR_KEY)
+            filemd = stat(endpoint, filepath, userid)
+            currvalue = filemd['xattrs'][LOCK_ATTR_KEY]
             if currvalue.split('!')[0] == appname and currvalue.split('!')[1] == value:
                 raise KeyError
             log.info('msg="Failed precondition on unlock" filepath="%s" appname="%s" previouslock="%s"' %

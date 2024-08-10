@@ -105,6 +105,7 @@ class TestStorage(unittest.TestCase):
         self.assertTrue('size' in statInfo, 'Missing size from stat output')
         self.assertTrue('mtime' in statInfo, 'Missing mtime from stat output')
         self.assertTrue('etag' in statInfo, 'Missing etag from stat output')
+        self.assertTrue('xattrs' in statInfo, 'Missing xattrs from stat output')
         self.storage.removefile(self.endpoint, self.homepath + '/test.txt', self.userid)
 
     def test_statx_invariant_fileid(self):
@@ -372,11 +373,11 @@ class TestStorage(unittest.TestCase):
         self.storage.setlock(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'test app', 'xattrlock')
         self.storage.setxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey', 123,
                               ('test app', 'xattrlock'))
-        v = self.storage.getxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey')
-        self.assertEqual(v, '123')
+        fmd = self.storage.statx(self.endpoint, self.homepath + '/test&xattr.txt', self.userid)
+        self.assertEqual(fmd['xattrs']['testkey'], '123')
         self.storage.rmxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey', ('test app', 'xattrlock'))
-        v = self.storage.getxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey')
-        self.assertEqual(v, None)
+        fmd = self.storage.statx(self.endpoint, self.homepath + '/test&xattr.txt', self.userid)
+        self.assertIsNone(fmd['xattrs'].get('testkey'))
         self.storage.removefile(self.endpoint, self.homepath + '/test&xattr.txt', self.userid)
 
     def test_rename_statx(self):
