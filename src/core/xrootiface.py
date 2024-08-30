@@ -244,7 +244,7 @@ def statx(endpoint, fileref, userid, versioninv=1):
         statxdata = {k.decode(): v.decode().strip('"') for k, v in
                      [kv for kv in kvlist if len(kv) == 2 and kv[0].find(b'xattr') == -1]}
         for ikv, kv in enumerate(kvlist):
-            if len(kv) == 2 and kv[0].find(b'xattrn') and kv[1].find(b'user.'):
+            if len(kv) == 2 and kv[0].find(b'xattrn') == 0 and kv[1].find(b'user.') == 0:
                 # we found an user xattr: use it as key, where the value is on the next element (with kv[0] = 'xattrv')
                 xattrs[kv[1].decode().strip('user.')] = kvlist[ikv+1][1].decode()
 
