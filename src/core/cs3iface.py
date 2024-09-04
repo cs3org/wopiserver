@@ -11,8 +11,9 @@ import os
 import cs3.storage.provider.v1beta1.resources_pb2 as cs3spr
 import cs3.gateway.v1beta1.gateway_api_pb2 as cs3gw
 import cs3.rpc.v1beta1.code_pb2 as cs3code
-from cs3client import CS3Client
-from cs3resource import Resource
+from cs3client.cs3client import CS3Client
+from cs3client.cs3resource import Resource
+from cs3client.auth import Auth
 import core.commoniface as common
 
 # key used if the `lockasattr` option is true, in order to store the lock payload without ensuring any lock semantic
@@ -117,23 +118,22 @@ def statx(endpoint, fileref, userid):
 
 def setxattr(endpoint, filepath, userid, key, value, lockmd):
     """Set the extended attribute <key> to <value> using the given userid as access token"""
-    resource = Resource(endpoint, filepath)
-    client.auth.set_token(userid)
-    client.file.set_xattr(resource, key, value, lockmd)
+    _, lock_id = lockmd
+    resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
+    client.file.set_xattr(Auth.check_token(userid), resource, key, value, lock_id)
 
 
 def rmxattr(endpoint, filepath, userid, key, lockmd):
     """Remove the extended attribute <key> using the given userid as access token"""
-    resource = Resource(endpoint, filepath)
-    client.auth.set_token(userid)
-    client.file.remove_xattr(resource, key, lockmd)
+    _, lock_id = lockmd
+    resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
+    client.file.remove_xattr(Auth.check_token(userid), resource, key, lock_id)
 
 
 def readfile(endpoint, filepath, userid, lockid):
     """Read a file using the given userid as access token. Note that the function is a generator, managed by the app server."""
-    resource = Resource(endpoint, filepath)
-    client.auth.set_token(userid)
-    data = client.file.read_file(resource, lockid)
+    resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
+    data = client.file.read_file(Auth.check_token(userid), resource, lockid)
     for chunk in data:
         yield chunk
 
@@ -143,51 +143,46 @@ def writefile(endpoint, filepath, userid, content, size, lockmd):
     and any pre-existing file is deleted (or moved to the previous version if supported).
     The islock flag is currently not supported. The backend should at least support
     writing the file with O_CREAT|O_EXCL flags to prevent races."""
-    resource = Resource(endpoint, filepath)
-    client.auth.set_token(userid)
-    client.file.write_file(resource, content, size, lockmd)
+    resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
+    client.file.write_file(Auth.check_token(userid), resource, content, size, lockmd)
 
 
 def renamefile(endpoint, filepath, newfilepath, userid, lockmd):
     """Rename a file from origfilepath to newfilepath using the given userid as access token."""
-    resource = Resource(endpoint, filepath)
-    new_resource = Resource(endpoint, newfilepath)
-    client.auth.set_token(userid)
-    client.file.rename_file(resource, new_resource, lockmd)
+    _, lock_id = lockmd
+    resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
+    new_resource = Resource.from_file_ref_and_endpoint(newfilepath, endpoint)
+    client.file.rename_file(Auth.check_token(userid), resource, new_resource, lock_id)
 
 
 def removefile(endpoint, filepath, userid):
     """Remove a file using the given userid as access token.
     The force argument is ignored for now for CS3 storage."""
-    resource = Resource(endpoint, filepath)
-    client.auth.set_token(userid)
-    client.file.remove_file(resource)
+    resource = Resource.from_file_ref_and_endpoint(endpoint, filepath)
+    client.file.remove_file(Auth.check_token(userid), resource)
 
 
 def setlock(endpoint, filepath, userid, appname, value):
     """Set a lock to filepath with the given value metadata and appname as holder"""
-    resource = Resource(endpoint, filepath)
-    client.auth.set_token(userid)
-    client.file.set_lock(resource, app_name=appname, value=value)
+    resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
+    client.file.set_lock(Auth.check_token(userid), resource, app_name=appname, lock_id=value)
 
 
 def refreshlock(endpoint, filepath, userid, appname, value, oldvalue=None):
     """Refresh the lock metadata for the given filepath"""
-    resource = Resource(endpoint, filepath)
-    client.auth.set_token(userid)
-    client.file.refresh_lock(resource, app_name=appname, value=value, old_value=oldvalue)
+    resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
+    client.file.refresh_lock(
+        Auth.check_token(userid), resource, app_name=appname, lock_id=value, existing_lock_id=oldvalue
+    )
 
 
 def getlock(endpoint, filepath, userid):
     """Get the lock metadata for the given filepath"""
-    resource = Resource(endpoint, filepath)
-    client.auth.set_token(userid)
-    lock = client.file.get_lock(resource)
-    return lock
+    resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
+    return client.file.get_lock(Auth.check_token(userid), resource)
 
 
 def unlock(endpoint, filepath, userid, appname, value):
     """Remove the lock for the given filepath"""
-    resource = Resource(endpoint, filepath)
-    client.auth.set_token(userid)
-    client.file.unlock(resource, app_name=appname, value=value)
+    resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
+    client.file.unlock(Auth.check_token(userid), resource, app_name=appname, lock_id=value)
