@@ -178,7 +178,7 @@ class TestStorage(unittest.TestCase):
     def test_write_islock(self):
         '''Test double write with the islock flag'''
         if self.storagetype == 'cs3':
-            self.log.warn('Skipping test_write_islock for storagetype cs3')
+            self.log.warning('Skipping test_write_islock for storagetype cs3')
             return
         try:
             self.storage.removefile(self.endpoint, self.homepath + '/testoverwrite', self.userid)
@@ -195,7 +195,7 @@ class TestStorage(unittest.TestCase):
     def test_write_race(self):
         '''Test multithreaded double write with the islock flag. Might fail as it relies on tight timing'''
         if self.storagetype == 'cs3':
-            self.log.warn('Skipping test_write_race for storagetype cs3')
+            self.log.warning('Skipping test_write_race for storagetype cs3')
             return
         try:
             self.storage.removefile(self.endpoint, self.homepath + '/testwriterace', self.userid)
