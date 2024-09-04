@@ -15,7 +15,6 @@ from datetime import datetime
 from urllib.parse import unquote_plus as url_unquote
 from urllib.parse import quote_plus as url_quote
 from urllib.parse import urlparse
-from more_itertools import peekable
 import flask
 import core.wopiutils as utils
 import core.commoniface as common

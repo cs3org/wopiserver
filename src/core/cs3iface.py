@@ -7,6 +7,7 @@ Main author: Giuseppe.LoPresti@cern.ch, CERN/IT-ST
 """
 
 import os
+from configparser import ConfigParser
 
 import cs3.storage.provider.v1beta1.resources_pb2 as cs3spr
 import cs3.gateway.v1beta1.gateway_api_pb2 as cs3gw
@@ -14,6 +15,7 @@ import cs3.rpc.v1beta1.code_pb2 as cs3code
 from cs3client.cs3client import CS3Client
 from cs3client.cs3resource import Resource
 from cs3client.auth import Auth
+import cs3client.exceptions
 import core.commoniface as common
 
 # key used if the `lockasattr` option is true, in order to store the lock payload without ensuring any lock semantic
@@ -27,18 +29,19 @@ client = None  # client to interact with the CS3 API
 
 def init(inconfig, inlog):
     """Init module-level variables"""
-    global config  # pylint: disable=global-statement
-    config = {}
     global log  # pylint: disable=global-statement
     log = inlog
+    global config  # pylint: disable=global-statement
+    config = ConfigParser()
+    config["cs3client"] = {}
     config["cs3client"]["host"] = inconfig.get("cs3", "revagateway")
-    config["cs3client"]["chunk_size"] = inconfig.getint("io", "chunksize")
-    config["cs3client"]["ssl_verify"] = inconfig.getboolean("cs3", "sslverify", fallback=True)
-    config["cs3client"]["lock_expiration"] = inconfig.getint("general", "wopilockexpiration")
-    config["cs3client"]["lock_as_attr"] = inconfig.getboolean("cs3", "lockasattr", fallback=False)
-    config["cs3client"]["lock_not_impl"] = False
-    config["cs3client"]["grpc_timeout"] = inconfig.getint("cs3", "grpctimeout", fallback=10)
-    config["cs3client"]["http_timeout"] = inconfig.getint("cs3", "httptimeout", fallback=10)
+    config["cs3client"]["chunk_size"] = inconfig.get("io", "chunksize")
+    config["cs3client"]["ssl_verify"] = inconfig.get("cs3", "sslverify", fallback='True')
+    config["cs3client"]["lock_expiration"] = inconfig.get("general", "wopilockexpiration")
+    config["cs3client"]["lock_as_attr"] = inconfig.get("cs3", "lockasattr", fallback='False')
+    config["cs3client"]["lock_not_impl"] = 'False'
+    config["cs3client"]["grpc_timeout"] = inconfig.get("cs3", "grpctimeout", fallback='10')
+    config["cs3client"]["http_timeout"] = inconfig.get("cs3", "httptimeout", fallback='10')
     global client  # pylint: disable=global-statement
     client = CS3Client(config, "cs3client", log)
 
@@ -46,7 +49,7 @@ def init(inconfig, inlog):
 def healthcheck():
     """Probes the storage and returns a status message. For cs3 storage, we execute a call to ListAuthProviders"""
     try:
-        client.auth.ListAuthProviders()
+        Auth(client).ListAuthProviders()
         log.debug('msg="Executed ListAuthProviders as health check" endpoint="%s"' % (ctx["revagateway"]))
         return "OK"
     except ConnectionError as e:
@@ -74,9 +77,8 @@ def authenticate_for_test(userid, userpwd):
 
 
 def stat(endpoint, fileref, userid):
-    resource = Resource(endpoint, fileref)
-    client.auth.set_token(userid)
-    statInfo = client.file.stat(resource)
+    resource = Resource.from_file_ref_and_endpoint(fileref, endpoint)
+    statInfo = client.file.stat(Auth.check_token(userid), resource)
     if statInfo.type == cs3spr.RESOURCE_TYPE_CONTAINER:
         log.info(
             'msg="Invoked stat" endpoint="%s" fileref="%s" trace="%s" result="ISDIR"'
@@ -118,14 +120,18 @@ def statx(endpoint, fileref, userid):
 
 def setxattr(endpoint, filepath, userid, key, value, lockmd):
     """Set the extended attribute <key> to <value> using the given userid as access token"""
-    _, lock_id = lockmd
+    lock_id = None
+    if lockmd:
+        _, lock_id = lockmd
     resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
     client.file.set_xattr(Auth.check_token(userid), resource, key, value, lock_id)
 
 
 def rmxattr(endpoint, filepath, userid, key, lockmd):
     """Remove the extended attribute <key> using the given userid as access token"""
-    _, lock_id = lockmd
+    lock_id = None
+    if lockmd:
+        _, lock_id = lockmd
     resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
     client.file.remove_xattr(Auth.check_token(userid), resource, key, lock_id)
 
@@ -149,7 +155,9 @@ def writefile(endpoint, filepath, userid, content, size, lockmd):
 
 def renamefile(endpoint, filepath, newfilepath, userid, lockmd):
     """Rename a file from origfilepath to newfilepath using the given userid as access token."""
-    _, lock_id = lockmd
+    lock_id = None
+    if lockmd:
+        _, lock_id = lockmd
     resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
     new_resource = Resource.from_file_ref_and_endpoint(newfilepath, endpoint)
     client.file.rename_file(Auth.check_token(userid), resource, new_resource, lock_id)
@@ -158,7 +166,7 @@ def renamefile(endpoint, filepath, newfilepath, userid, lockmd):
 def removefile(endpoint, filepath, userid):
     """Remove a file using the given userid as access token.
     The force argument is ignored for now for CS3 storage."""
-    resource = Resource.from_file_ref_and_endpoint(endpoint, filepath)
+    resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
     client.file.remove_file(Auth.check_token(userid), resource)
 
 
@@ -179,7 +187,10 @@ def refreshlock(endpoint, filepath, userid, appname, value, oldvalue=None):
 def getlock(endpoint, filepath, userid):
     """Get the lock metadata for the given filepath"""
     resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
-    return client.file.get_lock(Auth.check_token(userid), resource)
+    try:
+        return client.file.get_lock(Auth.check_token(userid), resource)
+    except cs3client.exceptions.NotFoundException:
+        return None
 
 
 def unlock(endpoint, filepath, userid, appname, value):

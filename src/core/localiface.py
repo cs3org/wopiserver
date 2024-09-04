@@ -104,7 +104,7 @@ def stat(_endpoint, filepath, _userid):
         try:
             xattrs = {
                 k.strip('user.'): os.getxattr(_getfilepath(filepath), k).decode()
-                    for k in os.listxattr(_getfilepath(filepath))
+                for k in os.listxattr(_getfilepath(filepath))
             }
         except OSError as e:
             log.info('msg="Failed to invoke listxattr/getxattr" inode="%d" filepath="%s" exception="%s"' %
