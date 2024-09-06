@@ -237,14 +237,13 @@ def readfile(_endpoint, filepath, _userid, _lockid):
             # the actual read is buffered and managed by the app server
             for chunk in iter(lambda: f.read(chunksize), b''):
                 yield chunk
-    except FileNotFoundError:
+    except FileNotFoundError as fnfe:
         # log this case as info to keep the logs cleaner
         log.info(f'msg="File not found on read" filepath="{filepath}"')
-        # as this is a generator, we yield the error string instead of the file's contents
-        yield IOError('No such file or directory')
+        raise IOError('No such file or directory') from fnfe
     except OSError as e:
         log.error(f'msg="Error opening the file for read" filepath="{filepath}" error="{e}"')
-        yield IOError(e)
+        raise IOError(e) from e
 
 
 def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
