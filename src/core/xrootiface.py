@@ -437,11 +437,11 @@ def readfile(endpoint, filepath, userid, _lockid):
             # the file could not be opened: check the case of ENOENT and log it as info to keep the logs cleaner
             if common.ENOENT_MSG in rc.message:
                 log.info(f'msg="File not found on read" filepath="{filepath}"')
-                yield IOError(common.ENOENT_MSG)
+                raise IOError(common.ENOENT_MSG)
             else:
                 log.error('msg="Error opening the file for read" filepath="%s" code="%d" error="%s"' %
                           (filepath, rc.shellcode, rc.message.strip('\n')))
-                yield IOError(rc.message)
+                raise IOError(rc.message)
         else:
             log.info(f'msg="File open for read" filepath="{filepath}" elapsedTimems="{(tend - tstart) * 1000:.1f}"')
             chunksize = config.getint('io', 'chunksize')

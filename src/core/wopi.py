@@ -141,17 +141,11 @@ def getFile(_fileid, acctok):
     try:
         # TODO for the time being we do not look if the file is locked. Once exclusive locks are implemented in Reva,
         # the lock must be fetched prior to the following call in order to access the file.
-        # get the file reader generator
-        f = peekable(st.readfile(acctok['endpoint'], acctok['filename'], acctok['userid'], None))
-        firstchunk = f.peek()
-        if isinstance(firstchunk, IOError):
-            log.error('msg="GetFile: download failed" endpoint="%s" filename="%s" token="%s" error="%s"' %
-                      (acctok['endpoint'], acctok['filename'], flask.request.args['access_token'][-20:], firstchunk))
-            return utils.createJsonResponse({'message': 'Failed to fetch file from storage'}, http.client.INTERNAL_SERVER_ERROR)
         # stat the file to get the current version
         statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
         # stream file from storage to client
-        resp = flask.Response(f, mimetype='application/octet-stream')
+        resp = flask.Response(st.readfile(acctok['endpoint'], acctok['filename'], acctok['userid'], None),
+                              mimetype='application/octet-stream')
         resp.status_code = http.client.OK
         resp.headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{url_quote(os.path.basename(acctok['filename']))}"
         resp.headers['X-Frame-Options'] = 'sameorigin'
@@ -162,10 +156,10 @@ def getFile(_fileid, acctok):
         # File is empty, still return OK (strictly speaking, we should return 204 NO_CONTENT)
         return '', http.client.OK
     except IOError as e:
-        # File is readable but statx failed?
-        log.error('msg="GetFile: failed to stat after read, possible race" filename="%s" token="%s" error="%s"' %
-                  (acctok['filename'], flask.request.args['access_token'][-20:], e))
-        return utils.createJsonResponse({'message': 'Failed to access file'}, http.client.INTERNAL_SERVER_ERROR)
+        # File got deleted meanwhile, or some other remote I/O error
+        log.error('msg="GetFile: download failed" endpoint="%s" filename="%s" token="%s" error="%s"' %
+                  (acctok['endpoint'], acctok['filename'], flask.request.args['access_token'][-20:], e))
+        return utils.createJsonResponse({'message': 'Failed to access file from storage'}, http.client.INTERNAL_SERVER_ERROR)
 
 
 #
@@ -229,8 +223,6 @@ def setLock(fileid, reqheaders, acctok):
                 try:
                     retrievedlolock = next(st.readfile(acctok['endpoint'], utils.getLibreOfficeLockName(fn),
                                                        acctok['userid'], None))
-                    if isinstance(retrievedlolock, IOError):
-                        raise retrievedlolock from e
                     retrievedlolock = retrievedlolock.decode()
                     # check that the lock is not stale
                     if datetime.strptime(retrievedlolock.split(',')[3], '%d.%m.%Y %H:%M').timestamp() + \

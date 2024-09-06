@@ -137,7 +137,6 @@ class TestStorage(unittest.TestCase):
         self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, databuf, -1, None)
         content = ''
         for chunk in self.storage.readfile(self.endpoint, self.homepath + '/test.txt', self.userid, None):
-            self.assertNotIsInstance(chunk, IOError, 'raised by storage.readfile')
             content += chunk.decode('utf-8')
         self.assertEqual(content, databuf, f'File test.txt should contain the string "{databuf}"')
         self.storage.removefile(self.endpoint, self.homepath + '/test.txt', self.userid)
@@ -148,7 +147,6 @@ class TestStorage(unittest.TestCase):
         self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, content, -1, None)
         content = ''
         for chunk in self.storage.readfile(self.endpoint, self.homepath + '/test.txt', self.userid, None):
-            self.assertNotIsInstance(chunk, IOError, 'raised by storage.readfile')
             content += chunk.decode('utf-8')
         self.assertEqual(content, 'bla\n', 'File test.txt should contain the text "bla\\n"')
         self.storage.removefile(self.endpoint, self.homepath + '/test.txt', self.userid)
@@ -158,16 +156,15 @@ class TestStorage(unittest.TestCase):
         content = ''
         self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, content, -1, None)
         for chunk in self.storage.readfile(self.endpoint, self.homepath + '/test.txt', self.userid, None):
-            self.assertNotIsInstance(chunk, IOError, 'raised by storage.readfile')
             content += chunk.decode('utf-8')
         self.assertEqual(content, '', 'File test.txt should be empty')
         self.storage.removefile(self.endpoint, self.homepath + '/test.txt', self.userid)
 
     def test_read_nofile(self):
         '''Test reading of a non-existing file'''
-        readex = next(self.storage.readfile(self.endpoint, self.homepath + '/hopefullynotexisting', self.userid, None))
-        self.assertIsInstance(readex, IOError, f'readfile returned {readex}')
-        self.assertEqual(str(readex), ENOENT_MSG, f'readfile returned {readex}')
+        with self.assertRaises(IOError) as context:
+            next(self.storage.readfile(self.endpoint, self.homepath + '/hopefullynotexisting', self.userid, None))
+        self.assertIn(ENOENT_MSG, str(context.exception))
 
     def test_write_remove_specialchars(self):
         '''Test write and removal of a file with special chars'''
@@ -322,8 +319,7 @@ class TestStorage(unittest.TestCase):
         self.storage.refreshlock(self.endpoint, self.homepath + '/testlockop', self.userid, 'test app', 'testlock')
         with self.assertRaises(IOError):
             self.storage.refreshlock(self.endpoint, self.homepath + '/testlockop', self.userid, 'mismatched app', 'mismatchlock')
-        for chunk in self.storage.readfile(self.endpoint, self.homepath + '/testlockop', self.userid, None):
-            self.assertNotIsInstance(chunk, IOError, 'raised by storage.readfile, lock shall be shared')
+        next(self.storage.readfile(self.endpoint, self.homepath + '/testlockop', self.userid, None))
         with self.assertRaises(IOError):
             self.storage.writefile(self.endpoint, self.homepath + '/testlockop', self.userid, databuf, -1, None)
         self.storage.renamefile(self.endpoint, self.homepath + '/testlockop', self.homepath + '/testlockop_renamed',
