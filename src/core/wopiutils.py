@@ -285,7 +285,7 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefn=None):
             pass
         try:
             # then try to read a LibreOffice lock
-            lolockstat = st.statx(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], versioninv=0)
+            lolockstat = st.statx(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'])
             lolock = next(st.readfile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], None))
             lolock = lolock.decode()
             if 'WOPIServer' not in lolock:
