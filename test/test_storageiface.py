@@ -98,7 +98,7 @@ class TestStorage(unittest.TestCase):
     def test_statx_fileid(self):
         '''Call statx() and test if fileid-based stat is supported'''
         self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, databuf, -1, None)
-        statInfo = self.storage.statx(self.endpoint, self.homepath + '/test.txt', self.userid, versioninv=0)
+        statInfo = self.storage.statx(self.endpoint, self.homepath + '/test.txt', self.userid)
         self.assertTrue('inode' in statInfo, 'Missing inode from statx output')
         self.assertTrue('filepath' in statInfo, 'Missing filepath from statx output')
         self.assertTrue('ownerid' in statInfo, 'Missing ownerid from stat output')

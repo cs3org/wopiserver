@@ -591,7 +591,7 @@ def putFile(fileid, acctok):
     try:
         if srv.config.get('general', 'detectexternalmodifications', fallback='True').upper() == 'TRUE':
             # check now the destination file against conflicts if required
-            statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'], versioninv=1)
+            statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
             savetime = statInfo['xattrs'].get(utils.LASTSAVETIMEKEY)
             mtime = statInfo['mtime']
             if not savetime or not savetime.isdigit() or int(savetime) < int(mtime):
@@ -609,7 +609,7 @@ def putFile(fileid, acctok):
         # Also, note we can't get a time resolution better than one second!
         # Anyhow, the EFSS should support versioning for such cases.
         utils.storeWopiFile(acctok, retrievedLock, utils.LASTSAVETIMEKEY)
-        statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'], versioninv=1)
+        statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
         log.info('msg="File stored successfully" action="edit" user="%s" filename="%s" version="%s" token="%s"' %
                  (acctok['userid'][-20:], acctok['filename'], statInfo['etag'], flask.request.args['access_token'][-20:]))
         resp = flask.Response()
