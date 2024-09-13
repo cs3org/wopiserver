@@ -198,9 +198,8 @@ def stat(endpoint, filepath, userid):
     return {'size': statInfo.size, 'mtime': statInfo.modtime}
 
 
-def statx(endpoint, fileref, userid, versioninv=1):
+def statx(endpoint, fileref, userid):
     '''Get extended stat info (inode, filepath, ownerid, size, mtime) via an xroot opaque query on behalf of the given userid.
-    If versioninv=0, the logic to support the version folder is not triggered.
     If the given fileref is an inode, it is resolved to a full path.'''
     tstart = time.time()
     if fileref[0] != '/':
@@ -255,21 +254,6 @@ def statx(endpoint, fileref, userid, versioninv=1):
     if 'treesize' in statxdata:
         raise IOError('Is a directory')      # EISDIR
 
-    if versioninv == 0:
-        # statx info of the given file:
-        # we extract the eosinstance from endpoint, which looks like e.g. root://eosinstance[.cern.ch]
-        endpoint = _geturlfor(endpoint)
-        inode = common.encodeinode(endpoint[7:] if endpoint.find('.') == -1 else endpoint[7:endpoint.find('.')], statxdata['ino'])
-        log.debug(f'msg="Invoked stat return" inode="{inode}" filepath="{_getfilepath(filepath)}"')
-        return {
-            'inode': inode,
-            'filepath': filepath,
-            'ownerid': statxdata['uid'] + ':' + statxdata['gid'],
-            'size': int(statxdata['size']),
-            'mtime': int(float(statxdata['mtime'])),
-            'etag': statxdata['etag'],
-            'xattrs': xattrs,
-        }
     # now stat the corresponding version folder to get an inode invariant to save operations, see CERNBOX-1216
     # also, use the owner's as opposed to the user's credentials to bypass any restriction (e.g. with single-share files)
     verFolder = os.path.dirname(filepath) + os.path.sep + EOSVERSIONPREFIX + os.path.basename(filepath)
