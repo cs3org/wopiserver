@@ -149,8 +149,11 @@ def writefile(endpoint, filepath, userid, content, size, lockmd):
     and any pre-existing file is deleted (or moved to the previous version if supported).
     The islock flag is currently not supported. The backend should at least support
     writing the file with O_CREAT|O_EXCL flags to prevent races."""
+    app_name = lock_id = ''
+    if lockmd:
+        app_name, lock_id = lockmd
     resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
-    client.file.write_file(Auth.check_token(userid), resource, content, size, lockmd)
+    client.file.write_file(Auth.check_token(userid), resource, content, size, app_name, lock_id)
 
 
 def renamefile(endpoint, filepath, newfilepath, userid, lockmd):
