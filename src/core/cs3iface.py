@@ -124,7 +124,7 @@ def setxattr(endpoint, filepath, userid, key, value, lockmd):
     if lockmd:
         _, lock_id = lockmd
     resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
-    client.file.set_xattr(Auth.check_token(userid), resource, key, value, lock_id)
+    client.file.set_xattr(Auth.check_token(userid), resource, key, str(value), lock_id)
 
 
 def rmxattr(endpoint, filepath, userid, key, lockmd):
