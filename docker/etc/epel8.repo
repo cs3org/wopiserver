@@ -1,8 +1,0 @@
-[epel]
-name=Extra Packages for Enterprise Linux 8 [HEAD]
-baseurl=http://linuxsoft.cern.ch/epel/8/Everything/x86_64
-enabled=1
-gpgcheck=1
-gpgkey=http://linuxsoft.cern.ch/epel/RPM-GPG-KEY-EPEL-8
-exclude=collectd*,libcollectd*,mcollective,perl-Authen-Krb5,perl-Collectd,puppet
-priority=20
