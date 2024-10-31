@@ -1,6 +1,0 @@
-[xrootd]
-name=xroot upstream for CentOS/Alma 8
-baseurl=https://xrootd.web.cern.ch/sw/repos/stable/slc/8/x86_64
-enabled=1
-gpgcheck=0
-priority=5
