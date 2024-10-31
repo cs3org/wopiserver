@@ -17,7 +17,8 @@ from binascii import Error as B64Error
 ENOENT_MSG = 'No such file or directory'
 
 # standard error thrown when attempting to overwrite a file/xattr in O_EXCL mode
-EXCL_ERROR = 'File exists and islock flag requested'
+# or when a lock operation cannot be performed because of failed preconditions
+EXCL_ERROR = 'File/xattr exists but EXCL mode requested, lock mismatch or lock expired'
 
 # standard error thrown when attempting an operation without the required access rights
 ACCESS_ERROR = 'Operation not permitted'
@@ -57,11 +58,11 @@ def genrevalock(appname, value):
             {
                 "lock_id": value,
                 "type": 2,  # LOCK_TYPE_WRITE
-                "app_name": appname if appname else "wopi",
+                "app_name": appname,
                 "user": {},
                 "expiration": {
                     "seconds": int(time.time())
-                    + config.getint("general", "wopilockexpiration")
+                    + config.getint('general', 'wopilockexpiration')
                 },
             }
         ).encode()
@@ -72,24 +73,18 @@ def retrieverevalock(rawlock):
     '''Restores the JSON payload from a base64-encoded Reva lock'''
     try:
         return json.loads(urlsafe_b64decode(rawlock + '==').decode())
-    except (B64Error, json.JSONDecodeError) as e:
+    except (B64Error, json.JSONDecodeError, UnicodeDecodeError) as e:
         raise IOError("Unable to parse existing lock: " + str(e))
 
 
 def encodeinode(endpoint, inode):
-    '''Encodes a given endpoint and inode to be used as a safe WOPISrc: endpoint is assumed to already be URL safe'''
-    return endpoint + '-' + urlsafe_b64encode(inode.encode()).decode()
+    '''Encodes a given endpoint and inode to be used as a safe WOPISrc: endpoint is assumed to already be URL safe.
+    Note that the separator is chosen to be `!` (similar to how the web frontend is implemented) to allow the inverse
+    operation, assuming that `endpoint` does not contain any `!` characters.'''
+    return endpoint + '!' + urlsafe_b64encode(inode.encode()).decode()
 
 
-def validatelock(filepath, appname, oldlock, op, log):
-    '''Common logic for validating locks in the xrootd and local storage interfaces.
-       Duplicates some logic implemented in Reva for the cs3 storage interface'''
-    if not oldlock:
-        log.warning('msg="Failed to %s" filepath="%s" appname="%s" reason="%s"' %
-                    (op, filepath, appname, 'File was not locked or lock had expired'))
-        raise IOError('File was not locked or lock had expired')
-    if oldlock['app_name'] != 'wopi' and appname != 'wopi' and oldlock['app_name'] and appname \
-       and oldlock['app_name'] != appname:
-        log.warning('msg="Failed to %s" filepath="%s" appname="%s" reason="%s"' %
-                    (op, filepath, appname, 'File is locked by %s' % oldlock['app_name']))
-        raise IOError('File is locked by %s' % oldlock['app_name'])
+def decodeinode(inode):
+    '''Decodes an inode obtained from encodeinode()'''
+    e, f = inode.split('!')
+    return e, urlsafe_b64decode(f.encode()).decode()

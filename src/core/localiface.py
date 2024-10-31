@@ -22,9 +22,6 @@ config = None
 log = None
 homepath = None
 
-# a conventional value used by _checklock()
-LOCK = '__LOCK__'
-
 
 class Flock:
     '''A simple class to lock/unlock when entering/leaving a runtime context
@@ -67,13 +64,30 @@ def init(inconfig, inlog):
         if not S_ISDIR(mode):
             raise IOError('Not a directory')
     except IOError as e:
-        raise IOError('Could not stat storagehomepath folder %s: %s' % (homepath, e))
+        raise IOError(f'Could not stat storagehomepath folder {homepath}: {e}') from e
+    # all right but inform the user
+    log.warning('msg="Use this local storage interface for test/development purposes only, not for production"')
+
+
+def healthcheck():
+    '''Probes the storage and returns a status message. For local storage, we just stat the root'''
+    try:
+        stat(None, '/', None)
+        return 'Warning'   # to please CodeQL but never reached
+    except IOError as e:
+        if str(e) == 'Is a directory':
+            # that's expected, yet we return warning as this is a test/dev storage interface
+            log.debug('msg="Executed health check against storage root"')
+            return 'Warning'
+        # any other error is a failure
+        log.error('msg="Health check failed against storage root" error="%s"' % e)
+        return str(e)
 
 
 def getuseridfromcreds(_token, _wopiuser):
     '''Maps a Reva token and wopiuser to the credentials to be used to access the storage.
     For the localfs case, this is trivially hardcoded'''
-    return '0:0'
+    return '0:0', 'root!0:0'
 
 
 def stat(_endpoint, filepath, _userid):
@@ -96,7 +110,7 @@ def stat(_endpoint, filepath, _userid):
             'etag': str(statInfo.st_mtime),
         }
     except (FileNotFoundError, PermissionError) as e:
-        raise IOError(e)
+        raise IOError(e) from e
 
 
 def statx(endpoint, filepath, userid, versioninv=1):
@@ -105,25 +119,32 @@ def statx(endpoint, filepath, userid, versioninv=1):
     return stat(endpoint, filepath, userid)
 
 
-def _checklock(op, endpoint, filepath, userid, lockid):
-    '''Verify if the given lockid matches the existing one on the given filepath, if any'''
-    if lockid == LOCK:
-        # this is a special value to skip the check, used by the lock operations themselves
-        return
-    lock = getlock(endpoint, filepath, userid)
-    if lock and lock['lock_id'] != lockid:
-        log.warning('msg="%s: file was locked" filepath="%s" holder="%s"' % (op, filepath, lock['app_name']))
-        raise IOError('File was locked')
+def _validatelock(filepath, currlock, lockmd, op, log):
+    '''Common logic for validating locks: duplicates some logic
+    natively implemented by EOS and Reva on the other storage interfaces'''
+    appname = value = None
+    if lockmd:
+        appname, value = lockmd
+    try:
+        if not currlock:
+            raise IOError(common.EXCL_ERROR)
+        if appname and currlock['app_name'] != appname:
+            raise IOError(common.EXCL_ERROR + f", file is locked by {currlock['app_name']}")
+        if value != currlock['lock_id']:
+            raise IOError(common.EXCL_ERROR)
+    except IOError as e:
+        log.warning('msg="Failed to %s" filepath="%s" appname="%s" lockid="%s" currlock="%s" reason="%s"' %
+                    (op, filepath, appname, value, currlock, e))
+        raise
 
 
-def setxattr(endpoint, filepath, userid, key, value, lockid):
+def setxattr(endpoint, filepath, userid, key, value, lockmd):
     '''Set the extended attribute <key> to <value> on behalf of the given userid'''
-    _checklock('setxattr', endpoint, filepath, userid, lockid)
     try:
         os.setxattr(_getfilepath(filepath), 'user.' + key, str(value).encode())
     except OSError as e:
-        log.error('msg="Failed to setxattr" filepath="%s" key="%s" exception="%s"' % (filepath, key, e))
-        raise IOError(e)
+        log.error(f'msg="Failed to setxattr" filepath="{filepath}" key="{key}" exception="{e}"')
+        raise IOError(e) from e
 
 
 def getxattr(_endpoint, filepath, _userid, key):
@@ -131,34 +152,34 @@ def getxattr(_endpoint, filepath, _userid, key):
     try:
         return os.getxattr(_getfilepath(filepath), 'user.' + key).decode('UTF-8')
     except OSError as e:
-        log.warn('msg="Failed to getxattr or missing key" filepath="%s" key="%s" exception="%s"' % (filepath, key, e))
+        log.warning(f'msg="Failed to getxattr or missing key" filepath="{filepath}" key="{key}" exception="{e}"')
         return None
 
 
-def rmxattr(endpoint, filepath, userid, key, lockid):
+def rmxattr(endpoint, filepath, userid, key, lockmd):
     '''Remove the extended attribute <key> on behalf of the given userid'''
-    _checklock('rmxattr', endpoint, filepath, userid, lockid)
     try:
         os.removexattr(_getfilepath(filepath), 'user.' + key)
     except OSError as e:
-        log.error('msg="Failed to rmxattr" filepath="%s" key="%s" exception="%s"' % (filepath, key, e))
-        raise IOError(e)
+        log.error(f'msg="Failed to rmxattr" filepath="{filepath}" key="{key}" exception="{e}"')
+        raise IOError(e) from e
 
 
 def setlock(endpoint, filepath, userid, appname, value):
     '''Set the lock as an xattr on behalf of the given userid'''
-    log.debug('msg="Invoked setlock" filepath="%s" value="%s"' % (filepath, value))
+    log.debug(f'msg="Invoked setlock" filepath="{filepath}" value="{value}"')
     with open(_getfilepath(filepath)) as fd:
         fl = Flock(fd)    # ensures atomicity of the following operations
         try:
             with fl:
                 if not getlock(endpoint, filepath, userid):
-                    setxattr(endpoint, filepath, '0:0', common.LOCKKEY, common.genrevalock(appname, value), LOCK)
+                    log.debug(f'msg="setlock: invoking setxattr" filepath="{filepath}" value="{value}"')
+                    setxattr(endpoint, filepath, '0:0', common.LOCKKEY, common.genrevalock(appname, value), None)
                 else:
                     raise IOError(common.EXCL_ERROR)
         except BlockingIOError as e:
-            log.error('msg="File already flocked" filepath="%s" exception="%s"' % (filepath, e))
-            raise IOError(common.EXCL_ERROR)
+            log.error(f'msg="File already flocked" filepath="{filepath}" exception="{e}"')
+            raise IOError(common.EXCL_ERROR) from e
 
 
 def getlock(endpoint, filepath, _userid):
@@ -167,62 +188,72 @@ def getlock(endpoint, filepath, _userid):
     if rawl:
         lock = common.retrieverevalock(rawl)
         if lock['expiration']['seconds'] > time.time():
-            log.debug('msg="Invoked getlock" filepath="%s"' % filepath)
+            log.debug(f'msg="Invoked getlock" filepath="{filepath}"')
             return lock
         # otherwise, the lock had expired: drop it and return None
-        log.debug('msg="getlock: removed stale lock" filepath="%s"' % filepath)
-        rmxattr(endpoint, filepath, '0:0', common.LOCKKEY, LOCK)
+        log.debug(f'msg="getlock: removed stale lock" filepath="{filepath}"')
+        rmxattr(endpoint, filepath, '0:0', common.LOCKKEY, None)
     return None
 
 
-def refreshlock(endpoint, filepath, userid, appname, value):
+def refreshlock(endpoint, filepath, userid, appname, value, oldvalue=None):
     '''Refresh the lock value as an xattr on behalf of the given userid'''
-    common.validatelock(filepath, appname, getlock(endpoint, filepath, userid), 'refreshlock', log)
+    currlock = getlock(endpoint, filepath, userid)
+    if not oldvalue and currlock:
+        # this is a pure refresh operation
+        oldvalue = currlock['lock_id']
+    _validatelock(filepath, currlock, (appname, oldvalue), 'refreshlock', log)
     # this is non-atomic, but if we get here the lock was already held
-    log.debug('msg="Invoked refreshlock" filepath="%s" value="%s"' % (filepath, value))
-    setxattr(endpoint, filepath, '0:0', common.LOCKKEY, common.genrevalock(appname, value), LOCK)
+    log.debug(f'msg="Invoked refreshlock" filepath="{filepath}" value="{value}"')
+    setxattr(endpoint, filepath, '0:0', common.LOCKKEY, common.genrevalock(appname, value), None)
 
 
 def unlock(endpoint, filepath, userid, appname, value):
     '''Remove the lock as an xattr on behalf of the given userid'''
-    common.validatelock(filepath, appname, getlock(endpoint, filepath, userid), 'unlock', log)
-    log.debug('msg="Invoked unlock" filepath="%s" value="%s"' % (filepath, value))
-    rmxattr(endpoint, filepath, '0:0', common.LOCKKEY, LOCK)
+    _validatelock(filepath, getlock(endpoint, filepath, userid), (appname, value), 'unlock', log)
+    log.debug(f'msg="Invoked unlock" filepath="{filepath}" value="{value}"')
+    rmxattr(endpoint, filepath, '0:0', common.LOCKKEY, None)
 
 
 def readfile(_endpoint, filepath, _userid, _lockid):
-    '''Read a file on behalf of the given userid. Note that the function is a generator, managed by Flask.'''
-    log.debug('msg="Invoking readFile" filepath="%s"' % filepath)
+    '''Read a file on behalf of the given userid. Note that the function is a generator, managed by the app server.'''
+    log.debug(f'msg="Invoking readFile" filepath="{filepath}"')
     try:
         tstart = time.time()
         chunksize = config.getint('io', 'chunksize')
         with open(_getfilepath(filepath), mode='rb', buffering=chunksize) as f:
             tend = time.time()
-            log.info('msg="File open for read" filepath="%s" elapsedTimems="%.1f"' % (filepath, (tend - tstart) * 1000))
-            # the actual read is buffered and managed by the Flask server
+            log.info(f'msg="File open for read" filepath="{filepath}" elapsedTimems="{(tend - tstart) * 1000:.1f}"')
+            # the actual read is buffered and managed by the app server
             for chunk in iter(lambda: f.read(chunksize), b''):
                 yield chunk
     except FileNotFoundError:
         # log this case as info to keep the logs cleaner
-        log.info('msg="File not found on read" filepath="%s"' % filepath)
+        log.info(f'msg="File not found on read" filepath="{filepath}"')
         # as this is a generator, we yield the error string instead of the file's contents
         yield IOError('No such file or directory')
     except OSError as e:
-        # general case, issue a warning
-        log.error('msg="Error opening the file for read" filepath="%s" error="%s"' % (filepath, e))
+        log.error(f'msg="Error opening the file for read" filepath="{filepath}" error="{e}"')
         yield IOError(e)
 
 
-def writefile(endpoint, filepath, userid, content, lockid, islock=False):
+def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
     '''Write a file via xroot on behalf of the given userid. The entire content is written
     and any pre-existing file is deleted (or moved to the previous version if supported).
     With islock=True, the file is opened with O_CREAT|O_EXCL.'''
-    if isinstance(content, str):
-        content = bytes(content, 'UTF-8')
-    size = len(content)
-    _checklock('writefile', endpoint, filepath, userid, lockid)
+    stream = True
+    if size == -1:
+        if isinstance(content, str):
+            content = bytes(content, 'UTF-8')
+        size = len(content)
+        stream = False
+    if lockmd:
+        _validatelock(filepath, getlock(endpoint, filepath, userid), lockmd, 'writefile', log)
+    elif getlock(endpoint, filepath, userid):
+        raise IOError(common.EXCL_ERROR)
     log.debug('msg="Invoking writeFile" filepath="%s" size="%d"' % (filepath, size))
     tstart = time.time()
+    written = 0
     if islock:
         warnings.simplefilter("ignore", ResourceWarning)
         try:
@@ -231,36 +262,51 @@ def writefile(endpoint, filepath, userid, content, lockid, islock=False):
             # so we resort to the os-level open(), with some caveats
             fd = os.open(_getfilepath(filepath), os.O_CREAT | os.O_EXCL)
             f = os.fdopen(fd, mode='wb')
+            tend = time.time()
             written = f.write(content)        # os.write(fd, ...) raises EBADF?
             os.close(fd)     # f.close() raises EBADF! while this works
             # as f goes out of scope here, we'd get a false ResourceWarning, which is ignored by the above filter
-        except FileExistsError:
-            log.info('msg="File exists on write but islock flag requested" filepath="%s"' % filepath)
-            raise IOError(common.EXCL_ERROR)
+        except FileExistsError as e:
+            log.info(f'msg="File exists on write but islock flag requested" filepath="{filepath}"')
+            raise IOError(common.EXCL_ERROR) from e
         except OSError as e:
-            log.warning('msg="Error writing file in O_EXCL mode" filepath="%s" error="%s"' % (filepath, e))
-            raise IOError(e)
+            log.warning(f'msg="Error writing file in O_EXCL mode" filepath="{filepath}" error="{e}"')
+            raise IOError(e) from e
     else:
         try:
             with open(_getfilepath(filepath), mode='wb') as f:
-                written = f.write(content)
+                tend = time.time()
+                if stream:
+                    chunksize = config.getint('io', 'chunksize')
+                    o = 0
+                    while True:
+                        chunk = content.read(chunksize)
+                        if len(chunk) == 0:
+                            break
+                        f.seek(o)
+                        written += f.write(chunk)
+                        o += len(chunk)
+                else:
+                    written = f.write(content)
         except OSError as e:
-            log.error('msg="Error writing file" filepath="%s" error="%s"' % (filepath, e))
-            raise IOError(e)
-    tend = time.time()
+            log.error(f'msg="Error writing file" filepath="{filepath}" error="{e}"')
+            raise IOError(e) from e
     if written != size:
         raise IOError('Written %d bytes but content is %d bytes' % (written, size))
     log.info('msg="File written successfully" filepath="%s" elapsedTimems="%.1f" islock="%s"' %
              (filepath, (tend - tstart) * 1000, islock))
 
 
-def renamefile(endpoint, origfilepath, newfilepath, userid, lockid):
+def renamefile(endpoint, origfilepath, newfilepath, userid, lockmd):
     '''Rename a file from origfilepath to newfilepath on behalf of the given userid.'''
-    _checklock('renamefile', endpoint, origfilepath, userid, lockid)
+    currlock = getlock(endpoint, origfilepath, userid)
+    if currlock:
+        # enforce lock only if previously set
+        _validatelock(origfilepath, currlock, lockmd, 'renamefile', log)
     try:
         os.rename(_getfilepath(origfilepath), _getfilepath(newfilepath))
     except OSError as e:
-        raise IOError(e)
+        raise IOError(e) from e
 
 
 def removefile(_endpoint, filepath, _userid, force=False):
@@ -269,4 +315,4 @@ def removefile(_endpoint, filepath, _userid, force=False):
     try:
         os.remove(_getfilepath(filepath))
     except OSError as e:
-        raise IOError(e)
+        raise IOError(e) from e

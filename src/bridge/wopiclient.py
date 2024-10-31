@@ -38,12 +38,12 @@ def request(wopisrc, acctok, method, contents=None, headers=None):
         log.debug('msg="Calling WOPI" url="%s" headers="%s" acctok="%s" ssl="%s"' %
                   (wopiurl, headers, acctok[-20:], sslverify))
         if method == 'GET':
-            return requests.get('%s?access_token=%s' % (wopiurl, acctok), verify=sslverify)
+            return requests.get(f'{wopiurl}?access_token={acctok}', verify=sslverify, timeout=10)
         if method == 'POST':
-            return requests.post('%s?access_token=%s' % (wopiurl, acctok), verify=sslverify,
-                                 headers=headers, data=contents)
-    except (requests.exceptions.ConnectionError, IOError) as e:
-        log.error('msg="Unable to contact WOPI" wopiurl="%s" acctok="%s" response="%s"' % (wopiurl, acctok, e))
+            return requests.post(f'{wopiurl}?access_token={acctok}', verify=sslverify,
+                                 headers=headers, data=contents, timeout=10)
+    except (requests.exceptions.RequestException, IOError) as e:
+        log.error(f'msg="Unable to contact WOPI" wopiurl="{wopiurl}" acctok="{acctok}" response="{e}"')
         res = Response()
         res.status_code = http.client.INTERNAL_SERVER_ERROR
         return res
@@ -74,7 +74,7 @@ def checkfornochanges(content, wopilock, acctokforlog):
         h = hashlib.sha1()
         h.update(content)
         if h.hexdigest() == wopilock['dig']:
-            log.info('msg="File unchanged, skipping save" token="%s"' % acctokforlog[-20:])
+            log.info(f'msg="File unchanged, skipping save" token="{acctokforlog[-20:]}"')
             return True
     return False
 
@@ -85,16 +85,16 @@ def getlock(wopisrc, acctok):
         res = request(wopisrc, acctok, 'POST', headers={'X-Wopi-Override': 'GET_LOCK'})
         if res.status_code != http.client.OK:
             # lock got lost or any other error
-            raise InvalidLock(res.content.decode())
+            raise InvalidLock(res.status_code)
         # the lock is expected to be a JSON dict, see generatelock()
         return json.loads(res.headers['X-WOPI-Lock'])
     except (ValueError, KeyError, json.decoder.JSONDecodeError) as e:
-        log.warning('msg="Missing or malformed WOPI lock" exception="%s" error="%s"' % (type(e), e))
-        raise InvalidLock(e)
+        log.warning(f'msg="Missing or malformed WOPI lock" exception="{type(e)}: {e}"')
+        raise InvalidLock(e) from e
 
 
-def _getheadersforrefreshlock(acctok, wopilock, digest, toclose):
-    '''Helper function for refreshlock to generate the old and new lock structures'''
+def _getheadersforrelock(acctok, wopilock, digest, toclose):
+    '''Helper function for relock to generate the old and new lock structures'''
     newlock = json.loads(json.dumps(wopilock))    # this is a hack for a deep copy
     if toclose:
         # we got the full 'toclose' dict, push it as is
@@ -105,7 +105,7 @@ def _getheadersforrefreshlock(acctok, wopilock, digest, toclose):
     if digest and wopilock['dig'] != digest:
         newlock['dig'] = digest
     return {
-        'X-Wopi-Override': 'REFRESH_LOCK',
+        'X-Wopi-Override': 'LOCK',
         'X-WOPI-OldLock': json.dumps(wopilock),
         'X-WOPI-Lock': json.dumps(newlock)
     }, newlock
@@ -113,19 +113,19 @@ def _getheadersforrefreshlock(acctok, wopilock, digest, toclose):
 
 def refreshlock(wopisrc, acctok, wopilock, digest=None, toclose=None):
     '''Refresh an existing WOPI lock. Returns the new lock if successful, None otherwise'''
-    h, newlock = _getheadersforrefreshlock(acctok, wopilock, digest, toclose)
+    h, newlock = _getheadersforrelock(acctok, wopilock, digest, toclose)
     res = request(wopisrc, acctok, 'POST', headers=h)
     if res.status_code == http.client.OK:
         return newlock
     if res.status_code == http.client.CONFLICT:
         # we have a race condition, another thread has updated the lock before us
-        log.warning('msg="Got conflict in refreshing lock, retrying" url="%s"' % wopisrc)
+        log.warning(f'msg="Got conflict in refreshing lock, retrying" url="{wopisrc}"')
         try:
             currlock = json.loads(res.headers['X-WOPI-Lock'])
         except json.decoder.JSONDecodeError as e:
             log.error('msg="Got unresolvable conflict in RefreshLock" url="%s" previouslock="%s" error="%s"' %
                       (wopisrc, res.headers.get('X-WOPI-Lock'), e))
-            raise InvalidLock('Found existing malformed lock on refreshlock')
+            raise InvalidLock('Found existing malformed lock on refreshlock') from e
         if toclose:
             # merge toclose token lists
             for t in currlock['tocl']:
@@ -133,7 +133,7 @@ def refreshlock(wopisrc, acctok, wopilock, digest=None, toclose=None):
         if digest:
             wopilock['dig'] = currlock['dig']
         # retry with the newly got lock
-        h, newlock = _getheadersforrefreshlock(acctok, wopilock, digest, toclose)
+        h, newlock = _getheadersforrelock(acctok, wopilock, digest, toclose)
         res = request(wopisrc, acctok, 'POST', headers=h)
         if res.status_code == http.client.OK:
             return newlock
@@ -152,7 +152,7 @@ def refreshdigestandlock(wopisrc, acctok, wopilock, content):
         dig = h.hexdigest()
     try:
         wopilock = refreshlock(wopisrc, acctok, wopilock, digest=dig)
-        log.info('msg="Save completed" filename="%s" dig="%s" token="%s"' % (wopilock['fn'], dig, acctok[-20:]))
+        log.info(f"msg=\"Save completed\" filename=\"{wopilock['fn']}\" dig=\"{dig}\" token=\"{acctok[-20:]}\"")
         return jsonify('File saved successfully'), http.client.OK
     except InvalidLock:
         return jsonify('File saved, but failed to refresh lock'), http.client.INTERNAL_SERVER_ERROR
@@ -163,8 +163,8 @@ def relock(wopisrc, acctok, docid, isclose):
     # first get again the file metadata
     res = request(wopisrc, acctok, 'GET')
     if res.status_code != http.client.OK:
-        log.warning('msg="Session expired or file renamed when attempting to relock it" response="%d" token="%s"' %
-                    (res.status_code, acctok[-20:]))
+        log.warning('msg="Session expired or file renamed when attempting to relock it" response="%d" docid="%s" token="%s"' %
+                    (res.status_code, docid, acctok[-20:]))
         raise InvalidLock('Session expired, please refresh this page')
     filemd = res.json()
 
@@ -192,13 +192,18 @@ def relock(wopisrc, acctok, docid, isclose):
 def handleputfile(wopicall, wopisrc, res):
     '''Deal with conflicts or errors following a PutFile/PutRelative request'''
     if res.status_code == http.client.CONFLICT:
+        # this is typically a user issue, return 500 and stop further editing
         log.warning('msg="Conflict when calling WOPI %s" url="%s" reason="%s"' %
                     (wopicall, wopisrc, res.headers.get('X-WOPI-LockFailureReason')))
         return jsonify('Error saving the file. %s' %
                        res.headers.get('X-WOPI-LockFailureReason')), http.client.INTERNAL_SERVER_ERROR
+    if res.status_code == http.client.INTERNAL_SERVER_ERROR:
+        # hopefully this is transient and the server has kept a local copy for later recovery
+        log.error(f'msg="Calling WOPI {wopicall} failed, will retry" url="{wopisrc}" response="{res.status_code}"')
+        return jsonify('Error saving the file, will try again'), http.client.FAILED_DEPENDENCY
     if res.status_code != http.client.OK:
-        # hopefully the server has kept a local copy for later recovery
-        log.error('msg="Calling WOPI %s failed" url="%s" response="%s"' % (wopicall, wopisrc, res.status_code))
+        # any other error is considered also fatal
+        log.error(f'msg="Calling WOPI {wopicall} failed" url="{wopisrc}" response="{res.status_code}"')
         return jsonify('Error saving the file, please contact support'), http.client.INTERNAL_SERVER_ERROR
     return None
 
@@ -230,7 +235,7 @@ def saveas(wopisrc, acctok, wopilock, targetname, content):
             log.warning('msg="Failed to delete the previous file" token="%s" response="%d"' %
                         (acctok[-20:], res.status_code))
         else:
-            log.info('msg="Previous file unlocked and removed successfully" token="%s"' % acctok[-20:])
+            log.info(f'msg="Previous file unlocked and removed successfully" token="{acctok[-20:]}"')
 
-    log.info('msg="Final save completed" filename="%s" token="%s"' % (newname, acctok[-20:]))
+    log.info(f'msg="Final save completed" filename="{newname}" token="{acctok[-20:]}"')
     return jsonify('File saved successfully'), http.client.OK

@@ -13,24 +13,28 @@ import getopt
 import configparser
 import requests
 sys.path.append('src')         # for tests out of the git repo
-from core.wopiutils import ViewMode
+from core.wopiutils import ViewMode, UserType     # noqa: E402
 
 
 # usage function
 def usage(exitcode):
     '''Prints usage'''
-    print('Usage : ' + sys.argv[0] + ' -a|--appname <app_name> -u|--appurl <app_url> [-i|--appinturl <app_url>] -k|--apikey <api_key> '
-          '[-s|--storage <storage_endpoint>] [-v|--viewmode VIEW_ONLY|READ_ONLY|READ_WRITE] [-x|--x-access-token <reva_token>] <filename>')
+    print('Usage : ' + sys.argv[0] + ' -a|--appname <app_name> -u|--appurl <app_url> [-i|--appinturl <app_url>] '
+          '-k|--apikey <api_key> [-s|--storage <storage_endpoint>] [-v|--viewmode VIEW_ONLY|READ_ONLY|READ_WRITE|PREVIEW] '
+          '[-t|--user-type REGULAR|FEDERATED|ANONYMOUS] [-x|--x-access-token <reva_token>] <filename>')
     sys.exit(exitcode)
 
 
 # first parse the options
 try:
-    options, args = getopt.getopt(sys.argv[1:], 'hv:s:a:i:u:x:k:', ['help', 'viewmode', 'storage', 'appname', 'appinturl', 'appurl', 'x-access-token', 'apikey'])
+    options, args = getopt.getopt(sys.argv[1:], 'hv:t:s:a:i:u:x:k:',
+                                  ['help', 'viewmode', 'usertype', 'storage', 'appname', 'appinturl', 'appurl',
+                                   'x-access-token', 'apikey'])
 except getopt.GetoptError as e:
     print(e)
     usage(1)
 viewmode = ViewMode.READ_WRITE
+usertype = UserType.REGULAR
 endpoint = ''
 appname = ''
 appurl = ''
@@ -46,6 +50,12 @@ for f, v in options:
             viewmode = ViewMode('VIEW_MODE_' + v)
         except ValueError:
             print("Invalid argument for viewmode: " + v)
+            usage(1)
+    elif f == '-t' or f == '--usertype':
+        try:
+            usertype = UserType(v)
+        except ValueError:
+            print("Invalid argument for usertype: " + v)
             usage(1)
     elif f == '-s' or f == '--storage':
         endpoint = v
@@ -109,8 +119,8 @@ requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.
 
 # open the file and get WOPI token
 wopiheaders = {'Authorization': 'Bearer ' + iopsecret}
-wopiparams = {'fileid': filename, 'endpoint': endpoint,
-              'viewmode': viewmode.value, 'username': 'Operator', 'userid': userid, 'folderurl': '/',
+wopiparams = {'fileid': filename, 'endpoint': endpoint, 'viewmode': viewmode.value, 'usertype': usertype.value,
+              'username': 'Operator', 'userid': userid, 'folderurl': '/',
               'appurl': appurl, 'appinturl': appinturl, 'appname': appname}
 wopiheaders['TokenHeader'] = revatoken
 # for bridged apps, also set the API key

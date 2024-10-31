@@ -1,5 +1,105 @@
 ## Changelog for the WOPI server
 
+### Fri May 24 2024 - v10.5.0
+- Added timeout settings for GRPC and HTTP connections (#149)
+- Fixed handing of trailing slashes (#151)
+- Moved docker image to 3.12.3-alpine (#147)
+
+### Tue May 14 2024 - v10.4.0
+- Added support for Microsoft compliance domains
+- Fixed opening of markdown files created on Windows platforms
+- Improved lock handling on write and xattr operations (#137)
+- Improved logs
+
+### Fri Jan 19 2024 - v10.3.0
+- Implemented support for X-Trace-Id header (#64)
+- Fixed SaveAs logic for non-authenticated (anonymous) users
+- Improved handling of HTTP requests
+- Improved memory efficiency by streaming files' content (#136, #141)
+- Fixed 0-byte uploads (#142)
+
+### Mon Oct 23 2023 - v10.2.0
+- Implemented cache for xattrs in the cs3 storage (#128)
+- Implemented advisory locking via xattrs for cs3 storages that
+  do not support native locking (#129)
+- Improved handling of default values, in order to clean up
+  the default config file
+- Fixed the PostMessageOrigin property in CheckFileInfo when
+  using the same wopiserver with multiple cloud storages
+- Fixed xroot build
+- Fixed failed precondition error handling in unlock
+
+### Wed Jul  5 2023 - v10.1.0
+- Fixed handling of filenames with non latin-1 characters (#127)
+- Improved logging and adjusted log levels (#123)
+- Switched from CentOS Stream 8 to AlmaLinux 8 for the
+  xroot-flavoured docker image
+
+### Wed May 31 2023 - v10.0.0
+- Added CloseUrl and other properties to CheckFileInfo
+- Introduced health check of the configured storage interface
+  to ease deployment validation (#122)
+- Inverted default for wopilockstrictcheck
+- Fixed Preview mode
+- Removed legacy logic for discovery of app endpoints (#119):
+  this is now only implemented by Reva's app providers, and
+  legacy ownCloud/CERNBox UIs are not supported any longer
+- Removed support to forcefully evict valid locks, introduced
+  to compensate a Microsoft Word issue
+- Converted all responses to JSON-formatted (#120)
+- Cleaned up obsoleted scripts
+
+### Fri Mar 10 2023 - v9.5.0
+- Introduced concept of user type, given on `/wopi/iop/open`,
+  to better serve federated vs regular users with respect to
+  folder URLs and SaveAs operations
+- Redefined `conflictpath` option as `homepath` (the former is
+  still supported for backwards compatibility): when defined,
+  a SaveAs operation falls back to the user's `homepath` when
+  it can't work on the original folder
+- Fixed PutUserInfo to use the user's username as xattr key
+- Added arm64-based builds
+
+### Tue Jan 31 2023 - v9.4.0
+- Introduced support to forcefully evict valid locks
+  to compensate Microsoft Online mishandling of collaborative
+  sessions. This workaround will stay until a proper fix
+  is implemented following Microsoft CSPP team's advices
+- Improved logging, in particular around lock eviction
+- Bridged apps: moved plugin loading apps out of the deprecated
+  discovery module, and fixed some minor bugs
+- CI: moved release builds to GitHub actions
+
+### Thu Nov 24 2022 - v9.3.0
+- Introduced heuristic to log which sessions are allowed
+  to open a collaborative session and which ones are
+  prevented by the application
+- Introduced support for app-aware locks in EOS (#94)
+- Disabled SaveAs action when user is not owner
+- Improved error coverage in case of transient errors
+  in bridged apps and in PutFile operations
+- Moved from LGTM to CodeQL workflow on GitHub (#100)
+- Introduced support for PutUserInfo
+- Added support for the Microsoft "business" flow (#105)
+
+### Mon Oct 17 2022 - v9.2.0
+- Added option to use file or stream handler for logging (#91)
+- Introduced configurable hostURLs for CheckFileInfo (#93)
+- Fixed duplicate log entries (#92)
+- CodiMD: added support for direct storage access via
+  the ownCloud file picker (#95)
+- Fixed check for external locks
+- Further fixes to improve coverage of the WOPI validator tests
+
+### Wed Oct  5 2022 - v9.1.0
+- Introduced support for PREVIEW mode (#82)
+- Improved UnlockAndRelock logic (#85, #87)
+- Switched to python-alpine docker image (#88)
+- Introduced further branding options in CheckFileInfo
+- Further improvements in the bridged apps logic
+- Added more logging and a new endpoint to monitor
+  conflicted sessions
+
 ### Thu Sep  1 2022 - v9.0.0
 - Refactored and strengthened save workflow for
   bridged applications, and simplified lock metadata (#80)
@@ -8,7 +108,7 @@
 - Refactored PutFile logic when handling conflict files (#78)
 - Improved support for Spaces in Reva (#79)
 - Implemented save workflow for Etherpad documents (#81)
-  Fixed direct download in case of errors
+- Fixed direct download in case of errors
 - Updated dependencies and documentation
 
 ### Thu Jun 16 2022 - v8.3.0

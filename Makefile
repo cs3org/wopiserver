@@ -1,4 +1,4 @@
-FILES_TO_RPM = src mon tools wopiserver.conf wopiserver.service wopiserver.logrotate
+FILES_TO_RPM = src tools wopiserver.conf wopiserver.service wopiserver.logrotate
 SPECFILE = $(shell find . -type f -name *.spec)
 VERSREL  = $(shell git describe | sed 's/^v//')
 VERSION  = $(shell echo ${VERSREL} | cut -d\- -f 1)

@@ -27,12 +27,20 @@ import core.commoniface as common
 # this is the xattr key used for conflicts resolution on the remote storage
 LASTSAVETIMEKEY = 'iop.wopi.lastwritetime'
 
+# this is the xattr key used to store user info data from WOPI apps
+USERINFOKEY = 'iop.wopi.userinfo'
+
+# header used by reverse proxies such as traefik to pass the real remote IP address
+REALIPHEADER = 'X-Real-IP'
+
+# conventional string representing an external, non-WOPI lock
+EXTERNALLOCK = 'External'
+
 # convenience references to global entities
 st = None
 srv = None
 log = None
 WOPIVER = None
-endpoints = {}
 
 
 class ViewMode(Enum):
@@ -43,8 +51,25 @@ class ViewMode(Enum):
     VIEW_ONLY = "VIEW_MODE_VIEW_ONLY"
     # The file can be downloaded
     READ_ONLY = "VIEW_MODE_READ_ONLY"
-    # The file can be downloaded and updated
+    # The file can be downloaded and updated, and the app should be shown in edit mode
     READ_WRITE = "VIEW_MODE_READ_WRITE"
+    # The file can be downloaded and updated, and the app should be shown in preview mode
+    PREVIEW = "VIEW_MODE_PREVIEW"
+
+
+class UserType(Enum):
+    '''App user types as given by
+    https://github.com/cs3org/reva/blob/master/pkg/app/provider/wopi/wopi.go
+    '''
+    INVALID = "invalid"
+    # regular user, logged in the local ID provider
+    REGULAR = "regular"
+    # federated/external user, logged in the local ID provider but with no home space
+    FEDERATED = "federated"
+    # OCM user, logged in a remote ID provider
+    OCM = "ocm"
+    # anonymous user, accessing a public link
+    ANONYMOUS = "anonymous"
 
 
 class JsonLogger:
@@ -69,15 +94,17 @@ class JsonLogger:
                     m = f[f.rfind('/') + 1:]
                 try:
                     # as we use a `key="value" ...` format in all logs, we only have args[0]
-                    payload = 'module="%s" %s ' % (m, args[0])
+                    payload = f'module="{m}" {args[0]} '
                     # now convert the payload to a dictionary assuming no `="` nor `" ` is present inside any key or value!
                     # the added trailing space matches the `" ` split, so we remove the last element of that list
                     payload = dict([tuple(kv.split('="')) for kv in payload.split('" ')[:-1]])
                     # then convert dict -> json -> str + strip `{` and `}`
                     payload = str(json.dumps(payload))[1:-1]
                 except Exception:    # pylint: disable=broad-except
-                    # if the above assumptions do not hold, just json-escape the original log
-                    payload = '"module": "%s", "payload": "%s"' % (m, json.dumps(args[0]))
+                    # if the above assumptions do not hold, just json-escape the original log and add debug info
+                    exc_type, exc_obj, tb = sys.exc_info()
+                    payload = f'"module": "{m}", "payload": "{json.dumps(args[0])}", "' + \
+                              f'"loggerex": "{exc_type}: {exc_obj} at L{tb.tb_lineno}"'
                 args = (payload,)
             # pass-through facade
             return getattr(self.logger, name)(*args, **kwargs)
@@ -88,7 +115,8 @@ def logGeneralExceptionAndReturn(ex, req):
     '''Convenience function to log a stack trace and return HTTP 500'''
     ex_type, ex_value, ex_traceback = sys.exc_info()
     log.critical('msg="Unexpected exception caught" exception="%s" type="%s" traceback="%s" client="%s" requestedUrl="%s"' %
-                 (ex, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback), req.remote_addr, req.url))
+                 (ex, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback),
+                  flask.request.headers.get(REALIPHEADER, flask.request.remote_addr), req.url))
     return 'Internal error, please contact support', http.client.INTERNAL_SERVER_ERROR
 
 
@@ -98,11 +126,12 @@ def validateAndLogHeaders(op):
     # validate the access token
     try:
         acctok = jwt.decode(flask.request.args['access_token'], srv.wopisecret, algorithms=['HS256'])
-        if acctok['exp'] < time.time():
+        if acctok['exp'] < time.time() or 'cs3org:wopiserver' not in acctok['iss']:
             raise jwt.exceptions.ExpiredSignatureError
-    except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError) as e:
-        log.info('msg="Expired or malformed token" client="%s" requestedUrl="%s" error="%s" token="%s"' %
-                 (flask.request.remote_addr, flask.request.base_url, str(type(e)) + ': ' + str(e), flask.request.args['access_token']))
+    except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError, KeyError) as e:
+        log.info('msg="Expired or malformed token" client="%s" requestedUrl="%s" details="%s" token="%s"' %
+                 (flask.request.headers.get(REALIPHEADER, flask.request.remote_addr), flask.request.base_url,
+                  str(type(e)) + ': ' + str(e), flask.request.args.get('access_token')))
         return 'Invalid access token', http.client.UNAUTHORIZED
 
     # validate the WOPI timestamp: this is typically not present, but if it is we must check its expiration
@@ -115,33 +144,49 @@ def validateAndLogHeaders(op):
                 # timestamps older than 20 minutes must be considered expired
                 raise ValueError
         except ValueError:
-            log.warning('msg="%s: invalid X-WOPI-Timestamp" user="%s" filename="%s" request="%s"' %
-                        (op, acctok['userid'][-20:], acctok['filename'], flask.request.__dict__))
+            log.warning('msg="%s: invalid X-WOPI-Timestamp" user="%s" token="%s" client="%s"' %
+                        (op, acctok['userid'][-20:], flask.request.args['access_token'][-20:],
+                         flask.request.headers.get(REALIPHEADER, flask.request.remote_addr)))
             # UNAUTHORIZED would seem more appropriate here, but the ProofKeys part of the MS test suite explicitly requires this
             return 'Invalid or expired X-WOPI-Timestamp header', http.client.INTERNAL_SERVER_ERROR
 
     # log all relevant headers to help debugging
-    log.debug('msg="%s: client context" user="%s" filename="%s" token="%s" client="%s" deviceId="%s" reqId="%s" sessionId="%s" '
-              'app="%s" appEndpoint="%s" correlationId="%s" wopits="%s"' %
-              (op.title(), acctok['userid'][-20:], acctok['filename'],
-               flask.request.args['access_token'][-20:], flask.request.remote_addr,
+    session = flask.request.headers.get('X-WOPI-SessionId')
+    log.debug('msg="%s: client context" trace="%s" user="%s" filename="%s" token="%s" client="%s" deviceId="%s" reqId="%s" '
+              'sessionId="%s" app="%s" appEndpoint="%s" correlationId="%s" wopits="%s"' %
+              (op.title(), acctok.get('trace', 'N/A'), acctok['userid'][-20:], acctok['filename'],
+               flask.request.args['access_token'][-20:], flask.request.headers.get(REALIPHEADER, flask.request.remote_addr),
                flask.request.headers.get('X-WOPI-DeviceId'), flask.request.headers.get('X-Request-Id'),
-               flask.request.headers.get('X-WOPI-SessionId'), flask.request.headers.get('X-WOPI-RequestingApplication'),
+               session, flask.request.headers.get('X-WOPI-RequestingApplication'),
                flask.request.headers.get('X-WOPI-AppEndpoint'), flask.request.headers.get('X-WOPI-CorrelationId'), wopits))
+
+    # update bookkeeping of pending sessions
+    if op.title() == 'Checkfileinfo' and session in srv.conflictsessions['pending'] and \
+       int(srv.conflictsessions['pending'][session]['time']) < time.time() - 30:
+        # a previously conflicted session is still around executing Checkfileinfo after some time, assume it got resolved
+        _resolveSession(session, acctok['filename'])
     return acctok, None
 
 
 def generateWopiSrc(fileid, proxy=False):
     '''Returns a URL-encoded WOPISrc for the given fileid, proxied if required.'''
     if not proxy or not srv.wopiproxy:
-        return url_quote_plus('%s/wopi/files/%s' % (srv.wopiurl, fileid)).replace('-', '%2D')
+        return url_quote_plus(f'{srv.wopiurl}/wopi/files/{fileid}').replace('-', '%2D')
     # proxy the WOPI request through an external WOPI proxy service, but only if it was not already proxied
-    if len(fileid) < 50:   # heuristically, proxied fileids are (much) longer than that
-        log.debug('msg="Generating proxied fileid" fileid="%s" proxy="%s"' % (fileid, srv.wopiproxy))
+    if len(fileid) < 90:   # heuristically, proxied fileids are (much) longer than that
+        log.debug(f'msg="Generating proxied fileid" fileid="{fileid}" proxy="{srv.wopiproxy}"')
         fileid = jwt.encode({'u': srv.wopiurl + '/wopi/files/', 'f': fileid}, srv.wopiproxykey, algorithm='HS256')
     else:
-        log.debug('msg="Proxied fileid already created" fileid="%s" proxy="%s"' % (fileid, srv.wopiproxy))
-    return url_quote_plus('%s/wopi/files/%s' % (srv.wopiproxy, fileid)).replace('-', '%2D')
+        log.debug(f'msg="Proxied fileid already created" fileid="{fileid}" proxy="{srv.wopiproxy}"')
+    return url_quote_plus(f'{srv.wopiproxy}/wopi/files/{fileid}').replace('-', '%2D')
+
+
+def generateUrlFromTemplate(url, acctok):
+    '''One-liner to parse an URL template and return it with actualised placeholders'''
+    return url.replace('<path>', acctok['filename']). \
+               replace('<endpoint>', acctok['endpoint']). \
+               replace('<fileid>', acctok['fileid']). \
+               replace('<app>', acctok['appname'])
 
 
 def getLibreOfficeLockName(filename):
@@ -166,49 +211,44 @@ def randomString(size):
     return ''.join([choice(ascii_lowercase) for _ in range(size)])
 
 
-def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app):
+def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app, trace):
     '''Generates an access token for a given file and a given user, and returns a tuple with
     the file's inode and the URL-encoded access token.'''
     appname, appediturl, appviewurl = app
-    username, wopiuser = user
+    friendlyname, wopiuser, usertype = user    # wopiuser has the form `username!userid_in_stat_format`
     log.debug('msg="Generating token" userid="%s" fileid="%s" endpoint="%s" app="%s"' %
               (userid[-20:], fileid, endpoint, appname))
     try:
-        # stat the file to check for existence and get a version-invariant inode and modification time:
-        # the inode serves as fileid (and must not change across save operations), the mtime is used for version information.
+        # stat the file to check for existence and get a version-invariant inode:
+        # the inode serves as fileid (and must not change across save operations)
         statinfo = st.statx(endpoint, fileid, userid)
     except IOError as e:
-        log.info('msg="Requested file not found or not a file" fileid="%s" error="%s"' % (fileid, e))
+        log.info(f'msg="Requested file not found or not a file" fileid="{fileid}" error="{e}"')
         raise
-    exptime = int(time.time()) + srv.tokenvalidity
+    exptime = int(time.time()) + srv.config.getint('general', 'tokenvalidity')
     fext = os.path.splitext(statinfo['filepath'])[1].lower()
-    if not appediturl:
-        # deprecated: for backwards compatibility, work out the URLs from the discovered app endpoints
-        try:
-            appediturl = endpoints[fext]['edit']
-            appviewurl = endpoints[fext]['view']
-        except KeyError:
-            log.critical('msg="No app URLs registered for the given file type" fileext="%s" mimetypescount="%d"' %
-                         (fext, len(endpoints) if endpoints else 0))
-            raise IOError
     if srv.config.get('general', 'disablemswriteodf', fallback='False').upper() == 'TRUE' and \
-       fext in srv.codetypes and appname != 'Collabora' and appname != '' and viewmode == ViewMode.READ_WRITE:
-        # we're opening an ODF file and the app is not Collabora (the last check is needed because the legacy endpoint
-        # does not set appname when the app is not proxied, so we optimistically assume it's Collabora and let it go)
-        log.info('msg="Forcing read-only access to ODF file" filename="%s"' % statinfo['filepath'])
+       fext[1:3] in ('od', 'ot') and appname != 'Collabora' and viewmode == ViewMode.READ_WRITE:
+        # we're opening an ODF (`.o[d|t]?`) file and the app is not Collabora
+        log.info(f"msg=\"Forcing read-only access to ODF file\" filename=\"{statinfo['filepath']}\"")
         viewmode = ViewMode.READ_ONLY
-    acctok = jwt.encode({'userid': userid, 'wopiuser': wopiuser, 'filename': statinfo['filepath'], 'username': username,
-                         'viewmode': viewmode.value, 'folderurl': folderurl, 'endpoint': endpoint,
-                         'appname': appname, 'appediturl': appediturl, 'appviewurl': appviewurl,
-                         'exp': exptime, 'iss': 'cs3org:wopiserver:%s' % WOPIVER},    # standard claims
-                        srv.wopisecret, algorithm='HS256')
-    log.info('msg="Access token generated" userid="%s" wopiuser="%s" mode="%s" endpoint="%s" filename="%s" inode="%s" '
-             'mtime="%s" folderurl="%s" appname="%s" expiration="%d" token="%s"' %
-             (userid[-20:], wopiuser if wopiuser != userid else username, viewmode, endpoint,
-              statinfo['filepath'], statinfo['inode'], statinfo['mtime'],
-              folderurl, appname, exptime, acctok[-20:]))
-    # return the inode == fileid, the filepath and the access token
-    return statinfo['inode'], acctok
+    if viewmode == ViewMode.PREVIEW and statinfo['size'] == 0:
+        # override preview mode when a new file is being created
+        viewmode = ViewMode.READ_WRITE
+    tokmd = {
+        'userid': userid, 'wopiuser': wopiuser, 'usertype': usertype.value, 'filename': statinfo['filepath'], 'fileid': fileid,
+        'username': friendlyname, 'viewmode': viewmode.value, 'folderurl': folderurl, 'endpoint': endpoint,
+        'appname': appname, 'appediturl': appediturl, 'appviewurl': appviewurl, 'trace': trace,
+        'exp': exptime, 'iss': f'cs3org:wopiserver:{WOPIVER}'    # standard claims
+    }
+    acctok = jwt.encode(tokmd, srv.wopisecret, algorithm='HS256')
+    if 'MS 365' in appname:
+        srv.allusers.add(userid)
+    log.info('msg="Access token generated" trace="%s" userid="%s" wopiuser="%s" friendlyname="%s" usertype="%s" mode="%s" '
+             'endpoint="%s" filename="%s" inode="%s" mtime="%s" folderurl="%s" appname="%s" expiration="%d" token="%s"' %
+             (trace, userid[-20:], wopiuser, friendlyname, usertype, viewmode, endpoint, statinfo['filepath'],
+              statinfo['inode'], statinfo['mtime'], folderurl, appname, exptime, acctok[-20:]))
+    return statinfo['inode'], acctok, viewmode
 
 
 def encodeLock(lock):
@@ -241,7 +281,7 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefn=None):
             mslockstat = st.stat(acctok['endpoint'], getMicrosoftOfficeLockName(acctok['filename']), acctok['userid'])
             log.info('msg="Found existing MS Office lock" lockop="%s" user="%s" filename="%s" token="%s" lockmtime="%ld"' %
                      (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, mslockstat['mtime']))
-            return 'External', 'Microsoft Office for Desktop'
+            return EXTERNALLOCK, 'Microsoft Office for Desktop'
         except IOError:
             pass
         try:
@@ -258,7 +298,7 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefn=None):
                          'lockmtime="%ld" holder="%s"' %
                          (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok,
                           lolockstat['mtime'], lolockholder))
-                return 'External', 'LibreOffice for Desktop'
+                return EXTERNALLOCK, 'LibreOffice for Desktop'
         except (IOError, StopIteration):
             pass
 
@@ -286,7 +326,7 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefn=None):
     except IOError as e:
         log.info('msg="Found non-compatible or unreadable lock" lockop="%s" user="%s" filename="%s" token="%s" error="%s"' %
                  (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, e))
-        return 'External', 'Another app or user'
+        return EXTERNALLOCK, 'Another app or user'
 
     log.info('msg="Retrieved lock" lockop="%s" user="%s" filename="%s" fileid="%s" lock="%s" '
              'retrievedlock="%s" expTime="%s" token="%s"' %
@@ -297,14 +337,14 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefn=None):
 
 def compareWopiLocks(lock1, lock2):
     '''Compares two locks and returns True if they represent the same WOPI lock.
-    Officially, the comparison must be based on the locks' string representations, but because of
-    a bug in Word Online, currently the internal format of the WOPI locks is looked at, based
-    on heuristics. Note that this format is subject to change and is not documented!'''
+    Officially, the comparison must be based on the locks' string representations. But because of
+    a bug in early versions of Word Online, the internal format of the WOPI locks may be looked at,
+    based on heuristics. Note that this format is subject to change and is not documented!'''
     if lock1 == lock2:
-        log.debug('msg="compareLocks" lock1="%s" lock2="%s" result="True"' % (lock1, lock2))
+        log.debug(f'msg="compareLocks" lock1="{lock1}" lock2="{lock2}" result="True"')
         return True
-    if srv.config.get('general', 'wopilockstrictcheck', fallback='False').upper() == 'TRUE':
-        log.debug('msg="compareLocks" lock1="%s" lock2="%s" strict="True" result="False"' % (lock1, lock2))
+    if srv.config.get('general', 'wopilockstrictcheck', fallback='True').upper() == 'TRUE':
+        log.debug(f'msg="compareLocks" lock1="{lock1}" lock2="{lock2}" strict="True" result="False"')
         return False
 
     # before giving up, attempt to parse the lock as a JSON dictionary if allowed by the config
@@ -316,36 +356,82 @@ def compareWopiLocks(lock1, lock2):
                 log.debug('msg="compareLocks" lock1="%s" lock2="%s" strict="False" result="%r"' %
                           (lock1, lock2, l1['S'] == l2['S']))
                 return l1['S'] == l2['S']         # used by Word
-            log.debug('msg="compareLocks" lock1="%s" lock2="%s" strict="False" result="False"' % (lock1, lock2))
-            return False
         except (TypeError, ValueError):
             # lock2 is not a JSON dictionary
             if 'S' in l1:
                 log.debug('msg="compareLocks" lock1="%s" lock2="%s" strict="False" result="%r"' %
                           (lock1, lock2, l1['S'] == lock2))
-                return l1['S'] == lock2                    # also used by Word (BUG!)
+                return l1['S'] == lock2                    # also used by Word
     except (TypeError, ValueError):
         # lock1 is not a JSON dictionary: log the lock values and fail the comparison
-        log.debug('msg="compareLocks" lock1="%s" lock2="%s" strict="False" result="False"' % (lock1, lock2))
-        return False
+        pass
+    log.debug(f'msg="compareLocks" lock1="{lock1}" lock2="{lock2}" strict="False" result="False"')
+    return False
 
 
-def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, filename, reason=None):
+def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, filename, reason, savetime=None):
     '''Generates and logs an HTTP 409 response in case of locks conflict'''
     resp = flask.Response(mimetype='application/json')
     resp.headers['X-WOPI-Lock'] = retrievedlock if retrievedlock else ''
     resp.status_code = http.client.CONFLICT
-    if reason:
-        # this is either a simple message or a dictionary: in all cases we want a dictionary to be JSON-ified
-        if isinstance(reason, str):
-            reason = {'message': reason}
-        resp.headers['X-WOPI-LockFailureReason'] = reason['message']
-        resp.data = json.dumps(reason)
+    if isinstance(reason, str):
+        # transform the given message in a dict to be JSON-ified
+        reason = {'message': reason}
+    resp.headers['X-WOPI-LockFailureReason'] = reason['message']
+    resp.data = json.dumps(reason)
+
+    session = flask.request.headers.get('X-WOPI-SessionId')
+    if session and retrievedlock != EXTERNALLOCK and \
+       session not in srv.conflictsessions['pending'] and session not in srv.conflictsessions['resolved']:
+        srv.conflictsessions['pending'][session] = {
+            'user': user,
+            'time': int(time.time()),
+            'heldby': retrievedlock,
+            'type': os.path.splitext(filename)[1],
+        }
+    if savetime:
+        fileage = f'{time.time() - int(savetime):1.1f}'
+    else:
+        fileage = 'NA'
     log.warning('msg="Returning conflict" lockop="%s" user="%s" filename="%s" token="%s" sessionId="%s" lock="%s" '
-                'oldlock="%s" retrievedlock="%s" reason="%s"' %
-                (operation.title(), user, filename, flask.request.args['access_token'][-20:],
-                 flask.request.headers.get('X-WOPI-SessionId'), lock, oldlock, retrievedlock,
+                'oldlock="%s" retrievedlock="%s" fileage="%s" reason="%s"' %
+                (('UnlockAndRelock' if oldlock and oldlock != 'NA' and operation != 'PUTFILE' else operation.title()),
+                 user, filename, flask.request.args['access_token'][-20:], session, lock, oldlock, retrievedlock, fileage,
                  (reason['message'] if reason else 'NA')))
+    return resp
+
+
+def _resolveSession(session, filename):
+    '''Mark a session as resolved and account the given filename in the openfiles map.
+    This is only used for bookkeeping, no functionality is associated to those maps'''
+    if session in srv.conflictsessions['pending']:
+        s = srv.conflictsessions['pending'].pop(session)
+        srv.conflictsessions['resolved'][session] = {
+            'user': s['user'],
+            'restime': int(time.time() - int(s['time'])),
+            'type': s['type'],
+        }
+    # keep some accounting of the open files
+    if filename not in srv.openfiles:
+        srv.openfiles[filename] = (time.asctime(), set())
+    if session not in srv.openfiles[filename][1]:
+        srv.openfiles[filename][1].add(session)
+
+
+def makeLockSuccessResponse(operation, acctok, lock, oldlock, version):
+    '''Generates and logs an HTTP 200 response with appropriate headers for Lock/RefreshLock operations'''
+    session = flask.request.headers.get('X-WOPI-SessionId')
+    if not session:
+        session = acctok['wopiuser'].split('!')[0]
+    _resolveSession(session, acctok['filename'])
+
+    log.info('msg="Successfully locked" lockop="%s" filename="%s" token="%s" sessionId="%s" '
+             'lock="%s" oldlock="%s" version="%s"' %
+             (('UnlockAndRelock' if oldlock else operation.title()), acctok['filename'],
+              flask.request.args['access_token'][-20:], session, lock, oldlock, version))
+    resp = flask.Response()
+    resp.status_code = http.client.OK
+    resp.headers['X-WOPI-ItemVersion'] = version
     return resp
 
 
@@ -354,9 +440,26 @@ def storeWopiFile(acctok, retrievedlock, xakey, targetname=''):
     and stores the save time as an xattr. Throws IOError in case of any failure'''
     if not targetname:
         targetname = acctok['filename']
-    st.writefile(acctok['endpoint'], targetname, acctok['userid'], flask.request.get_data(), encodeLock(retrievedlock))
-    # save the current time for later conflict checking: this is never older than the mtime of the file
-    st.setxattr(acctok['endpoint'], targetname, acctok['userid'], xakey, int(time.time()), encodeLock(retrievedlock))
+    session = flask.request.headers.get('X-WOPI-SessionId')
+    if not session:
+        session = acctok['wopiuser'].split('!')[0]
+    _resolveSession(session, targetname)
+
+    writeerror = None
+    try:
+        st.writefile(acctok['endpoint'], targetname, acctok['userid'],
+                     flask.request.stream, flask.request.content_length,
+                     (acctok['appname'], encodeLock(retrievedlock)))
+    except IOError as e:
+        if str(e) == common.ACCESS_ERROR:
+            raise
+        # something went wrong on write: we still want to setxattr but report this error to the caller
+        writeerror = e
+    # in all cases save the current time for later conflict checking: this is never older than the mtime of the file
+    st.setxattr(acctok['endpoint'], targetname, acctok['userid'], xakey, int(time.time()),
+                (acctok['appname'], encodeLock(retrievedlock)))
+    if writeerror:
+        raise writeerror
 
 
 def storeAfterConflict(acctok, retrievedlock, lock, reason):
@@ -365,7 +468,7 @@ def storeAfterConflict(acctok, retrievedlock, lock, reason):
     next to the original one, or to the user's home, or to the recovery path.'''
     newname, ext = os.path.splitext(acctok['filename'])
     # typical EFSS formats are like '<filename>_conflict-<date>-<time>', but they're not synchronized: use a similar format
-    newname = '%s-webconflict-%s%s' % (newname, time.strftime('%Y%m%d-%H'), ext.strip())
+    newname = f"{newname}-webconflict-{time.strftime('%Y%m%d-%H')}{ext.strip()}"
     try:
         dorecovery = None
         storeWopiFile(acctok, retrievedlock, LASTSAVETIMEKEY, newname)
@@ -373,9 +476,10 @@ def storeAfterConflict(acctok, retrievedlock, lock, reason):
         if common.ACCESS_ERROR not in str(e):
             dorecovery = e
         else:
-            # let's try the configured conflictpath instead of the current folder
-            newname = srv.conflictpath.replace('user_initial', acctok['username'][0]).replace('username', acctok['username']) \
-                      + os.path.sep + os.path.basename(newname)
+            # let's try the configured user's (or owner's) homepath instead of the current folder
+            newname = srv.homepath.replace('user_initial', acctok['wopiuser'][0]). \
+                                   replace('username', acctok['wopiuser'].split('!')[0]) \
+                      + os.path.sep + os.path.basename(newname)     # noqa: E131
             try:
                 storeWopiFile(acctok, retrievedlock, LASTSAVETIMEKEY, newname)
             except IOError as e:
@@ -383,22 +487,24 @@ def storeAfterConflict(acctok, retrievedlock, lock, reason):
                 dorecovery = e
 
     if dorecovery:
-        storeForRecovery(flask.request.get_data(), acctok['username'], newname,
-                         flask.request.args['access_token'][-20:], dorecovery)
+        storeForRecovery(acctok['wopiuser'], newname, flask.request.args['access_token'][-20:], dorecovery)
         # conflict file was stored on recovery space, tell user (but reason is advisory...)
-        return makeConflictResponse('PUTFILE', acctok['userid'], retrievedlock, lock, 'NA', acctok['filename'],
-                                    reason + ', please contact support to recover it')
+        reason += ', please contact support to recover it'
+    else:
+        # otherwise, conflict file was saved to user space
+        reason += ', conflict copy created'
 
-    # otherwise, conflict file was saved to user space but we still use a CONFLICT response
-    # as it is better handled by the app to signal the issue to the user
-    return makeConflictResponse('PUTFILE', acctok['userid'], retrievedlock, lock, 'NA', acctok['filename'],
-                                reason + ', conflict copy created')
+    # use a CONFLICT response as it is better handled by the app to signal the issue to the user
+    return makeConflictResponse('PUTFILE', acctok['userid'], retrievedlock, lock, 'NA',
+                                acctok['filename'], reason)
 
 
-def storeForRecovery(content, username, filename, acctokforlog, exception):
+def storeForRecovery(wopiuser, filename, acctokforlog, exception, content=None):
+    if not content:
+        content = flask.request.get_data()
     try:
-        filepath = srv.recoverypath + os.sep + time.strftime('%Y%m%dT%H%M%S') + '_editedby_' + username \
-                   + '_origat_' + secure_filename(filename)
+        filepath = srv.recoverypath + os.sep + time.strftime('%Y%m%dT%H%M%S') + '_editedby_' \
+                   + secure_filename(wopiuser.split('!')[0]) + '_origat_' + secure_filename(filename)
         with open(filepath, mode='wb') as f:
             written = f.write(content)
         if written != len(content):
@@ -410,3 +516,13 @@ def storeForRecovery(content, username, filename, acctokforlog, exception):
         log.critical('msg="Error writing file and failed to recover it to local storage, data is LOST" '
                      + 'filename="%s" token="%s" originalerror="%s" recoveryerror="%s"' %
                      (filename, acctokforlog, exception, e))
+
+
+# Creates a Flask response object with a JSON-encoded body, the given status code,
+# and the specified headers (or an empty dictionary if none are provided).
+def createJsonResponse(response_body, status_code, headers=None):
+    # Set default headers and include Content-Type: application/json
+    headers = headers or {}
+    headers['Content-Type'] = 'application/json'
+    # Create the response object with the JSON-encoded body and the specified status code and headers
+    return flask.Response(response=json.dumps(response_body), status=status_code, headers=headers)
