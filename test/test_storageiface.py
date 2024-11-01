@@ -98,13 +98,14 @@ class TestStorage(unittest.TestCase):
     def test_statx_fileid(self):
         '''Call statx() and test if fileid-based stat is supported'''
         self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, databuf, -1, None)
-        statInfo = self.storage.statx(self.endpoint, self.homepath + '/test.txt', self.userid, versioninv=0)
+        statInfo = self.storage.statx(self.endpoint, self.homepath + '/test.txt', self.userid)
         self.assertTrue('inode' in statInfo, 'Missing inode from statx output')
         self.assertTrue('filepath' in statInfo, 'Missing filepath from statx output')
         self.assertTrue('ownerid' in statInfo, 'Missing ownerid from stat output')
         self.assertTrue('size' in statInfo, 'Missing size from stat output')
         self.assertTrue('mtime' in statInfo, 'Missing mtime from stat output')
         self.assertTrue('etag' in statInfo, 'Missing etag from stat output')
+        self.assertTrue('xattrs' in statInfo, 'Missing xattrs from stat output')
         self.storage.removefile(self.endpoint, self.homepath + '/test.txt', self.userid)
 
     def test_statx_invariant_fileid(self):
@@ -136,7 +137,6 @@ class TestStorage(unittest.TestCase):
         self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, databuf, -1, None)
         content = ''
         for chunk in self.storage.readfile(self.endpoint, self.homepath + '/test.txt', self.userid, None):
-            self.assertNotIsInstance(chunk, IOError, 'raised by storage.readfile')
             content += chunk.decode('utf-8')
         self.assertEqual(content, databuf, f'File test.txt should contain the string "{databuf}"')
         self.storage.removefile(self.endpoint, self.homepath + '/test.txt', self.userid)
@@ -147,7 +147,6 @@ class TestStorage(unittest.TestCase):
         self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, content, -1, None)
         content = ''
         for chunk in self.storage.readfile(self.endpoint, self.homepath + '/test.txt', self.userid, None):
-            self.assertNotIsInstance(chunk, IOError, 'raised by storage.readfile')
             content += chunk.decode('utf-8')
         self.assertEqual(content, 'bla\n', 'File test.txt should contain the text "bla\\n"')
         self.storage.removefile(self.endpoint, self.homepath + '/test.txt', self.userid)
@@ -157,16 +156,15 @@ class TestStorage(unittest.TestCase):
         content = ''
         self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, content, -1, None)
         for chunk in self.storage.readfile(self.endpoint, self.homepath + '/test.txt', self.userid, None):
-            self.assertNotIsInstance(chunk, IOError, 'raised by storage.readfile')
             content += chunk.decode('utf-8')
         self.assertEqual(content, '', 'File test.txt should be empty')
         self.storage.removefile(self.endpoint, self.homepath + '/test.txt', self.userid)
 
     def test_read_nofile(self):
         '''Test reading of a non-existing file'''
-        readex = next(self.storage.readfile(self.endpoint, self.homepath + '/hopefullynotexisting', self.userid, None))
-        self.assertIsInstance(readex, IOError, f'readfile returned {readex}')
-        self.assertEqual(str(readex), ENOENT_MSG, f'readfile returned {readex}')
+        with self.assertRaises(IOError) as context:
+            next(self.storage.readfile(self.endpoint, self.homepath + '/hopefullynotexisting', self.userid, None))
+        self.assertIn(ENOENT_MSG, str(context.exception))
 
     def test_write_remove_specialchars(self):
         '''Test write and removal of a file with special chars'''
@@ -180,7 +178,7 @@ class TestStorage(unittest.TestCase):
     def test_write_islock(self):
         '''Test double write with the islock flag'''
         if self.storagetype == 'cs3':
-            self.log.warn('Skipping test_write_islock for storagetype cs3')
+            self.log.warning('Skipping test_write_islock for storagetype cs3')
             return
         try:
             self.storage.removefile(self.endpoint, self.homepath + '/testoverwrite', self.userid)
@@ -197,7 +195,7 @@ class TestStorage(unittest.TestCase):
     def test_write_race(self):
         '''Test multithreaded double write with the islock flag. Might fail as it relies on tight timing'''
         if self.storagetype == 'cs3':
-            self.log.warn('Skipping test_write_race for storagetype cs3')
+            self.log.warning('Skipping test_write_race for storagetype cs3')
             return
         try:
             self.storage.removefile(self.endpoint, self.homepath + '/testwriterace', self.userid)
@@ -321,8 +319,7 @@ class TestStorage(unittest.TestCase):
         self.storage.refreshlock(self.endpoint, self.homepath + '/testlockop', self.userid, 'test app', 'testlock')
         with self.assertRaises(IOError):
             self.storage.refreshlock(self.endpoint, self.homepath + '/testlockop', self.userid, 'mismatched app', 'mismatchlock')
-        for chunk in self.storage.readfile(self.endpoint, self.homepath + '/testlockop', self.userid, None):
-            self.assertNotIsInstance(chunk, IOError, 'raised by storage.readfile, lock shall be shared')
+        next(self.storage.readfile(self.endpoint, self.homepath + '/testlockop', self.userid, None))
         with self.assertRaises(IOError):
             self.storage.writefile(self.endpoint, self.homepath + '/testlockop', self.userid, databuf, -1, None)
         self.storage.renamefile(self.endpoint, self.homepath + '/testlockop', self.homepath + '/testlockop_renamed',
@@ -372,11 +369,11 @@ class TestStorage(unittest.TestCase):
         self.storage.setlock(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'test app', 'xattrlock')
         self.storage.setxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey', 123,
                               ('test app', 'xattrlock'))
-        v = self.storage.getxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey')
-        self.assertEqual(v, '123')
+        fmd = self.storage.statx(self.endpoint, self.homepath + '/test&xattr.txt', self.userid)
+        self.assertEqual(fmd['xattrs']['testkey'], '123')
         self.storage.rmxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey', ('test app', 'xattrlock'))
-        v = self.storage.getxattr(self.endpoint, self.homepath + '/test&xattr.txt', self.userid, 'testkey')
-        self.assertEqual(v, None)
+        fmd = self.storage.statx(self.endpoint, self.homepath + '/test&xattr.txt', self.userid)
+        self.assertIsNone(fmd['xattrs'].get('testkey'))
         self.storage.removefile(self.endpoint, self.homepath + '/test&xattr.txt', self.userid)
 
     def test_rename_statx(self):

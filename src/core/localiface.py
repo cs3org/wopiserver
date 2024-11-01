@@ -101,6 +101,15 @@ def stat(_endpoint, filepath, _userid):
                  (statInfo.st_ino, _getfilepath(filepath), (tend - tstart) * 1000))
         if S_ISDIR(statInfo.st_mode):
             raise IOError('Is a directory')
+        try:
+            xattrs = {
+                k.strip('user.'): os.getxattr(_getfilepath(filepath), k).decode()
+                for k in os.listxattr(_getfilepath(filepath))
+            }
+        except OSError as e:
+            log.info('msg="Failed to invoke listxattr/getxattr" inode="%d" filepath="%s" exception="%s"' %
+                     statInfo.st_ino, _getfilepath(filepath), e)
+            xattrs = {}
         return {
             'inode': common.encodeinode('local', str(statInfo.st_ino)),
             'filepath': filepath,
@@ -108,14 +117,14 @@ def stat(_endpoint, filepath, _userid):
             'size': statInfo.st_size,
             'mtime': statInfo.st_mtime,
             'etag': str(statInfo.st_mtime),
+            'xattrs': xattrs,
         }
     except (FileNotFoundError, PermissionError) as e:
         raise IOError(e) from e
 
 
-def statx(endpoint, filepath, userid, versioninv=1):
-    '''Get extended stat info (inode, filepath, ownerid, size, mtime). Equivalent to stat in the case of local storage.
-    The versioninv flag is ignored as local storage always supports version-invariant inodes (cf. CERNBOX-1216).'''
+def statx(endpoint, filepath, userid):
+    '''Get extended stat info (inode, filepath, ownerid, size, mtime). Equivalent to stat in the case of local storage'''
     return stat(endpoint, filepath, userid)
 
 
@@ -147,8 +156,8 @@ def setxattr(endpoint, filepath, userid, key, value, lockmd):
         raise IOError(e) from e
 
 
-def getxattr(_endpoint, filepath, _userid, key):
-    '''Get the extended attribute <key> on behalf of the given userid. Do not raise exceptions'''
+def _getxattr(filepath, key):
+    '''Internal only: get the extended attribute <key>, do not raise exceptions'''
     try:
         return os.getxattr(_getfilepath(filepath), 'user.' + key).decode('UTF-8')
     except OSError as e:
@@ -184,7 +193,7 @@ def setlock(endpoint, filepath, userid, appname, value):
 
 def getlock(endpoint, filepath, _userid):
     '''Get the lock metadata as an xattr on behalf of the given userid'''
-    rawl = getxattr(endpoint, filepath, '0:0', common.LOCKKEY)
+    rawl = _getxattr(filepath, common.LOCKKEY)
     if rawl:
         lock = common.retrieverevalock(rawl)
         if lock['expiration']['seconds'] > time.time():
@@ -227,14 +236,13 @@ def readfile(_endpoint, filepath, _userid, _lockid):
             # the actual read is buffered and managed by the app server
             for chunk in iter(lambda: f.read(chunksize), b''):
                 yield chunk
-    except FileNotFoundError:
+    except FileNotFoundError as fnfe:
         # log this case as info to keep the logs cleaner
         log.info(f'msg="File not found on read" filepath="{filepath}"')
-        # as this is a generator, we yield the error string instead of the file's contents
-        yield IOError('No such file or directory')
+        raise IOError('No such file or directory') from fnfe
     except OSError as e:
         log.error(f'msg="Error opening the file for read" filepath="{filepath}" error="{e}"')
-        yield IOError(e)
+        raise IOError(e) from e
 
 
 def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):

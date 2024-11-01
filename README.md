@@ -27,6 +27,7 @@ Contributors (oldest contributions first):
 - Vasco Guita (@vascoguita)
 - Thomas Mueller (@deepdiver1975)
 - Andre Duffeck (@aduffeck)
+- Rasmus Welander (@rawe0)
 
 Initial revision: December 2016 <br/>
 First production version for CERNBox: September 2017 (presented at [oCCon17](https://occon17.owncloud.org) - [slides](https://www.slideshare.net/giuseppelopresti/collaborative-editing-and-more-in-cernbox))<br/>
@@ -60,11 +61,13 @@ To run the tests, either run `pytest` if available in your system, or execute th
 
 ### Test against a Reva CS3 endpoint:
 
+The CS3 storage interface uses the [cs3 python client](https://github.com/cs3org/cs3-python-client), please also refer to its test suite and documentation.
+
 1. Clone reva (https://github.com/cs3org/reva)
 2. Run Reva according to <https://reva.link/docs/tutorials/share-tutorial/> (ie up until step 4 in the instructions)
+3. For a production deployment, configure your `wopiserver.conf` following the example above, and make sure the `iopsecret` file contains the same secret as configured in the [Reva appprovider](https://developer.sciencemesh.io/docs/technical-documentation/iop/iop-optional-configs/collabora-wopi-server/wopiserver)
 4. Configure `test/wopiserver-test.conf` such that the wopiserver can talk to your Reva instance: use [this example](docker/etc/wopiserver.cs3.conf) for a skeleton configuration
 5. Run the tests: `WOPI_STORAGE=cs3 python3 test/test_storageiface.py`
-3. For a production deployment, configure your `wopiserver.conf` following the example above, and make sure the `iopsecret` file contains the same secret as configured in the [Reva appprovider](https://developer.sciencemesh.io/docs/technical-documentation/iop/iop-optional-configs/collabora-wopi-server/wopiserver)
 
 ### Test against an Eos endpoint:
 

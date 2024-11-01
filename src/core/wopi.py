@@ -15,7 +15,6 @@ from datetime import datetime
 from urllib.parse import unquote_plus as url_unquote
 from urllib.parse import quote_plus as url_quote
 from urllib.parse import urlparse
-from more_itertools import peekable
 import flask
 import core.wopiutils as utils
 import core.commoniface as common
@@ -105,8 +104,7 @@ def checkFileInfo(fileid, acctok):
         fmd['SupportsRename'] = fmd['UserCanRename'] = enablerename and \
             acctok['viewmode'] in (utils.ViewMode.READ_WRITE, utils.ViewMode.PREVIEW)
         fmd['SupportsUserInfo'] = True
-        uinfo = st.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'],
-                            utils.USERINFOKEY + '.' + acctok['wopiuser'].split('!')[0])
+        uinfo = statInfo['xattrs'].get(utils.USERINFOKEY + '.' + acctok['wopiuser'].split('!')[0])
         if uinfo:
             fmd['UserInfo'] = uinfo
         if srv.config.get('general', 'earlyfeatures', fallback='False').upper() == 'TRUE':
@@ -142,17 +140,11 @@ def getFile(_fileid, acctok):
     try:
         # TODO for the time being we do not look if the file is locked. Once exclusive locks are implemented in Reva,
         # the lock must be fetched prior to the following call in order to access the file.
-        # get the file reader generator
-        f = peekable(st.readfile(acctok['endpoint'], acctok['filename'], acctok['userid'], None))
-        firstchunk = f.peek()
-        if isinstance(firstchunk, IOError):
-            log.error('msg="GetFile: download failed" endpoint="%s" filename="%s" token="%s" error="%s"' %
-                      (acctok['endpoint'], acctok['filename'], flask.request.args['access_token'][-20:], firstchunk))
-            return utils.createJsonResponse({'message': 'Failed to fetch file from storage'}, http.client.INTERNAL_SERVER_ERROR)
         # stat the file to get the current version
         statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
         # stream file from storage to client
-        resp = flask.Response(f, mimetype='application/octet-stream')
+        resp = flask.Response(st.readfile(acctok['endpoint'], acctok['filename'], acctok['userid'], None),
+                              mimetype='application/octet-stream')
         resp.status_code = http.client.OK
         resp.headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{url_quote(os.path.basename(acctok['filename']))}"
         resp.headers['X-Frame-Options'] = 'sameorigin'
@@ -163,10 +155,10 @@ def getFile(_fileid, acctok):
         # File is empty, still return OK (strictly speaking, we should return 204 NO_CONTENT)
         return '', http.client.OK
     except IOError as e:
-        # File is readable but statx failed?
-        log.error('msg="GetFile: failed to stat after read, possible race" filename="%s" token="%s" error="%s"' %
-                  (acctok['filename'], flask.request.args['access_token'][-20:], e))
-        return utils.createJsonResponse({'message': 'Failed to access file'}, http.client.INTERNAL_SERVER_ERROR)
+        # File got deleted meanwhile, or some other remote I/O error
+        log.error('msg="GetFile: download failed" endpoint="%s" filename="%s" token="%s" error="%s"' %
+                  (acctok['endpoint'], acctok['filename'], flask.request.args['access_token'][-20:], e))
+        return utils.createJsonResponse({'message': 'Failed to access file from storage'}, http.client.INTERNAL_SERVER_ERROR)
 
 
 #
@@ -194,7 +186,7 @@ def setLock(fileid, reqheaders, acctok):
 
     if retrievedLock or op == 'REFRESH_LOCK':
         # useful for later checks
-        savetime = st.getxattr(acctok['endpoint'], fn, acctok['userid'], utils.LASTSAVETIMEKEY)
+        savetime = statInfo['xattrs'].get(utils.LASTSAVETIMEKEY)
         if savetime and (not savetime.isdigit() or int(savetime) < int(statInfo['mtime'])):
             # we had stale information, discard
             log.warning('msg="Detected external modification" filename="%s" savetime="%s" mtime="%s" token="%s"' %
@@ -230,8 +222,6 @@ def setLock(fileid, reqheaders, acctok):
                 try:
                     retrievedlolock = next(st.readfile(acctok['endpoint'], utils.getLibreOfficeLockName(fn),
                                                        acctok['userid'], None))
-                    if isinstance(retrievedlolock, IOError):
-                        raise retrievedlolock from e
                     retrievedlolock = retrievedlolock.decode()
                     # check that the lock is not stale
                     if datetime.strptime(retrievedlolock.split(',')[3], '%d.%m.%Y %H:%M').timestamp() + \
@@ -600,9 +590,9 @@ def putFile(fileid, acctok):
     try:
         if srv.config.get('general', 'detectexternalmodifications', fallback='True').upper() == 'TRUE':
             # check now the destination file against conflicts if required
-            savetime = st.getxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY)
-            mtime = None
-            mtime = st.stat(acctok['endpoint'], acctok['filename'], acctok['userid'])['mtime']
+            statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
+            savetime = statInfo['xattrs'].get(utils.LASTSAVETIMEKEY)
+            mtime = statInfo['mtime']
             if not savetime or not savetime.isdigit() or int(savetime) < int(mtime):
                 # no xattr was there or we got our xattr but mtime is more recent: someone may have updated the file from
                 # a different source (e.g. FUSE or SMB mount), therefore force conflict and return failure to the application
@@ -618,7 +608,7 @@ def putFile(fileid, acctok):
         # Also, note we can't get a time resolution better than one second!
         # Anyhow, the EFSS should support versioning for such cases.
         utils.storeWopiFile(acctok, retrievedLock, utils.LASTSAVETIMEKEY)
-        statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'], versioninv=1)
+        statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
         log.info('msg="File stored successfully" action="edit" user="%s" filename="%s" version="%s" token="%s"' %
                  (acctok['userid'][-20:], acctok['filename'], statInfo['etag'], flask.request.args['access_token'][-20:]))
         resp = flask.Response()

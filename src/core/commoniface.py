@@ -12,15 +12,16 @@ import json
 from base64 import urlsafe_b64encode, urlsafe_b64decode
 from binascii import Error as B64Error
 
+# Standard Linux error messages as also defined in cs3client.exceptions
 
-# standard file missing message
+# file missing message
 ENOENT_MSG = 'No such file or directory'
 
-# standard error thrown when attempting to overwrite a file/xattr in O_EXCL mode
+# error thrown when attempting to overwrite a file/xattr in O_EXCL mode
 # or when a lock operation cannot be performed because of failed preconditions
-EXCL_ERROR = 'File/xattr exists but EXCL mode requested, lock mismatch or lock expired'
+EXCL_ERROR = 'Lock mismatch'
 
-# standard error thrown when attempting an operation without the required access rights
+# attempt an operation without the required access rights
 ACCESS_ERROR = 'Operation not permitted'
 
 # name of the xattr storing the Reva lock
