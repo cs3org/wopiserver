@@ -242,8 +242,7 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
         'exp': exptime, 'iss': f'cs3org:wopiserver:{WOPIVER}'    # standard claims
     }
     acctok = jwt.encode(tokmd, srv.wopisecret, algorithm='HS256')
-    if 'MS 365' in appname:
-        srv.allusers.add(userid)
+    srv.allusers.add(userid)
     log.info('msg="Access token generated" trace="%s" userid="%s" wopiuser="%s" friendlyname="%s" usertype="%s" mode="%s" '
              'endpoint="%s" filename="%s" inode="%s" mtime="%s" folderurl="%s" appname="%s" expiration="%d" token="%s"' %
              (trace, userid[-20:], wopiuser, friendlyname, usertype, viewmode, endpoint, statinfo['filepath'],
