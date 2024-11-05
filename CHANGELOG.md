@@ -1,5 +1,11 @@
 ## Changelog for the WOPI server
 
+### Future - v11.0.0
+- Adopted the cs3 python client (#161), and optimized the logic
+  that deals with extended attributes
+- Ported xrootd docker image to Alma9 (#164)
+- Forced preview mode for non-regular (non-primary) accounts
+
 ### Fri May 24 2024 - v10.5.0
 - Added timeout settings for GRPC and HTTP connections (#149)
 - Fixed handing of trailing slashes (#151)
