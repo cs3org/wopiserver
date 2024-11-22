@@ -115,7 +115,8 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args, app='wopi'):
         if not f.is_open():
             log.error(f'msg="Error or timeout with xroot" cmd="{cmd}" subcmd="{subcmd}" args="{args}" rc="{rc}"')
             raise IOError(f'Timeout executing {cmd}')
-        res = b''.join(f.readlines()).split(b'&')
+        _, res = f.read()
+        res = res.split(b'&')
         if len(res) == 3:        # we may only just get stdout: in that case, assume it's all OK
             rc = res[2].strip(b'\n').decode()
             rc = rc[rc.find('=') + 1:].strip('\00')
