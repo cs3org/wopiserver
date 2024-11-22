@@ -235,6 +235,9 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
     if viewmode == ViewMode.PREVIEW and statinfo['size'] == 0:
         # override preview mode when a new file is being created
         viewmode = ViewMode.READ_WRITE
+    elif viewmode == ViewMode.READ_WRITE and usertype != UserType.REGULAR:
+        # and instead force preview mode for external or anonymous users
+        viewmode = ViewMode.PREVIEW
     tokmd = {
         'userid': userid, 'wopiuser': wopiuser, 'usertype': usertype.value, 'filename': statinfo['filepath'], 'fileid': fileid,
         'username': friendlyname, 'viewmode': viewmode.value, 'folderurl': folderurl, 'endpoint': endpoint,
