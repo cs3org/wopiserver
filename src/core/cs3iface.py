@@ -49,14 +49,19 @@ def init(inconfig, inlog):
 def healthcheck():
     """Probes the storage and returns a status message. For cs3 storage, we execute a call to ListAuthProviders"""
     try:
-        Auth(client).ListAuthProviders()
-        log.debug('msg="Executed ListAuthProviders as health check" endpoint="%s"' % (ctx["revagateway"]))
+        Auth(client).list_auth_providers()
+        log.debug('msg="Executed ListAuthProviders as health check" endpoint="%s"' % (config["cs3client"]["host"]))
         return "OK"
     except ConnectionError as e:
         log.error(
-            'msg="Health check: failed to call ListAuthProviders" endpoint="%s" error="%s"' % (ctx["revagateway"], e)
+            'msg="Health check: connection error when calling ListAuthProviders" endpoint="%s" error="%s"' % (config["cs3client"]["host"], e)
         )
-        return str(e)
+        return "FAIL"
+    except Exception as e:
+        log.error(
+            'msg="Health check: failed to call ListAuthProviders" endpoint="%s" error="%s"' % (config["cs3client"]["host"], e)
+        )
+        return "FAIL"
 
 
 def getuseridfromcreds(token, wopiuser):
