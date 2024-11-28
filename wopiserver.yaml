@@ -3,7 +3,6 @@
 # Run with e.g.: HOST_HOSTNAME=`hostname` docker-compose --project-name wopiserver -f wopiserver.yaml up -d
 #
 
-version: "3.3"
 services:
   wopiserver:
     build:
@@ -16,8 +15,6 @@ services:
     restart: always
     ports:
       - 8880:8880
-    secrets:
-      - etherpad_apikey
     environment:
       - DEBUG_METRICS=false
       - HOST_HOSTNAME=${HOST_HOSTNAME}
@@ -31,10 +28,6 @@ services:
       interval: 600s
       timeout: 5s
       retries: 3
-
-secrets:
-  etherpad_apikey:
-    file: /etc/wopi/etherpad_apikey
 
 volumes:
   config:
