@@ -1,6 +1,6 @@
 ## Changelog for the WOPI server
 
-### Future - v11.0.0
+### Thu Nov 28 2024 - v11.0.0
 - Adopted the cs3 python client (#161), and optimized the logic
   that deals with extended attributes
 - Ported xrootd docker image to Alma9 (#164)
