@@ -53,14 +53,12 @@ def healthcheck():
         log.debug('msg="Executed ListAuthProviders as health check" endpoint="%s"' % (config["cs3client"]["host"]))
         return "OK"
     except ConnectionError as e:
-        log.error(
-            'msg="Health check: connection error when calling ListAuthProviders" endpoint="%s" error="%s"' % (config["cs3client"]["host"], e)
-        )
+        log.error('msg="Health check: connection error in calling ListAuthProviders" endpoint="%s" error="%s"' %
+                  (config["cs3client"]["host"], e))
         return "FAIL"
     except Exception as e:
-        log.error(
-            'msg="Health check: failed to call ListAuthProviders" endpoint="%s" error="%s"' % (config["cs3client"]["host"], e)
-        )
+        log.error('msg="Health check: failed to call ListAuthProviders" endpoint="%s" error="%s"' %
+                  (config["cs3client"]["host"], e))
         return "FAIL"
 
 
