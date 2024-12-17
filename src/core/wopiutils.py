@@ -226,11 +226,13 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
         log.info(f'msg="Requested file not found or not a file" fileid="{fileid}" error="{e}"')
         raise
     exptime = int(time.time()) + srv.config.getint('general', 'tokenvalidity')
-    fext = os.path.splitext(statinfo['filepath'])[1].lower()
-    if srv.config.get('general', 'disablemswriteodf', fallback='False').upper() == 'TRUE' and \
-       fext[1:3] in ('od', 'ot') and appname != 'Collabora' and viewmode == ViewMode.READ_WRITE:
-        # we're opening an ODF (`.o[d|t]?`) file and the app is not Collabora
-        log.info(f"msg=\"Forcing read-only access to ODF file\" filename=\"{statinfo['filepath']}\"")
+    fname = statinfo['filepath']
+    fext = os.path.splitext(fname)[1].lower()
+    if appname != 'Collabora' and viewmode == ViewMode.READ_WRITE and (
+            fext in ('.doc', '.dot', '.xls', '.ppt', '.pps', '.csv') or
+            fext[1:3] in ('od', 'ot') and srv.config.get('general', 'disablemswriteodf', fallback='False').upper() == 'TRUE'):
+        # we're opening a legacy format file or an ODF (`.o[d|t]?`) and the app is not Collabora
+        log.info(f"msg=\"Forcing read-only access to ODF/legacy formats\" filename=\"{fname}\"")
         viewmode = ViewMode.READ_ONLY
     if viewmode == ViewMode.PREVIEW and statinfo['size'] == 0:
         # override preview mode when a new file is being created
@@ -239,7 +241,7 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
         # and instead force preview mode for external or anonymous users
         viewmode = ViewMode.PREVIEW
     tokmd = {
-        'userid': userid, 'wopiuser': wopiuser, 'usertype': usertype.value, 'filename': statinfo['filepath'], 'fileid': fileid,
+        'userid': userid, 'wopiuser': wopiuser, 'usertype': usertype.value, 'filename': fname, 'fileid': fileid,
         'username': friendlyname, 'viewmode': viewmode.value, 'folderurl': folderurl, 'endpoint': endpoint,
         'appname': appname, 'appediturl': appediturl, 'appviewurl': appviewurl, 'trace': trace,
         'exp': exptime, 'iss': f'cs3org:wopiserver:{WOPIVER}'    # standard claims
@@ -248,7 +250,7 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
     srv.allusers.add(userid)
     log.info('msg="Access token generated" trace="%s" userid="%s" wopiuser="%s" friendlyname="%s" usertype="%s" mode="%s" '
              'endpoint="%s" filename="%s" inode="%s" mtime="%s" folderurl="%s" appname="%s" expiration="%d" token="%s"' %
-             (trace, userid[-20:], wopiuser, friendlyname, usertype, viewmode, endpoint, statinfo['filepath'],
+             (trace, userid[-20:], wopiuser, friendlyname, usertype, viewmode, endpoint, fname,
               statinfo['inode'], statinfo['mtime'], folderurl, appname, exptime, acctok[-20:]))
     return statinfo['inode'], acctok, viewmode
 

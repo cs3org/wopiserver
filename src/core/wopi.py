@@ -37,8 +37,6 @@ def checkFileInfo(fileid, acctok):
         # populate metadata for this file
         fmd = {}
         fmd['BaseFileName'] = fmd['BreadcrumbDocName'] = os.path.basename(acctok['filename'])
-        if acctok['viewmode'] in (utils.ViewMode.VIEW_ONLY, utils.ViewMode.READ_ONLY):
-            fmd['BreadcrumbDocName'] += ' (read only)'
         fmd['FileExtension'] = os.path.splitext(acctok['filename'])[1]
         wopiSrc = 'WOPISrc=%s&access_token=%s' % (utils.generateWopiSrc(fileid, acctok['appname'] == srv.proxiedappname),
                                                   flask.request.args['access_token'])
