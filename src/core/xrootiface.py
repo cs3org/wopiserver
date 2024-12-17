@@ -309,7 +309,7 @@ def setxattr(endpoint, filepath, _userid, key, value, lockmd):
     appname = 'wopi'
     if lockmd:
         appname, _ = lockmd
-    if 'user' not in key and 'sys' not in key:
+    if key[:5] != 'user.' and key[:4] != 'sys.':
         # if nothing is given, assume it's a user attr
         key = 'user.' + key
     _xrootcmd(endpoint, 'attr', 'set', '0:0', 'mgm.attr.key=' + key + '&mgm.attr.value=' + str(value)
@@ -318,7 +318,7 @@ def setxattr(endpoint, filepath, _userid, key, value, lockmd):
 
 def _getxattr(endpoint, filepath, key):
     '''Internal only: get the extended attribute <key> via a special open.'''
-    if 'user' not in key and 'sys' not in key:
+    if key[:5] != 'user.' and key[:4] != 'sys.':
         # if nothing is given, assume it's a user attr
         key = 'user.' + key
     try:
@@ -339,7 +339,7 @@ def rmxattr(endpoint, filepath, _userid, key, lockmd):
     appname = 'wopi'
     if lockmd:
         appname, _ = lockmd
-    if 'user' not in key and 'sys' not in key:
+    if key[:5] != 'user.' and key[:4] != 'sys.':
         # if nothing is given, assume it's a user attr
         key = 'user.' + key
     _xrootcmd(endpoint, 'attr', 'rm', '0:0',
