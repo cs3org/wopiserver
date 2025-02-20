@@ -355,6 +355,11 @@ def putRelative(fileid, reqheaders, acctok):
              'overwrite="%r" wopitimestamp="%s" token="%s"' %
              (acctok['userid'][-20:], acctok['filename'], fileid, suggTarget, relTarget,
               overwriteTarget, reqheaders.get('X-WOPI-TimeStamp'), flask.request.args['access_token'][-20:]))
+
+    if acctok['viewmode'] == utils.ViewMode.VIEW_ONLY or acctok['usertype'] != utils.UserType.REGULAR:
+        # UNAUTHORIZED may seem better but the WOPI validator tests explicitly expect NOT_IMPLEMENTED
+        return utils.createJsonResponse({'message': 'Unauthorized to perform PutRelative'}, http.client.NOT_IMPLEMENTED)
+
     # either one xor the other MUST be present; note we can't use `^` as we have a mix of str and NoneType
     if (suggTarget and relTarget) or (not suggTarget and not relTarget):
         return utils.createJsonResponse({'message': 'Conflicting headers given'}, http.client.BAD_REQUEST)
@@ -428,7 +433,6 @@ def putRelative(fileid, reqheaders, acctok):
                 # at this point give up and return error
                 pass
         if raisenoaccess:
-            # UNAUTHORIZED may seem better but the WOPI validator tests explicitly expect NOT_IMPLEMENTED
             return utils.createJsonResponse({'message': 'Unauthorized to perform PutRelative'}, http.client.NOT_IMPLEMENTED)
 
     # generate an access token for the new file
