@@ -510,9 +510,9 @@ def storeForRecovery(wopiuser, filename, acctokforlog, exception, content=None):
             written = f.write(content)
         if written != len(content):
             raise IOError('Size mismatch')
-        log.error('msg="Error writing file, a copy was stored locally for later recovery" '
-                  + 'filename="%s" recoveredpath="%s" token="%s" error="%s"' %
-                  (filename, filepath, acctokforlog, exception))
+        log.warning('msg="Error writing file, a copy was stored locally for later recovery" '
+                    + 'filename="%s" recoveredpath="%s" token="%s" error="%s"' %
+                    (filename, filepath, acctokforlog, exception))
     except (OSError, IOError) as e:
         log.critical('msg="Error writing file and failed to recover it to local storage, data is LOST" '
                      + 'filename="%s" token="%s" originalerror="%s" recoveryerror="%s"' %
