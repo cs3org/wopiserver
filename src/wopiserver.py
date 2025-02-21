@@ -84,6 +84,8 @@ class Wopi:
     # sets of sessions for which a lock conflict is outstanding or resolved
     conflictsessions = {'pending': {}, 'resolved': {}, 'users': 0}
     allusers = set()
+    # set of app URLs as received over time, used for active monitoring if enabled
+    appurls = set()
 
     @classmethod
     def init(cls):
@@ -364,6 +366,7 @@ def iopOpenInApp():
         # the base app URL is the editor in READ_WRITE mode, and the viewer in READ_ONLY or PREVIEW mode
         # as the known WOPI applications all support switching from preview to edit mode
         res['app-url'] = appurl if vm == utils.ViewMode.READ_WRITE else appviewurl
+        Wopi.appurls.add(res['app-url'])
         res['app-url'] += '%sWOPISrc=%s' % ('&' if '?' in res['app-url'] else '?',
                                             utils.generateWopiSrc(inode, appname == Wopi.proxiedappname))
         if Wopi.config.get('general', 'businessflow', fallback='False').upper() == 'TRUE':
