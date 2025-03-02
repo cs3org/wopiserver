@@ -240,6 +240,7 @@ def statx(endpoint, fileref, userid):
         kvlist = [kv.split(b'=') for kv in statInfo.split()]
         # extract the key-value pairs for the core metadata and the user xattrs; drop the rest, don't decode as
         # some sys xattrs may contain non-unicode-decodable content (cf. CERNBOX-3514)
+        # note that we don't parse sys.app.lock if present
         statxdata = {k.decode(): v.decode().strip('"') for k, v in
                      [kv for kv in kvlist if len(kv) == 2 and kv[0].find(b'xattr') == -1]}
         for ikv, kv in enumerate(kvlist):
@@ -291,7 +292,7 @@ def statx(endpoint, fileref, userid):
     # return the metadata of the given file, with the inode taken from the version folder
     endpoint = _geturlfor(endpoint)
     inode = common.encodeinode(endpoint[7:] if endpoint.find('.') == -1 else endpoint[7:endpoint.find('.')], statxdata['ino'])
-    log.debug(f'msg="Invoked stat return" inode="{inode}" filepath="{_getfilepath(verFolder)}"')
+    log.debug(f'msg="Invoked stat return" inode="{inode}" filepath="{_getfilepath(verFolder)}" xattrs="{xattrs}"')
     return {
         'inode': inode,
         'filepath': filepath,
