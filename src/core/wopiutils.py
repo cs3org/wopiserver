@@ -153,12 +153,13 @@ def validateAndLogHeaders(op):
     # log all relevant headers to help debugging
     session = flask.request.headers.get('X-WOPI-SessionId')
     log.debug('msg="%s: client context" trace="%s" user="%s" filename="%s" token="%s" client="%s" deviceId="%s" reqId="%s" '
-              'sessionId="%s" app="%s" appEndpoint="%s" correlationId="%s" wopits="%s"' %
+              'sessionId="%s" app="%s" appEndpoint="%s" appVersion="%s" correlationId="%s" wopits="%s"' %
               (op.title(), acctok.get('trace', 'N/A'), acctok['userid'][-20:], acctok['filename'],
                flask.request.args['access_token'][-20:], flask.request.headers.get(REALIPHEADER, flask.request.remote_addr),
                flask.request.headers.get('X-WOPI-DeviceId'), flask.request.headers.get('X-Request-Id'),
                session, flask.request.headers.get('X-WOPI-RequestingApplication'),
-               flask.request.headers.get('X-WOPI-AppEndpoint'), flask.request.headers.get('X-WOPI-CorrelationId'), wopits))
+               flask.request.headers.get('X-WOPI-AppEndpoint'), flask.request.headers.get('X-WOPI-ClientVersion'),
+               flask.request.headers.get('X-WOPI-CorrelationId'), wopits))
 
     # update bookkeeping of pending sessions
     if op.title() == 'Checkfileinfo' and session in srv.conflictsessions['pending'] and \
