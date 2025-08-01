@@ -119,6 +119,7 @@ def checkFileInfo(fileid, acctok):
         # extensions for Collabora Online
         if acctok['appname'] == 'Collabora':
             fmd['EnableOwnerTermination'] = True
+            fmd['UserCanNotWriteRelative'] = True
             fmd['DisableExport'] = fmd['DisableCopy'] = fmd['DisablePrint'] = acctok['viewmode'] == utils.ViewMode.VIEW_ONLY
 
         res = flask.Response(json.dumps(fmd), mimetype='application/json')
