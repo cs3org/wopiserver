@@ -123,8 +123,9 @@ def checkFileInfo(fileid, acctok):
 
         res = flask.Response(json.dumps(fmd), mimetype='application/json')
         # redact sensitive metadata for the logs
-        fmd['HostViewUrl'] = fmd['HostEditUrl'] = fmd['DownloadUrl'] = fmd['FileUrl'] = \
-            fmd['BreadcrumbBrandUrl'] = fmd['FileSharingUrl'] = '_redacted_'
+        if srv.config.get('general', 'loglevel') != 'Debug':
+            fmd['HostViewUrl'] = fmd['HostEditUrl'] = fmd['DownloadUrl'] = fmd['FileUrl'] = \
+                fmd['BreadcrumbBrandUrl'] = fmd['FileSharingUrl'] = '_redacted_'
         log.info(f"msg=\"File metadata response\" token=\"{flask.request.args['access_token'][-20:]}\" metadata=\"{fmd}\"")
         return res
     except IOError as e:
