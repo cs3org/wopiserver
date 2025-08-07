@@ -229,7 +229,7 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
     exptime = int(time.time()) + srv.config.getint('general', 'tokenvalidity')
     fname = statinfo['filepath']
     fext = os.path.splitext(fname)[1].lower()
-    if appname != 'Collabora' and viewmode == ViewMode.READ_WRITE and (
+    if 'Collabora' not in appname and viewmode == ViewMode.READ_WRITE and (
             fext in ('.doc', '.dot', '.xls', '.ppt', '.pps', '.csv') or
             fext[1:3] in ('od', 'ot') and srv.config.get('general', 'disablemswriteodf', fallback='False').upper() == 'TRUE'):
         # we're opening a legacy format file or an ODF (`.o[d|t]?`) and the app is not Collabora
