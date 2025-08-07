@@ -118,11 +118,14 @@ def checkFileInfo(fileid, acctok):
             # if no WebDAV URL is provided, ignore this setting
             pass
         # extensions for Collabora Online
-        if acctok['appname'] == 'Collabora':
+        if 'Collabora' in acctok['appname']:
             fmd['EnableOwnerTermination'] = True
             fmd['DisableExport'] = fmd['DisableCopy'] = fmd['DisablePrint'] = acctok['viewmode'] == utils.ViewMode.VIEW_ONLY
+            if srv.config.get('apps', 'codedisableexport', fallback='False').upper() == 'TRUE':
+                fmd['UserCanNotWriteRelative'] = fmd['DisableExport'] = True
 
         res = flask.Response(json.dumps(fmd), mimetype='application/json')
+
         # redact sensitive metadata for the logs
         if srv.config.get('general', 'loglevel') != 'Debug':
             fmd['HostViewUrl'] = fmd['HostEditUrl'] = fmd['DownloadUrl'] = fmd['FileUrl'] = \
