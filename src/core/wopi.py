@@ -34,6 +34,7 @@ def checkFileInfo(fileid, acctok):
         acctok['viewmode'] = utils.ViewMode(acctok['viewmode'])
         acctok['usertype'] = utils.UserType(acctok['usertype'])
         statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
+
         # populate metadata for this file
         fmd = {}
         fmd['BaseFileName'] = fmd['BreadcrumbDocName'] = os.path.basename(acctok['filename'])
@@ -77,7 +78,7 @@ def checkFileInfo(fileid, acctok):
         if acctok['viewmode'] != utils.ViewMode.VIEW_ONLY and srv.config.get('general', 'downloadurl', fallback=None):
             fmd['DownloadUrl'] = fmd['FileUrl'] = '%s?access_token=%s' % \
                                                   (srv.config.get('general', 'downloadurl'), flask.request.args['access_token'])
-        if srv.config.get('general', 'businessflow', fallback='True').upper() == 'TRUE':
+        if srv.config.get('apps', 'businessflow', fallback='True').upper() == 'TRUE':
             # according to Microsoft, this must be enabled for all users
             fmd['LicenseCheckForEditIsEnabled'] = True
         fmd['BreadcrumbBrandName'] = srv.config.get('general', 'brandingname', fallback=None)
@@ -105,11 +106,11 @@ def checkFileInfo(fileid, acctok):
         uinfo = statInfo['xattrs'].get(utils.USERINFOKEY + '.' + acctok['wopiuser'].split('!')[0])
         if uinfo:
             fmd['UserInfo'] = uinfo
-        if srv.config.get('general', 'earlyfeatures', fallback='False').upper() == 'TRUE':
-            fmd['AllowEarlyFeatures'] = True
-        fmd['ComplianceDomainPrefix'] = srv.config.get('general', 'compliancedomain', fallback='euc')
 
         # populate app-specific metadata
+        if srv.config.get('apps', 'earlyfeatures', fallback='False').upper() == 'TRUE':
+            fmd['AllowEarlyFeatures'] = True
+        fmd['ComplianceDomainPrefix'] = srv.config.get('apps', 'compliancedomain', fallback='euc')
         # the following is to enable the 'Edit in Word/Excel/PowerPoint' (desktop) action (probably broken)
         try:
             fmd['ClientUrl'] = srv.config.get('general', 'webdavurl') + '/' + acctok['filename']

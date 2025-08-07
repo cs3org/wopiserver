@@ -124,10 +124,10 @@ class Wopi:
             # prepare the Flask web app
             cls.port = int(cls.config.get('general', 'port'))
             try:
-                cls.nonofficetypes = cls.config.get('general', 'nonofficetypes').split()
+                cls.nonofficetypes = cls.config.get('apps', 'nonofficetypes').split()
             except (TypeError, configparser.NoOptionError):
                 cls.nonofficetypes = []
-            cls.codetypes = cls.config.get('general', 'codeofficetypes', fallback='.odt .ods .odp').split()
+            cls.codetypes = cls.config.get('apps', 'codeofficetypes', fallback='.odt .ods .odp').split()
             with open(cls.config.get('security', 'wopisecretfile')) as s:
                 cls.wopisecret = s.read().strip('\n')
             with open(cls.config.get('security', 'iopsecretfile')) as s:
@@ -366,7 +366,7 @@ def iopOpenInApp():
         res['app-url'] = appurl if vm == utils.ViewMode.READ_WRITE else appviewurl
         res['app-url'] += '%sWOPISrc=%s' % ('&' if '?' in res['app-url'] else '?',
                                             utils.generateWopiSrc(inode, appname == Wopi.proxiedappname))
-        if Wopi.config.get('general', 'businessflow', fallback='False').upper() == 'TRUE':
+        if Wopi.config.get('apps', 'businessflow', fallback='False').upper() == 'TRUE':
             # tells the app to enable the business flow if appropriate
             res['app-url'] += '&IsLicensedUser=1'
         res['form-parameters'] = {'access_token': acctok}
