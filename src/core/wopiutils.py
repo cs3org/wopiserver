@@ -25,6 +25,7 @@ from werkzeug.utils import secure_filename
 import core.commoniface as common
 
 # this is the xattr key used for conflicts resolution on the remote storage
+# as well as to establish whether a new version is to be created on save
 LASTSAVETIMEKEY = 'iop.wopi.lastwritetime'
 
 # this is the xattr key used to store user info data from WOPI apps
@@ -437,7 +438,7 @@ def makeLockSuccessResponse(operation, acctok, lock, oldlock, version):
     return resp
 
 
-def storeWopiFile(acctok, retrievedlock, xakey, targetname=''):
+def storeWopiFile(acctok, retrievedlock, xakey, targetname='', noversion=False):
     '''Saves a file from an HTTP request to the given target filename (defaulting to the access token's one),
     and stores the save time as an xattr. Throws IOError in case of any failure'''
     if not targetname:
@@ -451,7 +452,7 @@ def storeWopiFile(acctok, retrievedlock, xakey, targetname=''):
     try:
         st.writefile(acctok['endpoint'], targetname, acctok['userid'],
                      flask.request.stream, flask.request.content_length,
-                     (acctok['appname'], encodeLock(retrievedlock)))
+                     (acctok['appname'], encodeLock(retrievedlock)), noversion=noversion)
     except IOError as e:
         if str(e) == common.ACCESS_ERROR:
             raise
@@ -523,8 +524,6 @@ def storeForRecovery(wopiuser, filename, acctokforlog, exception, content=None):
 # Creates a Flask response object with a JSON-encoded body, the given status code,
 # and the specified headers (or an empty dictionary if none are provided).
 def createJsonResponse(response_body, status_code, headers=None):
-    # Set default headers and include Content-Type: application/json
-    headers = headers or {}
+    headers = headers or {}    # having a `{}` default value raises a 'mutating default value' error
     headers['Content-Type'] = 'application/json'
-    # Create the response object with the JSON-encoded body and the specified status code and headers
     return flask.Response(response=json.dumps(response_body), status=status_code, headers=headers)

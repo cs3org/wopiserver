@@ -437,9 +437,9 @@ def readfile(endpoint, filepath, userid, _lockid):
                 yield chunk
 
 
-def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
+def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False, noversion=False):
     '''Write a file via xroot on behalf of the given userid. The entire content is written
-       and any pre-existing file is deleted (or moved to the previous version if supported).
+       and any pre-existing file is deleted (or moved to the previous version if noversion=False).
        With islock=True, the write explicitly disables versioning, and the file is opened with
        O_CREAT|O_EXCL, preventing race conditions.'''
     stream = True
@@ -457,7 +457,8 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
         appname = 'wopi'
     f = XrdClient.File()
     tstart = time.time()
-    rc, _ = f.open(_geturlfor(endpoint) + '/' + homepath + filepath + _eosargs(userid, appname, size),
+    rc, _ = f.open(_geturlfor(endpoint) + '/' + homepath + filepath + _eosargs(userid, appname, size) + \
+                   ('&eos.versioning=0' if noversion else ''),
                    OpenFlags.NEW if islock else OpenFlags.DELETE, timeout=timeout)
     tend = time.time()
     if not rc.ok:
@@ -504,8 +505,8 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
                   (filepath, (tend-tstart)*1000, rc.message.strip('\n')))
         raise IOError(rc.message.strip('\n'))
 
-    log.info('msg="File written successfully" filepath="%s" elapsedTimems="%.1f" islock="%s"' %
-             (filepath, (tend-tstart)*1000, islock))
+    log.info('msg="File written successfully" filepath="%s" elapsedTimems="%.1f" islock="%s" noversion="%s"' %
+             (filepath, (tend-tstart)*1000, islock, noversion))
 
 
 def renamefile(endpoint, origfilepath, newfilepath, userid, lockmd):

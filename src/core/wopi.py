@@ -317,6 +317,8 @@ def unlock(fileid, reqheaders, acctok):
         # validate that the underlying file is still there
         statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
         st.unlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'], utils.encodeLock(lock))
+        # and remove the lastwritetime xattr, so next time the file is opened we go for a new version
+        st.rmxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY, None)
     except IOError as e:
         if common.ENOENT_MSG in str(e):
             return utils.createJsonResponse({'message': 'File not found'}, http.client.NOT_FOUND)
@@ -594,6 +596,7 @@ def putFile(fileid, acctok):
     # OK, we can save the file: check the destination file against conflicts if required
     log.info('msg="PutFile" user="%s" filename="%s" fileid="%s" action="edit" token="%s"' %
              (acctok['userid'][-20:], acctok['filename'], fileid, flask.request.args['access_token'][-20:]))
+    statInfo = {}
     try:
         if srv.config.get('general', 'detectexternalmodifications', fallback='True').upper() == 'TRUE':
             # check now the destination file against conflicts if required
@@ -610,11 +613,21 @@ def putFile(fileid, acctok):
                 return utils.storeAfterConflict(acctok, utils.EXTERNALLOCK, lock,
                                                 'The file being edited got moved or overwritten')
 
+        # check whether to skip creating a new version of the file by reusing the same savetime attribute
+        noversion = False
+        timerangefornoversioning = srv.config.getint('general', 'timerangefornoversioning')
+        if timerangefornoversioning > 0:
+            if len(statInfo) == 0:
+                statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
+                savetime = statInfo['xattrs'].get(utils.LASTSAVETIMEKEY)
+            # disable versioning if the file was last saved less than timerangefornoversioning seconds ago
+            noversion = savetime and savetime.isdigit() and (int(time.time()) < int(savetime) + timerangefornoversioning)
+
         # Go for overwriting the file. Note that the entire check+write operation should be atomic,
         # but the previous checks still give the opportunity of a race condition. We just live with it.
         # Also, note we can't get a time resolution better than one second!
         # Anyhow, the EFSS should support versioning for such cases.
-        utils.storeWopiFile(acctok, retrievedLock, utils.LASTSAVETIMEKEY)
+        utils.storeWopiFile(acctok, retrievedLock, utils.LASTSAVETIMEKEY, noversion=noversion)
         statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
         log.info('msg="File stored successfully" action="edit" user="%s" filename="%s" version="%s" token="%s"' %
                  (acctok['userid'][-20:], acctok['filename'], statInfo['etag'], flask.request.args['access_token'][-20:]))

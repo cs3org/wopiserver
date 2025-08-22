@@ -225,7 +225,7 @@ def unlock(endpoint, filepath, userid, appname, value):
 
 
 def readfile(_endpoint, filepath, _userid, _lockid):
-    '''Read a file on behalf of the given userid. Note that the function is a generator, managed by the app server.'''
+    '''Read a file as root (the userid parameter is ignored). Note that the function is a generator, managed by the app server.'''
     log.debug(f'msg="Invoking readFile" filepath="{filepath}"')
     try:
         tstart = time.time()
@@ -245,10 +245,10 @@ def readfile(_endpoint, filepath, _userid, _lockid):
         raise IOError(e) from e
 
 
-def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False):
-    '''Write a file via xroot on behalf of the given userid. The entire content is written
-    and any pre-existing file is deleted (or moved to the previous version if supported).
-    With islock=True, the file is opened with O_CREAT|O_EXCL.'''
+def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False, _noversion=False):
+    '''Write a file on behalf of the given userid. The entire content is written and any
+    pre-existing content is deleted.  With islock=True, the file is opened with O_CREAT|O_EXCL.
+    The noversion argument is ignored for local storage.'''
     stream = True
     if size == -1:
         if isinstance(content, str):

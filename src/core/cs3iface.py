@@ -147,16 +147,17 @@ def readfile(endpoint, filepath, userid, lockid):
         yield chunk
 
 
-def writefile(endpoint, filepath, userid, content, size, lockmd):
+def writefile(endpoint, filepath, userid, content, size, lockmd, noversion=False):
     """Write a file using the given userid as access token. The entire content is written
-    and any pre-existing file is deleted (or moved to the previous version if supported).
+    and any pre-existing file is deleted (or moved to the previous version if noversion=False).
     The islock flag is currently not supported. The backend should at least support
     writing the file with O_CREAT|O_EXCL flags to prevent races."""
     app_name = lock_id = ''
     if lockmd:
         app_name, lock_id = lockmd
     resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
-    client.file.write_file(Auth.check_token(userid), resource, content, size, app_name, lock_id)
+    client.file.write_file(Auth.check_token(userid), resource, content, size,
+                           app_name, lock_id, disable_versioning=noversion)
 
 
 def renamefile(endpoint, filepath, newfilepath, userid, lockmd):
