@@ -615,13 +615,13 @@ def putFile(fileid, acctok):
 
         # check whether to skip creating a new version of the file by reusing the same savetime attribute
         noversion = False
-        timerangefornoversioning = srv.config.getint('general', 'timerangefornoversioning')
-        if timerangefornoversioning > 0:
+        noversiongraceperiod = srv.config.getint('general', 'noversiongraceperiod')
+        if noversiongraceperiod > 0:
             if len(statInfo) == 0:
                 statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
                 savetime = statInfo['xattrs'].get(utils.LASTSAVETIMEKEY)
-            # disable versioning if the file was last saved less than timerangefornoversioning seconds ago
-            noversion = savetime and savetime.isdigit() and (int(time.time()) < int(savetime) + timerangefornoversioning)
+            # disable versioning if the file was last saved more recently than noversiongraceperiod seconds ago
+            noversion = savetime and savetime.isdigit() and (int(savetime) > int(time.time()) - noversiongraceperiod)
 
         # Go for overwriting the file. Note that the entire check+write operation should be atomic,
         # but the previous checks still give the opportunity of a race condition. We just live with it.
