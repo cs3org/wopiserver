@@ -1,5 +1,11 @@
 ## Changelog for the WOPI server
 
+### Thu Sep  4 2025 - v11.1.0
+- Add support for no versioning on save (#180)
+- Moved apps-specific config to dedicated section
+- Improved logging
+- First version validated against Reva+EOS
+
 ### Thu Nov 28 2024 - v11.0.0
 - Adopted the cs3 python client (#161), and optimized the logic
   that deals with extended attributes
