@@ -3,7 +3,7 @@
 # Build: make docker or docker-compose -f wopiserver.yaml build --build-arg VERSION=`git describe | sed 's/^v//'` BASEIMAGE=... wopiserver
 
 ARG VERSION=latest
-ARG BASEIMAGE=python:3.13.3-alpine
+ARG BASEIMAGE=python:3.14.0rc2-alpine
 
 FROM $BASEIMAGE
 
