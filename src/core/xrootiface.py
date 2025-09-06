@@ -44,7 +44,7 @@ def init(inconfig, inlog):
     endpointoverride = config.get('xroot', 'endpointoverride', fallback='')
     defaultstorage = config.get('xroot', 'storageserver')
     homepath = config.get('xroot', 'storagehomepath', fallback='')
-    timeout = int(config.get('xroot', 'timeout', fallback='10'))
+    timeout = config.getint('xroot', 'timeout', fallback=10)
     # prepare the xroot client for the default storageserver
     _getxrdfor(defaultstorage)
 

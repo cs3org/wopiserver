@@ -66,8 +66,8 @@ class WB:
     def init(cls, config, log, secret):
         '''Initialises the application, bails out in case of failures. Note this is not a __init__ method'''
         cls.sslverify = config.get('bridge', 'sslverify', fallback='True').upper() in ('TRUE', 'YES')
-        cls.saveinterval = int(config.get('bridge', 'saveinterval', fallback='200'))
-        cls.unlockinterval = int(config.get('bridge', 'unlockinterval', fallback='90'))
+        cls.saveinterval = config.getint('bridge', 'saveinterval', fallback=200)
+        cls.unlockinterval = config.getint('bridge', 'unlockinterval', fallback=90)
         cls.disablezip = config.get('bridge', 'disablezip', fallback='False').upper() in ('TRUE', 'YES')
         cls.hashsecret = secret
         cls.log = wopic.log = log

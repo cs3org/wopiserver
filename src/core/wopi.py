@@ -615,7 +615,7 @@ def putFile(fileid, acctok):
 
         # check whether to skip creating a new version of the file by reusing the same savetime attribute
         noversion = False
-        noversiongraceperiod = srv.config.getint('general', 'noversiongraceperiod')
+        noversiongraceperiod = srv.config.getint('general', 'noversiongraceperiod', fallback=0)
         if noversiongraceperiod > 0:
             if len(statInfo) == 0:
                 statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
