@@ -1,7 +1,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
  [![Gitter chat](https://badges.gitter.im/cs3org/wopiserver.svg)](https://gitter.im/cs3org/wopiserver)
  [![Build Status](https://github.com/cs3org/wopiserver/actions/workflows/release.yml/badge.svg)](https://github.com/cs3org/wopiserver/actions)
- [![codecov](https://codecov.io/gh/cs3org/wopiserver/branch/master/graph/badge.svg)](https://codecov.io/gh/cs3org/wopiserver)
+
 ========
 
 # WOPI Server
