@@ -246,7 +246,7 @@ def statx(endpoint, fileref, userid):
         for ikv, kv in enumerate(kvlist):
             if len(kv) == 2 and kv[0].find(b'xattrn') == 0 and kv[1].find(b'user.') == 0:
                 # we found an user xattr: use it as key, where the value is on the next element (with kv[0] = 'xattrv')
-                xattrs[kv[1].decode().strip('user.')] = kvlist[ikv+1][1].decode()
+                xattrs[kv[1].lstrip(b'user.').decode()] = kvlist[ikv+1][1].decode()
 
     except ValueError as e:
         # UnicodeDecodeError exceptions would fall here
