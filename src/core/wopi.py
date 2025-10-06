@@ -190,7 +190,7 @@ def setLock(fileid, reqheaders, acctok):
     if retrievedLock or op == 'REFRESH_LOCK':
         # useful for later checks
         savetime = statInfo['xattrs'].get(utils.LASTSAVETIMEKEY)
-        if savetime and (not savetime.isdigit() or int(savetime) < int(statInfo['mtime'])):
+        if not savetime or not savetime.isdigit() or int(savetime) < int(statInfo['mtime']):
             # we had stale information, discard
             log.warning('msg="Detected external modification" filename="%s" savetime="%s" mtime="%s" token="%s"' %
                         (fn, savetime, statInfo['mtime'], flask.request.args['access_token'][-20:]))
