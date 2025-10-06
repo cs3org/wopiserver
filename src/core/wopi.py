@@ -317,8 +317,7 @@ def unlock(fileid, reqheaders, acctok):
         # validate that the underlying file is still there
         statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
         st.unlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'], utils.encodeLock(lock))
-        # and remove the lastwritetime xattr, so next time the file is opened we go for a new version
-        st.rmxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.LASTSAVETIMEKEY, None)
+        # note we leave the lastwritetime xattr, as it may be useful for RefreshLock with X-WOPI-ValidateTarget headers
     except IOError as e:
         if common.ENOENT_MSG in str(e):
             return utils.createJsonResponse({'message': 'File not found'}, http.client.NOT_FOUND)
