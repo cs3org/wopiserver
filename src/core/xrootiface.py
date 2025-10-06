@@ -238,11 +238,13 @@ def statx(endpoint, fileref, userid):
         # fsid=648 fsid=260
         # cf. https://gitlab.cern.ch/dss/eos/-/blob/master/archive/eosarch/utils.py
         kvlist = [kv.split(b'=') for kv in statInfo.split()]
+        log.debug(f'msg="fileinfo output" fileinfo="{statInfo}" kvlist="{kvlist}"')
         # extract the key-value pairs for the core metadata and the user xattrs; drop the rest, don't decode as
         # some sys xattrs may contain non-unicode-decodable content (cf. CERNBOX-3514)
         # note that we don't parse sys.app.lock if present
         statxdata = {k.decode(): v.decode().strip('"') for k, v in
                      [kv for kv in kvlist if len(kv) == 2 and kv[0].find(b'xattr') == -1]}
+        log.debug(f'msg="fileinfo parsing" fileinfo="{statInfo}" kvlist="{kvlist}" statxdata="{statxdata}"')
         for ikv, kv in enumerate(kvlist):
             if len(kv) == 2 and kv[0].find(b'xattrn') == 0 and kv[1].find(b'user.') == 0:
                 # we found an user xattr: use it as key, where the value is on the next element (with kv[0] = 'xattrv')
