@@ -2,7 +2,6 @@
  [![Gitter chat](https://badges.gitter.im/cs3org/wopiserver.svg)](https://gitter.im/cs3org/wopiserver)
  [![Build Status](https://github.com/cs3org/wopiserver/actions/workflows/release.yml/badge.svg)](https://github.com/cs3org/wopiserver/actions)
 
-========
 
 # WOPI Server
 
