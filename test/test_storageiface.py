@@ -175,6 +175,18 @@ class TestStorage(unittest.TestCase):
         with self.assertRaises(IOError):
             self.storage.stat(self.endpoint, self.homepath + '/testwrite&rm', self.userid)
 
+    def test_write_noversion(self):
+        '''Writes a text file and overwrites it again with the noversion flag on, validating that the content matches (no check is performed on the versioned file)'''
+        content = 'bla\n'
+        self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, content, -1, None)
+        content = 'blabla\n'
+        self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, content, -1, None, islock=False, noversion=True)
+        content = ''
+        for chunk in self.storage.readfile(self.endpoint, self.homepath + '/test.txt', self.userid, None):
+            content += chunk.decode('utf-8')
+        self.assertEqual(content, 'blabla\n', 'File test.txt should contain the text "bla\\n"')
+        self.storage.removefile(self.endpoint, self.homepath + '/test.txt', self.userid)
+
     def test_write_islock(self):
         '''Test double write with the islock flag'''
         if self.storagetype == 'cs3':
