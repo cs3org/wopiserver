@@ -180,7 +180,7 @@ class TestStorage(unittest.TestCase):
         content = 'bla\n'
         self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, content, -1, None)
         content = 'blabla\n'
-        self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, content, -1, None, islock=False, noversion=True)
+        self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, content, -1, None, noversion=True)
         content = ''
         for chunk in self.storage.readfile(self.endpoint, self.homepath + '/test.txt', self.userid, None):
             content += chunk.decode('utf-8')
