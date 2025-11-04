@@ -245,7 +245,7 @@ def readfile(_endpoint, filepath, _userid, _lockid):
         raise IOError(e) from e
 
 
-def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False, _noversion=False):
+def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False, noversion=False):
     '''Write a file on behalf of the given userid. The entire content is written and any
     pre-existing content is deleted.  With islock=True, the file is opened with O_CREAT|O_EXCL.
     The noversion argument is ignored for local storage.'''
