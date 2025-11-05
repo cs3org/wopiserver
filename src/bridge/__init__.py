@@ -140,7 +140,9 @@ def _validateappname(appname):
 def _gendocid(wopisrc):
     '''Generate a URL safe hash of the wopisrc to be used as document id by the app'''
     dig = hmac.new(WB.hashsecret.encode(), msg=wopisrc.split('/')[-1].encode(), digestmod=hashlib.sha1).digest()
-    return urlsafe_b64encode(dig).decode()[:-1]
+    docid = urlsafe_b64encode(dig).decode()[:-1]
+    WB.log.debug(f'msg="Generating docid" wopisrc="{wopisrc}" docid="{docid}"')
+    return docid
 
 
 # The Bridge endpoints start here
@@ -326,6 +328,13 @@ def applist():
         return 'Client not authorized', http.client.UNAUTHORIZED
     WB.log.info(f'msg="BridgeList: returning list of open files" client="{flask.request.remote_addr}"')
     return flask.Response(json.dumps(WB.openfiles), mimetype='application/json')
+
+
+def validatedocid(wopisrc, docid):
+    '''Validate that the given docid matches the wopiSrc'''
+    expecteddocid = _gendocid(wopisrc)
+    WB.log.debug(f'msg="Validate docid" expected="{expecteddocid}" actual="{docid}" wopisrc="{wopisrc}"')
+    return expecteddocid == docid
 
 
 #############################################################################################################
