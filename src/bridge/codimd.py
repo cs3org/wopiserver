@@ -26,6 +26,7 @@ upload_re = re.compile(r'\/uploads\/upload_\w{32}\.\w+')
 # initialized by the main class or by the init method
 appurl = None
 appexturl = None
+apikey = None
 log = None
 sslverify = None
 disablezip = None
@@ -39,8 +40,10 @@ def init(_appurl, _appinturl, _apikey):
     '''Initialize global vars from the environment'''
     global appurl
     global appexturl
+    global apikey
     appexturl = _appurl
     appurl = _appinturl
+    apikey = _apikey
     try:
         # CodiMD integrates Prometheus metrics, let's probe if they exist
         res = requests.head(appurl + '/metrics/codimd', verify=sslverify, timeout=10)
@@ -75,7 +78,7 @@ def getredirecturl(viewmode, wopisrc, acctok, docid, filename, displayname, reva
 # Cloud storage to CodiMD
 ##########################
 
-def _unzipattachments(inputbuf):
+def _unzipattachments(inputbuf, wopisrc, acctok):
     '''Unzip the given input buffer uploading the content to CodiMD and return the contained .md file'''
     mddoc = None
     try:
@@ -102,7 +105,10 @@ def _unzipattachments(inputbuf):
                     mddoc = mddoc.replace(bytes(zipinfo.filename), bytes(fname))
                 # OK, let's upload
                 log.debug(f'msg="Pushing attachment" filename="{fname}"')
-                res = requests.post(appurl + '/uploadimage', params={'generateFilename': 'false'},
+                res = requests.post(appurl + '/uploadimage',
+                                    params={'generateFilename': 'false',
+                                            'WOPISrc': wopisrc,
+                                            'accessToken': acctok},
                                     files={'image': (fname, inputzip.read(zipinfo))}, verify=sslverify, timeout=10)
                 if res.status_code != http.client.OK:
                     log.error('msg="Failed to push included file" filename="%s" httpcode="%d"' % (fname, res.status_code))
@@ -144,7 +150,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
 
     # if it's a bundled file, unzip it and push the attachments in the appropriate folder
     if wasbundle and mdfile:
-        mddoc = _unzipattachments(mdfile)
+        mddoc = _unzipattachments(mdfile, wopisrc, acctok)
     else:
         mddoc = mdfile
     # if the file was created on Windows, convert \r\n to \n for CodiMD to correctly edit it
@@ -157,7 +163,8 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
             res = requests.post(appurl + '/new', data=mddoc,
                                 allow_redirects=False,
                                 params={'mode': 'locked'},
-                                headers={'Content-Type': 'text/markdown'},
+                                headers={'Content-Type': 'text/markdown',
+                                         'Authorization': f'Bearer {apikey}'},
                                 verify=sslverify,
                                 timeout=10)
             if res.status_code == http.client.REQUEST_ENTITY_TOO_LARGE:
@@ -174,6 +181,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
             # reserve the given docid in CodiMD via a HEAD request
             res = requests.head(appurl + '/' + docid,
                                 allow_redirects=False,
+                                headers={'Authorization': f'Bearer {apikey}'},
                                 verify=sslverify,
                                 timeout=10)
             if res.status_code not in (http.client.OK, http.client.FOUND):
@@ -190,6 +198,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
 
             # push the document to CodiMD with the update API
             res = requests.put(appurl + '/api/notes/' + docid,
+                               headers={'Authorization': f'Bearer {apikey}'},
                                json={'content': mddoc.decode()},
                                verify=sslverify,
                                timeout=10)
@@ -205,6 +214,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
                 raise AppFailure
 
             log.info(f'msg="Pushed document to CodiMD" docid="{docid}" token="{acctok[-20:]}"')
+
     except requests.exceptions.RequestException as e:
         log.error(f'msg="Exception raised attempting to connect to CodiMD" exception="{e}"')
         raise AppFailure from e
