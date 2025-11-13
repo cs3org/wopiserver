@@ -394,7 +394,7 @@ def iopDownload():
         Wopi.log.info('msg="Expired or malformed token" client="%s" requestedUrl="%s" error="%s" token="%s"' %
                       (flask.request.remote_addr, flask.request.base_url, e,
                        (flask.request.args['access_token'] if 'access_token' in flask.request.args else 'N/A')))
-        return 'Invalid access token', http.client.UNAUTHORIZED
+        return 'Missing or invalid access token', http.client.UNAUTHORIZED
 
 
 @Wopi.app.route("/wopi/iop/list", methods=['GET'])
@@ -528,11 +528,32 @@ def wopiPutFile(fileid):
 #
 # Bridge functionality
 #
-@Wopi.app.route("/wopi/bridge/<docid>", methods=["POST"])
+@Wopi.app.route("/wopi/bridge/<docid>", methods=["HEAD", "POST"])
 @Wopi.metrics.do_not_track()
-def bridgeSave(docid):
-    '''The WOPI bridge save endpoint'''
-    return bridge.appsave(docid)
+def bridgeRoot(docid):
+    '''The WOPI bridge endpoint'''
+    if flask.request.method == "HEAD":
+        # this is used to validate the access token
+        try:
+            acctok = jwt.decode(flask.request.args['access_token'], Wopi.wopisecret, algorithms=['HS256'])
+            if acctok['exp'] < time.time():
+                raise jwt.exceptions.ExpiredSignatureError
+            if bridge.validatedocid(flask.request.args['WOPISrc'], docid):
+                Wopi.log.info('msg="Bridge: access token is valid" filename="%s" token="%s"' %
+                              (acctok['filename'], flask.request.args['access_token'][-20:]))
+                return '', http.client.OK
+            else:
+                Wopi.log.info('msg="Bridge: invalid docid for token" docid="%s" filename="%s" token="%s"' %
+                              (docid, acctok['filename'], flask.request.args['access_token'][-20:]))
+                return 'Invalid docID for access token', http.client.UNAUTHORIZED
+        except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError, KeyError) as e:
+            Wopi.log.info('msg="Bridge: expired or malformed token" client="%s" requestedUrl="%s" error="%s" token="%s"' %
+                          (flask.request.remote_addr, flask.request.base_url, e,
+                          (flask.request.args['access_token'] if 'access_token' in flask.request.args else 'N/A')))
+            return 'Missing or invalid access token', http.client.UNAUTHORIZED
+    else:
+        # this is used via web hooks by the apps to save the document
+        return bridge.appsave(docid)
 
 
 @Wopi.app.route("/wopi/bridge/list", methods=["GET"])

@@ -328,6 +328,12 @@ def applist():
     return flask.Response(json.dumps(WB.openfiles), mimetype='application/json')
 
 
+def validatedocid(wopiSrc, docid):
+    '''Validate that the given docid matches the wopiSrc'''
+    expecteddocid = _gendocid(urlparse.unquote_plus(wopiSrc))
+    return expecteddocid == docid
+
+
 #############################################################################################################
 
 def _intersection(boolsdict):
