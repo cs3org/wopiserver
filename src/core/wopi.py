@@ -59,11 +59,6 @@ def checkFileInfo(fileid, acctok):
         if fsurl:
             fmd['FileSharingUrl'] = utils.generateUrlFromTemplate(fsurl, acctok)
             fmd['FileSharingPostMessage'] = True
-        try:
-            fmd['PrivacyUrl'] = srv.config.get('general', 'privacyurl')
-        except configparser.NoOptionError:
-            # ignore, this property is optional
-            pass
         furl = acctok['folderurl']
         if furl != '/':
             fmd['CloseUrl'] = fmd['BreadcrumbFolderUrl'] = furl + '?scrollTo=' + fmd['BaseFileName']
