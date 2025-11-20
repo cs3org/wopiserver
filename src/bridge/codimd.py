@@ -78,7 +78,7 @@ def getredirecturl(viewmode, wopisrc, acctok, docid, filename, displayname, reva
 # Cloud storage to CodiMD
 ##########################
 
-def _unzipattachments(inputbuf, wopisrc, acctok):
+def _unzipattachments(inputbuf, docid, wopisrc, acctok):
     '''Unzip the given input buffer uploading the content to CodiMD and return the contained .md file'''
     mddoc = None
     try:
@@ -108,6 +108,7 @@ def _unzipattachments(inputbuf, wopisrc, acctok):
                 res = requests.post(appurl + '/uploadimage',
                                     params={'generateFilename': 'false',
                                             'WOPISrc': wopisrc,
+                                            'docId': docid,
                                             'accessToken': acctok},
                                     files={'image': (fname, inputzip.read(zipinfo))}, verify=sslverify, timeout=10)
                 if res.status_code != http.client.OK:
@@ -150,7 +151,7 @@ def loadfromstorage(filemd, wopisrc, acctok, docid):
 
     # if it's a bundled file, unzip it and push the attachments in the appropriate folder
     if wasbundle and mdfile:
-        mddoc = _unzipattachments(mdfile, wopisrc, acctok)
+        mddoc = _unzipattachments(mdfile, docid, wopisrc, acctok)
     else:
         mddoc = mdfile
     # if the file was created on Windows, convert \r\n to \n for CodiMD to correctly edit it
