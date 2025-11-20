@@ -323,7 +323,7 @@ def unlock(fileid, reqheaders, acctok):
         try:
             # also remove the LibreOffice-compatible lock file when relevant
             if os.path.splitext(acctok['filename'])[1] not in srv.nonofficetypes:
-                st.removefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), acctok['userid'], True)
+                st.removefile(acctok['endpoint'], utils.getLibreOfficeLockName(acctok['filename']), acctok['userid'], force=True)
         except IOError:
             # ignore, it's not worth to report anything here
             pass

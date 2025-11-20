@@ -244,7 +244,7 @@ class TestStorage(unittest.TestCase):
             self.storage.setlock(self.endpoint, self.homepath + '/testlock', self.userid, 'mismatched app', 'mismatchlock')
         self.assertIn(EXCL_ERROR, str(context.exception))
         self.storage.unlock(self.endpoint, self.homepath + '/testlock', self.userid, 'test app', 'testlock')
-        self.storage.removefile(self.endpoint, self.homepath + '/testlock', self.userid)
+        self.storage.removefile(self.endpoint, self.homepath + '/testlock', self.userid, force=True)
 
     def test_refresh_lock(self):
         '''Test refreshing lock'''

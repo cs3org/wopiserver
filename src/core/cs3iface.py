@@ -170,7 +170,7 @@ def renamefile(endpoint, filepath, newfilepath, userid, lockmd):
     client.file.rename_file(Auth.check_token(userid), resource, new_resource, lock_id)
 
 
-def removefile(endpoint, filepath, userid):
+def removefile(endpoint, filepath, userid, force=False):
     """Remove a file using the given userid as access token.
     The force argument is ignored for now for CS3 storage."""
     resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)

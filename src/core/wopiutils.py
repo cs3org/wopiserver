@@ -318,7 +318,7 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefn=None):
             # the expected signature - cf. setLock()
             try:
                 if lolock:
-                    st.removefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], True)
+                    st.removefile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], force=True)
             except IOError as e:
                 log.warning('msg="Unable to delete stale LibreOffice-compatible lock file" lockop="%s" user="%s" filename="%s" '
                             'fileid="%s" error="%s"' %
