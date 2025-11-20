@@ -18,6 +18,7 @@ from datetime import datetime
 from base64 import b64encode, b64decode
 from binascii import Error as B64Error
 from urllib.parse import quote_plus as url_quote_plus
+from urllib.parse import urlparse
 import http.client
 import flask
 import jwt
@@ -184,8 +185,12 @@ def generateWopiSrc(fileid, proxy=False):
 
 
 def generateUrlFromTemplate(url, acctok):
-    '''One-liner to parse an URL template and return it with actualised placeholders'''
-    return url.replace('<path>', acctok['filename']). \
+    '''Parse an URL template and return it with actualised placeholders'''
+    if acctok['username'] == '' or acctok['usertype'] == UserType.ANONYMOUS:
+        p = urlparse(acctok['folderurl']).path.replace('/files/link/', '/') + '/' + os.path.basename(acctok['filename'])
+    else:
+        p = acctok['filename']
+    return url.replace('<path>', p). \
                replace('<endpoint>', acctok['endpoint']). \
                replace('<fileid>', acctok['fileid']). \
                replace('<app>', acctok['appname'])
