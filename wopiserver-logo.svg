@@ -1,0 +1,44 @@
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Cloud shape -->
+  <path d="M 140 80 
+           C 140 70, 132 62, 122 62
+           C 120 50, 110 42, 98 42
+           C 84 42, 72 52, 70 65
+           C 58 66, 48 76, 48 88
+           C 48 101, 58 112, 70 112
+           L 138 112
+           C 150 112, 160 102, 160 90
+           C 160 78, 150 68, 138 68
+           C 139 74, 140 77, 140 80 Z"
+           fill="#4A90E2" opacity="0.9"/>
+  
+  <!-- Document icon with collaborative elements -->
+  <g transform="translate(70, 90)">
+    <!-- Background document -->
+    <rect x="8" y="6" width="50" height="60" rx="2" fill="white" stroke="#2C3E50" stroke-width="2"/>
+    
+    <!-- Gray lines on background doc -->
+    <line x1="16" y1="20" x2="50" y2="20" stroke="#95a5a6" stroke-width="2" stroke-linecap="round"/>
+    <line x1="16" y1="28" x2="50" y2="28" stroke="#95a5a6" stroke-width="2" stroke-linecap="round"/>
+    <line x1="16" y1="36" x2="46" y2="36" stroke="#95a5a6" stroke-width="2" stroke-linecap="round"/>
+    <line x1="16" y1="44" x2="50" y2="44" stroke="#95a5a6" stroke-width="2" stroke-linecap="round"/>
+    
+    <!-- Foreground document with multi-colored lines (co-editing) -->
+    <rect x="0" y="0" width="50" height="60" rx="2" fill="white" stroke="#2C3E50" stroke-width="2"/>
+    
+    <!-- Document lines in different colors (different users editing) -->
+    <line x1="8" y1="14" x2="42" y2="14" stroke="#4A90E2" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="8" y1="22" x2="42" y2="22" stroke="#E74C3C" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="8" y1="30" x2="38" y2="30" stroke="#27AE60" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="8" y1="38" x2="42" y2="38" stroke="#9B59B6" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="8" y1="46" x2="35" y2="46" stroke="#F39C12" stroke-width="2.5" stroke-linecap="round"/>
+    
+    <!-- Simple cursor indicators (smaller vertical lines, separated from text) -->
+    <line x1="44.5" y1="12" x2="44.5" y2="16" stroke="#4A90E2" stroke-width="1" stroke-linecap="round"/>
+    <line x1="44.5" y1="20" x2="44.5" y2="24" stroke="#E74C3C" stroke-width="1" stroke-linecap="round"/>
+    <line x1="37.5" y1="44" x2="37.5" y2="48" stroke="#F39C12" stroke-width="1" stroke-linecap="round"/>
+  </g>
+  
+  <!-- Text -->
+  <text x="100" y="175" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="#2C3E50" text-anchor="middle">wopiserver</text>
+</svg>
