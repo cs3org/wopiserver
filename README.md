@@ -5,7 +5,7 @@
 ==========
 
 <p align="center">
-  <img src="wopiserver-logo.svg" style="max-height: 200px;" alt="Wopiserver Logo"/>
+  <img src="wopiserver-logo.png" style="max-height: 200px;" alt="Wopiserver Logo"/>
 </p>
 <br/>
 
