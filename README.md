@@ -5,11 +5,11 @@
 ==========
 
 <p align="center">
-  <img src="wopiserver-logo.svg" alt="Wopiserver Logo"/>
+  <img src="wopiserver-logo.svg" style="max-height: 200px;" alt="Wopiserver Logo"/>
 </p>
 <br/>
 
-# WOPI Server
+# WOPIServer
 
 This service is part of the ScienceMesh Interoperability Platform ([IOP](https://developer.sciencemesh.io)) and implements a vendor-neutral application gateway compatible with the Web-application Open Platform Interface ([WOPI](https://docs.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/online)) specifications.
 
