@@ -19,6 +19,7 @@ from getpass import getpass
 sys.path.append('src')         # for tests out of the git repo
 sys.path.append('/app')        # for tests within the Docker image
 from core.commoniface import EXCL_ERROR, ENOENT_MSG  # noqa: E402
+from core.wopiutils import encodeLock
 
 databuf = 'ebe5tresbsrdthbrdhvdtr'
 
@@ -233,17 +234,17 @@ class TestStorage(unittest.TestCase):
         self.storage.writefile(self.endpoint, self.homepath + '/testlock', self.userid, databuf, -1, None)
         statInfo = self.storage.stat(self.endpoint, self.homepath + '/testlock', self.userid)
         self.assertIsInstance(statInfo, dict)
-        self.storage.setlock(self.endpoint, self.homepath + '/testlock', self.userid, 'test app', 'testlock')
+        self.storage.setlock(self.endpoint, self.homepath + '/testlock', self.userid, 'test app', encodeLock('testlock'))
         l = self.storage.getlock(self.endpoint, self.homepath + '/testlock', self.userid)  # noqa: E741
         self.assertIsInstance(l, dict)
-        self.assertEqual(l['lock_id'], 'testlock')
+        self.assertEqual(l['lock_id'], encodeLock('testlock'))
         self.assertEqual(l['app_name'], 'test app')
         self.assertIsInstance(l['expiration'], dict)
         self.assertIsInstance(l['expiration']['seconds'], int)
         with self.assertRaises(IOError) as context:
             self.storage.setlock(self.endpoint, self.homepath + '/testlock', self.userid, 'mismatched app', 'mismatchlock')
         self.assertIn(EXCL_ERROR, str(context.exception))
-        self.storage.unlock(self.endpoint, self.homepath + '/testlock', self.userid, 'test app', 'testlock')
+        self.storage.unlock(self.endpoint, self.homepath + '/testlock', self.userid, 'test app', encodeLock('testlock'))
         self.storage.removefile(self.endpoint, self.homepath + '/testlock', self.userid, force=True)
 
     def test_refresh_lock(self):
@@ -302,8 +303,9 @@ class TestStorage(unittest.TestCase):
         self.storage.writefile(self.endpoint, self.homepath + '/testlockop', self.userid, databuf, -1, None)
         statInfo = self.storage.stat(self.endpoint, self.homepath + '/testlockop', self.userid)
         self.assertIsInstance(statInfo, dict)
-        self.storage.setlock(self.endpoint, self.homepath + '/testlockop', self.userid, 'test app', 'testlock')
-        self.storage.writefile(self.endpoint, self.homepath + '/testlockop', self.userid, databuf, -1, ('test app', 'testlock'))
+        lock_payload = "{'foo': 'bar', 'xyz': 123, 'data': {'a': 'b'}}"
+        self.storage.setlock(self.endpoint, self.homepath + '/testlockop', self.userid, 'test app', encodeLock(lock_payload))
+        self.storage.writefile(self.endpoint, self.homepath + '/testlockop', self.userid, databuf, -1, ('test app', encodeLock(lock_payload)))
         with self.assertRaises(IOError):
             # Note that different interfaces raise exceptions on either mismatching app xor mismatching lock payload,
             # this is why we test that both mismatch. Could be improved, though we specifically care about the lock paylaod.
@@ -328,14 +330,14 @@ class TestStorage(unittest.TestCase):
         except IOError as e:
             if str(e) == EXCL_ERROR:
                 pass
-        self.storage.refreshlock(self.endpoint, self.homepath + '/testlockop', self.userid, 'test app', 'testlock')
+        self.storage.refreshlock(self.endpoint, self.homepath + '/testlockop', self.userid, 'test app', encodeLock(lock_payload))
         with self.assertRaises(IOError):
             self.storage.refreshlock(self.endpoint, self.homepath + '/testlockop', self.userid, 'mismatched app', 'mismatchlock')
         next(self.storage.readfile(self.endpoint, self.homepath + '/testlockop', self.userid, None))
         with self.assertRaises(IOError):
             self.storage.writefile(self.endpoint, self.homepath + '/testlockop', self.userid, databuf, -1, None)
         self.storage.renamefile(self.endpoint, self.homepath + '/testlockop', self.homepath + '/testlockop_renamed',
-                                self.userid, ('test app', 'testlock'))
+                                self.userid, ('test app', encodeLock(lock_payload)))
         self.storage.removefile(self.endpoint, self.homepath + '/testlockop_renamed', self.userid)
 
     def test_expired_locks(self):
