@@ -210,8 +210,10 @@ def setLock(fileid, reqheaders, acctok):
 
             # create a LibreOffice-compatible lock file for interoperability purposes, making sure to
             # not overwrite any existing or being created lock
-            lockcontent = ',Collaborative Online Editor,%s,%s,WOPIServer;' % \
-                          (srv.wopiurl, time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())))
+            lockcontent = ',%s via web collaboration,%s,%s,wopiserver;' % \
+                          (acctok['wopiuser'].split('!')[0],
+                           srv.config.get('general', 'brandingname', fallback='cernbox').lower(),
+                           time.strftime('%d.%m.%Y %H:%M', time.localtime(time.time())))
             st.writefile(acctok['endpoint'], utils.getLibreOfficeLockName(fn), acctok['userid'],
                          lockcontent, -1, None, islock=True)
         except IOError as e:
