@@ -1,4 +1,9 @@
-## Changelog for the WOPI server
+## Changelog for the wopiserver
+
+### Mon Nov 24 2025 - v11.2.0
+- Implemented CodiMD authorization headers (#186, #187)
+- Certified cs3 storage interface
+- Improved testing
 
 ### Thu Sep  4 2025 - v11.1.0
 - Add support for no versioning on save (#180)
