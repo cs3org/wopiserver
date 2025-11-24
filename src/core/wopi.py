@@ -105,7 +105,8 @@ def checkFileInfo(fileid, acctok):
         # populate app-specific metadata
         if srv.config.get('apps', 'earlyfeatures', fallback='False').upper() == 'TRUE':
             fmd['AllowEarlyFeatures'] = True
-        fmd['ComplianceDomainPrefix'] = srv.config.get('apps', 'compliancedomain', fallback='euc')
+        if srv.config.has_option('apps', 'compliancedomain'):
+            fmd['ComplianceDomainPrefix'] = srv.config.get('apps', 'compliancedomain')
         # the following is to enable the 'Edit in Word/Excel/PowerPoint' (desktop) action (probably broken)
         try:
             fmd['ClientUrl'] = srv.config.get('general', 'webdavurl') + '/' + acctok['filename']
