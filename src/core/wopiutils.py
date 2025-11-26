@@ -297,7 +297,7 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefn=None):
             lolockstat = st.statx(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'])
             lolock = next(st.readfile(acctok['endpoint'], getLibreOfficeLockName(acctok['filename']), acctok['userid'], None))
             lolock = lolock.decode()
-            if 'WOPIServer' not in lolock:
+            if 'wopiserver' not in lolock:
                 lolockholder = lolock.split(',')[1] if ',' in lolock else lolockstat['ownerid']
                 log.info('msg="Found existing LibreOffice lock" lockop="%s" user="%s" filename="%s" token="%s" '
                          'lockmtime="%ld" holder="%s"' %
