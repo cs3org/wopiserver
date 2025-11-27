@@ -44,8 +44,7 @@ def checkFileInfo(fileid, acctok):
         hosteurl = srv.config.get('general', 'hostediturl', fallback=None)
         if hosteurl:
             fmd['HostEditUrl'] = utils.generateUrlFromTemplate(hosteurl, acctok)
-            # for the PostMessage origin, use the folderurl if given and not empty, else the editurl
-            pmhost = urlparse(acctok['folderurl'] if len(acctok['folderurl']) > 1 else fmd['HostEditUrl'])
+            pmhost = urlparse(fmd['HostEditUrl'])
             fmd['PostMessageOrigin'] = pmhost.scheme + '://' + pmhost.netloc
             fmd['EditModePostMessage'] = fmd['EditNotificationPostMessage'] = True
         else:
@@ -82,9 +81,9 @@ def checkFileInfo(fileid, acctok):
         fmd['UserId'] = acctok['wopiuser'].split('!')[-1]  # typically same as OwnerId; different when accessing shared documents
         fmd['Size'] = statInfo['size']
         fmd['LastModifiedTime'] = str(datetime.fromtimestamp(int(statInfo['mtime']))) + '.000'
-        # note that in ownCloud 10 the version is generated as: `'V' + etag + checksum`
+        # note that in ownCloud 10 the version is generated as: `'V' + etag + checksum`. Here etag is `version:checksum`.
         fmd['Version'] = f"v{statInfo['etag']}"
-        fmd['SupportsExtendedLockLength'] = fmd['SupportsGetLock'] = True
+        fmd['SupportsExtendedLockLength'] = fmd['SupportsGetLock'] = fmd['SupportsCoauth'] = True
         fmd['SupportsUpdate'] = fmd['UserCanWrite'] = fmd['SupportsLocks'] = \
             fmd['SupportsDeleteFile'] = acctok['viewmode'] in (utils.ViewMode.READ_WRITE, utils.ViewMode.PREVIEW)
         fmd['ReadOnly'] = not fmd['SupportsUpdate']
@@ -97,6 +96,16 @@ def checkFileInfo(fileid, acctok):
             acctok['usertype'] != utils.UserType.REGULAR
         fmd['SupportsRename'] = fmd['UserCanRename'] = enablerename and \
             acctok['viewmode'] in (utils.ViewMode.READ_WRITE, utils.ViewMode.PREVIEW)
+        fmd['AccessTokenExpiry'] = acctok['exp'] * 1000
+        fmd['FileGeoLocationCode'] = fmd['RealTimeChannelEndpointUrl'] = \
+            fmd['OfficeCollaborationServiceEndpointUrl'] = ''   # to please the wopi validator
+        fmd['SharingStatus'] = 'Shared'
+        fmd['ServerTime'] = int(time.time()) * 1000
+        try:
+            fmd['SequenceNumber'] = int(statInfo['etag'][:statInfo['etag'].find(':')])
+        except (ValueError, AttributeError):
+            log.warning('msg="Failed to extract SequenceNumber from etag" ' +
+                        f'token="{flask.request.args["access_token"][-20:]}" etag="{statInfo["etag"]}"')
         fmd['SupportsUserInfo'] = True
         uinfo = statInfo['xattrs'].get(utils.USERINFOKEY + '.' + acctok['wopiuser'].split('!')[0])
         if uinfo:
@@ -528,7 +537,7 @@ def renameFile(fileid, reqheaders, acctok):
         # send the response as JSON
         return flask.Response(json.dumps(renamemd), mimetype='application/json')
     except IOError as e:
-        log.warn(f"msg=\"RenameFile\" token=\"{flask.request.args['access_token'][-20:]}\" error=\"{e}\"")
+        log.warning(f"msg=\"RenameFile\" token=\"{flask.request.args['access_token'][-20:]}\" error=\"{e}\"")
         resp = flask.Response()
         if common.ENOENT_MSG in str(e):
             resp.headers['X-WOPI-InvalidFileNameError'] = 'File not found'
