@@ -111,7 +111,7 @@ def stat(endpoint, fileref, userid):
         "ownerid": statInfo.owner.opaque_id + "@" + statInfo.owner.idp,
         "size": statInfo.size,
         "mtime": statInfo.mtime.seconds,
-        "etag": statInfo.etag,
+        "etag": statInfo.etag.strip('"'),
         "xattrs": statInfo.arbitrary_metadata.metadata,
     }
 
