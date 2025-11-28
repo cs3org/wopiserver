@@ -455,7 +455,7 @@ def putRelative(fileid, reqheaders, acctok):
     inode, newacctok, _ = utils.generateAccessToken(acctok['userid'], targetName, utils.ViewMode.READ_WRITE,
                                                     (acctok['username'], acctok['wopiuser'], utils.UserType(acctok['usertype'])),
                                                     acctok['folderurl'], acctok['endpoint'],
-                                                    (acctok['appname'], acctok['appediturl'], acctok['appviewurl']),
+                                                    (acctok['appname'], acctok.get('appediturl'), acctok.get('appviewurl')),
                                                     acctok.get('trace', 'N/A'))
     # prepare and send the response as JSON
     _, newfileid = common.decodeinode(inode)

@@ -247,9 +247,12 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
     tokmd = {
         'userid': userid, 'wopiuser': wopiuser, 'usertype': usertype.value, 'filename': fname, 'fileid': fileid,
         'username': friendlyname, 'viewmode': viewmode.value, 'folderurl': folderurl, 'endpoint': endpoint,
-        'appname': appname, 'appediturl': appediturl, 'appviewurl': appviewurl, 'trace': trace,
+        'appname': appname, 'trace': trace,
         'exp': exptime, 'iss': f'cs3org:wopiserver:{WOPIVER}'    # standard claims
     }
+    if not srv.config.has_option('general', 'hostediturl') or not srv.config.has_option('general', 'hostviewurl'):
+        tokmd['appediturl'] = appediturl
+        tokmd['appviewurl'] = appviewurl
     acctok = jwt.encode(tokmd, srv.wopisecret, algorithm='HS256')
     srv.allusers.add(userid)
     log.info('msg="Access token generated" trace="%s" userid="%s" wopiuser="%s" friendlyname="%s" usertype="%s" mode="%s" '
