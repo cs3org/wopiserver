@@ -22,7 +22,7 @@ jobs:
         - file: wopiserver.Dockerfile
           tags: ${{ vars.DOCKERHUB_ORGANIZATION }}/wopiserver:${{ github.ref_name }}-arm64
           platform: linux/arm64
-          image: python:3.14-slim-buster
+          image: python:3.13-slim-buster
           push: ${{ github.event_name != 'workflow_dispatch' }}
         - file: wopiserver-xrootd.Dockerfile
           tags: ${{ vars.DOCKERHUB_ORGANIZATION }}/wopiserver:${{ github.ref_name }}-xrootd
