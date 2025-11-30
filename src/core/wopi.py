@@ -35,7 +35,7 @@ def checkFileInfo(fileid, acctok):
         acctok['usertype'] = utils.UserType(acctok['usertype'])
         statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
 
-        # populate metadata for this file
+        # ** Populate general metadata for this file **
         fmd = {}
         fmd['BaseFileName'] = fmd['BreadcrumbDocName'] = os.path.basename(acctok['filename'])
         fmd['FileExtension'] = os.path.splitext(acctok['filename'])[1]
@@ -72,9 +72,6 @@ def checkFileInfo(fileid, acctok):
         if acctok['viewmode'] != utils.ViewMode.VIEW_ONLY and srv.config.get('general', 'downloadurl', fallback=None):
             fmd['DownloadUrl'] = fmd['FileUrl'] = '%s?access_token=%s' % \
                                                   (srv.config.get('general', 'downloadurl'), flask.request.args['access_token'])
-        if srv.config.get('apps', 'businessflow', fallback='True').upper() == 'TRUE':
-            # according to Microsoft, this must be enabled for all users
-            fmd['LicenseCheckForEditIsEnabled'] = True
         fmd['BreadcrumbBrandName'] = srv.config.get('general', 'brandingname', fallback=None)
         fmd['BreadcrumbBrandUrl'] = srv.config.get('general', 'brandingurl', fallback=None)
         fmd['OwnerId'] = statInfo['ownerid']
@@ -83,6 +80,9 @@ def checkFileInfo(fileid, acctok):
         fmd['LastModifiedTime'] = str(datetime.fromtimestamp(int(statInfo['mtime']))) + '.000'
         # note that in ownCloud 10 the version is generated as: `'V' + etag + checksum`. Here etag is `version:checksum`.
         fmd['Version'] = f"v{statInfo['etag']}"
+        fmd['AccessTokenExpiry'] = acctok['exp'] * 1000
+        fmd['ServerTime'] = int(time.time()) * 1000
+
         fmd['SupportsExtendedLockLength'] = fmd['SupportsGetLock'] = fmd['SupportsCoauth'] = True
         fmd['SupportsUpdate'] = fmd['UserCanWrite'] = fmd['SupportsLocks'] = \
             fmd['SupportsDeleteFile'] = acctok['viewmode'] in (utils.ViewMode.READ_WRITE, utils.ViewMode.PREVIEW)
@@ -96,32 +96,40 @@ def checkFileInfo(fileid, acctok):
             acctok['usertype'] != utils.UserType.REGULAR
         fmd['SupportsRename'] = fmd['UserCanRename'] = enablerename and \
             acctok['viewmode'] in (utils.ViewMode.READ_WRITE, utils.ViewMode.PREVIEW)
-        fmd['AccessTokenExpiry'] = acctok['exp'] * 1000
-        fmd['FileGeoLocationCode'] = fmd['RealTimeChannelEndpointUrl'] = \
-            fmd['OfficeCollaborationServiceEndpointUrl'] = ''   # to please the wopi validator
-        fmd['SharingStatus'] = 'Shared'
-        fmd['ServerTime'] = int(time.time()) * 1000
-        try:
-            fmd['SequenceNumber'] = int(statInfo['etag'][:statInfo['etag'].find(':')])
-        except (ValueError, AttributeError):
-            log.warning('msg="Failed to extract SequenceNumber from etag" ' +
-                        f'token="{flask.request.args["access_token"][-20:]}" etag="{statInfo["etag"]}"')
         fmd['SupportsUserInfo'] = True
         uinfo = statInfo['xattrs'].get(utils.USERINFOKEY + '.' + acctok['wopiuser'].split('!')[0])
         if uinfo:
             fmd['UserInfo'] = uinfo
 
-        # populate app-specific metadata
+        # ** Populate app-specific metadata **
+        if srv.config.get('apps', 'businessflow', fallback='True').upper() == 'TRUE':
+            # according to Microsoft, this must be enabled for all users
+            fmd['LicenseCheckForEditIsEnabled'] = True
         if srv.config.get('apps', 'earlyfeatures', fallback='False').upper() == 'TRUE':
             fmd['AllowEarlyFeatures'] = True
         if srv.config.has_option('apps', 'compliancedomain'):
             fmd['ComplianceDomainPrefix'] = srv.config.get('apps', 'compliancedomain')
+
+        # 28/11/2025: the following properties are CSPP+ related and necessary only when running the wopivalidator,
+        # with 'SequenceNumber' even breaking normal CSPP Office apps:
+        # learn.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/rest/files/checkfileinfo/checkfileinfo-csppp
+        if '.wopitest' in fmd['BaseFileName']:
+            fmd['SharingStatus'] = 'Shared'
+            fmd['FileGeoLocationCode'] = srv.config.get('apps', 'compliancedomain', fallback='euc')
+            fmd['RealTimeChannelEndpointUrl'] = fmd['OfficeCollaborationServiceEndpointUrl'] = ''
+            try:
+                fmd['SequenceNumber'] = int(statInfo['etag'][:statInfo['etag'].find(':')])
+            except (ValueError, AttributeError):
+                log.warning('msg="Failed to extract SequenceNumber from etag" ' +
+                            f'token="{flask.request.args["access_token"][-20:]}" etag="{statInfo["etag"]}"')
+
         # the following is to enable the 'Edit in Word/Excel/PowerPoint' (desktop) action (probably broken)
         try:
             fmd['ClientUrl'] = srv.config.get('general', 'webdavurl') + '/' + acctok['filename']
         except configparser.NoOptionError:
             # if no WebDAV URL is provided, ignore this setting
             pass
+
         # extensions for Collabora Online
         if 'Collabora' in acctok['appname']:
             fmd['EnableOwnerTermination'] = True
@@ -129,14 +137,14 @@ def checkFileInfo(fileid, acctok):
             if srv.config.get('apps', 'codedisableexport', fallback='False').upper() == 'TRUE':
                 fmd['UserCanNotWriteRelative'] = fmd['DisableExport'] = True
 
+        # ** Response and log **
         res = flask.Response(json.dumps(fmd), mimetype='application/json')
-
-        # redact sensitive metadata for the logs
         if srv.config.get('general', 'loglevel') != 'Debug':
             fmd['HostViewUrl'] = fmd['HostEditUrl'] = fmd['DownloadUrl'] = fmd['FileUrl'] = \
                 fmd['BreadcrumbBrandUrl'] = fmd['FileSharingUrl'] = '_redacted_'
         log.info(f"msg=\"File metadata response\" token=\"{flask.request.args['access_token'][-20:]}\" metadata=\"{fmd}\"")
         return res
+
     except IOError as e:
         log.info('msg="Requested file not found" filename="%s" token="%s" details="%s"' %
                  (acctok['filename'], flask.request.args['access_token'][-20:], e))
