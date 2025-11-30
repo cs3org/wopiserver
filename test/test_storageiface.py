@@ -19,7 +19,7 @@ from getpass import getpass
 sys.path.append('src')         # for tests out of the git repo
 sys.path.append('/app')        # for tests within the Docker image
 from core.commoniface import EXCL_ERROR, ENOENT_MSG  # noqa: E402
-from core.wopiutils import encodeLock
+from core.wopiutils import encodeLock  # noqa: E402
 
 databuf = 'ebe5tresbsrdthbrdhvdtr'
 
@@ -177,7 +177,8 @@ class TestStorage(unittest.TestCase):
             self.storage.stat(self.endpoint, self.homepath + '/testwrite&rm', self.userid)
 
     def test_write_noversion(self):
-        '''Writes a text file and overwrites it again with the noversion flag on, validating that the content matches (no check is performed on the versioned file)'''
+        '''Writes a text file and overwrites it again with the noversion flag on, validating that
+           the content matches (no check is performed on the versioned file)'''
         content = 'bla\n'
         self.storage.writefile(self.endpoint, self.homepath + '/test.txt', self.userid, content, -1, None)
         content = 'blabla\n'
@@ -305,7 +306,8 @@ class TestStorage(unittest.TestCase):
         self.assertIsInstance(statInfo, dict)
         lock_payload = "{'foo': 'bar', 'xyz': 123, 'data': {'a': 'b'}}"
         self.storage.setlock(self.endpoint, self.homepath + '/testlockop', self.userid, 'test app', encodeLock(lock_payload))
-        self.storage.writefile(self.endpoint, self.homepath + '/testlockop', self.userid, databuf, -1, ('test app', encodeLock(lock_payload)))
+        self.storage.writefile(self.endpoint, self.homepath + '/testlockop', self.userid, databuf, -1,
+                               ('test app', encodeLock(lock_payload)))
         with self.assertRaises(IOError):
             # Note that different interfaces raise exceptions on either mismatching app xor mismatching lock payload,
             # this is why we test that both mismatch. Could be improved, though we specifically care about the lock paylaod.

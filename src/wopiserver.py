@@ -549,7 +549,7 @@ def bridgeRoot(docid):
         except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError, KeyError) as e:
             Wopi.log.info('msg="Bridge: expired or malformed token" client="%s" requestedUrl="%s" error="%s" token="%s"' %
                           (flask.request.remote_addr, flask.request.base_url, e,
-                          (flask.request.args['access_token'] if 'access_token' in flask.request.args else 'N/A')))
+                           (flask.request.args['access_token'] if 'access_token' in flask.request.args else 'N/A')))
             return 'Missing or invalid access token', http.client.UNAUTHORIZED
     else:
         # this is used via web hooks by the apps to save the document
