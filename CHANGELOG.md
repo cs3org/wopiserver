@@ -1,7 +1,8 @@
 ## Changelog for the wopiserver
 
-### Mon Nov 24 2025 - v11.2.0
+### Fri Nov 28 2025 - v11.2.0
 - Implemented CodiMD authorization headers (#186, #187)
+- Added extra properties to pass the wopivalidator tests (#190)
 - Certified cs3 storage interface
 - Improved testing
 
