@@ -135,8 +135,13 @@ def _validatelock(filepath, currlock, lockmd, op, log):
     if lockmd:
         appname, value = lockmd
     try:
-        if not currlock:
-            raise IOError(common.EXCL_ERROR)
+        if not currlock or currlock['expiration']['seconds'] < time.time():
+            if op == 'writefile':
+                # overwriting a file with a missing or expired lock is ok
+                return
+            else:
+                # other operations require a valid pre-existing lock
+                raise IOError(common.EXCL_ERROR)
         if appname and currlock['app_name'] != appname:
             raise IOError(common.EXCL_ERROR + f", file is locked by {currlock['app_name']}")
         if value != currlock['lock_id']:
