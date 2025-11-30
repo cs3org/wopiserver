@@ -349,25 +349,30 @@ class TestStorage(unittest.TestCase):
         self.storage.writefile(self.endpoint, self.homepath + '/testelock', self.userid, databuf, -1, None)
         statInfo = self.storage.stat(self.endpoint, self.homepath + '/testelock', self.userid)
         self.assertIsInstance(statInfo, dict)
-        self.storage.setlock(self.endpoint, self.homepath + '/testelock', self.userid, 'test app', 'testlock')
+        # 1: get an expired lock
+        self.storage.setlock(self.endpoint, self.homepath + '/testelock', self.userid, 'test app', 'testlock1')
         time.sleep(3.1)
         l = self.storage.getlock(self.endpoint, self.homepath + '/testelock', self.userid)  # noqa: E741
         self.assertEqual(l, None)
+        # 2: set a new lock over an expired one
         self.storage.setlock(self.endpoint, self.homepath + '/testelock', self.userid, 'test app', 'testlock2')
-        time.sleep(3.1)
-        self.storage.setlock(self.endpoint, self.homepath + '/testelock', self.userid, 'test app', 'testlock3')
         l = self.storage.getlock(self.endpoint, self.homepath + '/testelock', self.userid)  # noqa: E741
         self.assertIsInstance(l, dict)
-        self.assertEqual(l['lock_id'], 'testlock3')
+        self.assertEqual(l['lock_id'], 'testlock2')
+        # 3: refresh an expired lock, should fail
         time.sleep(3.1)
         with self.assertRaises(IOError) as context:
-            self.storage.refreshlock(self.endpoint, self.homepath + '/testelock', self.userid, 'test app', 'testlock4')
+            self.storage.refreshlock(self.endpoint, self.homepath + '/testelock', self.userid, 'test app', 'testlock2')
         self.assertEqual(EXCL_ERROR, str(context.exception))
-        self.storage.setlock(self.endpoint, self.homepath + '/testelock', self.userid, 'test app', 'testlock5')
-        time.sleep(3.1)
+        # 4: unlock an expired lock, should fail
         with self.assertRaises(IOError) as context:
-            self.storage.unlock(self.endpoint, self.homepath + '/testelock', self.userid, 'test app', 'testlock5')
+            self.storage.unlock(self.endpoint, self.homepath + '/testelock', self.userid, 'test app', 'testlock2')
         self.assertEqual(EXCL_ERROR, str(context.exception))
+        # 5: overwrite a file having an expired lock with a mismatched one or without lock metadata
+        self.storage.writefile(self.endpoint, self.homepath + '/testelock', self.userid, databuf, -1,
+                               ('mismatched app', 'mismatched lock'))
+        self.storage.writefile(self.endpoint, self.homepath + '/testelock', self.userid, databuf, -1, None)
+        # cleanup
         self.storage.removefile(self.endpoint, self.homepath + '/testelock', self.userid)
 
     def test_remove_nofile(self):
