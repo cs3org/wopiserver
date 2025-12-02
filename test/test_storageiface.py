@@ -243,7 +243,7 @@ class TestStorage(unittest.TestCase):
         self.assertIsInstance(l['expiration'], dict)
         self.assertIsInstance(l['expiration']['seconds'], int)
         with self.assertRaises(IOError) as context:
-            self.storage.setlock(self.endpoint, self.homepath + '/testlock', self.userid, 'mismatched app', 'mismatchlock')
+            self.storage.setlock(self.endpoint, self.homepath + '/testlock', self.userid, 'test app', 'mismatchlock')
         self.assertIn(EXCL_ERROR, str(context.exception))
         self.storage.unlock(self.endpoint, self.homepath + '/testlock', self.userid, 'test app', encodeLock('testlock'))
         self.storage.removefile(self.endpoint, self.homepath + '/testlock', self.userid, force=True)
