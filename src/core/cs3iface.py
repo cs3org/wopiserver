@@ -147,7 +147,7 @@ def readfile(endpoint, filepath, userid, lockid):
         yield chunk
 
 
-def writefile(endpoint, filepath, userid, content, size, lockmd, noversion=False):
+def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False, noversion=False):
     """Write a file using the given userid as access token. The entire content is written
     and any pre-existing file is deleted (or moved to the previous version if noversion=False).
     The islock flag is currently not supported. The backend should at least support
@@ -155,6 +155,8 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, noversion=False
     app_name = lock_id = ''
     if lockmd:
         app_name, lock_id = lockmd
+    if islock:
+        log.warning('msg="islock flag not supported for CS3 storage" filepath="%s"' % filepath)
     resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
     client.file.write_file(Auth.check_token(userid), resource, content, size,
                            app_name, lock_id, disable_versioning=noversion)
