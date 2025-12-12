@@ -69,7 +69,8 @@ def checkFileInfo(fileid, acctok):
             fmd['IsAnonymousUser'] = False
             fmd['UserFriendlyName'] = acctok['username']
             fmd['BreadcrumbFolderName'] = 'ScienceMesh share' if acctok['usertype'] == utils.UserType.OCM else 'Parent folder'
-        if acctok['viewmode'] != utils.ViewMode.VIEW_ONLY and srv.config.get('general', 'downloadurl', fallback=None):
+        if acctok['viewmode'] not in (utils.ViewMode.VIEW_ONLY, utils.ViewMode.EMBEDDED) and \
+            srv.config.get('general', 'downloadurl', fallback=None):
             fmd['DownloadUrl'] = fmd['FileUrl'] = '%s?access_token=%s' % \
                                                   (srv.config.get('general', 'downloadurl'), flask.request.args['access_token'])
         fmd['BreadcrumbBrandName'] = srv.config.get('general', 'brandingname', fallback=None)
@@ -87,12 +88,12 @@ def checkFileInfo(fileid, acctok):
         fmd['SupportsUpdate'] = fmd['UserCanWrite'] = fmd['SupportsLocks'] = \
             fmd['SupportsDeleteFile'] = acctok['viewmode'] in (utils.ViewMode.READ_WRITE, utils.ViewMode.PREVIEW)
         fmd['ReadOnly'] = not fmd['SupportsUpdate']
-        fmd['RestrictedWebViewOnly'] = acctok['viewmode'] == utils.ViewMode.VIEW_ONLY
+        fmd['RestrictedWebViewOnly'] = acctok['viewmode'] in (utils.ViewMode.VIEW_ONLY, utils.ViewMode.EMBEDDED)
         # SaveAs functionality is disabled for anonymous and federated users, as they have no personal space where to save
         # as an alternate location and we cannot assume that saving to the same folder is allowed (e.g. single-file shares).
         # Instead, regular (authenticated) users are offered a SaveAs (unless in view-only mode), where the operation
         # is executed to the user's home if no access is given to the same folder where the file is.
-        fmd['UserCanNotWriteRelative'] = acctok['viewmode'] == utils.ViewMode.VIEW_ONLY or \
+        fmd['UserCanNotWriteRelative'] = acctok['viewmode'] in (utils.ViewMode.VIEW_ONLY, utils.ViewMode.EMBEDDED) or \
             acctok['usertype'] != utils.UserType.REGULAR
         fmd['SupportsRename'] = fmd['UserCanRename'] = enablerename and \
             acctok['viewmode'] in (utils.ViewMode.READ_WRITE, utils.ViewMode.PREVIEW)
@@ -133,7 +134,8 @@ def checkFileInfo(fileid, acctok):
         # extensions for Collabora Online
         if 'Collabora' in acctok['appname']:
             fmd['EnableOwnerTermination'] = True
-            fmd['DisableExport'] = fmd['DisableCopy'] = fmd['DisablePrint'] = acctok['viewmode'] == utils.ViewMode.VIEW_ONLY
+            fmd['DisableExport'] = fmd['DisableCopy'] = fmd['DisablePrint'] = acctok['viewmode'] in (utils.ViewMode.VIEW_ONLY,
+                utils.ViewMode.EMBEDDED)
             if srv.config.get('apps', 'codedisableexport', fallback='False').upper() == 'TRUE':
                 fmd['UserCanNotWriteRelative'] = fmd['DisableExport'] = True
 
@@ -377,7 +379,7 @@ def putRelative(fileid, reqheaders, acctok):
              (acctok['userid'][-20:], acctok['filename'], fileid, suggTarget, relTarget,
               overwriteTarget, reqheaders.get('X-WOPI-TimeStamp'), flask.request.args['access_token'][-20:]))
 
-    if acctok['viewmode'] == utils.ViewMode.VIEW_ONLY or acctok['usertype'] != utils.UserType.REGULAR:
+    if acctok['viewmode'] in (utils.ViewMode.VIEW_ONLY, utils.ViewMode.EMBEDDED) or acctok['usertype'] != utils.UserType.REGULAR:
         # UNAUTHORIZED may seem better but the WOPI validator tests explicitly expect NOT_IMPLEMENTED
         return utils.createJsonResponse({'message': 'Unauthorized to perform PutRelative'}, http.client.NOT_IMPLEMENTED)
 

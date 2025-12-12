@@ -361,7 +361,7 @@ def iopOpenInApp():
         except bridge.FailedOpen as foe:
             return foe.msg, foe.statuscode
     else:
-        # the base app URL is the editor in READ_WRITE mode, and the viewer in READ_ONLY or PREVIEW mode
+        # the base app URL is the editor in READ_WRITE mode, and the viewer in READ_ONLY, PREVIEW or EMBEDDED mode
         # as the known WOPI applications all support switching from preview to edit mode
         res['app-url'] = appurl if vm == utils.ViewMode.READ_WRITE else appviewurl
         res['app-url'] += '%sWOPISrc=%s' % ('&' if '?' in res['app-url'] else '?',

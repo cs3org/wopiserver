@@ -57,6 +57,8 @@ class ViewMode(Enum):
     READ_WRITE = "VIEW_MODE_READ_WRITE"
     # The file can be downloaded and updated, and the app should be shown in preview mode
     PREVIEW = "VIEW_MODE_PREVIEW"
+    # The file can be viewed in embedded mode, no editing is allowed
+    EMBEDDED = "VIEW_MODE_EMBEDDED"
 
 
 class UserType(Enum):
