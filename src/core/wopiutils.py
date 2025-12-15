@@ -118,8 +118,8 @@ class JsonLogger:
 def logGeneralExceptionAndReturn(ex, req):
     '''Convenience function to log a stack trace and return HTTP 500'''
     ex_type, ex_value, ex_traceback = sys.exc_info()
-    log.critical('msg="Unexpected exception caught" exception="%s" type="%s" traceback="%s" client="%s" requestedUrl="%s"' %
-                 (ex, ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback),
+    log.critical('msg="Unexpected exception caught" type="%s" traceback="%s" client="%s" requestedUrl="%s"' %
+                 (ex_type, traceback.format_exception(ex_type, ex_value, ex_traceback),
                   flask.request.headers.get(REALIPHEADER, flask.request.remote_addr), req.url))
     return 'Internal error, please contact support', http.client.INTERNAL_SERVER_ERROR
 
