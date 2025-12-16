@@ -83,7 +83,7 @@ def stat(endpoint, fileref, userid):
     try:
         resource = Resource.from_file_ref_and_endpoint(fileref, endpoint)
         statInfo = client.file.stat(Auth.check_token(userid), resource)
-    except (cs3client.exceptions.UnknownException, Exception) as e:
+    except cs3client.exceptions.UnknownException as e:
         log.error(
             'msg="Invoked stat" endpoint="%s" fileref="%s" exception="%s"' %
             (endpoint, fileref, str(e).replace('\n', ' ').replace('"', ''))

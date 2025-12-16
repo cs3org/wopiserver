@@ -8,7 +8,7 @@ requests
 more_itertools
 prometheus-flask-exporter
 waitress
-cs3client>=1.5
+cs3client>=1.6
 wheel>=0.38.0 # not directly required, pinned by Snyk to avoid a vulnerability
 setuptools>=78.1.1 # not directly required, pinned by Snyk to avoid a vulnerability
 werkzeug>=3.0.1 # not directly required, pinned by Snyk to avoid a vulnerability
