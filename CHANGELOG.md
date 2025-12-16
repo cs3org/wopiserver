@@ -1,5 +1,9 @@
 ## Changelog for the wopiserver
 
+### Tue Dec 16 2025 - v11.3.0
+- Added support for embedded views
+- Improved exception handling and logging for cs3 storage
+
 ### Fri Nov 28 2025 - v11.2.0
 - Implemented CodiMD authorization headers (#186, #187)
 - Added extra properties to pass the wopivalidator tests (#190)
