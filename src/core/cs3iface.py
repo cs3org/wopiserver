@@ -80,8 +80,15 @@ def authenticate_for_test(userid, userpwd):
 
 
 def stat(endpoint, fileref, userid):
-    resource = Resource.from_file_ref_and_endpoint(fileref, endpoint)
-    statInfo = client.file.stat(Auth.check_token(userid), resource)
+    try:
+        resource = Resource.from_file_ref_and_endpoint(fileref, endpoint)
+        statInfo = client.file.stat(Auth.check_token(userid), resource)
+    except cs3client.exceptions.UnknownException as e:
+        log.error(
+            'msg="Invoked stat" endpoint="%s" fileref="%s" exception="%s"' %
+            (endpoint, fileref, str(e).replace('\n', ' '))
+        )
+        raise IOError(f"Stat failed for {fileref}") from e
     if statInfo.type == cs3spr.RESOURCE_TYPE_CONTAINER:
         log.info(
             'msg="Invoked stat" endpoint="%s" fileref="%s" trace="%s" result="ISDIR"'
