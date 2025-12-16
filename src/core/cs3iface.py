@@ -86,7 +86,7 @@ def stat(endpoint, fileref, userid):
     except (cs3client.exceptions.UnknownException, Exception) as e:
         log.error(
             'msg="Invoked stat" endpoint="%s" fileref="%s" exception="%s"' %
-            (endpoint, fileref, str(e).replace('\n', ' '))
+            (endpoint, fileref, str(e).replace('\n', ' ').replace('"', ''))
         )
         raise IOError(f"Stat failed for {fileref}") from e
     if statInfo.type == cs3spr.RESOURCE_TYPE_CONTAINER:
