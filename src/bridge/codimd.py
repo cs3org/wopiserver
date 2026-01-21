@@ -118,7 +118,6 @@ def _unzipattachments(inputbuf, docid, wopisrc, acctok):
             mddoc = mddoc.replace(b'/byoa/codimd/', b'/')
         return mddoc
     except zipfile.BadZipFile as e:
-        log.warn(f'msg="File is not in a valid zip format" exception="{e}"')
         raise AppFailure('The file is not in the expected zipped format') from e
     except requests.exceptions.RequestException as e:
         log.error(f'msg="Exception raised attempting to connect to CodiMD" exception="{e}"')
