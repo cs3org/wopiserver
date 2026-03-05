@@ -91,8 +91,8 @@ def stat(endpoint, fileref, userid):
         raise IOError(f"Stat failed for {fileref}") from e
     if statInfo.type == cs3spr.RESOURCE_TYPE_CONTAINER:
         log.info(
-            'msg="Invoked stat" endpoint="%s" fileref="%s" trace="%s" result="ISDIR"'
-            % (endpoint, fileref, statInfo.status.trace)
+            'msg="Invoked stat" endpoint="%s" fileref="%s" result="ISDIR"'
+            % (endpoint, fileref)
         )
         raise IOError("Is a directory")
     if statInfo.type not in (
