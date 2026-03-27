@@ -134,6 +134,7 @@ def checkFileInfo(fileid, acctok):
         # extensions for Collabora Online
         if 'Collabora' in acctok['appname']:
             fmd['EnableOwnerTermination'] = True
+            fmd['IsAdminUser'] = False
             fmd['DisableExport'] = fmd['DisableCopy'] = fmd['DisablePrint'] = acctok['viewmode'] in (utils.ViewMode.VIEW_ONLY,
                                                                                                      utils.ViewMode.EMBEDDED)
             if srv.config.get('apps', 'codedisableexport', fallback='False').upper() == 'TRUE':

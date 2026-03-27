@@ -343,9 +343,9 @@ def iopOpenInApp():
 
     try:
         userid, wopiuser = storage.getuseridfromcreds(usertoken, wopiuser)
-        inode, acctok, vm = utils.generateAccessToken(userid, fileid, viewmode, (username, wopiuser, usertype), folderurl,
-                                                      endpoint, (appname, appurl, appviewurl),
-                                                      req.headers.get('X-Trace-Id', 'N/A'))
+        inode, acctok, vm, vmdetails = utils.generateAccessToken(userid, fileid, viewmode, (username, wopiuser, usertype),
+                                                                 folderurl, endpoint, (appname, appurl, appviewurl),
+                                                                 req.headers.get('X-Trace-Id', 'N/A'))
     except IOError as e:
         Wopi.log.info('msg="iopOpenInApp: remote error on generating token" client="%s" trace="%s" user="%s" '
                       'friendlyname="%s" mode="%s" endpoint="%s" reason="%s"' %
@@ -357,7 +357,7 @@ def iopOpenInApp():
         try:
             res['app-url'], res['form-parameters'] = bridge.appopen(utils.generateWopiSrc(inode), acctok,
                 (appname, appurl, url_unquote_plus(req.args.get('appinturl', appurl)), req.headers.get('ApiKey')),  # noqa: E128
-                 vm, usertoken)
+                vm, usertoken)
         except bridge.FailedOpen as foe:
             return foe.msg, foe.statuscode
     else:
@@ -370,6 +370,8 @@ def iopOpenInApp():
             # tells the app to enable the business flow if appropriate
             res['app-url'] += '&IsLicensedUser=1'
         res['form-parameters'] = {'access_token': acctok}
+        if vm != viewmode:
+            res['forced-viewmode-reason'] = vmdetails
 
     appforlog = res['app-url']
     if appforlog.find('access') > 0:
