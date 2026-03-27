@@ -68,9 +68,9 @@ def checkFileInfo(fileid, acctok):
         else:
             fmd['IsAnonymousUser'] = False
             fmd['UserFriendlyName'] = acctok['username']
-            fmd['BreadcrumbFolderName'] = 'ScienceMesh share' if acctok['usertype'] == utils.UserType.OCM else 'Parent folder'
+            fmd['BreadcrumbFolderName'] = 'Federated share' if acctok['usertype'] == utils.UserType.OCM else 'Parent folder'
         if acctok['viewmode'] not in (utils.ViewMode.VIEW_ONLY, utils.ViewMode.EMBEDDED) and \
-            srv.config.get('general', 'downloadurl', fallback=None):
+                srv.config.get('general', 'downloadurl', fallback=None):
             fmd['DownloadUrl'] = fmd['FileUrl'] = '%s?access_token=%s' % \
                                                   (srv.config.get('general', 'downloadurl'), flask.request.args['access_token'])
         fmd['BreadcrumbBrandName'] = srv.config.get('general', 'brandingname', fallback=None)
@@ -135,7 +135,7 @@ def checkFileInfo(fileid, acctok):
         if 'Collabora' in acctok['appname']:
             fmd['EnableOwnerTermination'] = True
             fmd['DisableExport'] = fmd['DisableCopy'] = fmd['DisablePrint'] = acctok['viewmode'] in (utils.ViewMode.VIEW_ONLY,
-                utils.ViewMode.EMBEDDED)
+                                                                                                     utils.ViewMode.EMBEDDED)
             if srv.config.get('apps', 'codedisableexport', fallback='False').upper() == 'TRUE':
                 fmd['UserCanNotWriteRelative'] = fmd['DisableExport'] = True
 
