@@ -237,15 +237,32 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
     exptime = int(time.time()) + srv.config.getint('general', 'tokenvalidity')
     fname = statinfo['filepath']
     fext = os.path.splitext(fname)[1].lower()
+
+    vmdetails = ''
     if 'Collabora' not in appname and viewmode == ViewMode.READ_WRITE and (
             fext in ('.doc', '.dot', '.xls', '.ppt', '.pps', '.csv') or
             fext[1:3] in ('od', 'ot') and srv.config.get('general', 'disablemswriteodf', fallback='False').upper() == 'TRUE'):
         # we're opening a legacy format file or an ODF (`.o[d|t]?`) and the app is not Collabora
         log.info(f"msg=\"Forcing read-only access to ODF/legacy formats\" filename=\"{fname}\"")
         viewmode = ViewMode.READ_ONLY
+        vmdetails = 'app does not support edit for this file type'
+    # if we're opening the file in edit mode, check for existing locks and downgrade to read-only if any is found
+    if viewmode in (ViewMode.READ_WRITE, ViewMode.PREVIEW) and \
+            srv.config.get('general', 'detectexternallocks', fallback='True').upper() == 'TRUE':
+        lock = retrieveWopiLock(fileid, 'genAccessToken', 'NA',
+                                {'filename': fname, 'userid': userid, 'endpoint': endpoint})
+        if lock[0] is not None and lock[0] != appname:
+            log.info(f'msg="Forcing read-only access due to existing lock" filename="{fname}" lock="{lock}" app="{appname}"')
+            viewmode = ViewMode.READ_ONLY
+            if lock[0] == EXTERNALLOCK:
+                vmdetails = f'read-only, opened exclusively by {lock[1]}'
+            else:
+                vmdetails = f'read-only, use app {lock[1]} to edit instead'
     if viewmode == ViewMode.PREVIEW and statinfo['size'] == 0:
         # override preview mode when a new file is being created
         viewmode = ViewMode.READ_WRITE
+        vmdetails = 'new file'
+
     tokmd = {
         'userid': userid, 'wopiuser': wopiuser, 'usertype': usertype.value, 'filename': fname, 'fileid': fileid,
         'username': friendlyname, 'viewmode': viewmode.value, 'folderurl': folderurl, 'endpoint': endpoint,
@@ -257,11 +274,12 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
         tokmd['appviewurl'] = appviewurl
     acctok = jwt.encode(tokmd, srv.wopisecret, algorithm='HS256')
     srv.allusers.add(userid)
+
     log.info('msg="Access token generated" trace="%s" userid="%s" wopiuser="%s" friendlyname="%s" usertype="%s" mode="%s" '
              'endpoint="%s" filename="%s" inode="%s" mtime="%s" folderurl="%s" appname="%s" expiration="%d" token="%s"' %
              (trace, userid[-20:], wopiuser, friendlyname, usertype, viewmode, endpoint, fname,
               statinfo['inode'], statinfo['mtime'], folderurl, appname, exptime, acctok[-20:]))
-    return statinfo['inode'], acctok, viewmode
+    return statinfo['inode'], acctok, viewmode, vmdetails
 
 
 def encodeLock(lock):
@@ -294,7 +312,7 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefn=None):
             mslockstat = st.stat(acctok['endpoint'], getMicrosoftOfficeLockName(acctok['filename']), acctok['userid'])
             log.info('msg="Found existing MS Office lock" lockop="%s" user="%s" filename="%s" token="%s" lockmtime="%ld"' %
                      (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, mslockstat['mtime']))
-            return EXTERNALLOCK, 'Microsoft Office for Desktop'
+            return EXTERNALLOCK, f'{mslockstat["ownerid"].split("@")[0]} via Microsoft Office for Desktop'
         except IOError:
             pass
         try:
@@ -308,7 +326,7 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefn=None):
                          'lockmtime="%ld" holder="%s"' %
                          (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok,
                           lolockstat['mtime'], lolockholder))
-                return EXTERNALLOCK, 'LibreOffice for Desktop'
+                return EXTERNALLOCK, f'{lolockholder} via LibreOffice for Desktop'
         except (IOError, StopIteration):
             pass
 
