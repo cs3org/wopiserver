@@ -1,5 +1,10 @@
 ## Changelog for the wopiserver
 
+### Thu Apr 23 2026 - v11.4.0
+- Added detection of external locks at open time (#195)
+- Updated dependencies
+- Improved logging
+
 ### Tue Dec 16 2025 - v11.3.0
 - Added support for embedded views
 - Improved exception handling and logging for cs3 storage
