@@ -245,7 +245,7 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
         # we're opening a legacy format file or an ODF (`.o[d|t]?`) and the app is not Collabora
         log.info(f"msg=\"Forcing read-only access to ODF/legacy formats\" filename=\"{fname}\"")
         viewmode = ViewMode.READ_ONLY
-        vmdetails = 'app does not support edit for this file type'
+        vmdetails = 'App does not support edit for this file type'
     # if we're opening the file in edit mode, check for existing locks and downgrade to read-only if any is found
     if viewmode in (ViewMode.READ_WRITE, ViewMode.PREVIEW) and \
             srv.config.get('general', 'detectexternallocks', fallback='True').upper() == 'TRUE':
@@ -255,13 +255,12 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
             log.info(f'msg="Forcing read-only access due to existing lock" filename="{fname}" lock="{lock}" app="{appname}"')
             viewmode = ViewMode.READ_ONLY
             if lock[0] == EXTERNALLOCK:
-                vmdetails = f'read-only, opened exclusively by {lock[1]}'
+                vmdetails = f'This file is opened exclusively by {lock[1]} and cannot be edited'
             else:
-                vmdetails = f'read-only, use app {lock[1]} to edit instead'
+                vmdetails = f'This file cannot be edited in {appname}, use app {lock[1]} to edit instead'
     if viewmode == ViewMode.PREVIEW and statinfo['size'] == 0:
-        # override preview mode when a new file is being created
+        # override preview mode when a new file is being created. No need to provide a reason
         viewmode = ViewMode.READ_WRITE
-        vmdetails = 'new file'
 
     tokmd = {
         'userid': userid, 'wopiuser': wopiuser, 'usertype': usertype.value, 'filename': fname, 'fileid': fileid,
