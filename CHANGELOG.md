@@ -1,6 +1,6 @@
 ## Changelog for the wopiserver
 
-### Thu Apr 23 2026 - v11.4.0
+### Mon Apr 27 2026 - v11.4.0
 - Added detection of external locks at open time (#195)
 - Updated dependencies
 - Improved logging
