@@ -249,9 +249,10 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
     # if we're opening the file in edit mode, check for existing locks and downgrade to read-only if any is found
     if viewmode in (ViewMode.READ_WRITE, ViewMode.PREVIEW) and \
             srv.config.get('general', 'detectexternallocks', fallback='True').upper() == 'TRUE':
+        # lock is a 2-tuple
         lock = retrieveWopiLock(fileid, 'genAccessToken', 'NA',
                                 {'filename': fname, 'userid': userid, 'endpoint': endpoint})
-        if lock[0] is not None and lock[0] != appname:
+        if lock[0] == EXTERNALLOCK or (lock[1] is not None and lock[1] != appname):
             log.info(f'msg="Forcing read-only access due to existing lock" filename="{fname}" lock="{lock}" app="{appname}"')
             viewmode = ViewMode.READ_ONLY
             if lock[0] == EXTERNALLOCK:
