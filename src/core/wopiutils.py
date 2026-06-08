@@ -354,7 +354,7 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefn=None):
     except IOError as e:
         log.info('msg="Found non-compatible or unreadable lock" lockop="%s" user="%s" filename="%s" token="%s" error="%s"' %
                  (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, e))
-        return EXTERNALLOCK, 'Another app or user'
+        return EXTERNALLOCK, 'another app or user'
 
     log.info('msg="Retrieved lock" lockop="%s" user="%s" filename="%s" fileid="%s" lock="%s" '
              'retrievedlock="%s" expTime="%s" token="%s"' %
