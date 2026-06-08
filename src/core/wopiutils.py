@@ -529,7 +529,13 @@ def storeAfterConflict(acctok, retrievedlock, lock, reason):
 
 def storeForRecovery(wopiuser, filename, acctokforlog, exception, content=None):
     if not content:
-        content = flask.request.get_data()
+        try:
+            content = flask.request.get_data()
+        except RuntimeError as e:
+            log.warning('msg="Requested to store for recovery but no content and no request context" '
+                        + 'filename="%s" token="%s" originalerror="%s" recoveryerror="%s"' %
+                        (filename, acctokforlog, exception, e))
+            return
     try:
         filepath = srv.recoverypath + os.sep + time.strftime('%Y%m%dT%H%M%S') + '_editedby_' \
                    + secure_filename(wopiuser.split('!')[0]) + '_origat_' + secure_filename(filename)
