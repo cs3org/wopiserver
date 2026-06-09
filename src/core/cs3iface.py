@@ -189,15 +189,29 @@ def removefile(endpoint, filepath, userid, force=False):
 def setlock(endpoint, filepath, userid, appname, value):
     """Set a lock to filepath with the given value metadata and appname as holder"""
     resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
-    client.file.set_lock(Auth.check_token(userid), resource, app_name=appname, lock_id=value)
+    try:
+        client.file.set_lock(Auth.check_token(userid), resource, app_name=appname, lock_id=value)
+    except cs3client.exceptions.UnknownException as e:
+        log.error(
+            'msg="Invoked setlock" endpoint="%s" filepath="%s" exception="%s"' %
+            (endpoint, filepath, str(e).replace('\n', ' ').replace('"', ''))
+        )
+        raise IOError(f"Failed to setlock on {filepath}") from e
 
 
 def refreshlock(endpoint, filepath, userid, appname, value, oldvalue=None):
     """Refresh the lock metadata for the given filepath"""
     resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
-    client.file.refresh_lock(
-        Auth.check_token(userid), resource, app_name=appname, lock_id=value, existing_lock_id=oldvalue
-    )
+    try:
+        client.file.refresh_lock(
+            Auth.check_token(userid), resource, app_name=appname, lock_id=value, existing_lock_id=oldvalue
+        )
+    except cs3client.exceptions.UnknownException as e:
+        log.error(
+            'msg="Invoked refreshlock" endpoint="%s" filepath="%s" exception="%s"' %
+            (endpoint, filepath, str(e).replace('\n', ' ').replace('"', ''))
+        )
+        raise IOError(f"Failed to refreshlock on {filepath}") from e
 
 
 def getlock(endpoint, filepath, userid):
@@ -207,9 +221,23 @@ def getlock(endpoint, filepath, userid):
         return client.file.get_lock(Auth.check_token(userid), resource)
     except cs3client.exceptions.NotFoundException:
         return None
+    except cs3client.exceptions.UnknownException as e:
+        log.error(
+            'msg="Invoked getlock" endpoint="%s" filepath="%s" exception="%s"' %
+            (endpoint, filepath, str(e).replace('\n', ' ').replace('"', ''))
+        )
+        raise IOError(f"Failed to getlock on {filepath}") from e
 
 
 def unlock(endpoint, filepath, userid, appname, value):
     """Remove the lock for the given filepath"""
     resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
-    client.file.unlock(Auth.check_token(userid), resource, app_name=appname, lock_id=value)
+    try:
+        client.file.unlock(Auth.check_token(userid), resource, app_name=appname, lock_id=value)
+    except cs3client.exceptions.UnknownException as e:
+        log.error(
+            'msg="Invoked unlock" endpoint="%s" filepath="%s" exception="%s"' %
+            (endpoint, filepath, str(e).replace('\n', ' ').replace('"', ''))
+        )
+        raise IOError(f"Failed to unlock on {filepath}") from e
+
