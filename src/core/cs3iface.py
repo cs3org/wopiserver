@@ -134,7 +134,14 @@ def setxattr(endpoint, filepath, userid, key, value, lockmd):
     if lockmd:
         _, lock_id = lockmd
     resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
-    client.file.set_xattr(Auth.check_token(userid), resource, key, str(value), lock_id)
+    try:
+        client.file.set_xattr(Auth.check_token(userid), resource, key, str(value), lock_id)
+    except cs3client.exceptions.UnknownException as e:
+        log.error(
+            'msg="Invoked setxattr" endpoint="%s" filepath="%s" exception="%s"' %
+            (endpoint, filepath, str(e).replace('\n', ' ').replace('"', ''))
+        )
+        raise IOError(f"Failed to setxattr on {filepath}") from e
 
 
 def rmxattr(endpoint, filepath, userid, key, lockmd):
@@ -143,7 +150,14 @@ def rmxattr(endpoint, filepath, userid, key, lockmd):
     if lockmd:
         _, lock_id = lockmd
     resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
-    client.file.remove_xattr(Auth.check_token(userid), resource, key, lock_id)
+    try:
+        client.file.remove_xattr(Auth.check_token(userid), resource, key, lock_id)
+    except cs3client.exceptions.UnknownException as e:
+        log.error(
+            'msg="Invoked rmxattr" endpoint="%s" filepath="%s" exception="%s"' %
+            (endpoint, filepath, str(e).replace('\n', ' ').replace('"', ''))
+        )
+        raise IOError(f"Failed to rmxattr on {filepath}") from e
 
 
 def readfile(endpoint, filepath, userid, lockid):
@@ -165,8 +179,15 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False, n
     if islock:
         log.warning('msg="islock flag not supported for CS3 storage" filepath="%s"' % filepath)
     resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
-    client.file.write_file(Auth.check_token(userid), resource, content, size,
-                           app_name, lock_id, disable_versioning=noversion)
+    try:
+        client.file.write_file(Auth.check_token(userid), resource, content, size,
+                               app_name, lock_id, disable_versioning=noversion)
+    except cs3client.exceptions.UnknownException as e:
+        log.error(
+            'msg="Invoked writefile" endpoint="%s" filepath="%s" lock="%s" exception="%s"' %
+            (endpoint, filepath, lockmd, str(e).replace('\n', ' ').replace('"', ''))
+        )
+        raise IOError(f"Failed to writefile on {filepath}") from e
 
 
 def renamefile(endpoint, filepath, newfilepath, userid, lockmd):
