@@ -135,6 +135,7 @@ def checkFileInfo(fileid, acctok):
         if 'Collabora' in acctok['appname']:
             fmd['EnableOwnerTermination'] = True
             fmd['IsAdminUser'] = False
+            fmd['EnableInsertRemoteImage'] = fmd['EnableInsertRemoteFile'] = fmd['EnableRemoteLinkPicker'] = True
             fmd['DisableExport'] = fmd['DisableCopy'] = fmd['DisablePrint'] = acctok['viewmode'] in (utils.ViewMode.VIEW_ONLY,
                                                                                                      utils.ViewMode.EMBEDDED)
             if srv.config.get('apps', 'codedisableexport', fallback='False').upper() == 'TRUE':
