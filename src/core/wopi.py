@@ -131,14 +131,20 @@ def checkFileInfo(fileid, acctok):
             # if no WebDAV URL is provided, ignore this setting
             pass
 
-        # extensions for Collabora Online
-        if 'Collabora' in acctok['appname']:
+        # extensions for Collabora Online and EuroOffice: both are integrated via postMessages
+        # from an iframed page, and read the same set of feature flags
+        if 'Collabora' in acctok['appname'] or 'EuroOffice' in acctok['appname']:
             fmd['EnableOwnerTermination'] = True
             fmd['IsAdminUser'] = False
             fmd['EnableInsertRemoteImage'] = fmd['EnableInsertRemoteFile'] = fmd['EnableRemoteLinkPicker'] = True
+            # @mentions in comments, and the "copy link to this comment" action that goes with them
+            fmd['UserMentionPostMessage'] = True
             fmd['DisableExport'] = fmd['DisableCopy'] = fmd['DisablePrint'] = acctok['viewmode'] in (utils.ViewMode.VIEW_ONLY,
                                                                                                      utils.ViewMode.EMBEDDED)
-            if srv.config.get('apps', 'codedisableexport', fallback='False').upper() == 'TRUE':
+            # codedisableexport is a flag to disable 'Export As' in Collabora Online
+            # since it is broken in certain versions.
+            if 'Collabora' in acctok['appname'] and \
+                    srv.config.get('apps', 'codedisableexport', fallback='False').upper() == 'TRUE':
                 fmd['UserCanNotWriteRelative'] = fmd['DisableExport'] = True
 
         # ** Response and log **
