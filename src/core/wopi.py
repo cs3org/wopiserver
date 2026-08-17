@@ -647,8 +647,9 @@ def putFile(fileid, acctok):
         # Anyhow, the EFSS should support versioning for such cases.
         utils.storeWopiFile(acctok, retrievedLock, utils.LASTSAVETIMEKEY, noversion=noversion)
         statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
-        log.info('msg="File stored successfully" action="edit" user="%s" filename="%s" version="%s" token="%s"' %
-                 (acctok['userid'][-20:], acctok['filename'], statInfo['etag'], flask.request.args['access_token'][-20:]))
+        log.info('msg="File stored successfully" action="edit" user="%s" filename="%s" version="%s" appname="%s" token="%s"' %
+                 (acctok['userid'][-20:], acctok['filename'], statInfo['etag'], acctok['appname'],
+                  flask.request.args['access_token'][-20:]))
         resp = flask.Response()
         resp.status_code = http.client.OK
         resp.headers['X-WOPI-ItemVersion'] = f"v{statInfo['etag']}"
