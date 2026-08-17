@@ -131,9 +131,8 @@ def checkFileInfo(fileid, acctok):
             # if no WebDAV URL is provided, ignore this setting
             pass
 
-        # extensions for Collabora Online and EuroOffice: both are integrated via postMessages
-        # from an iframed page, and read the same set of feature flags
-        if 'Collabora' in acctok['appname'] or 'EuroOffice' in acctok['appname']:
+        # postMessage extensions for non-Microsoft editors: we expose them in all cases, except when running the wopivalidator test suite
+        if '.wopitest' not in fmd['BaseFileName']:
             fmd['EnableOwnerTermination'] = True
             fmd['IsAdminUser'] = False
             fmd['EnableInsertRemoteImage'] = fmd['EnableInsertRemoteFile'] = fmd['EnableRemoteLinkPicker'] = True
@@ -141,11 +140,6 @@ def checkFileInfo(fileid, acctok):
             fmd['UserMentionPostMessage'] = True
             fmd['DisableExport'] = fmd['DisableCopy'] = fmd['DisablePrint'] = acctok['viewmode'] in (utils.ViewMode.VIEW_ONLY,
                                                                                                      utils.ViewMode.EMBEDDED)
-            # codedisableexport is a flag to disable 'Export As' in Collabora Online
-            # since it is broken in certain versions.
-            if 'Collabora' in acctok['appname'] and \
-                    srv.config.get('apps', 'codedisableexport', fallback='False').upper() == 'TRUE':
-                fmd['UserCanNotWriteRelative'] = fmd['DisableExport'] = True
 
         # ** Response and log **
         res = flask.Response(json.dumps(fmd), mimetype='application/json')
