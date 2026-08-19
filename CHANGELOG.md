@@ -1,5 +1,11 @@
 ## Changelog for the wopiserver
 
+### Wed Aug 19 2026 - v11.5.0
+- Added support for postMessage API as used by other Office
+  applications (Collabora, EuroOffice) (#199)
+- Improved logging
+- Fixed some cases of uncaught exceptions
+
 ### Mon Apr 27 2026 - v11.4.0
 - Added detection of external locks at open time (#195)
 - Updated dependencies
