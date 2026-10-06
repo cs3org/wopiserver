@@ -29,6 +29,9 @@ import core.commoniface as common
 # as well as to establish whether a new version is to be created on save
 LASTSAVETIMEKEY = 'iop.wopi.lastwritetime'
 
+# this is the xattr key used to store the last editor of a file, for logging and UI purposes
+LASTEDITORKEY = 'iop.wopi.lasteditor'
+
 # this is the xattr key used to store user info data from WOPI apps
 USERINFOKEY = 'iop.wopi.userinfo'
 
@@ -251,14 +254,14 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
             srv.config.get('general', 'detectexternallocks', fallback='True').upper() == 'TRUE':
         # lock is a 2-tuple
         lock = retrieveWopiLock(fileid, 'genAccessToken', 'NA',
-                                {'filename': fname, 'userid': userid, 'endpoint': endpoint})
-        if lock[0] == EXTERNALLOCK or (lock[1] is not None and lock[1] != appname):
+                                {'filename': fname, 'userid': userid, 'endpoint': endpoint}, lasteditor=True)
+        if lock[0] == EXTERNALLOCK or (lock[1] is not None and (appname not in lock[1])):
             log.info(f'msg="Forcing read-only access due to existing lock" filename="{fname}" lock="{lock}" app="{appname}"')
             viewmode = ViewMode.READ_ONLY
             if lock[0] == EXTERNALLOCK:
                 vmdetails = f'This file is opened exclusively by {lock[1]} and cannot be edited'
             else:
-                vmdetails = f'This file cannot be edited in {appname}, use app {lock[1]} to edit instead'
+                vmdetails = f'This file cannot be edited in {appname}, join user {lock[1]} to edit instead'
     if viewmode == ViewMode.PREVIEW and statinfo['size'] == 0:
         # override preview mode when a new file is being created. No need to provide a reason
         viewmode = ViewMode.READ_WRITE
@@ -299,7 +302,7 @@ def _decodeLock(storedlock):
         raise IOError(e)
 
 
-def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefn=None):
+def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefn=None, lasteditor=False):
     '''Retrieves and logs a lock for a given file: returns the lock and its holder, or (None, None) if no lock found'''
     encacctok = flask.request.args['access_token'][-20:] if 'access_token' in flask.request.args else 'NA'
 
@@ -355,6 +358,13 @@ def retrieveWopiLock(fileid, operation, lockforlog, acctok, overridefn=None):
         log.info('msg="Found non-compatible or unreadable lock" lockop="%s" user="%s" filename="%s" token="%s" error="%s"' %
                  (operation.title(), acctok['userid'][-20:], acctok['filename'], encacctok, e))
         return EXTERNALLOCK, 'another app or user'
+
+    if lasteditor:
+        # decorate the app name with the last editor's username if available
+        filestat = st.stat(acctok['endpoint'], acctok['filename'], acctok['userid'])
+        username = filestat['xattrs'].get(LASTEDITORKEY, 'UNKNOWN')
+        if username != 'UNKNOWN':
+            lockcontent['app_name'] = username + ' on ' + lockcontent['app_name']
 
     log.info('msg="Retrieved lock" lockop="%s" user="%s" filename="%s" fileid="%s" lock="%s" '
              'retrievedlock="%s" expTime="%s" token="%s"' %
@@ -461,6 +471,23 @@ def makeLockSuccessResponse(operation, acctok, lock, oldlock, version):
     resp.status_code = http.client.OK
     resp.headers['X-WOPI-ItemVersion'] = version
     return resp
+
+
+def checkAndSetLastEditor(acctok, lock, statInfo):
+    '''Checks if the last editor xattr is set, and sets it to the current user if not.'''
+    lasteditor = statInfo['xattrs'].get(LASTEDITORKEY)
+    if lasteditor is not None and lasteditor != acctok['wopiuser'].split('!')[0]:
+        # there was a different user before: this is typically due to concurrent editing, though
+        # stale locks can cause false positives. We log it anyway for statistics purposes
+        log.info('msg="Concurrent editing detected" filename="%s" token="%s" lasteditor="%s" currenteditor="%s"' %
+                 (acctok['filename'], flask.request.args['access_token'][-20:],
+                  lasteditor, acctok['wopiuser'].split('!')[0]))
+    try:
+        st.setxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], LASTEDITORKEY,
+                    acctok['wopiuser'].split('!')[0], (acctok['appname'], encodeLock(lock)))
+    except IOError as e:
+        log.warning('msg="Unable to set last editor xattr" filename="%s" token="%s" error="%s"' %
+                    (acctok['filename'], flask.request.args['access_token'][-20:], e))
 
 
 def storeWopiFile(acctok, retrievedlock, xakey, targetname='', noversion=False):
