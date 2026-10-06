@@ -273,9 +273,11 @@ def setLock(fileid, reqheaders, acctok):
         st.setlock(acctok['endpoint'], fn, acctok['userid'], acctok['appname'], utils.encodeLock(lock))
 
         # on first lock, set in addition an xattr with the current time for later conflicts checking if required
+        # and also check if the current user is the first editor of the file
         try:
             st.setxattr(acctok['endpoint'], fn, acctok['userid'], utils.LASTSAVETIMEKEY, int(time.time()),
                         (acctok['appname'], utils.encodeLock(lock)))
+            utils.checkAndSetFirstEditor(acctok, lock, statInfo)
         except IOError as e:
             # not fatal, but will generate a conflict file later on, so log a warning
             log.warning('msg="Unable to set lastwritetime xattr" lockop="%s" user="%s" filename="%s" token="%s" reason="%s"' %
@@ -299,10 +301,12 @@ def setLock(fileid, reqheaders, acctok):
                                                   (lockHolder if lockHolder else 'another editor'),
                                                   savetime=savetime)
 
-            # else it's our own lock, refresh it (rechecking the oldLock if necessary, for atomicity) and return
+            # else it's our own lock, refresh it (rechecking the oldLock if necessary, for atomicity),
+            # check for the first editor and return
             try:
                 st.refreshlock(acctok['endpoint'], fn, acctok['userid'], acctok['appname'],
                                utils.encodeLock(lock), utils.encodeLock(oldLock))
+                utils.checkAndSetFirstEditor(acctok, lock, statInfo)
                 return utils.makeLockSuccessResponse(op, acctok, lock, oldLock, f"v{statInfo['etag']}")
             except IOError as rle:
                 # this is unexpected now
@@ -336,7 +340,10 @@ def unlock(fileid, reqheaders, acctok):
         # validate that the underlying file is still there
         statInfo = st.statx(acctok['endpoint'], acctok['filename'], acctok['userid'])
         st.unlock(acctok['endpoint'], acctok['filename'], acctok['userid'], acctok['appname'], utils.encodeLock(lock))
-        # note we leave the lastwritetime xattr, as it may be useful for RefreshLock with X-WOPI-ValidateTarget headers
+        # note we leave the lastwritetime xattr, as it may be useful for RefreshLock with X-WOPI-ValidateTarget headers,
+        # but we must drop the firsteditor xattr
+        st.rmxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], utils.FIRSTEDITORKEY, None)
+
     except IOError as e:
         if common.ENOENT_MSG in str(e):
             return utils.createJsonResponse({'message': 'File not found'}, http.client.NOT_FOUND)
