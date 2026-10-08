@@ -138,8 +138,8 @@ def checkFileInfo(fileid, acctok):
             fmd['EnableInsertRemoteImage'] = fmd['EnableInsertRemoteFile'] = fmd['EnableRemoteLinkPicker'] = True
             # @mentions in comments, and the "copy link to this comment" action that goes with them
             fmd['UserMentionPostMessage'] = True
-            fmd['DisableExport'] = fmd['DisableCopy'] = fmd['DisablePrint'] = acctok['viewmode'] in (utils.ViewMode.VIEW_ONLY,
-                                                                                                     utils.ViewMode.EMBEDDED)
+            fmd['DisableExport'] = fmd['DisableCopy'] = fmd['DisablePrint'] = fmd['HideExportOption'] = \
+                acctok['viewmode'] in (utils.ViewMode.VIEW_ONLY, utils.ViewMode.EMBEDDED)
 
         # ** Response and log **
         res = flask.Response(json.dumps(fmd), mimetype='application/json')
