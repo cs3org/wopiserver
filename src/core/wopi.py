@@ -131,7 +131,8 @@ def checkFileInfo(fileid, acctok):
             # if no WebDAV URL is provided, ignore this setting
             pass
 
-        # postMessage extensions for non-Microsoft editors: we expose them in all cases, except when running the wopivalidator test suite
+        # postMessage extensions for non-Microsoft editors: we expose them in all cases,
+        # except when running the wopivalidator test suite
         if '.wopitest' not in fmd['BaseFileName']:
             fmd['EnableOwnerTermination'] = True
             fmd['IsAdminUser'] = False
@@ -272,12 +273,12 @@ def setLock(fileid, reqheaders, acctok):
         # and return conflict response if the file was already locked
         st.setlock(acctok['endpoint'], fn, acctok['userid'], acctok['appname'], utils.encodeLock(lock))
 
-        # on first lock, set in addition an xattr with the current time for later conflicts checking if required
-        # and also check if the current user is the first editor of the file
+        # on first lock, check if the current user is the first editor of the file,
+        # and set in addition an xattr with the current time for later conflicts checking if required
         try:
+            utils.checkAndSetFirstEditor(acctok, lock, statInfo)
             st.setxattr(acctok['endpoint'], fn, acctok['userid'], utils.LASTSAVETIMEKEY, int(time.time()),
                         (acctok['appname'], utils.encodeLock(lock)))
-            utils.checkAndSetFirstEditor(acctok, lock, statInfo)
         except IOError as e:
             # not fatal, but will generate a conflict file later on, so log a warning
             log.warning('msg="Unable to set lastwritetime xattr" lockop="%s" user="%s" filename="%s" token="%s" reason="%s"' %

@@ -476,9 +476,13 @@ def makeLockSuccessResponse(operation, acctok, lock, oldlock, version):
 def checkAndSetFirstEditor(acctok, lock, statInfo):
     '''Checks if the first editor xattr is set, and sets it to the current user if not.'''
     try:
-        if statInfo['xattrs'].get(FIRSTEDITORKEY) is None:
+        if statInfo['xattrs'].get(FIRSTEDITORKEY) is None or \
+              st.getlock(acctok['endpoint'], acctok['filename'], acctok['userid']) is None:
+            # the first editor is not set, or if it is, it's a stale value due to a lock
+            # that timed out: override it (a refreshlock never gets here)
             st.setxattr(acctok['endpoint'], acctok['filename'], acctok['userid'], FIRSTEDITORKEY,
                         acctok['wopiuser'].split('!')[0], (acctok['appname'], encodeLock(lock)))
+
         elif statInfo['xattrs'].get(FIRSTEDITORKEY) != acctok['wopiuser'].split('!')[0]:
             log.info('msg="Concurrent editing detected" filename="%s" token="%s" firsteditor="%s" currenteditor="%s"' %
                      (acctok['filename'], flask.request.args['access_token'][-20:],
