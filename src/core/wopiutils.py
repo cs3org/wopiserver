@@ -196,9 +196,9 @@ def generateUrlFromTemplate(url, acctok):
     else:
         p = acctok['filename']
     return url.replace('<path>', p). \
-               replace('<endpoint>', acctok['endpoint']). \
-               replace('<fileid>', acctok['fileid']). \
-               replace('<app>', acctok['appname'])
+        replace('<endpoint>', acctok['endpoint']). \
+        replace('<fileid>', acctok['fileid']). \
+        replace('<app>', acctok['appname'])
 
 
 def getLibreOfficeLockName(filename):
