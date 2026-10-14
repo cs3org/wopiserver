@@ -261,4 +261,3 @@ def unlock(endpoint, filepath, userid, appname, value):
             (endpoint, filepath, str(e).replace('\n', ' ').replace('"', ''))
         )
         raise IOError(f"Failed to unlock on {filepath}") from e
-
