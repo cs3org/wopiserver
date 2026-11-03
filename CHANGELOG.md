@@ -1,5 +1,9 @@
 ## Changelog for the wopiserver
 
+### Tue Nov 03 2026 - v11.6.0
+- Added support for exposing and logging the last editor
+  of any edited/locked file (#201)
+
 ### Wed Aug 19 2026 - v11.5.0
 - Added support for postMessage API as used by other Office
   applications (Collabora, EuroOffice) (#199)
