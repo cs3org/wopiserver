@@ -103,7 +103,7 @@ def stat(_endpoint, filepath, _userid):
             raise IOError('Is a directory')
         try:
             xattrs = {
-                k.strip('user.'): os.getxattr(_getfilepath(filepath), k).decode()
+                k.removeprefix('user.'): os.getxattr(_getfilepath(filepath), k).decode()
                 for k in os.listxattr(_getfilepath(filepath))
             }
         except OSError as e:
