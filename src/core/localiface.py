@@ -103,7 +103,7 @@ def stat(_endpoint, filepath, _userid):
             raise IOError('Is a directory')
         try:
             xattrs = {
-                k.removeprefix('user.'): os.getxattr(_getfilepath(filepath), k).decode()
+                k.strip('user.'): _decode_xattr(os.getxattr(_getfilepath(filepath), k))
                 for k in os.listxattr(_getfilepath(filepath))
             }
         except OSError as e:
@@ -329,3 +329,10 @@ def removefile(_endpoint, filepath, _userid, force=False):
         os.remove(_getfilepath(filepath))
     except OSError as e:
         raise IOError(e) from e
+        
+def _decode_xattr(value: bytes):
+    """UTF-8-Text as str, else RAW-Bytes."""
+    try:
+        return value.decode("utf-8")
+    except UnicodeDecodeError:
+        return value
