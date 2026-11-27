@@ -13,6 +13,7 @@ import http.client
 import flask
 import prometheus_client
 from prometheus_client.core import GaugeMetricFamily
+from prometheus_flask_exporter import PrometheusMetrics
 
 # all metrics are registered on the registry used by the PrometheusMetrics exporter
 registry = prometheus_client.REGISTRY
@@ -82,8 +83,7 @@ class _StateCollector:
             counts = {}
             # take a copy of the values as the maps are updated concurrently by the server threads
             for f in list(_srv.openfiles.values()):
-                key = (f[2], f[3]) if len(f) > 3 else (OTHER, OTHER)
-                counts[key] = counts.get(key, 0) + 1
+                counts[(f[2], f[3])] = counts.get((f[2], f[3]), 0) + 1
             for (app, mode), n in counts.items():
                 openfiles.add_metric([app, mode], n)
             for state in ('pending', 'resolved'):
@@ -131,7 +131,9 @@ def init(config, logger, srv=None):
 
 
 def authenticate(view):
-    '''Decorator for the /metrics view: 404 if no token is configured, 401 if the bearer token does not match'''
+    '''Decorator for the /metrics view: 404 if no token is configured, 401 if the bearer token does not match.
+    The rejected requests are not tracked in the default request metrics either'''
+    @PrometheusMetrics.do_not_track()
     @functools.wraps(view)
     def wrapper(*args, **kwargs):
         if not _token:
@@ -179,8 +181,8 @@ def countopen(appname, vm, filename, ut, folderurl):
     opens.labels(normapp(appname), viewmode(vm), filetype(filename), usertype(ut, folderurl)).inc()
 
 
-def countsave(acctok, result, filename=None):
-    saves.labels(normapp(acctok.get('appname')), filetype(filename or acctok['filename']), result).inc()
+def countsave(acctok, result):
+    saves.labels(normapp(acctok.get('appname')), filetype(acctok['filename']), result).inc()
 
 
 def countsession(appname):
@@ -201,10 +203,14 @@ def observeresolution(seconds):
     conflictresolution.observe(max(seconds, 0))
 
 
+def _storageop(op):
+    return storagelatency.labels(op if op in STORAGEOPS else OTHER)
+
+
 def observestorage(op, seconds):
-    storagelatency.labels(op if op in STORAGEOPS else 'other').observe(seconds)
+    _storageop(op).observe(seconds)
 
 
 def timestorage(op):
     '''Context manager timing a storage operation'''
-    return storagelatency.labels(op if op in STORAGEOPS else 'other').time()
+    return _storageop(op).time()

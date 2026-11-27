@@ -167,6 +167,9 @@ class TestMetrics(unittest.TestCase):
         self.assertEqual(resp.status_code, 401)
         resp = self.client.get('/metrics', headers={'Authorization': self.token})
         self.assertEqual(resp.status_code, 401)
+        # the rejected scrapes are not tracked in the default request metrics
+        _, samples = self._scrape()
+        self.assertFalse([k for k in samples if ('endpoint', 'prometheus_metrics') in k[1]])
 
     def test_metrics_right_token(self):
         families, _ = self._scrape()
@@ -309,6 +312,13 @@ class TestMetrics(unittest.TestCase):
         self.assertEqual(resp.status_code, 200, resp.get_data(as_text=True))
         self.assertEqual(self._value('wopi_conflicted_sessions', state='resolved'), 1)
         self.assertEqual(self._value('wopi_conflict_resolution_seconds_count'), resolutions + 1)
+
+        # the other conflicted session unlocks a file not accounted as open (e.g. after a restart): it gets resolved too
+        Wopi.openfiles.clear()
+        resp = self._wopipost(fileid, acctok, 'UNLOCK', 'lock-one', session='s-three')
+        self.assertEqual(resp.status_code, 200, resp.get_data(as_text=True))
+        self.assertEqual(self._value('wopi_conflicted_sessions', state='pending'), 0)
+        self.assertEqual(self._value('wopi_conflict_resolution_seconds_count'), resolutions + 2)
 
     # log messages
 

@@ -362,19 +362,15 @@ def unlock(fileid, reqheaders, acctok):
             pass
 
     # and update our internal lists of opened files and conflicted sessions
-    try:
-        del srv.openfiles[acctok['filename']]
-        session = flask.request.headers.get('X-WOPI-SessionId')
-        s = srv.conflictsessions['pending'].pop(session, None)
-        if s:
-            srv.conflictsessions['resolved'][session] = {
-                'user': s['user'],
-                'restime': int(time.time() - int(s['time']))
-            }
-            wmetrics.observeresolution(time.time() - int(s['time']))
-    except KeyError:
-        # already removed?
-        pass
+    srv.openfiles.pop(acctok['filename'], None)
+    session = flask.request.headers.get('X-WOPI-SessionId')
+    s = srv.conflictsessions['pending'].pop(session, None)
+    if s:
+        srv.conflictsessions['resolved'][session] = {
+            'user': s['user'],
+            'restime': int(time.time() - int(s['time']))
+        }
+        wmetrics.observeresolution(time.time() - int(s['time']))
     resp = flask.Response()
     resp.status_code = http.client.OK
     resp.headers['X-WOPI-ItemVersion'] = f"v{statInfo['etag']}"
