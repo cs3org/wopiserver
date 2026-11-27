@@ -18,6 +18,7 @@ from urllib.parse import urlparse
 import flask
 import core.wopiutils as utils
 import core.commoniface as common
+import core.wopimetrics as wmetrics
 
 IO_ERROR = 'I/O Error, please contact support'
 
@@ -221,7 +222,7 @@ def setLock(fileid, reqheaders, acctok):
         # by other external actions (cf. PutFile logic)
         return utils.makeConflictResponse(op, acctok['userid'], None, lock, oldLock, fn,
                                           'The file was not locked' + (' and got modified' if validateTarget else ''),
-                                          savetime=savetime)
+                                          savetime=savetime, appname=acctok['appname'])
 
     # now check for and create an "external" lock if required
     if srv.config.get('general', 'detectexternallocks', fallback='True').upper() == 'TRUE' and \
@@ -229,7 +230,8 @@ def setLock(fileid, reqheaders, acctok):
         try:
             if retrievedLock == utils.EXTERNALLOCK:
                 return utils.makeConflictResponse(op, acctok['userid'], retrievedLock, lock, oldLock,
-                                                  fn, 'The file is locked by ' + lockHolder, savetime=savetime)
+                                                  fn, 'The file is locked by ' + lockHolder, savetime=savetime,
+                                                  appname=acctok['appname'])
 
             # create a LibreOffice-compatible lock file for interoperability purposes, making sure to
             # not overwrite any existing or being created lock
@@ -258,8 +260,8 @@ def setLock(fileid, reqheaders, acctok):
                     log.warning('msg="Valid LibreOffice lock found, denying WOPI lock" lockop="%s" filename="%s" holder="%s"' %
                                 (op.title(), fn, lockholder if lockholder else retrievedlolock))
                     reason = 'File locked by ' + ((lockholder + ' via LibreOffice') if lockholder else 'a LibreOffice user')
-                    return utils.makeConflictResponse(op, acctok['userid'], 'External App', lock, oldLock,
-                                                      fn, reason, savetime=savetime)
+                    return utils.makeConflictResponse(op, acctok['userid'], utils.EXTERNALAPPLOCK, lock, oldLock,
+                                                      fn, reason, savetime=savetime, appname=acctok['appname'])
                 # else it's our previous lock or it had expired: all right, move on
             else:
                 # any other error is logged but not raised as this is optimistically not blocking WOPI operations
@@ -299,7 +301,7 @@ def setLock(fileid, reqheaders, acctok):
                 return utils.makeConflictResponse(op, acctok['userid'], retrievedLock, lock, oldLock, fn,
                                                   'The file is locked by %s' %
                                                   (lockHolder if lockHolder else 'another editor'),
-                                                  savetime=savetime)
+                                                  savetime=savetime, appname=acctok['appname'])
 
             # else it's our own lock, refresh it (rechecking the oldLock if necessary, for atomicity),
             # check for the last editor and return
@@ -334,7 +336,7 @@ def unlock(fileid, reqheaders, acctok):
     retrievedLock, _ = utils.retrieveWopiLock(fileid, 'UNLOCK', lock, acctok)
     if not utils.compareWopiLocks(retrievedLock, lock):
         return utils.makeConflictResponse('UNLOCK', acctok['userid'], retrievedLock, lock, 'NA',
-                                          acctok['filename'], 'Lock mismatch unlocking file')
+                                          acctok['filename'], 'Lock mismatch unlocking file', appname=acctok['appname'])
     # OK, the lock matches, remove it
     try:
         # validate that the underlying file is still there
@@ -363,12 +365,13 @@ def unlock(fileid, reqheaders, acctok):
     try:
         del srv.openfiles[acctok['filename']]
         session = flask.request.headers.get('X-WOPI-SessionId')
-        if session in srv.conflictsessions['pending']:
-            s = srv.conflictsessions['pending'].pop(session)
+        s = srv.conflictsessions['pending'].pop(session, None)
+        if s:
             srv.conflictsessions['resolved'][session] = {
                 'user': s['user'],
                 'restime': int(time.time() - int(s['time']))
             }
+            wmetrics.observeresolution(time.time() - int(s['time']))
     except KeyError:
         # already removed?
         pass
@@ -437,7 +440,7 @@ def putRelative(fileid, reqheaders, acctok):
                     'Url': utils.generateWopiSrc(statInfo['inode'], acctok['appname'] == srv.proxiedappname),
                 }
                 return utils.makeConflictResponse('PUT_RELATIVE', acctok['userid'], retrievedTargetLock, 'NA', 'NA',
-                                                  relTarget, respmd)
+                                                  relTarget, respmd, appname=acctok['appname'])
         except IOError:
             # optimistically assume we're clear
             pass
@@ -511,7 +514,7 @@ def deleteFile(fileid, _reqheaders_unused, acctok):
     if retrievedLock is not None:
         # file is locked and cannot be deleted
         return utils.makeConflictResponse('DELETE', acctok['userid'], retrievedLock, 'NA', 'NA',
-                                          acctok['filename'], 'Cannot delete a locked file')
+                                          acctok['filename'], 'Cannot delete a locked file', appname=acctok['appname'])
     try:
         st.removefile(acctok['endpoint'], acctok['filename'], acctok['userid'])
         return utils.createJsonResponse({'message': 'OK'}, http.client.OK)
@@ -536,7 +539,7 @@ def renameFile(fileid, reqheaders, acctok):
     retrievedLock, _ = utils.retrieveWopiLock(fileid, 'RENAMEFILE', lock, acctok)
     if retrievedLock is not None and not utils.compareWopiLocks(retrievedLock, lock):
         return utils.makeConflictResponse('RENAMEFILE', acctok['userid'], retrievedLock, lock, 'NA',
-                                          acctok['filename'], 'Lock mismatch renaming file')
+                                          acctok['filename'], 'Lock mismatch renaming file', appname=acctok['appname'])
     try:
         # the destination name comes without base path and typically without extension
         targetName = os.path.dirname(acctok['filename']) + os.path.sep + targetName \
@@ -588,9 +591,12 @@ def _createNewFile(fileid, acctok):
             utils.storeWopiFile(acctok, None, utils.LASTSAVETIMEKEY)
             log.info('msg="File stored successfully" action="editnew" user="%s" filename="%s" token="%s"' %
                      (acctok['userid'][-20:], acctok['filename'], flask.request.args['access_token'][-20:]))
+            wmetrics.countsave(acctok, 'ok')
             return utils.createJsonResponse({'message': 'OK'}, http.client.OK)
         except IOError as e:
-            utils.storeForRecovery(acctok['wopiuser'], acctok['filename'], flask.request.args['access_token'][-20:], e)
+            recovered = utils.storeForRecovery(acctok['wopiuser'], acctok['filename'],
+                                               flask.request.args['access_token'][-20:], e)
+            wmetrics.countsave(acctok, 'recovery' if recovered else 'error')
             return utils.createJsonResponse({'message': IO_ERROR}, http.client.INTERNAL_SERVER_ERROR)
 
 
@@ -604,7 +610,7 @@ def putFile(fileid, acctok):
     retrievedLock, lockHolder = utils.retrieveWopiLock(fileid, 'PUTFILE', lock, acctok)
     if retrievedLock is None:
         return utils.makeConflictResponse('PUTFILE', acctok['userid'], retrievedLock, lock, 'NA',
-                                          acctok['filename'], 'Cannot overwrite unlocked file')
+                                          acctok['filename'], 'Cannot overwrite unlocked file', appname=acctok['appname'])
     if retrievedLock == utils.EXTERNALLOCK:
         # this should not happen and we must fail, yet we save the file as conflict for the user to recover it
         log.error('msg="Detected external lock, forcing conflict" user="%s" filename="%s" tocken="%s"' %
@@ -616,7 +622,8 @@ def putFile(fileid, acctok):
         utils.storeForRecovery(acctok['wopiuser'], acctok['filename'], flask.request.args['access_token'][-20:],
                                'Mismatched lock on PutFile')
         return utils.makeConflictResponse('PUTFILE', acctok['userid'], retrievedLock, lock, 'NA',
-                                          acctok['filename'], f'Cannot overwrite file locked by {lockHolder}')
+                                          acctok['filename'], f'Cannot overwrite file locked by {lockHolder}',
+                                          appname=acctok['appname'])
 
     # OK, we can save the file: check the destination file against conflicts if required
     log.info('msg="PutFile" user="%s" filename="%s" fileid="%s" action="edit" token="%s"' %
@@ -657,13 +664,16 @@ def putFile(fileid, acctok):
         log.info('msg="File stored successfully" action="edit" user="%s" filename="%s" version="%s" appname="%s" token="%s"' %
                  (acctok['userid'][-20:], acctok['filename'], statInfo['etag'], acctok['appname'],
                   flask.request.args['access_token'][-20:]))
+        wmetrics.countsave(acctok, 'ok')
         resp = flask.Response()
         resp.status_code = http.client.OK
         resp.headers['X-WOPI-ItemVersion'] = f"v{statInfo['etag']}"
         return resp
 
     except IOError as e:
-        utils.storeForRecovery(acctok['wopiuser'], acctok['filename'], flask.request.args['access_token'][-20:], e)
+        recovered = utils.storeForRecovery(acctok['wopiuser'], acctok['filename'],
+                                           flask.request.args['access_token'][-20:], e)
+        wmetrics.countsave(acctok, 'recovery' if recovered else 'error')
         return utils.createJsonResponse({'message': IO_ERROR}, http.client.INTERNAL_SERVER_ERROR)
 
 

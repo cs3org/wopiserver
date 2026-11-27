@@ -24,6 +24,7 @@ import flask
 import jwt
 from werkzeug.utils import secure_filename
 import core.commoniface as common
+import core.wopimetrics as wmetrics
 
 # this is the xattr key used for conflicts resolution on the remote storage
 # as well as to establish whether a new version is to be created on save
@@ -40,6 +41,9 @@ REALIPHEADER = 'X-Real-IP'
 
 # conventional string representing an external, non-WOPI lock
 EXTERNALLOCK = 'External'
+
+# string representing a LibreOffice for Desktop lock, used when denying a WOPI lock
+EXTERNALAPPLOCK = 'External App'
 
 # convenience references to global entities
 st = None
@@ -167,12 +171,13 @@ def validateAndLogHeaders(op):
               session, flask.request.headers.get('X-WOPI-RequestingApplication'),
               flask.request.headers.get('X-WOPI-AppEndpoint'), flask.request.headers.get('X-WOPI-ClientVersion'),
               flask.request.headers.get('X-WOPI-CorrelationId'), wopits))
+    wmetrics.countsession(acctok.get('appname'))
 
     # update bookkeeping of pending sessions
     if op.title() == 'Checkfileinfo' and session in srv.conflictsessions['pending'] and \
        int(srv.conflictsessions['pending'][session]['time']) < time.time() - 30:
         # a previously conflicted session is still around executing Checkfileinfo after some time, assume it got resolved
-        _resolveSession(session, acctok['filename'])
+        _resolveSession(session, acctok['filename'], acctok)
     return acctok, None
 
 
@@ -277,6 +282,7 @@ def generateAccessToken(userid, fileid, viewmode, user, folderurl, endpoint, app
         tokmd['appviewurl'] = appviewurl
     acctok = jwt.encode(tokmd, srv.wopisecret, algorithm='HS256')
     srv.allusers.add(userid)
+    wmetrics.countopen(appname, viewmode, fname, usertype, folderurl)
 
     log.info('msg="Access token generated" trace="%s" userid="%s" wopiuser="%s" friendlyname="%s" usertype="%s" mode="%s" '
              'endpoint="%s" filename="%s" inode="%s" mtime="%s" folderurl="%s" appname="%s" expiration="%d" token="%s"' %
@@ -407,7 +413,7 @@ def compareWopiLocks(lock1, lock2):
     return False
 
 
-def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, filename, reason, savetime=None):
+def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, filename, reason, savetime=None, appname=None):
     '''Generates and logs an HTTP 409 response in case of locks conflict'''
     resp = flask.Response(mimetype='application/json')
     resp.headers['X-WOPI-Lock'] = retrievedlock if retrievedlock else ''
@@ -436,22 +442,25 @@ def makeConflictResponse(operation, user, retrievedlock, lock, oldlock, filename
                 (('UnlockAndRelock' if oldlock and oldlock != 'NA' and operation != 'PUTFILE' else operation.title()),
                  user[-20:], filename, flask.request.args['access_token'][-20:], session, lock, oldlock, retrievedlock, fileage,
                  (reason['message'] if reason else 'NA')))
+    wmetrics.countconflict(appname, retrievedlock, reason['message'], (EXTERNALLOCK, EXTERNALAPPLOCK))
     return resp
 
 
-def _resolveSession(session, filename):
+def _resolveSession(session, filename, acctok):
     '''Mark a session as resolved and account the given filename in the openfiles map.
     This is only used for bookkeeping, no functionality is associated to those maps'''
-    if session in srv.conflictsessions['pending']:
-        s = srv.conflictsessions['pending'].pop(session)
+    s = srv.conflictsessions['pending'].pop(session, None)
+    if s:
         srv.conflictsessions['resolved'][session] = {
             'user': s['user'],
             'restime': int(time.time() - int(s['time'])),
             'type': s['type'],
         }
-    # keep some accounting of the open files
+        wmetrics.observeresolution(time.time() - int(s['time']))
+    # keep some accounting of the open files, including the app and mode for the metrics
     if filename not in srv.openfiles:
-        srv.openfiles[filename] = (time.asctime(), set())
+        srv.openfiles[filename] = (time.asctime(), set(), wmetrics.normapp(acctok.get('appname')),
+                                   wmetrics.viewmode(acctok['viewmode']))
     if session not in srv.openfiles[filename][1]:
         srv.openfiles[filename][1].add(session)
 
@@ -461,7 +470,7 @@ def makeLockSuccessResponse(operation, acctok, lock, oldlock, version):
     session = flask.request.headers.get('X-WOPI-SessionId')
     if not session:
         session = acctok['wopiuser'].split('!')[0]
-    _resolveSession(session, acctok['filename'])
+    _resolveSession(session, acctok['filename'], acctok)
 
     log.info('msg="Successfully locked" lockop="%s" filename="%s" token="%s" sessionId="%s" '
              'lock="%s" oldlock="%s" version="%s"' %
@@ -498,7 +507,7 @@ def storeWopiFile(acctok, retrievedlock, xakey, targetname='', noversion=False):
     session = flask.request.headers.get('X-WOPI-SessionId')
     if not session:
         session = acctok['wopiuser'].split('!')[0]
-    _resolveSession(session, targetname)
+    _resolveSession(session, targetname, acctok)
 
     writeerror = None
     try:
@@ -542,7 +551,8 @@ def storeAfterConflict(acctok, retrievedlock, lock, reason):
                 dorecovery = e
 
     if dorecovery:
-        storeForRecovery(acctok['wopiuser'], newname, flask.request.args['access_token'][-20:], dorecovery)
+        recovered = storeForRecovery(acctok['wopiuser'], newname, flask.request.args['access_token'][-20:], dorecovery)
+        wmetrics.countsave(acctok, 'recovery' if recovered else 'error')
         # conflict file was stored on recovery space, tell user (but reason is advisory...)
         reason += ', please contact support to recover it'
     else:
@@ -551,10 +561,12 @@ def storeAfterConflict(acctok, retrievedlock, lock, reason):
 
     # use a CONFLICT response as it is better handled by the app to signal the issue to the user
     return makeConflictResponse('PUTFILE', acctok['userid'], retrievedlock, lock, 'NA',
-                                acctok['filename'], reason)
+                                acctok['filename'], reason, appname=acctok['appname'])
 
 
 def storeForRecovery(wopiuser, filename, acctokforlog, exception, content=None):
+    '''Stores the given content, or the content of the current request, to the local recovery path.
+    Returns True if the content was stored, False otherwise'''
     if not content:
         try:
             content = flask.request.get_data()
@@ -562,7 +574,7 @@ def storeForRecovery(wopiuser, filename, acctokforlog, exception, content=None):
             log.warning('msg="Requested to store for recovery but no content and no request context" '
                         + 'filename="%s" token="%s" originalerror="%s" recoveryerror="%s"' %
                         (filename, acctokforlog, exception, e))
-            return
+            return False
     try:
         filepath = srv.recoverypath + os.sep + time.strftime('%Y%m%dT%H%M%S') + '_editedby_' \
                    + secure_filename(wopiuser.split('!')[0]) + '_origat_' + secure_filename(filename)
@@ -573,10 +585,12 @@ def storeForRecovery(wopiuser, filename, acctokforlog, exception, content=None):
         log.warning('msg="Error writing file, a copy was stored locally for later recovery" '
                     + 'filename="%s" recoveredpath="%s" token="%s" error="%s"' %
                     (filename, filepath, acctokforlog, exception))
+        return True
     except (OSError, IOError) as e:
         log.critical('msg="Error writing file and failed to recover it to local storage, data is LOST" '
                      + 'filename="%s" token="%s" originalerror="%s" recoveryerror="%s"' %
                      (filename, acctokforlog, exception, e))
+        return False
 
 
 # Creates a Flask response object with a JSON-encoded body, the given status code,
