@@ -1,5 +1,14 @@
 ## Changelog for the wopiserver
 
+### Unreleased
+- Added native usage metrics for Prometheus (opens, saves, sessions, conflicts,
+  storage latency, open files, conflicted sessions, active users, log messages),
+  see the Monitoring section in the README
+- `/metrics` now requires a bearer token configured via `metricstokenfile` in the
+  new `[monitoring]` section, and it is disabled when that is not set: before, it was
+  served without authentication
+- Replaced the `open_by_app` counter with `wopi_opens_total`
+
 ### Tue Nov 03 2026 - v11.6.0
 - Added support for exposing and logging the last editor
   of any edited/locked file (#201)
