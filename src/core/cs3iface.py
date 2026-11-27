@@ -17,6 +17,7 @@ from cs3client.cs3resource import Resource
 from cs3client.auth import Auth
 import cs3client.exceptions
 import core.commoniface as common
+import core.wopimetrics as wmetrics
 
 # key used if the `lockasattr` option is true, in order to store the lock payload without ensuring any lock semantic
 LOCK_ATTR_KEY = "wopi.advlock"
@@ -82,7 +83,8 @@ def authenticate_for_test(userid, userpwd):
 def stat(endpoint, fileref, userid):
     try:
         resource = Resource.from_file_ref_and_endpoint(fileref, endpoint)
-        statInfo = client.file.stat(Auth.check_token(userid), resource)
+        with wmetrics.timestorage('stat'):
+            statInfo = client.file.stat(Auth.check_token(userid), resource)
     except cs3client.exceptions.UnknownException as e:
         log.error(
             'msg="Invoked stat" endpoint="%s" fileref="%s" exception="%s"' %
@@ -135,7 +137,8 @@ def setxattr(endpoint, filepath, userid, key, value, lockmd):
         _, lock_id = lockmd
     resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
     try:
-        client.file.set_xattr(Auth.check_token(userid), resource, key, str(value), lock_id)
+        with wmetrics.timestorage('xattr'):
+            client.file.set_xattr(Auth.check_token(userid), resource, key, str(value), lock_id)
     except cs3client.exceptions.UnknownException as e:
         log.error(
             'msg="Invoked setxattr" endpoint="%s" filepath="%s" exception="%s"' %
@@ -151,7 +154,8 @@ def rmxattr(endpoint, filepath, userid, key, lockmd):
         _, lock_id = lockmd
     resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
     try:
-        client.file.remove_xattr(Auth.check_token(userid), resource, key, lock_id)
+        with wmetrics.timestorage('xattr'):
+            client.file.remove_xattr(Auth.check_token(userid), resource, key, lock_id)
     except cs3client.exceptions.UnknownException as e:
         log.error(
             'msg="Invoked rmxattr" endpoint="%s" filepath="%s" exception="%s"' %
@@ -164,8 +168,13 @@ def readfile(endpoint, filepath, userid, lockid):
     """Read a file using the given userid as access token. Note that the function is a generator, managed by the app server."""
     resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
     data = client.file.read_file(Auth.check_token(userid), resource, lockid)
-    for chunk in data:
-        yield chunk
+    # time the request up to the first chunk, as the rest is streamed to the client
+    with wmetrics.timestorage('read'):
+        chunk = next(data, None)
+    if chunk is None:
+        return
+    yield chunk
+    yield from data
 
 
 def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False, noversion=False):
@@ -180,8 +189,9 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False, n
         log.warning('msg="islock flag not supported for CS3 storage" filepath="%s"' % filepath)
     resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
     try:
-        client.file.write_file(Auth.check_token(userid), resource, content, size,
-                               app_name, lock_id, disable_versioning=noversion)
+        with wmetrics.timestorage('write'):
+            client.file.write_file(Auth.check_token(userid), resource, content, size,
+                                   app_name, lock_id, disable_versioning=noversion)
     except cs3client.exceptions.UnknownException as e:
         log.error(
             'msg="Invoked writefile" endpoint="%s" filepath="%s" lock="%s" exception="%s"' %
@@ -197,21 +207,24 @@ def renamefile(endpoint, filepath, newfilepath, userid, lockmd):
         _, lock_id = lockmd
     resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
     new_resource = Resource.from_file_ref_and_endpoint(newfilepath, endpoint)
-    client.file.rename_file(Auth.check_token(userid), resource, new_resource, lock_id)
+    with wmetrics.timestorage('rename'):
+        client.file.rename_file(Auth.check_token(userid), resource, new_resource, lock_id)
 
 
 def removefile(endpoint, filepath, userid, force=False):
     """Remove a file using the given userid as access token.
     The force argument is ignored for now for CS3 storage."""
     resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
-    client.file.remove_file(Auth.check_token(userid), resource)
+    with wmetrics.timestorage('remove'):
+        client.file.remove_file(Auth.check_token(userid), resource)
 
 
 def setlock(endpoint, filepath, userid, appname, value):
     """Set a lock to filepath with the given value metadata and appname as holder"""
     resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
     try:
-        client.file.set_lock(Auth.check_token(userid), resource, app_name=appname, lock_id=value)
+        with wmetrics.timestorage('lock'):
+            client.file.set_lock(Auth.check_token(userid), resource, app_name=appname, lock_id=value)
     except cs3client.exceptions.UnknownException as e:
         log.error(
             'msg="Invoked setlock" endpoint="%s" filepath="%s" exception="%s"' %
@@ -224,9 +237,10 @@ def refreshlock(endpoint, filepath, userid, appname, value, oldvalue=None):
     """Refresh the lock metadata for the given filepath"""
     resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
     try:
-        client.file.refresh_lock(
-            Auth.check_token(userid), resource, app_name=appname, lock_id=value, existing_lock_id=oldvalue
-        )
+        with wmetrics.timestorage('lock'):
+            client.file.refresh_lock(
+                Auth.check_token(userid), resource, app_name=appname, lock_id=value, existing_lock_id=oldvalue
+            )
     except cs3client.exceptions.UnknownException as e:
         log.error(
             'msg="Invoked refreshlock" endpoint="%s" filepath="%s" exception="%s"' %
@@ -239,7 +253,8 @@ def getlock(endpoint, filepath, userid):
     """Get the lock metadata for the given filepath"""
     resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
     try:
-        return client.file.get_lock(Auth.check_token(userid), resource)
+        with wmetrics.timestorage('lock'):
+            return client.file.get_lock(Auth.check_token(userid), resource)
     except cs3client.exceptions.NotFoundException:
         return None
     except cs3client.exceptions.UnknownException as e:
@@ -254,7 +269,8 @@ def unlock(endpoint, filepath, userid, appname, value):
     """Remove the lock for the given filepath"""
     resource = Resource.from_file_ref_and_endpoint(filepath, endpoint)
     try:
-        client.file.unlock(Auth.check_token(userid), resource, app_name=appname, lock_id=value)
+        with wmetrics.timestorage('unlock'):
+            client.file.unlock(Auth.check_token(userid), resource, app_name=appname, lock_id=value)
     except cs3client.exceptions.UnknownException as e:
         log.error(
             'msg="Invoked unlock" endpoint="%s" filepath="%s" exception="%s"' %

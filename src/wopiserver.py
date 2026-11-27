@@ -40,6 +40,7 @@ except ImportError:
 
 import core.wopi
 import core.wopiutils as utils
+import core.wopimetrics as wmetrics
 import bridge
 
 
@@ -70,7 +71,9 @@ def storage_layer_import(storagetype):
 class Wopi:
     '''A singleton container for all state information of the WOPI server'''
     app = flask.Flask("wopiserver")
-    metrics = PrometheusMetrics(app, group_by='endpoint')
+    # the /metrics endpoint is protected by a bearer token, see the [monitoring] section in wopiserver.conf
+    metrics = PrometheusMetrics(app, group_by='endpoint', registry=wmetrics.registry,
+                                metrics_decorator=wmetrics.authenticate)
     port = 0
     lastConfigReadTime = 0
     loglevels = {"Critical": logging.CRITICAL,  # 50
@@ -119,6 +122,8 @@ class Wopi:
                 logging.getLogger().handlers = [loghandler]
             else:
                 cls.app.logger.handlers = [loghandler]
+            # initialize the metrics: this also counts the warning and error logs
+            wmetrics.init(cls.config, cls.log.logger, cls)
             # load the requested storage layer
             storage_layer_import(cls.config.get('general', 'storagetype'))
             # prepare the Flask web app
@@ -264,8 +269,6 @@ def index():
 #
 @Wopi.app.route("/wopi/iop/openinapp", methods=['GET'])
 @Wopi.metrics.do_not_track()
-@Wopi.metrics.counter('open_by_app', 'Number of /open calls by appname',
-                      labels={'open_type': lambda: flask.request.args.get('appname')})
 def iopOpenInApp():
     '''Generates a WOPISrc target and an access token to be passed to a WOPI-compatible Office-like app
     for accessing a given file for a given user.
@@ -454,9 +457,10 @@ def iopWopiTest():
         return 'Missing arguments', http.client.BAD_REQUEST
     if Wopi.useHttps:
         return 'WOPI validator not supported in https mode', http.client.BAD_REQUEST
-    inode, acctok, _ = utils.generateAccessToken(usertoken, filepath, utils.ViewMode.READ_WRITE, ('test', 'test!' + usertoken),
-                                                 'http://folderurlfortestonly/', endpoint,
-                                                 ('WOPI validator', 'http://fortestonly/', 'http://fortestonly/'), 'TestTrace')
+    inode, acctok, _, _ = utils.generateAccessToken(usertoken, filepath, utils.ViewMode.READ_WRITE,
+                                                    ('test', 'test!' + usertoken, utils.UserType.REGULAR),
+                                                    'http://folderurlfortestonly/', endpoint,
+                                                    ('WOPI validator', 'http://fortestonly/', 'http://fortestonly/'), 'TestTrace')
     Wopi.log.info(f'msg="iopWopiTest: preparing test via WOPI validator" client="{req.remote_addr}"')
     return '-e WOPI_URL=http://localhost:%d/wopi/files/%s -e WOPI_TOKEN=%s' % (Wopi.port, inode, acctok)
 

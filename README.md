@@ -52,6 +52,56 @@ Integration in the CS3 Organisation: April 2020
 
 This WOPI server implements the required APIs to ensure full compatibility with Microsoft Office (as provided via the CSPP Terms), Collabora Online, and ONLYOFFICE.
 
+## Monitoring
+
+The WOPI server exposes [Prometheus](https://prometheus.io) metrics on `/metrics`, on the same port
+as the WOPI endpoints. The endpoint is disabled unless a bearer token is configured:
+
+```
+[monitoring]
+metricstokenfile = /etc/wopi/metricstoken
+```
+
+Scrapers must then pass `Authorization: Bearer <token>`, any other request gets a 401. Use a secret
+other than the `iopsecret`, as the latter grants access to any file. The `app` label takes one of the
+names in `metricsapps` (by default `MS365 Collabora CodiMD EuroOffice Etherpad`) or `other`.
+No metric is labelled with user, file, path, token or session identities.
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `wopi_opens_total` | counter | `app`, `mode`, `filetype`, `user_type` | access tokens generated, i.e. files opened |
+| `wopi_saves_total` | counter | `app`, `filetype`, `result` | PutFile operations: `ok`, `recovery` (the content, or a conflict copy, could not be written to the storage and was stored in the local `recoverypath`), `error` (even that failed) |
+| `wopi_sessions_total` | counter | `app` | WOPI calls with a valid access token |
+| `wopi_conflicts_total` | counter | `app`, `kind` | lock conflicts returned to the apps: `external` (desktop app lock), `ms365` (known MS365 false positives), `other` |
+| `wopi_conflict_resolution_seconds` | histogram | | time for a conflicted session to get resolved |
+| `wopi_storage_request_duration_seconds` | histogram | `op` | latency of the storage requests, `op` one of `stat read write lock unlock xattr remove rename other` |
+| `wopi_open_files` | gauge | `app`, `mode` | files in the open files map, as returned by `/wopi/iop/list`: entries are added on lock and save, and removed on unlock |
+| `wopi_conflicted_sessions` | gauge | `state` | `pending` and `resolved` conflicted sessions |
+| `wopi_active_users` | gauge | | users who opened a file since the start of the server |
+| `wopi_log_messages_total` | counter | `level` | log messages at `warning` level or above, as long as `loglevel` lets them through |
+
+where `mode` is one of `write read view preview embedded`, `user_type` one of
+`regular federated ocm anonymous publink`, and `filetype` one of
+`doc docx xls xlsx ppt pptx odt ods odp md zmd others` (templates are accounted as the type they are a template of).
+The storage latency covers the request to the storage: with xroot and local storage the open of the file for
+`read` and `write`, and the EOS commands for the others (locks are `xattr` operations on xroot); with cs3 storage
+`read` is the time to the first chunk, and `write` includes the transfer of the content.
+The default per-endpoint request metrics of [prometheus-flask-exporter](https://github.com/rycus86/prometheus_flask_exporter)
+are also exposed.
+
+An example of Prometheus scrape configuration:
+
+```yaml
+scrape_configs:
+  - job_name: wopiserver
+    scheme: https
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/wopi-metricstoken
+    static_configs:
+      - targets: ['wopiserver.example.org:8443']
+```
+
 ## Unit testing
 
 The `/test` folder contains some unit tests for the supported storage interfaces.
@@ -63,6 +113,8 @@ To run the tests, either run `pytest` if available in your system, or execute th
 
 1. Run all tests: `python3 test/test_storageiface.py [-v]`
 2. Run only one test: `python3 test/test_storageiface.py [-v] TestStorage.<the test you would like to run>`
+
+The `test/test_metrics.py` tests cover the metrics exposed on `/metrics`, using the local storage.
 
 ### Test against a Reva CS3 endpoint:
 

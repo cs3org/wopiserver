@@ -13,6 +13,7 @@ from XRootD import client as XrdClient
 from XRootD.client.flags import OpenFlags, QueryCode, MkDirFlags, StatInfoFlags
 
 import core.commoniface as common
+import core.wopimetrics as wmetrics
 
 EOSVERSIONPREFIX = '.sys.v#.'
 EXCL_XATTR_MSG = 'exclusive set for existing attribute'
@@ -20,6 +21,8 @@ LOCK_MISMATCH_MSG = 'file has a valid extended attribute lock'
 FOREIGN_XATTR_MSG = 'foreign attribute lock existing'
 OK_MSG = '[SUCCESS]'     # this is what xroot returns on success
 EOSLOCKKEY = 'sys.app.lock'
+# map of the EOS /proc/user commands to the storage operations exposed in the metrics
+_XROOTCMDOPS = {'fileinfo': 'stat', 'attr': 'xattr', 'file': 'rename', 'rm': 'remove'}
 
 # module-wide state
 config = None
@@ -112,6 +115,7 @@ def _xrootcmd(endpoint, cmd, subcmd, userid, args, app='wopi'):
         tstart = time.time()
         rc, _ = f.open(url, OpenFlags.READ, timeout=timeout)
         tend = time.time()
+        wmetrics.observestorage(_XROOTCMDOPS.get(cmd, 'other'), tend - tstart)
         if not f.is_open():
             log.error(f'msg="Error or timeout with xroot" cmd="{cmd}" subcmd="{subcmd}" args="{args}" rc="{rc}"')
             raise IOError(f'Timeout executing {cmd}')
@@ -187,6 +191,7 @@ def stat(endpoint, filepath, userid):
     tstart = time.time()
     rc, statInfo = _getxrdfor(endpoint).stat(filepath + _eosargs(userid), timeout=timeout)
     tend = time.time()
+    wmetrics.observestorage('stat', tend - tstart)
     logfun = log.debug if filepath == '/' else log.info
     logfun(f'msg="Invoked stat" filepath="{filepath}" elapsedTimems="{(tend - tstart) * 1000:.1f}"')
     if not statInfo:
@@ -418,6 +423,7 @@ def readfile(endpoint, filepath, userid, _lockid):
         rc, _ = f.open(_geturlfor(endpoint) + '/' + homepath + filepath + _eosargs(userid),
                        OpenFlags.READ, timeout=timeout)
         tend = time.time()
+        wmetrics.observestorage('read', tend - tstart)
         if not rc.ok:
             # the file could not be opened: check the case of ENOENT and log it as info to keep the logs cleaner
             if common.ENOENT_MSG in rc.message:
@@ -461,6 +467,7 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False, n
                    ('&eos.versioning=0' if noversion else ''),
                    OpenFlags.NEW if islock else OpenFlags.DELETE, timeout=timeout)
     tend = time.time()
+    wmetrics.observestorage('write', tend - tstart)
     if not rc.ok:
         if islock and 'File exists' in rc.message:
             # racing against an existing file

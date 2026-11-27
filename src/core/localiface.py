@@ -16,6 +16,7 @@ import fcntl
 import warnings
 from stat import S_ISDIR
 import core.commoniface as common
+import core.wopimetrics as wmetrics
 
 # module-wide state
 config = None
@@ -97,6 +98,7 @@ def stat(_endpoint, filepath, _userid):
         tstart = time.time()
         statInfo = os.stat(_getfilepath(filepath))
         tend = time.time()
+        wmetrics.observestorage('stat', tend - tstart)
         log.info('msg="Invoked stat" inode="%d" filepath="%s" elapsedTimems="%.1f"' %
                  (statInfo.st_ino, _getfilepath(filepath), (tend - tstart) * 1000))
         if S_ISDIR(statInfo.st_mode):
@@ -237,6 +239,7 @@ def readfile(_endpoint, filepath, _userid, _lockid):
         chunksize = config.getint('io', 'chunksize')
         with open(_getfilepath(filepath), mode='rb', buffering=chunksize) as f:
             tend = time.time()
+            wmetrics.observestorage('read', tend - tstart)
             log.info(f'msg="File open for read" filepath="{filepath}" elapsedTimems="{(tend - tstart) * 1000:.1f}"')
             # the actual read is buffered and managed by the app server
             for chunk in iter(lambda: f.read(chunksize), b''):
@@ -306,6 +309,7 @@ def writefile(endpoint, filepath, userid, content, size, lockmd, islock=False, n
             raise IOError(e) from e
     if written != size:
         raise IOError('Written %d bytes but content is %d bytes' % (written, size))
+    wmetrics.observestorage('write', tend - tstart)
     log.info('msg="File written successfully" filepath="%s" elapsedTimems="%.1f" islock="%s"' %
              (filepath, (tend - tstart) * 1000, islock))
 
