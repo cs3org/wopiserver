@@ -470,11 +470,12 @@ def putRelative(fileid, reqheaders, acctok):
     log.info('msg="PutRelative: generating new access token" user="%s" filename="%s" '
              'mode="ViewMode.READ_WRITE" friendlyname="%s"' %
              (acctok['userid'][-20:], targetName, acctok['username']))
-    inode, newacctok, _ = utils.generateAccessToken(acctok['userid'], targetName, utils.ViewMode.READ_WRITE,
-                                                    (acctok['username'], acctok['wopiuser'], utils.UserType(acctok['usertype'])),
-                                                    acctok['folderurl'], acctok['endpoint'],
-                                                    (acctok['appname'], acctok.get('appediturl'), acctok.get('appviewurl')),
-                                                    acctok.get('trace', 'N/A'))
+    inode, newacctok, _, _ = utils.generateAccessToken(acctok['userid'], targetName, utils.ViewMode.READ_WRITE,
+                                                       (acctok['username'], acctok['wopiuser'],
+                                                        utils.UserType(acctok['usertype'])),
+                                                       acctok['folderurl'], acctok['endpoint'],
+                                                       (acctok['appname'], acctok.get('appediturl'), acctok.get('appviewurl')),
+                                                       acctok.get('trace', 'N/A'))
     # prepare and send the response as JSON
     _, newfileid = common.decodeinode(inode)
     mdforhosturls = {
