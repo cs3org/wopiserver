@@ -70,19 +70,22 @@ No metric is labelled with user, file, path, token or session identities.
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
 | `wopi_opens_total` | counter | `app`, `mode`, `filetype`, `user_type` | access tokens generated, i.e. files opened |
-| `wopi_saves_total` | counter | `app`, `filetype`, `result` | PutFile operations: `ok`, `recovery` (the content was stored in the local `recoverypath`), `error` (even that failed) |
+| `wopi_saves_total` | counter | `app`, `filetype`, `result` | PutFile operations: `ok`, `recovery` (the content, or a conflict copy, could not be written to the storage and was stored in the local `recoverypath`), `error` (even that failed) |
 | `wopi_sessions_total` | counter | `app` | WOPI calls with a valid access token |
 | `wopi_conflicts_total` | counter | `app`, `kind` | lock conflicts returned to the apps: `external` (desktop app lock), `ms365` (known MS365 false positives), `other` |
 | `wopi_conflict_resolution_seconds` | histogram | | time for a conflicted session to get resolved |
 | `wopi_storage_request_duration_seconds` | histogram | `op` | latency of the storage requests, `op` one of `stat read write lock unlock xattr remove rename other` |
-| `wopi_open_files` | gauge | `app`, `mode` | files currently open (locked) |
+| `wopi_open_files` | gauge | `app`, `mode` | files in the open files map, as returned by `/wopi/iop/list`: entries are added on lock and save, and removed on unlock |
 | `wopi_conflicted_sessions` | gauge | `state` | `pending` and `resolved` conflicted sessions |
 | `wopi_active_users` | gauge | | users who opened a file since the start of the server |
-| `wopi_log_messages_total` | counter | `level` | log messages at `warning` level or above |
+| `wopi_log_messages_total` | counter | `level` | log messages at `warning` level or above, as long as `loglevel` lets them through |
 
 where `mode` is one of `write read view preview embedded`, `user_type` one of
 `regular federated ocm anonymous publink`, and `filetype` one of
 `doc docx xls xlsx ppt pptx odt ods odp md zmd others` (templates are accounted as the type they are a template of).
+The storage latency covers the request to the storage: with xroot and local storage the open of the file for
+`read` and `write`, and the EOS commands for the others (locks are `xattr` operations on xroot); with cs3 storage
+`read` is the time to the first chunk, and `write` includes the transfer of the content.
 The default per-endpoint request metrics of [prometheus-flask-exporter](https://github.com/rycus86/prometheus_flask_exporter)
 are also exposed.
 
